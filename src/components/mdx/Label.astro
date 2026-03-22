@@ -1,0 +1,20 @@
+---
+interface Props {
+  color?: 'teal' | 'green' | 'amber' | 'rose';
+}
+const { color = 'teal' } = Astro.props;
+
+const styles = {
+  teal:  'background: rgba(8,145,178,0.12); color: #0891b2;',
+  green: 'background: rgba(5,150,105,0.12); color: #059669;',
+  amber: 'background: rgba(217,119,6,0.12); color: #d97706;',
+  rose:  'background: rgba(190,18,60,0.12); color: #be123c;',
+};
+---
+
+<span
+  class="inline-block rounded px-2 py-0.5 font-mono text-xs font-semibold uppercase tracking-wider"
+  style={styles[color]}
+>
+  <slot />
+</span>

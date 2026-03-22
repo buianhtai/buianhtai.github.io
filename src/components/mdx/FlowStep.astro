@@ -1,0 +1,37 @@
+---
+interface Props {
+  step: string | number;
+  color?: 'teal' | 'green' | 'amber' | 'rose';
+  title: string;
+}
+const { step, color = 'teal', title } = Astro.props;
+
+const bgColors = {
+  teal:  'rgba(8,145,178,0.12)',
+  green: 'rgba(5,150,105,0.12)',
+  amber: 'rgba(217,119,6,0.12)',
+  rose:  'rgba(190,18,60,0.12)',
+};
+
+const fgColors = {
+  teal:  '#0891b2',
+  green: '#059669',
+  amber: '#d97706',
+  rose:  '#be123c',
+};
+---
+
+<div class="flex gap-3 items-start py-3 border-b border-[var(--color-border)] last:border-b-0">
+  <div
+    class="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center font-mono text-sm font-semibold"
+    style={`background: ${bgColors[color]}; color: ${fgColors[color]};`}
+  >
+    {step}
+  </div>
+  <div>
+    <strong class="block mb-1">{title}</strong>
+    <div class="text-sm text-[var(--color-text-dim)] leading-relaxed">
+      <slot />
+    </div>
+  </div>
+</div>

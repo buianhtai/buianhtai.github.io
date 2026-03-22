@@ -1,0 +1,23 @@
+---
+interface Props {
+  accent?: 'teal' | 'green' | 'amber' | 'rose';
+  flush?: boolean;
+}
+const { accent, flush = false } = Astro.props;
+
+const accentColors = {
+  teal: '#0891b2',
+  green: '#059669',
+  amber: '#d97706',
+  rose: '#be123c',
+};
+
+const borderColor = accent && flush ? accentColors[accent] : undefined;
+---
+
+<div
+  class="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-sm"
+  style={borderColor ? `border-left: 3px solid ${borderColor}` : undefined}
+>
+  <slot />
+</div>
