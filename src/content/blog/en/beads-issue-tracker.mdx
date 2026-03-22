@@ -12,6 +12,10 @@ import Label from '../../../components/mdx/Label.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
 import HeroGrid from '../../../components/mdx/HeroGrid.astro';
 import Callout from '../../../components/mdx/Callout.astro';
+import ArchLayer from '../../../components/mdx/ArchLayer.astro';
+import DagGrid from '../../../components/mdx/DagGrid.astro';
+import HashDemo from '../../../components/mdx/HashDemo.astro';
+import Pipeline from '../../../components/mdx/Pipeline.astro';
 
 AI coding agents are stateless by nature. Every session starts fresh — no memory of what was attempted, what's blocked, or what's ready to work on. Traditional issue trackers (Jira, GitHub Issues, Linear) don't help: they're built for humans clicking through GUIs, not agents running `--json` commands at machine speed.
 
@@ -26,14 +30,82 @@ AI coding agents are stateless by nature. Every session starts fresh — no memo
 
 ---
 
-## <Label color="teal">1</Label> The Dependency Graph
+## <Label color="teal">WHY</Label> Traditional Trackers Fail Agents
+
+Issue tracking for AI agents is a **graph problem**, not a list problem. Every existing tracker was designed for humans who can interpret context, remember state, and click buttons. Agents need something fundamentally different.
+
+<Card>
+
+| Capability | Jira / Linear | GitHub Issues | **Beads** |
+|-----------|:---:|:---:|:---:|
+| Dependency DAG with readiness | ✗ | ✗ | ✓ |
+| Content-hashed IDs (no conflicts) | ✗ | ✗ | ✓ |
+| Offline-first, no SaaS | ✗ | ✗ | ✓ |
+| Cell-level merge (Dolt) | ✗ | ✗ | ✓ |
+| `--json` CLI for agents | ✗ | Partial | ✓ |
+| Multi-agent wave scheduling | ✗ | ✗ | ✓ |
+
+</Card>
+
+<Callout color="teal">
+The core insight: agents don't need a status board — they need an answer to one question: **"What can I work on right now?"** Beads computes this from the dependency graph automatically.
+</Callout>
+
+---
+
+## <Label color="amber">HOW</Label> Architecture
+
+Beads is a Go CLI with four clean layers. Each layer has a single responsibility, and data flows downward.
+
+<ArchLayer
+  badge="CLI"
+  badgeColor="teal"
+  label="User Interface"
+  items={["bd ready", "bd create", "bd swarm", "bd gate", "bd mol", "bd dolt"]}
+/>
+
+<ArchLayer
+  badge="CORE"
+  badgeColor="amber"
+  label="Business Logic"
+  items={["DAG walker", "Hash generator", "Wave scheduler", "Formula engine"]}
+/>
+
+<ArchLayer
+  badge="STORE"
+  badgeColor="green"
+  label="Dolt SQL"
+  items={["issues", "dependencies", "gates", "formulas", "config"]}
+/>
+
+<ArchLayer
+  badge="SYNC"
+  badgeColor="rose"
+  label="Git Integration"
+  items={["refs/dolt/data/", "push/pull", "branch merge", "remote tracking"]}
+/>
+
+<Callout color="amber">
+The CLI layer is a thin shell. All intelligence lives in Core — the DAG walker, hash generator, and wave scheduler. Storage is Dolt SQL (Git-for-databases). Sync piggybacks on the existing Git remote.
+</Callout>
+
+---
+
+## <Label color="teal">HOW</Label> The Dependency DAG
 
 Traditional trackers treat issues as flat lists with optional labels. Beads treats them as **nodes in a directed acyclic graph** where task readiness is automatically computed through transitive closure.
 
-<Card>
-### Ready Work Computation
+<DagGrid nodes={[
+  { name: "Foundation", id: "bd-a3f8", status: "closed", wave: 0 },
+  { name: "Auth module", id: "bd-b2c1", status: "closed", wave: 0 },
+  { name: "Component A", id: "bd-c7d3", status: "progress", wave: 1 },
+  { name: "Component B", id: "bd-d4e5", status: "ready", wave: 1 },
+  { name: "Messages", id: "bd-e9f2", status: "ready", wave: 1 },
+  { name: "Integration", id: "bd-f1a6", status: "blocked", wave: 2 },
+  { name: "E2E tests", id: "bd-g8h4", status: "blocked", wave: 3 },
+]} />
 
-The core query is a recursive CTE that walks the dependency graph to find all transitively blocked issues, then returns everything that's unblocked:
+The core query is a recursive CTE that walks the graph to find all transitively blocked issues, then returns everything that's unblocked:
 
 ```sql
 WITH RECURSIVE
@@ -60,10 +132,6 @@ LEFT JOIN blocked_transitively bt ON bt.issue_id = i.id
 WHERE i.status = 'open' AND bt.issue_id IS NULL;
 ```
 
-An agent doesn't need to understand the graph. It runs `bd ready --json` and gets back only issues where **every transitive blocker is resolved**.
-
-</Card>
-
 <Card>
 ### Dependency Types
 
@@ -82,20 +150,19 @@ Only three types actually affect readiness computation. The rest exist for conte
 
 </Card>
 
-<Callout color="teal">
-Wave analysis: `bd swarm status` groups ready issues into parallel waves. Wave 0 has no dependencies, Wave 1 depends only on Wave 0, and so on. This tells you the critical path and maximum parallelism.
-</Callout>
-
 ---
 
-## <Label color="green">2</Label> Hash-Based IDs
+## <Label color="green">HOW</Label> Hash-Based IDs
 
 Sequential IDs (GitHub's `#1`, `#2`, `#3`) break in multi-agent workflows. Two agents on different branches both create issue `#47` — instant merge conflict.
 
-<Card>
-### Content Hashing
+<HashDemo agents={[
+  { name: "Agent A", input: "Fix auth timeout on login page", output: "bd-f4e2a1b3", same: true },
+  { name: "Agent B", input: "Fix auth timeout on login page", output: "bd-f4e2a1b3", same: true },
+  { name: "Agent C", input: "Add rate limiting to API", output: "bd-7c3d9e12", same: false },
+]} />
 
-Beads derives IDs from a SHA256 hash of the issue content:
+Beads derives IDs from a SHA-256 hash of the issue content:
 
 ```go
 func (i *Issue) ComputeContentHash() string {
@@ -105,10 +172,6 @@ func (i *Issue) ComputeContentHash() string {
 }
 // Result: "bd-f4e2a1b3"
 ```
-
-Two agents creating "Fix auth bug" with the same description produce the **same hash** — no collision, no conflict. Two agents creating different issues always produce different hashes. This is what makes Beads safe for distributed, multi-branch, multi-agent workflows.
-
-</Card>
 
 <Card>
 ### Hierarchical IDs
@@ -127,12 +190,24 @@ The ID structure encodes the hierarchy directly — no separate parent field loo
 
 ---
 
-## <Label color="amber">3</Label> Dolt: Git for Data
+## <Label color="amber">HOW</Label> Dolt Sync
 
-Beads stores everything in [Dolt](https://github.com/dolthub/dolt) — a SQL database that implements Git's version control model (commits, branches, diffs, remotes) at the cell level.
+Beads stores everything in [Dolt](https://github.com/dolthub/dolt) — a SQL database that implements Git's version control model at the cell level. Issue data travels with the code repository, piggybacking on the existing Git remote.
+
+<Pipeline
+  nodes={[
+    { title: "Local Dolt DB", subtitle: "agent workspace" },
+    { title: "Git Remote", subtitle: "refs/dolt/data/" },
+    { title: "Local Dolt DB", subtitle: "other agent" },
+  ]}
+  arrows={[
+    { label: "bd dolt push", direction: "right" },
+    { label: "bd dolt pull", direction: "left" },
+  ]}
+  footer="Cell-level merge: two agents editing different fields on the same issue merge without conflict. No locking, no coordination server."
+/>
 
 <Card>
-### Why Not SQLite or Postgres?
 
 <FlowStep step={1} color="amber" title="Cell-Level Merge">
 Dolt can merge two branches that modified different cells in the same row without conflicts. Traditional databases require row-level or table-level locking.
@@ -148,28 +223,39 @@ Each agent can work on a Dolt branch. Changes merge cleanly because hash-based I
 
 </Card>
 
-<Card>
-### Sync Architecture
+---
 
-```bash
-# Add remote (piggybacks on the existing Git remote)
-bd dolt remote add origin git+ssh://git@github.com/org/repo.git
+## <Label color="teal">FLOW</Label> Agent Workflow
 
-# Push/pull issue data
-bd dolt push    # Commits + pushes to refs/dolt/data/
-bd dolt pull    # Pulls + merges remote changes
+A typical agent session follows this loop. The key: agents never decide *what* to work on — the DAG decides for them.
 
-# Auto-commit after every write (optional)
-bd config set dolt.auto-commit on
-```
+<FlowStep step="→" color="teal" title="Agent starts a session">
+Fresh context. No memory of previous sessions. The agent needs to know what's ready.
+</FlowStep>
 
-The key insight: issue data travels with the code repository. No separate SaaS backend, no API tokens, no account required. Clone the repo, run `bd init`, and you have the full issue graph locally.
+<FlowStep step="1" color="green" title="bd ready --json">
+The DAG walker computes all transitively unblocked issues. Returns only tasks with zero open dependencies.
+</FlowStep>
 
-</Card>
+<FlowStep step="2" color="green" title="bd update <id> --claim">
+Atomic operation: sets assignee + status to `in_progress` in one transaction. Prevents two agents from claiming the same work (mutex work type).
+</FlowStep>
+
+<FlowStep step="3" color="amber" title="Agent does the work">
+Writes code, runs tests, creates PRs. The issue tracks what was done and by whom.
+</FlowStep>
+
+<FlowStep step="4" color="amber" title="bd close <id>">
+Marks the issue as closed. This may unblock downstream issues in the DAG — making them appear in the next `bd ready` call.
+</FlowStep>
+
+<FlowStep step="↻" color="teal" title="bd ready --json (again)">
+The loop repeats. Each closure potentially unlocks new work. The agent keeps pulling from the graph until nothing is ready.
+</FlowStep>
 
 ---
 
-## <Label color="rose">4</Label> Multi-Agent Coordination
+## <Label color="rose">HOW</Label> Multi-Agent Coordination
 
 When multiple agents work in parallel, you need more than a flat task list. Beads provides three coordination primitives.
 
@@ -230,7 +316,7 @@ Mutex is the safe default. Open competition is useful for speculative work where
 
 ---
 
-## <Label color="purple">5</Label> Formula System
+## <Label color="green">HOW</Label> Formula System
 
 Repeatable workflows are defined as formula templates with variable substitution:
 
@@ -267,8 +353,6 @@ This creates concrete issues from the template, wires up the dependencies, and t
 ---
 
 ## What Makes It Different
-
-The fundamental insight behind Beads is that issue tracking for AI agents is a **graph problem**, not a list problem:
 
 1. **`bd ready` is the only command agents need** — the graph does the scheduling
 2. **Hash IDs eliminate the coordination tax** — no merge conflicts, no central server

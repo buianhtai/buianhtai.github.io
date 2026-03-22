@@ -1,0 +1,134 @@
+---
+interface Props {
+  agents: Array<{ name: string; input: string; output: string; same: boolean }>;
+}
+const { agents } = Astro.props;
+---
+
+<div class="hash-container">
+  <div class="hash-columns">
+    {agents.map((agent) => (
+      <div class="hash-column">
+        <div class="hash-agent">{agent.name}</div>
+        <div class="hash-input">{agent.input}</div>
+        <div class="hash-arrow">SHA-256 ↓</div>
+        <div class:list={['hash-output', { 'hash-same': agent.same, 'hash-diff': !agent.same }]}>
+          <code>{agent.output}</code>
+        </div>
+      </div>
+    ))}
+  </div>
+  <div class="hash-verdict">
+    <span class="hash-verdict-same">Same content → same hash → zero conflicts</span>
+  </div>
+</div>
+
+<style>
+  .hash-container {
+    border: 1px solid var(--color-border);
+    border-radius: 0.5rem;
+    background: var(--color-surface);
+    padding: 1.25rem;
+    margin: 1rem 0;
+    overflow-x: auto;
+  }
+
+  .hash-columns {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+    gap: 1rem;
+  }
+
+  .hash-column {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    text-align: center;
+  }
+
+  .hash-agent {
+    font-weight: 700;
+    font-size: 0.8rem;
+    color: var(--color-text);
+    padding: 0.25rem 0.75rem;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 0.375rem;
+    width: 100%;
+  }
+
+  .hash-input {
+    font-size: 0.75rem;
+    color: var(--color-text-dim);
+    padding: 0.375rem 0.5rem;
+    background: var(--color-bg);
+    border: 1px dashed var(--color-border);
+    border-radius: 0.25rem;
+    width: 100%;
+    line-height: 1.4;
+  }
+
+  .hash-arrow {
+    font-family: 'IBM Plex Mono', 'Fira Code', monospace;
+    font-size: 0.65rem;
+    color: var(--color-text-dim);
+    letter-spacing: 0.05em;
+  }
+
+  .hash-output {
+    padding: 0.375rem 0.5rem;
+    border: 1.5px solid;
+    border-radius: 0.375rem;
+    width: 100%;
+  }
+
+  .hash-output code {
+    font-family: 'IBM Plex Mono', 'Fira Code', monospace;
+    font-size: 0.7rem;
+    word-break: break-all;
+    border: none !important;
+    background: none !important;
+    padding: 0 !important;
+  }
+
+  .hash-same {
+    border-color: #059669;
+    background: rgba(5,150,105,0.08);
+  }
+
+  .hash-same code {
+    color: #059669;
+  }
+
+  .hash-diff {
+    border-color: var(--color-accent);
+    background: rgba(56,189,248,0.08);
+  }
+
+  .hash-diff code {
+    color: var(--color-accent);
+  }
+
+  .hash-verdict {
+    margin-top: 1rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--color-border);
+    text-align: center;
+  }
+
+  .hash-verdict-same {
+    font-family: 'IBM Plex Mono', 'Fira Code', monospace;
+    font-size: 0.7rem;
+    color: #059669;
+    background: rgba(5,150,105,0.08);
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+  }
+
+  @media (max-width: 480px) {
+    .hash-columns {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

@@ -1,0 +1,176 @@
+---
+interface Props {
+  nodes: Array<{ name: string; id: string; status: 'ready' | 'progress' | 'blocked' | 'closed'; wave: number }>;
+}
+const { nodes } = Astro.props;
+
+const statusColors = {
+  ready:    { border: '#059669', bg: 'rgba(5,150,105,0.08)',  fg: '#059669' },
+  progress: { border: '#d97706', bg: 'rgba(217,119,6,0.08)', fg: '#d97706' },
+  blocked:  { border: '#be123c', bg: 'rgba(190,18,60,0.08)', fg: '#be123c' },
+  closed:   { border: 'var(--color-border)', bg: 'var(--color-surface)', fg: 'var(--color-text-dim)' },
+};
+
+const statusLabels = {
+  ready: 'Ready',
+  progress: 'In Progress',
+  blocked: 'Blocked',
+  closed: 'Closed',
+};
+
+// Group nodes by wave
+const waves = new Map<number, typeof nodes>();
+for (const node of nodes) {
+  if (!waves.has(node.wave)) waves.set(node.wave, []);
+  waves.get(node.wave)!.push(node);
+}
+const sortedWaves = [...waves.entries()].sort((a, b) => a[0] - b[0]);
+---
+
+<div class="dag-container">
+  <div class="dag-main">
+    {sortedWaves.map(([wave, waveNodes]) => (
+      <div class="dag-wave">
+        <div class="dag-wave-label">
+          <span class="dag-wave-badge">Wave {wave}</span>
+        </div>
+        <div class="dag-wave-nodes">
+          {waveNodes.map((node) => {
+            const s = statusColors[node.status];
+            return (
+              <div
+                class="dag-node"
+                style={`border-color: ${s.border}; background: ${s.bg};`}
+              >
+                <div class="dag-node-name">{node.name}</div>
+                <div class="dag-node-id" style={`color: ${s.fg};`}>{node.id}</div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    ))}
+  </div>
+  <div class="dag-legend">
+    {Object.entries(statusColors).map(([key, val]) => (
+      <div class="dag-legend-item">
+        <span class="dag-legend-dot" style={`background: ${val.border};`} />
+        <span class="dag-legend-text">{statusLabels[key as keyof typeof statusLabels]}</span>
+      </div>
+    ))}
+  </div>
+</div>
+
+<style>
+  .dag-container {
+    display: flex;
+    gap: 1.25rem;
+    margin: 1rem 0;
+    padding: 1.25rem;
+    border: 1px solid var(--color-border);
+    border-radius: 0.5rem;
+    background: var(--color-surface);
+    overflow-x: auto;
+  }
+
+  .dag-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    min-width: 0;
+  }
+
+  .dag-wave {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+  }
+
+  .dag-wave-label {
+    display: flex;
+    align-items: center;
+  }
+
+  .dag-wave-badge {
+    font-family: 'IBM Plex Mono', 'Fira Code', monospace;
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-text-dim);
+    background: var(--color-bg);
+    padding: 0.125rem 0.5rem;
+    border-radius: 9999px;
+    border: 1px solid var(--color-border);
+  }
+
+  .dag-wave-nodes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .dag-node {
+    padding: 0.5rem 0.75rem;
+    border: 1.5px solid;
+    border-radius: 0.375rem;
+    min-width: 7rem;
+  }
+
+  .dag-node-name {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--color-text);
+    line-height: 1.3;
+  }
+
+  .dag-node-id {
+    font-family: 'IBM Plex Mono', 'Fira Code', monospace;
+    font-size: 0.65rem;
+    margin-top: 0.125rem;
+  }
+
+  .dag-legend {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    flex-shrink: 0;
+    padding-left: 1rem;
+    border-left: 1px solid var(--color-border);
+  }
+
+  .dag-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+  }
+
+  .dag-legend-dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .dag-legend-text {
+    font-size: 0.65rem;
+    color: var(--color-text-dim);
+    white-space: nowrap;
+  }
+
+  @media (max-width: 640px) {
+    .dag-container {
+      flex-direction: column;
+    }
+
+    .dag-legend {
+      flex-direction: row;
+      flex-wrap: wrap;
+      padding-left: 0;
+      padding-top: 0.75rem;
+      border-left: none;
+      border-top: 1px solid var(--color-border);
+    }
+  }
+</style>

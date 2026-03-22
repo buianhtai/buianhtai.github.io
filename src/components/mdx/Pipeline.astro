@@ -1,0 +1,146 @@
+---
+interface Props {
+  nodes: Array<{ title: string; subtitle: string }>;
+  arrows: Array<{ label: string; direction: 'right' | 'left' }>;
+  footer?: string;
+}
+const { nodes, arrows, footer } = Astro.props;
+
+// Interleave nodes and arrows: node, arrow, node, arrow, node
+const elements: Array<{ type: 'node'; data: (typeof nodes)[0] } | { type: 'arrow'; data: (typeof arrows)[0] }> = [];
+for (let i = 0; i < nodes.length; i++) {
+  elements.push({ type: 'node', data: nodes[i] });
+  if (i < arrows.length) {
+    elements.push({ type: 'arrow', data: arrows[i] });
+  }
+}
+---
+
+<div class="pipeline-container">
+  <div class="pipeline-flow">
+    {elements.map((el) => {
+      if (el.type === 'node') {
+        const node = el.data as (typeof nodes)[0];
+        return (
+          <div class="pipeline-node">
+            <div class="pipeline-node-title">{node.title}</div>
+            <div class="pipeline-node-subtitle">{node.subtitle}</div>
+          </div>
+        );
+      } else {
+        const arrow = el.data as (typeof arrows)[0];
+        return (
+          <div class="pipeline-arrow">
+            <span class="pipeline-arrow-label">{arrow.label}</span>
+            <span class="pipeline-arrow-icon">
+              {arrow.direction === 'right' ? '→' : '←'}
+            </span>
+          </div>
+        );
+      }
+    })}
+  </div>
+  {footer && (
+    <div class="pipeline-footer">
+      {footer}
+    </div>
+  )}
+</div>
+
+<style>
+  .pipeline-container {
+    border: 1px solid var(--color-border);
+    border-radius: 0.5rem;
+    background: var(--color-surface);
+    padding: 1.25rem;
+    margin: 1rem 0;
+    overflow-x: auto;
+  }
+
+  .pipeline-flow {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    justify-content: center;
+    flex-wrap: nowrap;
+  }
+
+  .pipeline-node {
+    padding: 0.625rem 1rem;
+    border: 1.5px solid var(--color-border);
+    border-radius: 0.5rem;
+    background: var(--color-bg);
+    text-align: center;
+    flex-shrink: 0;
+    min-width: 6.5rem;
+  }
+
+  .pipeline-node-title {
+    font-weight: 700;
+    font-size: 0.8rem;
+    color: var(--color-text);
+    line-height: 1.3;
+  }
+
+  .pipeline-node-subtitle {
+    font-family: 'IBM Plex Mono', 'Fira Code', monospace;
+    font-size: 0.65rem;
+    color: var(--color-text-dim);
+    margin-top: 0.125rem;
+  }
+
+  .pipeline-arrow {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.125rem;
+    padding: 0 0.5rem;
+    flex-shrink: 0;
+  }
+
+  .pipeline-arrow-label {
+    font-family: 'IBM Plex Mono', 'Fira Code', monospace;
+    font-size: 0.6rem;
+    color: var(--color-text-dim);
+    white-space: nowrap;
+  }
+
+  .pipeline-arrow-icon {
+    font-size: 1.1rem;
+    color: var(--color-accent);
+    line-height: 1;
+  }
+
+  .pipeline-footer {
+    margin-top: 0.875rem;
+    padding: 0.5rem 0.75rem;
+    background: rgba(8,145,178,0.08);
+    border-left: 3px solid #0891b2;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    color: var(--color-text-dim);
+    line-height: 1.5;
+  }
+
+  @media (max-width: 640px) {
+    .pipeline-flow {
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .pipeline-arrow {
+      padding: 0.375rem 0;
+      flex-direction: row;
+      gap: 0.375rem;
+    }
+
+    .pipeline-arrow-icon {
+      transform: rotate(90deg);
+    }
+
+    .pipeline-node {
+      width: 100%;
+      min-width: auto;
+    }
+  }
+</style>
