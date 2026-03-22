@@ -1,0 +1,295 @@
+---
+title: "Sandbox, Index, Resume: How context-mode Keeps AI Agents Under Budget"
+description: "A deep dive into context-mode's architecture — FTS5 knowledge bases, sandboxed polyglot execution, session continuity across compactions, and the security model that makes it safe."
+pubDate: 2026-03-22
+tags: ["ai", "mcp", "architecture", "typescript"]
+lang: "en"
+category: "architecture"
+---
+
+import Card from '../../../components/mdx/Card.astro';
+import Label from '../../../components/mdx/Label.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+
+Every MCP tool call dumps raw data into the AI's context window. A Playwright snapshot costs 56 KB. Twenty GitHub issues cost 59 KB. One access log eats 45 KB. After 30 minutes of real work, 40% of your context budget is gone — and when the conversation compacts, the agent forgets which files it was editing.
+
+[context-mode](https://github.com/mksglu/context-mode) is an open-source MCP server that solves this at the protocol layer. Raw data stays in sandboxed subprocesses. Only your printed summary enters context. And when compaction happens, an FTS5-backed session database reconstructs what matters.
+
+<HeroGrid items={[
+  { label: "98% Savings", sublabel: "315 KB raw → 5.4 KB context\nSandbox-first architecture", color: "#0891b2" },
+  { label: "11 Languages", sublabel: "JS, TS, Python, Go, Rust\nRuby, PHP, Perl, R, Elixir, Shell", color: "#059669" },
+  { label: "FTS5 + BM25", sublabel: "Dual tokenizers\nReciprocal Rank Fusion", color: "#d97706" },
+  { label: "Session Resume", sublabel: "Priority-budgeted snapshots\nSurvives compaction", color: "#e11d48" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> The FTS5 Knowledge Base
+
+The core of context-mode is a SQLite FTS5 knowledge base that chunks, indexes, and retrieves content on demand — so the AI gets exact code blocks instead of truncated output.
+
+<Card>
+### Dual Tokenizer Design
+
+Most search systems pick one tokenizer. context-mode runs two FTS5 tables in parallel:
+
+```sql
+-- English stemming: "configuring" → "configur"
+CREATE VIRTUAL TABLE chunks USING fts5(
+  title, content, source_id UNINDEXED, content_type UNINDEXED,
+  tokenize='porter unicode61'
+);
+
+-- Character n-grams: fuzzy/substring matching
+CREATE VIRTUAL TABLE chunks_trigram USING fts5(
+  title, content, source_id UNINDEXED, content_type UNINDEXED,
+  tokenize='trigram'
+);
+```
+
+Porter stemming handles semantic queries — "configure", "configured", "configuring" all match. Trigram handles typos and partial matches — searching "fetc" still finds "fetch".
+
+</Card>
+
+<Card>
+### Reciprocal Rank Fusion
+
+Two rankers produce two result lists. How do you merge them? context-mode uses **Reciprocal Rank Fusion** (Cormack et al. 2009) — a technique that merges ranked lists without needing score normalization:
+
+```typescript
+const K = 60; // Standard RRF constant
+
+for (const [i, r] of porterResults.entries()) {
+  const existing = scoreMap.get(key(r));
+  if (existing) {
+    existing.score += 1 / (K + i + 1);  // RRF formula
+  } else {
+    scoreMap.set(key(r), { result: r, score: 1 / (K + i + 1) });
+  }
+}
+// Same scoring pass for trigram results, then sort by combined score
+```
+
+Results that appear in **both** rankers get boosted. Results unique to one ranker still surface but with lower combined scores. K=60 is the standard constant — higher values give more weight to lower-ranked results.
+
+</Card>
+
+<Card>
+### Proximity Reranking
+
+After RRF fusion, a sweep-line algorithm reranks by term proximity. If you search "session resume snapshot", results where all three words appear within 10 tokens of each other rank higher than results where they're scattered across paragraphs:
+
+```typescript
+// Boost = 1 / (1 + minSpan / maxLength)
+// Closer terms = higher boost
+const span = curMax - curMin;
+if (span < minSpan) minSpan = span;
+```
+
+The final ranking chain: **BM25 → RRF Fusion → Proximity Rerank → Fuzzy Spelling Correction** (Levenshtein with distance caps by word length).
+
+</Card>
+
+<Callout color="teal">
+Smart chunking splits markdown by headings while keeping code blocks intact. Max chunk size is 4 KB — small enough for BM25 normalization, large enough to preserve context.
+</Callout>
+
+---
+
+## <Label color="green">2</Label> Sandboxed Polyglot Execution
+
+The `PolyglotExecutor` runs code in 11 languages inside isolated subprocesses. Raw output never enters the context window — only what you explicitly `console.log` or `print` crosses the boundary.
+
+<Card>
+### Environment Sanitization
+
+Before spawning any process, context-mode strips 70+ dangerous environment variables. Each denial maps to a known attack vector:
+
+```typescript
+const DENIED = new Set([
+  // Shell — auto-execute scripts
+  "BASH_ENV", "ENV", "PROMPT_COMMAND",
+  // Node.js — require injection
+  "NODE_OPTIONS", "NODE_PATH",
+  // Python — startup injection
+  "PYTHONSTARTUP", "PYTHONHOME",
+  // Dynamic linker — shared library injection
+  "LD_PRELOAD", "DYLD_INSERT_LIBRARIES",
+  // Git — command injection via hooks
+  "GIT_SSH_COMMAND", "GIT_TEMPLATE_DIR",
+  // ... 50+ more
+]);
+```
+
+This isn't theoretical — `LD_PRELOAD` hijacking is [MITRE T1574.006](https://attack.mitre.org/techniques/T1574/006/). Every variable on the deny list has a documented exploitation path.
+
+</Card>
+
+<Card>
+### Dual-Layer Output Capping
+
+Two caps prevent both memory exhaustion and context flooding:
+
+<FlowStep step={1} color="green" title="Hard Cap — 100 MB">
+Stream-level byte counter. If stdout + stderr exceeds 100 MB, the process is killed immediately — prevents `yes | base64` from exhausting RAM.
+</FlowStep>
+
+<FlowStep step={2} color="green" title="Soft Cap — 100 KB">
+After execution completes, output is smart-truncated to 100 KB for context delivery. The full output remains searchable via `ctx_search`.
+</FlowStep>
+
+</Card>
+
+<Card>
+### Process Group Isolation
+
+Each execution spawns a new process group (`detached: true` on Unix). On timeout or cap breach, the entire tree is killed — not just the parent:
+
+```typescript
+function killTree(proc) {
+  if (isWin) {
+    execSync(`taskkill /F /T /PID ${proc.pid}`);
+  } else {
+    process.kill(-proc.pid, "SIGKILL"); // Negative PID = entire group
+  }
+}
+```
+
+No orphaned children. No zombie processes consuming CPU after the sandbox closes.
+
+</Card>
+
+---
+
+## <Label color="amber">3</Label> Session Continuity
+
+When the AI conversation compacts, the agent loses all working memory. context-mode solves this by tracking every significant event in SQLite and generating priority-budgeted resume snapshots.
+
+<Card>
+### Event Tracking with Dedup
+
+Every file edit, git commit, task creation, error, and decision is stored as a session event with a priority tier:
+
+| Priority | Budget | Categories |
+|----------|--------|-----------|
+| P1 (50%) | ~1024 bytes | file, task, rule |
+| P2 (35%) | ~716 bytes | cwd, error, decision, env, git |
+| P3-P4 (15%) | ~308 bytes | subagent, skill, role, intent |
+
+Deduplication uses SHA256 hashing — the same file read won't be stored twice within a sliding window:
+
+```typescript
+const dataHash = createHash("sha256")
+  .update(event.data)
+  .digest("hex")
+  .slice(0, 16)
+  .toUpperCase();
+
+// Atomic: dedup check + FIFO eviction + insert
+const transaction = this.db.transaction(() => {
+  const dup = this.stmt(S.checkDuplicate).get(
+    sessionId, DEDUP_WINDOW, event.type, dataHash
+  );
+  if (dup) return;
+  // ... eviction + insert
+});
+```
+
+</Card>
+
+<Card>
+### Resume Snapshots
+
+When compaction triggers, the snapshot builder converts stored events into a compact XML resume. The budget system ensures the most important context survives:
+
+<FlowStep step={1} color="amber" title="Collect Events by Priority">
+P1 events (active files, tasks, rules) get 50% of the byte budget. These are the things you absolutely need to continue working.
+</FlowStep>
+
+<FlowStep step={2} color="amber" title="Progressive Tier Dropping">
+If the snapshot exceeds the budget, lower-priority tiers are dropped progressively — P4 first, then P3. P1 is never dropped.
+</FlowStep>
+
+<FlowStep step={3} color="amber" title="Inject into Next Turn">
+The XML snapshot is injected into the conversation on the next `SessionStart` hook. The agent picks up exactly where it left off.
+</FlowStep>
+
+</Card>
+
+<Callout color="amber">
+Worktree isolation: when running in git worktrees, each worktree gets its own session database keyed by a SHA256 hash of the working directory. Parallel branches never cross-contaminate.
+</Callout>
+
+---
+
+## <Label color="rose">4</Label> The Adapter Pattern
+
+context-mode supports 9 platforms — Claude Code, Gemini CLI, OpenCode, Cursor, Zed, Kiro, Codex CLI, VS Code Copilot, and OpenClaw — through a clean separation:
+
+<Card>
+### Two Layers, One Backend
+
+```
+MCP Server Layer (portable)     Hook Layer (platform-specific)
+┌──────────────────────┐        ┌──────────────────────┐
+│  Tools: ctx_execute,  │        │  Adapters:           │
+│  ctx_search,          │◄──────►│  claude-code/        │
+│  ctx_batch_execute,   │        │  gemini-cli/         │
+│  ctx_index, ...       │        │  opencode/           │
+└──────────────────────┘        │  cursor/  zed/  ...  │
+                                 └──────────────────────┘
+```
+
+Each adapter handles platform-specific concerns:
+- **Parsing** hook input (JSON stdin format varies)
+- **Session ID** extraction (transcript path, env vars, PPID)
+- **Response format** (deny, modify, context injection)
+- **Hook config** generation (which tools to intercept)
+
+The MCP server itself is identical across all platforms. Adding a new platform means writing one adapter file — no changes to the core.
+
+</Card>
+
+---
+
+## <Label color="purple">5</Label> ctx_batch_execute — One Call to Rule Them All
+
+The most powerful tool in context-mode replaces 30+ individual tool calls with a single request:
+
+<Card>
+### How It Works
+
+```typescript
+ctx_batch_execute({
+  commands: [
+    { label: "Git Log", command: "git log --oneline -20" },
+    { label: "Package", command: "cat package.json" },
+    { label: "Tests",   command: "npm test" },
+  ],
+  queries: [
+    "test failures",
+    "dependency versions",
+    "recent commits mentioning auth"
+  ]
+})
+```
+
+One round trip: execute all commands → index all output → search with all queries → return only matching snippets. The raw output (potentially hundreds of KB) stays in the FTS5 index. Only the relevant search results (~2-3 KB) enter context.
+
+</Card>
+
+---
+
+## What Makes It Work
+
+The 98% context reduction isn't magic — it's the combination of three architectural decisions:
+
+1. **Sandbox at source, not filter after** — raw data never enters context at all
+2. **Exact retrieval over summaries** — FTS5 returns real code blocks, not lossy summaries
+3. **Priority-budgeted continuity** — compaction doesn't mean amnesia
+
+All of it runs locally. No telemetry, no cloud sync, no account required. SQLite databases in `~/.context-mode/`, and that's it.
+
+The project is open source under the Elastic-2.0 license: [github.com/mksglu/context-mode](https://github.com/mksglu/context-mode).
