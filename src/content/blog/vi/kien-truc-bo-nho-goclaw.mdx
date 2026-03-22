@@ -6,37 +6,269 @@ tags: ["ai", "golang", "postgresql", "architecture"]
 lang: "vi"
 ---
 
+import Card from '../../../components/mdx/Card.astro';
+import Label from '../../../components/mdx/Label.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+
 Phần lớn AI agent là stateless — chúng quên mọi thứ khi cuộc hội thoại kết thúc. GoClaw chọn hướng tiếp cận khác: mỗi agent có một bộ nhớ bền vững, có thể tìm kiếm, tồn tại xuyên suốt các phiên, người dùng, và cả các chu kỳ nén.
 
-Hệ thống gồm ba tầng, tất cả dựa trên PostgreSQL: **Memory Store** (tài liệu + chunk + embedding với tìm kiếm lai), **Knowledge Graph** (thực thể và quan hệ trích xuất bằng LLM), và **Session History** (với chu kỳ nén và flush bộ nhớ).
+Hệ thống gồm ba tầng, tất cả đều dựa trên PostgreSQL.
 
-<iframe
-  id="diagram-frame"
-  src="/diagrams/goclaw-memory-architecture.html"
-  style="width: 100%; border: none; border-radius: 8px; margin: 2rem 0; min-height: 600px;"
-  title="Kiến Trúc Bộ Nhớ GoClaw"
-  loading="lazy"
-/>
+<HeroGrid items={[
+  { label: "Memory", sublabel: "Tài liệu + chunk + embedding\nTìm kiếm lai: pgvector + tsvector", color: "#0891b2" },
+  { label: "Knowledge Graph", sublabel: "Thực thể + quan hệ + duyệt đồ thị\nTrích xuất từ hội thoại bằng LLM", color: "#059669" },
+  { label: "Sessions", sublabel: "Lịch sử tin nhắn + metadata\nChu kỳ nén + flush bộ nhớ", color: "#d97706" },
+]} />
 
-<script>{`
-  window.addEventListener('message', (e) => {
-    if (e.data?.type === 'diagram-resize') {
-      const frame = document.getElementById('diagram-frame');
-      if (frame) frame.style.height = e.data.height + 'px';
-    }
-  });
-`}</script>
+---
 
-## Tại Sao Kiến Trúc Này?
+## <Label color="teal">1</Label> Memory Store
 
-**Một database cho mọi thứ.** Tài liệu, embedding, knowledge graph, session, và context file — tất cả trong PostgreSQL. Không cần Redis, Neo4j, hay Pinecone. pgvector xử lý tìm kiếm tương đồng. tsvector xử lý full-text. JSONB xử lý metadata linh hoạt. Độ phức tạp vận hành được giữ ở mức thấp.
+<Card>
+### Mô Hình Dữ Liệu
 
-Đánh đổi là scale — kiến trúc này hoạt động tốt cho hàng nghìn agent với hàng triệu bộ nhớ, nhưng không tỉ. Cho một AI agent platform tự host, đó là đánh đổi đúng.
+Lưu trữ ba tầng: tài liệu → chunk → embedding. Mỗi tài liệu được phân quyền theo `(agent_id, user_id)` cho tenant isolation.
 
-### Quyết Định Thiết Kế Quan Trọng
+| Bảng | Cột chính | Mục đích |
+|---|---|---|
+| `memory_documents` | `agent_id`, `user_id`, `path`, `content`, `hash` | Tài liệu markdown đầy đủ (vd: `MEMORY.md`, `memory/2026-03-22.md`) |
+| `memory_chunks` | `document_id`, `text`, `embedding vector(1536)`, `tsv tsvector` | Chunk cấp đoạn văn với cả vector embedding và full-text index |
+| `embedding_cache` | `hash`, `provider`, `model`, `embedding` | Cache loại trùng — cùng text+model không bao giờ embed lại |
+</Card>
 
-- **Tìm kiếm lai** (vector + full-text) hiệu quả hơn dùng riêng lẻ. Config `'simple'` tsvector hoạt động tốt với tiếng Việt.
-- **Knowledge graph trong PostgreSQL** — không cần Neo4j khi truy vấn đồ thị giới hạn BFS depth 3.
-- **Memory flush trước nén** đảm bảo kiến thức không bao giờ mất khi session bị cắt. Regex fallback bắt những gì LLM bỏ sót.
-- **Embedding cache** theo content hash loại bỏ API call thừa — cùng text không bao giờ embed hai lần.
-- **Phân quyền multi-tenant** qua `(agent_id, user_id)` trên mọi bảng cung cấp isolation mà không cần database riêng.
+<Card>
+### Pipeline Tìm Kiếm Lai
+
+Mỗi truy vấn `memory_search` chạy **hai tìm kiếm song song**, sau đó hợp nhất kết quả với trọng số cấu hình.
+
+<FlowStep step={1} color="teal" title="Vector Search">
+  Truy vấn được embed qua <code>EmbeddingProvider</code> (API tương thích OpenAI, mặc định <code>text-embedding-3-small</code>). Cosine similarity trên <code>memory_chunks.embedding</code> sử dụng HNSW index.
+</FlowStep>
+
+<FlowStep step={2} color="teal" title="Full-Text Search">
+  PostgreSQL <code>tsvector</code> với config <code>'simple'</code> (không stemming — hoạt động tốt với tiếng Việt). Cột <code>tsv</code> được đánh GIN index trên mỗi chunk.
+</FlowStep>
+
+<FlowStep step={3} color="teal" title="Rank Fusion">
+  Kết quả hợp nhất theo <code>VectorWeight</code> và <code>TextWeight</code> (cấu hình theo agent). Lọc qua ngưỡng <code>MinScore</code>. Trả về path, line range, score, snippet, và scope.
+</FlowStep>
+</Card>
+
+<Callout color="teal">
+**Phân quyền Multi-Tenant:** Mỗi thao tác bộ nhớ được phân quyền theo `(agent_id, user_id)`. Agent chỉ thấy bộ nhớ của mình. User trong agent chỉ thấy bộ nhớ cá nhân + bộ nhớ chung (`user_id IS NULL`).
+</Callout>
+
+```go
+type MemoryStore interface {
+    GetDocument(ctx, agentID, userID, path)
+    PutDocument(ctx, agentID, userID, path, content)
+    DeleteDocument(ctx, agentID, userID, path)
+    ListDocuments(ctx, agentID, userID)
+    Search(ctx, query, agentID, userID, opts)
+    IndexDocument(ctx, agentID, userID, path)
+    SetEmbeddingProvider(provider)
+}
+```
+
+---
+
+## <Label color="green">2</Label> Knowledge Graph
+
+<Card>
+### Mô Hình Thực Thể - Quan Hệ
+
+Property graph lưu trong PostgreSQL (không phải Neo4j). Thực thể và quan hệ được phân quyền theo `(agent_id, user_id)`.
+
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 not-prose">
+<div>
+
+| kg_entities | |
+|---|---|
+| `external_id` | ID chuẩn lowercase (vd: "john-doe") |
+| `name` | Tên hiển thị bằng ngôn ngữ gốc |
+| `entity_type` | person, project, task, event, concept, location, organization |
+| `description` | Tóm tắt 1 câu |
+| `confidence` | 0.0–1.0 (độ chắc chắn trích xuất) |
+| `properties` | JSONB cho metadata tùy ý |
+
+</div>
+<div>
+
+| kg_relations | |
+|---|---|
+| `source_entity_id` | FK → kg_entities(id) |
+| `relation_type` | works_on, manages, depends_on, uses, v.v. |
+| `target_entity_id` | FK → kg_entities(id) |
+| `confidence` | Điểm tin cậy trích xuất |
+
+</div>
+</div>
+</Card>
+
+<Card>
+### Pipeline Trích Xuất LLM
+
+Thực thể và quan hệ được trích xuất từ văn bản hội thoại bằng LLM với prompt cấu trúc.
+
+<FlowStep step={1} color="green" title="Chia Chunk">
+  Văn bản dài chia tại ranh giới đoạn (tối đa 12.000 ký tự mỗi chunk). Mỗi chunk trích xuất độc lập.
+</FlowStep>
+
+<FlowStep step={2} color="green" title="Trích Xuất LLM">
+  System prompt định nghĩa 7 loại entity và 15 loại relation. LLM trả về JSON cấu trúc với <code>external_id</code>, <code>name</code>, <code>entity_type</code>, <code>confidence</code>. Temperature=0, max_tokens=8192.
+</FlowStep>
+
+<FlowStep step={3} color="green" title="Lọc + Hợp Nhất">
+  Entity dưới <code>minConfidence</code> (mặc định 0.75) bị loại. Dedup cross-chunk theo <code>external_id</code>, giữ confidence cao hơn. Relation dedup theo <code>(source, type, target)</code>.
+</FlowStep>
+
+<FlowStep step={4} color="green" title="Upsert">
+  <code>IngestExtraction()</code> bulk-upsert entity và relation vào PostgreSQL. Entity có sẵn được cập nhật, mới được tạo.
+</FlowStep>
+</Card>
+
+<Card>
+### Thao Tác Đồ Thị
+
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 not-prose">
+<div>
+<strong>Tìm kiếm</strong> — Text search trên <code>name</code> và <code>description</code> entity. Filter theo <code>entity_type</code>. <code>query="*"</code> liệt kê tất cả entity.
+</div>
+<div>
+<strong>Duyệt đồ thị</strong> — BFS từ entity bắt đầu đến <code>maxDepth</code> (mặc định 2, tối đa 3). Trả về entity kết nối với depth, path, và relation type.
+</div>
+</div>
+</Card>
+
+<Callout color="amber">
+**Pruning:** `PruneByConfidence()` xóa entity và relation dưới ngưỡng — garbage collection cho trích xuất chất lượng thấp.
+</Callout>
+
+```go
+type KnowledgeGraphStore interface {
+    UpsertEntity(ctx, entity)
+    SearchEntities(ctx, agentID, userID, query, limit)
+    ListEntities(ctx, agentID, userID, opts)
+    UpsertRelation(ctx, relation)
+    ListRelations(ctx, agentID, userID, entityID)
+    Traverse(ctx, agentID, userID, startID, maxDepth)
+    IngestExtraction(ctx, agentID, userID, entities, relations)
+    PruneByConfidence(ctx, agentID, userID, minConf)
+}
+```
+
+---
+
+## <Label color="amber">3</Label> Session History
+
+<Card>
+### Cấu Trúc Dữ Liệu Session
+
+| Trường | Loại | Mục đích |
+|---|---|---|
+| `session_key` | VARCHAR(500) | Key duy nhất: `{agent}:{channel}:{chatID}` |
+| `messages` | JSONB | Mảng tin nhắn đầy đủ (role, content, tool_calls, tool_call_id) |
+| `summary` | TEXT | Tóm tắt nén — lịch sử cô đọng cho quản lý context window |
+| `agent_id` / `user_id` | UUID / VARCHAR | Phân quyền multi-tenant |
+| `model` / `provider` | VARCHAR | LLM nào phục vụ session này |
+| `input_tokens` / `output_tokens` | BIGINT | Theo dõi token tích lũy |
+| `compaction_count` | INT | Số lần lịch sử đã bị nén |
+| `memory_flush_compaction_count` | INT | Dedup guard — tránh flush trùng trong cùng chu kỳ nén |
+| `spawned_by` / `spawn_depth` | VARCHAR / INT | Theo dõi chuỗi ủy quyền agent |
+| `context_window` / `last_prompt_tokens` | INT | Throttling tự thích ứng — scheduler đọc không cần DB lookup |
+</Card>
+
+<Card>
+### Chu Kỳ Nén + Flush Bộ Nhớ
+
+Khi session tiến gần giới hạn context window, GoClaw chạy chu kỳ hai pha để bảo tồn kiến thức trước khi cắt lịch sử.
+
+<FlowStep step={1} color="amber" title="Memory Flush (Trước Nén)">
+  Gửi flush prompt tới LLM với file tools. Agent ghi bộ nhớ bền vào <code>memory/*.md</code>. Tối đa 5 vòng tool, timeout 90 giây. Tăng <code>memory_flush_compaction_count</code> làm dedup guard.
+</FlowStep>
+
+<FlowStep step={2} color="amber" title="Fallback Trích Xuất">
+  Nếu LLM trả về <code>NO_REPLY</code> hoặc thất bại, regex-based extraction khởi động. Bắt: quyết định (<em>"quyết định..."</em>), sở thích (<em>"tôi thích..."</em>), dữ kiện kỹ thuật (<em>"API là..."</em>), URL, đường dẫn file, ngày tháng.
+</FlowStep>
+
+<FlowStep step={3} color="amber" title="Nén">
+  Lịch sử tóm tắt vào <code>session.summary</code>. Tin nhắn cũ bị cắt. Summary inject làm context cho các lượt sau. <code>compaction_count</code> tăng lên.
+</FlowStep>
+
+<FlowStep step={4} color="amber" title="Lập Chỉ Mục">
+  Tài liệu flush được chunk (ranh giới đoạn), embed qua <code>EmbeddingProvider</code>, và lưu với cả <code>vector(1536)</code> và <code>tsvector</code> index cho tìm kiếm lai trong tương lai.
+</FlowStep>
+</Card>
+
+---
+
+## <Label color="rose">4</Label> Kết Nối Ba Hệ Thống
+
+<Card accent="rose" flush>
+### Tích Hợp Agent Loop
+
+Trong mỗi lượt agent, ba hệ thống tương tác qua tool layer:
+
+<FlowStep step="A" color="rose" title="Recall">
+  Agent gọi <code>memory_search</code> → tìm kiếm lai trên tất cả tài liệu bộ nhớ. Nếu knowledge graph bật, agent cũng gọi <code>knowledge_graph_search</code> cho truy vấn entity/relationship. Kết quả inject vào context.
+</FlowStep>
+
+<FlowStep step="B" color="rose" title="Hội Thoại">
+  Tin nhắn lưu trong bảng <code>sessions</code> dạng JSONB. Token count tích lũy. Context window giám sát cho ngưỡng nén.
+</FlowStep>
+
+<FlowStep step="C" color="rose" title="Bền Vững Hóa">
+  Khi kích hoạt nén: memory flush ghi vào <code>memory_documents</code> → chunk embed → lập chỉ mục. KG extractor chạy trên nội dung flush → entity/relation upsert vào <code>kg_entities</code>/<code>kg_relations</code>.
+</FlowStep>
+
+<FlowStep step="D" color="rose" title="Context Files">
+  Tách biệt khỏi memory: <code>agent_context_files</code> (chia sẻ tất cả user) và <code>user_context_files</code> (theo user). Inject vào system prompt mỗi lượt. Nghĩ như <code>AGENTS.md</code> cho agent và <code>USER.md</code> cho user.
+</FlowStep>
+</Card>
+
+---
+
+## <Label color="green">5</Label> Bản Đồ Source File
+
+<Card>
+
+| Tầng | File | Vai trò |
+|---|---|---|
+| <Label color="teal">Store</Label> | `internal/store/memory_store.go` | MemoryStore interface + types |
+| | `internal/store/knowledge_graph_store.go` | KnowledgeGraphStore interface + types |
+| | `internal/store/session_store.go` | SessionStore interface + SessionData struct |
+| <Label color="green">Core</Label> | `internal/memory/embeddings.go` | EmbeddingProvider, chunking, cosine similarity |
+| | `internal/knowledgegraph/extractor.go` | LLM extraction pipeline, JSON parsing, chunk merging |
+| <Label color="amber">Agent</Label> | `internal/agent/memoryflush.go` | Điều phối memory flush trước nén |
+| | `internal/agent/extractive_memory.go` | Regex-based fallback extraction |
+| <Label color="rose">Tools</Label> | `internal/tools/memory.go` | memory_search + memory_get tools (agent-facing) |
+| | `internal/tools/knowledge_graph.go` | knowledge_graph_search tool (search + traverse) |
+
+</Card>
+
+---
+
+## Tại Sao PostgreSQL?
+
+Một database cho mọi thứ: tài liệu, embedding, knowledge graph, session, và context file. Không cần Redis, Neo4j, hay Pinecone.
+
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 my-6 not-prose">
+<Card>
+<strong>pgvector</strong> xử lý tìm kiếm tương đồng với HNSW index trên cột <code>vector(1536)</code>.
+</Card>
+<Card>
+<strong>tsvector</strong> xử lý full-text search với GIN index, config <code>'simple'</code> cho hỗ trợ đa ngôn ngữ.
+</Card>
+<Card>
+<strong>JSONB</strong> xử lý metadata linh hoạt — session messages, entity properties, tool call results.
+</Card>
+<Card>
+<strong>Low ops</strong> — một database để backup, monitor, và scale. Không cần phối hợp giữa các service riêng biệt.
+</Card>
+</div>
+
+<Callout color="teal">
+**Đánh đổi là scale** — kiến trúc này hoạt động tốt cho hàng nghìn agent với hàng triệu bộ nhớ, nhưng không tỉ. Cho một AI agent platform tự host, đó là đánh đổi đúng.
+</Callout>
