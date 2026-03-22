@@ -8,7 +8,7 @@ const recentPosts = allPosts
   .sort((a, b) => new Date(b.data.pubDate).getTime() - new Date(a.data.pubDate).getTime())
   .slice(0, 4);
 
-const techStack = ['Java', 'Go', 'PostgreSQL', 'Docker', 'Kubernetes', 'AWS', 'AI/LLM'];
+const techStack = ['Java', 'Quarkus', 'Spring Boot', 'Neo4j', 'PostgreSQL', 'MongoDB', 'Keycloak', 'Kafka', 'Docker', 'Kubernetes', 'AWS', 'AI/LLM'];
 const goclawTech = ['Go', 'PostgreSQL', 'Docker', 'OpenTelemetry'];
 ---
 
@@ -35,12 +35,12 @@ const goclawTech = ['Go', 'PostgreSQL', 'Docker', 'OpenTelemetry'];
           <div class="mb-4">
             <span class="text-[var(--color-accent)]">$</span>
             <span class="text-[var(--color-text-dim)]"> cat role.txt</span>
-            <div class="text-[var(--color-text)] mt-1">Backend Engineer — Java, Go, AI, PostgreSQL</div>
+            <div class="text-[var(--color-text)] mt-1">Backend Engineer — Java, Microservices, Multi-Tenant, Cloud-Native</div>
           </div>
           <div>
             <span class="text-[var(--color-accent)]">$</span>
             <span class="text-[var(--color-text-dim)]"> echo $MISSION</span>
-            <div class="text-[var(--color-text)] mt-1">Building intelligent systems that remember, reason, and act.</div>
+            <div class="text-[var(--color-text)] mt-1">Building scalable multi-tenant systems and exploring AI agent architectures.</div>
           </div>
         </div>
       </div>
@@ -135,7 +135,7 @@ const goclawTech = ['Go', 'PostgreSQL', 'Docker', 'OpenTelemetry'];
   <section class="py-12">
     <div class="max-w-3xl mx-auto px-4">
       <h2 class="text-2xl font-bold mb-8">
-        <span class="text-[var(--color-accent)] font-mono">#</span> Projects
+        <span class="text-[var(--color-accent)] font-mono">#</span> Open Source I Study
       </h2>
 
       <a
@@ -148,12 +148,12 @@ const goclawTech = ['Go', 'PostgreSQL', 'Docker', 'OpenTelemetry'];
           <h3 class="text-lg font-bold text-[var(--color-text)] group-hover:text-[var(--color-accent)] transition-colors">
             GoClaw
           </h3>
-          <span class="text-xs font-mono text-[var(--color-accent)] border border-[var(--color-accent)] px-2 py-0.5 rounded">
-            Open Source
+          <span class="text-xs font-mono text-[var(--color-text-dim)] border border-[var(--color-border)] px-2 py-0.5 rounded">
+            Architecture Study
           </span>
         </div>
         <p class="text-sm text-[var(--color-text-dim)] mb-4 leading-relaxed">
-          Enterprise AI Agent Platform — multi-agent gateway built in Go. 20+ LLM providers, 7 channels, multi-tenant PostgreSQL.
+          An open-source multi-agent AI gateway built in Go. I study its architecture and write deep dives on its design — provider abstraction, security model, memory systems, and agent orchestration.
         </p>
         <div class="flex flex-wrap gap-2">
           {goclawTech.map((tech) => (
@@ -174,9 +174,8 @@ const goclawTech = ['Go', 'PostgreSQL', 'Docker', 'OpenTelemetry'];
       </h2>
 
       <p class="text-[var(--color-text-dim)] leading-relaxed mb-6">
-        Backend engineer based in Vietnam. I build AI agent platforms, distributed systems, and developer tools.
-        Currently working on GoClaw — an enterprise multi-agent gateway.
-        I write about architecture decisions, Go patterns, and AI systems.
+        Backend engineer based in Vietnam, building multi-tenant microservices and cloud-native platforms with Java, Quarkus, and Spring Boot.
+        I explore open-source AI agent frameworks and write deep dives on their architecture — currently studying GoClaw's design patterns.
       </p>
 
       <!-- Tech stack pills -->
