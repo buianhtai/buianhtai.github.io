@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GoClaw Memory & Knowledge Architecture</title>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f8f6f3;
+      --surface: #ffffff;
+      --surface-alt: #f0ede8;
+      --border: rgba(0,0,0,0.08);
+      --border-strong: rgba(0,0,0,0.15);
+      --text: #1a1a1a;
+      --text-dim: #6b6b6b;
+      --text-muted: #999;
+      --accent-1: #0891b2;
+      --accent-1-bg: rgba(8,145,178,0.08);
+      --accent-2: #059669;
+      --accent-2-bg: rgba(5,150,105,0.08);
+      --accent-3: #d97706;
+      --accent-3-bg: rgba(217,119,6,0.08);
+      --accent-4: #be123c;
+      --accent-4-bg: rgba(190,18,60,0.08);
+      --code-bg: #2d2d2d;
+      --code-text: #e0e0e0;
+      --font-body: 'IBM Plex Sans', -apple-system, sans-serif;
+      --font-mono: 'IBM Plex Mono', 'Fira Code', monospace;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+      --shadow-lg: 0 8px 24px rgba(0,0,0,0.1);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #121212;
+        --surface: #1e1e1e;
+        --surface-alt: #252525;
+        --border: rgba(255,255,255,0.08);
+        --border-strong: rgba(255,255,255,0.15);
+        --text: #e8e8e8;
+        --text-dim: #999;
+        --text-muted: #666;
+        --accent-1-bg: rgba(8,145,178,0.15);
+        --accent-2-bg: rgba(5,150,105,0.15);
+        --accent-3-bg: rgba(217,119,6,0.15);
+        --accent-4-bg: rgba(190,18,60,0.15);
+        --code-bg: #0d0d0d;
+        --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
+        --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
+        --shadow-lg: 0 8px 24px rgba(0,0,0,0.5);
+      }
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: var(--font-body); background: var(--bg); color: var(--text); line-height: 1.6; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+    h1 { font-size: 2rem; font-weight: 700; margin-bottom: 0.25rem; }
+    h2 { font-size: 1.35rem; font-weight: 600; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
+    h3 { font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; }
+    .subtitle { color: var(--text-dim); font-size: 1.05rem; margin-bottom: 2.5rem; }
+    .label { font-family: var(--font-mono); font-size: 0.7rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.08em; padding: 0.15rem 0.5rem; border-radius: 3px; display: inline-block; }
+    .label--teal { background: var(--accent-1-bg); color: var(--accent-1); }
+    .label--green { background: var(--accent-2-bg); color: var(--accent-2); }
+    .label--amber { background: var(--accent-3-bg); color: var(--accent-3); }
+    .label--rose { background: var(--accent-4-bg); color: var(--accent-4); }
+    code { font-family: var(--font-mono); font-size: 0.85em; background: var(--surface-alt); padding: 0.1em 0.35em; border-radius: 3px; }
+    .section { margin-bottom: 3rem; animation: fadeUp 0.5s ease both; }
+    .section:nth-child(2) { animation-delay: 0.05s; }
+    .section:nth-child(3) { animation-delay: 0.1s; }
+    .section:nth-child(4) { animation-delay: 0.15s; }
+    .section:nth-child(5) { animation-delay: 0.2s; }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+    @media (prefers-reduced-motion: reduce) { .section { animation: none; } }
+
+    .hero-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 2rem;
+      box-shadow: var(--shadow-md);
+      margin-bottom: 2.5rem;
+    }
+    .hero-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.5rem;
+      margin-top: 1.5rem;
+    }
+    @media (max-width: 768px) { .hero-grid { grid-template-columns: 1fr; } }
+    .hero-stat {
+      text-align: center;
+      padding: 1.25rem;
+      border-radius: 8px;
+      background: var(--surface-alt);
+    }
+    .hero-stat__num { font-size: 2rem; font-weight: 700; line-height: 1; }
+    .hero-stat__label { font-size: 0.8rem; color: var(--text-dim); margin-top: 0.35rem; }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.5rem;
+      box-shadow: var(--shadow-sm);
+    }
+    .card + .card { margin-top: 1rem; }
+    .card--flush { border-left: 3px solid; }
+
+    .flow {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      position: relative;
+    }
+    .flow-step {
+      display: grid;
+      grid-template-columns: 48px 1fr;
+      gap: 1rem;
+      align-items: start;
+    }
+    .flow-step + .flow-step { margin-top: 0.5rem; }
+    .flow-num {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--font-mono); font-size: 0.8rem; font-weight: 600;
+      position: relative;
+      z-index: 1;
+    }
+    .flow-num--teal { background: var(--accent-1-bg); color: var(--accent-1); }
+    .flow-num--green { background: var(--accent-2-bg); color: var(--accent-2); }
+    .flow-num--amber { background: var(--accent-3-bg); color: var(--accent-3); }
+    .flow-num--rose { background: var(--accent-4-bg); color: var(--accent-4); }
+    .flow-content { padding-bottom: 1rem; border-bottom: 1px solid var(--border); }
+    .flow-step:last-child .flow-content { border-bottom: none; padding-bottom: 0; }
+
+    .schema-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+      margin-top: 0.75rem;
+    }
+    .schema-table th {
+      text-align: left;
+      font-weight: 600;
+      padding: 0.5rem 0.75rem;
+      border-bottom: 2px solid var(--border-strong);
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-dim);
+    }
+    .schema-table td {
+      padding: 0.4rem 0.75rem;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    .schema-table tr:last-child td { border-bottom: none; }
+    .schema-table code { font-size: 0.8em; }
+
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    @media (max-width: 768px) { .two-col { grid-template-columns: 1fr; } }
+
+    .interface-block {
+      background: var(--code-bg);
+      color: var(--code-text);
+      border-radius: 6px;
+      padding: 1rem 1.25rem;
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      line-height: 1.65;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .interface-block .kw { color: #c792ea; }
+    .interface-block .type { color: #82aaff; }
+    .interface-block .fn { color: #c3e88d; }
+    .interface-block .comment { color: #546e7a; }
+
+    .callout {
+      padding: 1rem 1.25rem;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      margin-top: 1rem;
+    }
+    .callout--teal { background: var(--accent-1-bg); border-left: 3px solid var(--accent-1); }
+    .callout--amber { background: var(--accent-3-bg); border-left: 3px solid var(--accent-3); }
+
+    .tag-list { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.5rem; }
+    .tag { font-family: var(--font-mono); font-size: 0.72rem; padding: 0.1rem 0.4rem; border-radius: 3px; background: var(--surface-alt); color: var(--text-dim); border: 1px solid var(--border); }
+
+    .connector {
+      text-align: center;
+      padding: 0.75rem 0;
+      color: var(--text-muted);
+      font-size: 1.2rem;
+      line-height: 1;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <h1>GoClaw Memory & Knowledge Architecture</h1>
+    <p class="subtitle">Three-layer intelligence system: per-user memory, knowledge graph, and session history — all PostgreSQL-backed with pgvector</p>
+
+    <!-- Hero Overview -->
+    <div class="hero-card section">
+      <h2><span class="label label--teal">overview</span> Three Subsystems</h2>
+      <p style="color: var(--text-dim); margin-bottom: 1rem;">GoClaw's intelligence layer is built on three complementary subsystems, each scoped per-agent and per-user for multi-tenant isolation.</p>
+      <div class="hero-grid">
+        <div class="hero-stat">
+          <div class="hero-stat__num" style="color: var(--accent-1);">Memory</div>
+          <div class="hero-stat__label">Documents + chunks + embeddings<br>Hybrid search: pgvector + tsvector</div>
+        </div>
+        <div class="hero-stat">
+          <div class="hero-stat__num" style="color: var(--accent-2);">Knowledge Graph</div>
+          <div class="hero-stat__label">Entities + relations + traversal<br>LLM-extracted from conversations</div>
+        </div>
+        <div class="hero-stat">
+          <div class="hero-stat__num" style="color: var(--accent-3);">Sessions</div>
+          <div class="hero-stat__label">Full message history + metadata<br>Compaction + memory flush cycle</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 1. MEMORY SYSTEM -->
+    <div class="section">
+      <h2><span class="label label--teal">1</span> Memory System</h2>
+
+      <div class="card" style="margin-bottom: 1rem;">
+        <h3>Data Model</h3>
+        <p style="font-size: 0.9rem; color: var(--text-dim); margin-bottom: 0.75rem;">Three-tier storage: documents → chunks → embeddings. Every document is scoped to <code>(agent_id, user_id)</code> for tenant isolation.</p>
+        <table class="schema-table">
+          <thead><tr><th>Table</th><th>Key Columns</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><code>memory_documents</code></td>
+              <td><code>agent_id</code>, <code>user_id</code>, <code>path</code>, <code>content</code>, <code>hash</code></td>
+              <td>Full markdown files (e.g., <code>MEMORY.md</code>, <code>memory/2026-03-22.md</code>)</td>
+            </tr>
+            <tr>
+              <td><code>memory_chunks</code></td>
+              <td><code>document_id</code>, <code>text</code>, <code>embedding vector(1536)</code>, <code>tsv tsvector</code></td>
+              <td>Paragraph-level chunks with both vector embedding and full-text search index</td>
+            </tr>
+            <tr>
+              <td><code>embedding_cache</code></td>
+              <td><code>hash</code>, <code>provider</code>, <code>model</code>, <code>embedding</code></td>
+              <td>Deduplication cache — same text+model never re-embedded</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card" style="margin-bottom: 1rem;">
+        <h3>Hybrid Search Pipeline</h3>
+        <p style="font-size: 0.9rem; color: var(--text-dim); margin-bottom: 0.75rem;">Every <code>memory_search</code> query runs <strong>two searches in parallel</strong>, then fuses results with configurable weights.</p>
+        <div class="flow">
+          <div class="flow-step">
+            <div class="flow-num flow-num--teal">1</div>
+            <div class="flow-content">
+              <strong>Vector Search</strong> — Query is embedded via <code>EmbeddingProvider</code> (OpenAI-compatible API, default <code>text-embedding-3-small</code>). Cosine similarity against <code>memory_chunks.embedding</code> using HNSW index.
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-num flow-num--teal">2</div>
+            <div class="flow-content">
+              <strong>Full-Text Search</strong> — PostgreSQL <code>tsvector</code> with <code>'simple'</code> config (no stemming — works for Vietnamese and non-English). GIN-indexed <code>tsv</code> column on every chunk.
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-num flow-num--teal">3</div>
+            <div class="flow-content">
+              <strong>Rank Fusion</strong> — Results merged by <code>VectorWeight</code> and <code>TextWeight</code> (per-agent configurable). Filtered by <code>MinScore</code> threshold. Returns path, line range, score, snippet, and scope (global vs personal).
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Multi-Tenant Scoping</h3>
+        <p style="font-size: 0.9rem; color: var(--text-dim); margin-bottom: 0.5rem;">Every memory operation is scoped by <code>(agent_id, user_id)</code>. Agents see only their own memories. Users within an agent see only their personal memories + the agent's global memories (<code>user_id IS NULL</code>).</p>
+        <div class="tag-list">
+          <span class="tag">agent_id: UUID → agents(id)</span>
+          <span class="tag">user_id: per-channel identity</span>
+          <span class="tag">global scope: user_id = NULL</span>
+          <span class="tag">personal scope: user_id = 'telegram:12345'</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. KNOWLEDGE GRAPH -->
+    <div class="section">
+      <h2><span class="label label--green">2</span> Knowledge Graph</h2>
+
+      <div class="card" style="margin-bottom: 1rem;">
+        <h3>Entity-Relation Model</h3>
+        <p style="font-size: 0.9rem; color: var(--text-dim); margin-bottom: 0.75rem;">Classic property graph stored in PostgreSQL (not Neo4j). Entities and relations are scoped per <code>(agent_id, user_id)</code>.</p>
+        <div class="two-col">
+          <div>
+            <table class="schema-table">
+              <thead><tr><th colspan="2">kg_entities</th></tr></thead>
+              <tbody>
+                <tr><td><code>external_id</code></td><td>Canonical lowercase ID (e.g., "john-doe")</td></tr>
+                <tr><td><code>name</code></td><td>Display name in original language</td></tr>
+                <tr><td><code>entity_type</code></td><td>person | project | task | event | concept | location | organization</td></tr>
+                <tr><td><code>description</code></td><td>1-sentence summary</td></tr>
+                <tr><td><code>confidence</code></td><td>0.0–1.0 (extraction certainty)</td></tr>
+                <tr><td><code>properties</code></td><td>JSONB for arbitrary metadata</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div>
+            <table class="schema-table">
+              <thead><tr><th colspan="2">kg_relations</th></tr></thead>
+              <tbody>
+                <tr><td><code>source_entity_id</code></td><td>FK → kg_entities(id)</td></tr>
+                <tr><td><code>relation_type</code></td><td>works_on, manages, depends_on, uses, etc.</td></tr>
+                <tr><td><code>target_entity_id</code></td><td>FK → kg_entities(id)</td></tr>
+                <tr><td><code>confidence</code></td><td>Extraction confidence score</td></tr>
+              </tbody>
+            </table>
+            <div class="callout callout--teal" style="margin-top: 0.75rem; font-size: 0.82rem;">
+              <strong>Dedup constraint:</strong> <code>UNIQUE(agent_id, user_id, source, type, target)</code> — same relation is never stored twice.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom: 1rem;">
+        <h3>LLM Extraction Pipeline</h3>
+        <p style="font-size: 0.9rem; color: var(--text-dim); margin-bottom: 0.75rem;">Entities and relations are extracted from conversation text by an LLM call with a structured prompt.</p>
+        <div class="flow">
+          <div class="flow-step">
+            <div class="flow-num flow-num--green">1</div>
+            <div class="flow-content">
+              <strong>Chunking</strong> — Long text split at paragraph boundaries (max 12,000 chars per chunk). Each chunk extracted independently.
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-num flow-num--green">2</div>
+            <div class="flow-content">
+              <strong>LLM Extraction</strong> — System prompt defines 7 entity types and 15 relation types. LLM returns structured JSON with <code>external_id</code>, <code>name</code>, <code>entity_type</code>, <code>confidence</code>. Temperature=0, max_tokens=8192.
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-num flow-num--green">3</div>
+            <div class="flow-content">
+              <strong>Filtering + Merging</strong> — Entities below <code>minConfidence</code> (default 0.75) are dropped. Cross-chunk dedup by <code>external_id</code>, keeping higher confidence. Relations deduped by <code>(source, type, target)</code>.
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-num flow-num--green">4</div>
+            <div class="flow-content">
+              <strong>Upsert</strong> — <code>IngestExtraction()</code> bulk-upserts entities and relations into PostgreSQL. Existing entities updated, new ones created.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Graph Operations</h3>
+        <div class="two-col">
+          <div>
+            <h3 style="font-size: 0.85rem;">Search</h3>
+            <p style="font-size: 0.85rem; color: var(--text-dim);">Text search on entity <code>name</code> and <code>description</code>. Optional <code>entity_type</code> filter. Returns entities with their relations resolved to human-readable names. <code>query="*"</code> lists all entities.</p>
+          </div>
+          <div>
+            <h3 style="font-size: 0.85rem;">Traversal</h3>
+            <p style="font-size: 0.85rem; color: var(--text-dim);">BFS from a start entity up to <code>maxDepth</code> (default 2, max 3). Returns connected entities with depth, path, and connecting relation type. Used for multi-hop relationship discovery.</p>
+          </div>
+        </div>
+        <div class="callout callout--amber" style="font-size: 0.82rem;">
+          <strong>Pruning:</strong> <code>PruneByConfidence()</code> removes entities and relations below a threshold — garbage collection for low-quality extractions.
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. SESSION HISTORY -->
+    <div class="section">
+      <h2><span class="label label--amber">3</span> Session History</h2>
+
+      <div class="card" style="margin-bottom: 1rem;">
+        <h3>Session Data Structure</h3>
+        <table class="schema-table">
+          <thead><tr><th>Field</th><th>Type</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td><code>session_key</code></td><td>VARCHAR(500)</td><td>Unique key (format: <code>{agent}:{channel}:{chatID}</code>)</td></tr>
+            <tr><td><code>messages</code></td><td>JSONB</td><td>Full message array (role, content, tool_calls, tool_call_id)</td></tr>
+            <tr><td><code>summary</code></td><td>TEXT</td><td>Compaction summary — condensed history for context window management</td></tr>
+            <tr><td><code>agent_id</code> / <code>user_id</code></td><td>UUID / VARCHAR</td><td>Multi-tenant scoping</td></tr>
+            <tr><td><code>model</code> / <code>provider</code></td><td>VARCHAR</td><td>Which LLM served this session</td></tr>
+            <tr><td><code>input_tokens</code> / <code>output_tokens</code></td><td>BIGINT</td><td>Cumulative token usage tracking</td></tr>
+            <tr><td><code>compaction_count</code></td><td>INT</td><td>How many times history was compacted</td></tr>
+            <tr><td><code>memory_flush_compaction_count</code></td><td>INT</td><td>Dedup guard — prevents duplicate memory flushes per compaction cycle</td></tr>
+            <tr><td><code>spawned_by</code> / <code>spawn_depth</code></td><td>VARCHAR / INT</td><td>Agent delegation chain tracking</td></tr>
+            <tr><td><code>context_window</code> / <code>last_prompt_tokens</code></td><td>INT</td><td>Adaptive throttling — scheduler reads without DB lookup</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <h3>Compaction + Memory Flush Cycle</h3>
+        <p style="font-size: 0.9rem; color: var(--text-dim); margin-bottom: 0.75rem;">When a session approaches the context window limit, GoClaw runs a two-phase cycle to preserve knowledge before truncating history.</p>
+        <div class="flow">
+          <div class="flow-step">
+            <div class="flow-num flow-num--amber">1</div>
+            <div class="flow-content">
+              <strong>Memory Flush (Pre-Compaction)</strong> — Sends flush prompt to LLM with file tools enabled. Agent writes durable memories to <code>memory/*.md</code> files. Max 5 tool iterations, 90s timeout. Increments <code>memory_flush_compaction_count</code> as dedup guard.
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-num flow-num--amber">2</div>
+            <div class="flow-content">
+              <strong>Extractive Fallback</strong> — If LLM returns <code>NO_REPLY</code> or fails, regex-based extraction kicks in. Captures: decisions (<em>"decided to..."</em>), user preferences (<em>"I prefer..."</em>), technical facts (<em>"the API is..."</em>), URLs, file paths, dates. Appends to <code>memory/YYYY-MM-DD-auto-extract.md</code>.
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-num flow-num--amber">3</div>
+            <div class="flow-content">
+              <strong>Compaction</strong> — History summarized into <code>session.summary</code>. Old messages truncated. Summary injected as context in future turns. <code>compaction_count</code> incremented.
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-num flow-num--amber">4</div>
+            <div class="flow-content">
+              <strong>Indexing</strong> — Flushed memory documents are chunked (paragraph boundaries), embedded via <code>EmbeddingProvider</code>, and stored with both <code>vector(1536)</code> and <code>tsvector</code> indexes for future hybrid search.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. HOW THEY CONNECT -->
+    <div class="section">
+      <h2><span class="label label--rose">4</span> How The Three Systems Connect</h2>
+
+      <div class="card" style="border-left: 3px solid var(--accent-4);">
+        <h3>Agent Loop Integration</h3>
+        <p style="font-size: 0.9rem; color: var(--text-dim); margin-bottom: 1rem;">During every agent turn, the three systems interact through the tool layer:</p>
+
+        <div class="flow">
+          <div class="flow-step">
+            <div class="flow-num flow-num--rose">A</div>
+            <div class="flow-content">
+              <strong>Recall</strong> — Agent calls <code>memory_search</code> tool → hybrid search across all memory documents. If knowledge graph is enabled, agent also calls <code>knowledge_graph_search</code> for entity/relationship queries. Results injected into context.
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-num flow-num--rose">B</div>
+            <div class="flow-content">
+              <strong>Conversation</strong> — Messages stored in <code>sessions</code> table as JSONB array. Token counts accumulated. Context window monitored for compaction threshold.
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-num flow-num--rose">C</div>
+            <div class="flow-content">
+              <strong>Persist</strong> — On compaction trigger: memory flush writes to <code>memory_documents</code> → chunks embedded → indexed. Knowledge graph extractor runs on flushed content → entities/relations upserted to <code>kg_entities</code>/<code>kg_relations</code>.
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-num flow-num--rose">D</div>
+            <div class="flow-content">
+              <strong>Context Files</strong> — Separate from memory: <code>agent_context_files</code> (shared across all users) and <code>user_context_files</code> (per-user). Injected into system prompt on every turn. Think <code>AGENTS.md</code> and <code>USER.md</code>.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. KEY INTERFACES -->
+    <div class="section">
+      <h2><span class="label label--teal">5</span> Key Interfaces</h2>
+
+      <div class="two-col">
+        <div class="card">
+          <h3><code>MemoryStore</code></h3>
+          <p style="font-size: 0.82rem; color: var(--text-dim); margin-bottom: 0.5rem;">internal/store/memory_store.go</p>
+          <div class="interface-block"><span class="kw">type</span> <span class="type">MemoryStore</span> <span class="kw">interface</span> {
+  <span class="comment">// CRUD</span>
+  <span class="fn">GetDocument</span>(ctx, agentID, userID, path)
+  <span class="fn">PutDocument</span>(ctx, agentID, userID, path, content)
+  <span class="fn">DeleteDocument</span>(ctx, agentID, userID, path)
+  <span class="fn">ListDocuments</span>(ctx, agentID, userID)
+
+  <span class="comment">// Search (hybrid vector + FTS)</span>
+  <span class="fn">Search</span>(ctx, query, agentID, userID, opts)
+
+  <span class="comment">// Indexing</span>
+  <span class="fn">IndexDocument</span>(ctx, agentID, userID, path)
+  <span class="fn">SetEmbeddingProvider</span>(provider)
+}</div>
+        </div>
+        <div class="card">
+          <h3><code>KnowledgeGraphStore</code></h3>
+          <p style="font-size: 0.82rem; color: var(--text-dim); margin-bottom: 0.5rem;">internal/store/knowledge_graph_store.go</p>
+          <div class="interface-block"><span class="kw">type</span> <span class="type">KnowledgeGraphStore</span> <span class="kw">interface</span> {
+  <span class="comment">// Entities</span>
+  <span class="fn">UpsertEntity</span>(ctx, entity)
+  <span class="fn">SearchEntities</span>(ctx, agentID, userID, query, limit)
+  <span class="fn">ListEntities</span>(ctx, agentID, userID, opts)
+
+  <span class="comment">// Relations</span>
+  <span class="fn">UpsertRelation</span>(ctx, relation)
+  <span class="fn">ListRelations</span>(ctx, agentID, userID, entityID)
+
+  <span class="comment">// Graph ops</span>
+  <span class="fn">Traverse</span>(ctx, agentID, userID, startID, maxDepth)
+  <span class="fn">IngestExtraction</span>(ctx, agentID, userID, entities, relations)
+  <span class="fn">PruneByConfidence</span>(ctx, agentID, userID, minConf)
+}</div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top: 1rem;">
+        <h3><code>EmbeddingProvider</code></h3>
+        <p style="font-size: 0.82rem; color: var(--text-dim); margin-bottom: 0.5rem;">internal/memory/embeddings.go — OpenAI-compatible API, used by both Memory and KG</p>
+        <div class="interface-block"><span class="kw">type</span> <span class="type">EmbeddingProvider</span> <span class="kw">interface</span> {
+  <span class="fn">Name</span>() <span class="type">string</span>             <span class="comment">// "openai", "voyage", "ollama"</span>
+  <span class="fn">Model</span>() <span class="type">string</span>            <span class="comment">// "text-embedding-3-small"</span>
+  <span class="fn">Embed</span>(ctx, texts) <span class="type">[][]float32</span>  <span class="comment">// Batch embed, cached by content hash</span>
+}
+
+<span class="comment">// Implementation: OpenAIEmbeddingProvider</span>
+<span class="comment">// POST {apiURL}/embeddings with model + input[]</span>
+<span class="comment">// Supports WithDimensions() for truncation</span>
+<span class="comment">// CosineSimilarity(a, b) for manual scoring</span></div>
+      </div>
+    </div>
+
+    <!-- 6. FILE MAP -->
+    <div class="section">
+      <h2><span class="label label--green">6</span> Source File Map</h2>
+      <div class="card">
+        <table class="schema-table">
+          <thead><tr><th>Layer</th><th>File</th><th>Role</th></tr></thead>
+          <tbody>
+            <tr><td rowspan="3"><span class="label label--teal">Store</span></td>
+              <td><code>internal/store/memory_store.go</code></td><td>MemoryStore interface + types</td></tr>
+            <tr><td><code>internal/store/knowledge_graph_store.go</code></td><td>KnowledgeGraphStore interface + types</td></tr>
+            <tr><td><code>internal/store/session_store.go</code></td><td>SessionStore interface + SessionData struct</td></tr>
+            <tr><td rowspan="2"><span class="label label--green">Core</span></td>
+              <td><code>internal/memory/embeddings.go</code></td><td>EmbeddingProvider, chunking, cosine similarity</td></tr>
+            <tr><td><code>internal/knowledgegraph/extractor.go</code></td><td>LLM extraction pipeline, JSON parsing, chunk merging</td></tr>
+            <tr><td rowspan="2"><span class="label label--amber">Agent</span></td>
+              <td><code>internal/agent/memoryflush.go</code></td><td>Pre-compaction memory flush orchestration</td></tr>
+            <tr><td><code>internal/agent/extractive_memory.go</code></td><td>Regex-based fallback extraction</td></tr>
+            <tr><td rowspan="2"><span class="label label--rose">Tools</span></td>
+              <td><code>internal/tools/memory.go</code></td><td>memory_search + memory_get tools (agent-facing)</td></tr>
+            <tr><td><code>internal/tools/knowledge_graph.go</code></td><td>knowledge_graph_search tool (search + traverse)</td></tr>
+            <tr><td rowspan="3"><span class="label label--teal">Schema</span></td>
+              <td><code>migrations/000001_init_schema.up.sql</code></td><td>memory_documents, memory_chunks, sessions, embedding_cache</td></tr>
+            <tr><td><code>migrations/000013_knowledge_graph.up.sql</code></td><td>kg_entities, kg_relations</td></tr>
+            <tr><td><code>migrations/000025_kg_entity_embeddings.up.sql</code></td><td>Adds vector embeddings to KG entities</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

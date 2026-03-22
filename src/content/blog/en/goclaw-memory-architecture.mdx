@@ -6,218 +6,27 @@ tags: ["ai", "golang", "postgresql", "architecture"]
 lang: "en"
 ---
 
-import Card from '../../../components/mdx/Card.astro';
-import Label from '../../../components/mdx/Label.astro';
-import FlowStep from '../../../components/mdx/FlowStep.astro';
-import HeroGrid from '../../../components/mdx/HeroGrid.astro';
-import Callout from '../../../components/mdx/Callout.astro';
-
 Most AI agents are stateless. They forget everything the moment a conversation ends. GoClaw takes a different approach — it gives every agent a durable, searchable memory that survives across sessions, users, and even compaction cycles.
 
-The system has three layers, all backed by PostgreSQL.
+The system has three layers, all backed by PostgreSQL: a **Memory Store** (documents + chunks + embeddings with hybrid search), a **Knowledge Graph** (LLM-extracted entities and relations), and **Session History** (with compaction and memory flush cycles).
 
-<HeroGrid items={[
-  { label: "Memory", sublabel: "Documents + chunks + embeddings\nHybrid search: pgvector + tsvector", color: "#0891b2" },
-  { label: "Knowledge Graph", sublabel: "Entities + relations + traversal\nLLM-extracted from conversations", color: "#059669" },
-  { label: "Sessions", sublabel: "Full message history + metadata\nCompaction + memory flush cycle", color: "#d97706" },
-]} />
+<iframe
+  src="/diagrams/goclaw-memory-architecture.html"
+  style="width: 100%; height: 3200px; border: none; border-radius: 8px; margin: 2rem 0;"
+  title="GoClaw Memory & Knowledge Architecture"
+  loading="lazy"
+/>
 
-## <Label color="teal">1</Label> Memory Store
+## Why This Architecture?
 
-<Card>
-### Data Model
+**One database for everything.** Documents, embeddings, knowledge graph, sessions, and context files — all in PostgreSQL. No Redis, no Neo4j, no Pinecone. pgvector handles similarity search. tsvector handles full-text. JSONB handles schema-flexible metadata. The operational complexity stays low.
 
-The foundation is a three-tier document store. Agents write markdown files (think `MEMORY.md` or dated notes like `memory/2026-03-22.md`), and these get chunked at paragraph boundaries, embedded via an OpenAI-compatible API, and indexed for hybrid search.
+The tradeoff is scale — this architecture works for thousands of agents with millions of memories, but not billions. For a self-hosted AI agent platform, that's the right tradeoff.
 
-Every document is scoped to `(agent_id, user_id)` for multi-tenant isolation.
+### Key Design Decisions
 
-| Table | Key Columns | Purpose |
-|---|---|---|
-| `memory_documents` | `agent_id`, `user_id`, `path`, `content`, `hash` | Full markdown files |
-| `memory_chunks` | `document_id`, `text`, `embedding vector(1536)`, `tsv tsvector` | Paragraph-level chunks with both vector and full-text index |
-| `embedding_cache` | `hash`, `provider`, `model`, `embedding` | Deduplication — same text+model never re-embedded |
-</Card>
-
-<Card>
-### Hybrid Search Pipeline
-
-Every `memory_search` query runs **two searches in parallel**, then fuses results with configurable weights.
-
-<FlowStep step={1} color="teal" title="Vector Search">
-  Query is embedded via <code>EmbeddingProvider</code> (OpenAI-compatible API, default <code>text-embedding-3-small</code>). Cosine similarity against <code>memory_chunks.embedding</code> using HNSW index.
-</FlowStep>
-
-<FlowStep step={2} color="teal" title="Full-Text Search">
-  PostgreSQL <code>tsvector</code> with <code>'simple'</code> config (no stemming — works for Vietnamese and non-English). GIN-indexed <code>tsv</code> column on every chunk.
-</FlowStep>
-
-<FlowStep step={3} color="teal" title="Rank Fusion">
-  Results merged by <code>VectorWeight</code> and <code>TextWeight</code> (per-agent configurable). Filtered by <code>MinScore</code> threshold. Returns path, line range, score, snippet, and scope (global vs personal).
-</FlowStep>
-</Card>
-
-```go
-type MemoryStore interface {
-    PutDocument(ctx, agentID, userID, path, content)
-    Search(ctx, query, agentID, userID, opts) []SearchResult
-    IndexDocument(ctx, agentID, userID, path)
-    SetEmbeddingProvider(provider)
-}
-```
-
-<Callout color="teal">
-**Multi-Tenant Scoping:** Every memory operation is scoped by `(agent_id, user_id)`. Agents see only their own memories. Users within an agent see only their personal memories + the agent's global memories (`user_id IS NULL`).
-</Callout>
-
-## <Label color="green">2</Label> Knowledge Graph
-
-<Card>
-### Entity-Relation Model
-
-Raw memory is good for recall, but it doesn't capture *relationships*. GoClaw extracts a classic property graph stored in PostgreSQL (not Neo4j). Entities and relations are scoped per `(agent_id, user_id)`.
-
-<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-<div>
-
-| Column | Description |
-|---|---|
-| `external_id` | Canonical lowercase ID (e.g., "john-doe") |
-| `name` | Display name in original language |
-| `entity_type` | person, project, task, event, concept, location, organization |
-| `confidence` | 0.0–1.0 (extraction certainty) |
-| `properties` | JSONB for arbitrary metadata |
-
-</div>
-<div>
-
-| Column | Description |
-|---|---|
-| `source_entity_id` | FK → kg_entities(id) |
-| `relation_type` | works_on, manages, depends_on, uses, etc. |
-| `target_entity_id` | FK → kg_entities(id) |
-| `confidence` | Extraction confidence score |
-
-</div>
-</div>
-</Card>
-
-<Card>
-### LLM Extraction Pipeline
-
-Entities and relations are extracted from conversation text by an LLM call with a structured prompt.
-
-<FlowStep step={1} color="green" title="Chunking">
-  Long text split at paragraph boundaries (max 12,000 chars per chunk). Each chunk extracted independently.
-</FlowStep>
-
-<FlowStep step={2} color="green" title="LLM Extraction">
-  System prompt defines 7 entity types and 15 relation types. LLM returns structured JSON with <code>external_id</code>, <code>name</code>, <code>entity_type</code>, <code>confidence</code>. Temperature=0, max_tokens=8192.
-</FlowStep>
-
-<FlowStep step={3} color="green" title="Filtering + Merging">
-  Entities below <code>minConfidence</code> (default 0.75) are dropped. Cross-chunk dedup by <code>external_id</code>, keeping higher confidence. Relations deduped by <code>(source, type, target)</code>.
-</FlowStep>
-
-<FlowStep step={4} color="green" title="Upsert">
-  <code>IngestExtraction()</code> bulk-upserts entities and relations into PostgreSQL. Existing entities updated, new ones created.
-</FlowStep>
-</Card>
-
-<Callout color="amber">
-**Pruning:** `PruneByConfidence()` removes entities and relations below a threshold — garbage collection for low-quality extractions.
-</Callout>
-
-## <Label color="amber">3</Label> Session History
-
-<Card>
-### Session Data Structure
-
-Sessions store the full message array as JSONB, plus rich metadata for operational intelligence.
-
-| Field | Type | Purpose |
-|---|---|---|
-| `session_key` | VARCHAR(500) | Unique key: `{agent}:{channel}:{chatID}` |
-| `messages` | JSONB | Full message array (role, content, tool_calls) |
-| `summary` | TEXT | Compaction summary for context window management |
-| `input_tokens` / `output_tokens` | BIGINT | Cumulative token usage tracking |
-| `compaction_count` | INT | How many times history was compacted |
-| `spawned_by` / `spawn_depth` | VARCHAR / INT | Agent delegation chain tracking |
-| `context_window` / `last_prompt_tokens` | INT | Adaptive throttling — scheduler reads without DB lookup |
-</Card>
-
-<Card>
-### Compaction + Memory Flush Cycle
-
-When a session approaches the context window limit, GoClaw runs a two-phase cycle to preserve knowledge before truncating history.
-
-<FlowStep step={1} color="amber" title="Memory Flush (Pre-Compaction)">
-  Sends flush prompt to LLM with file tools enabled. Agent writes durable memories to <code>memory/*.md</code> files. Max 5 tool iterations, 90s timeout. Increments <code>memory_flush_compaction_count</code> as dedup guard.
-</FlowStep>
-
-<FlowStep step={2} color="amber" title="Extractive Fallback">
-  If LLM returns <code>NO_REPLY</code> or fails, regex-based extraction kicks in. Captures: decisions (<em>"decided to..."</em>), user preferences (<em>"I prefer..."</em>), technical facts (<em>"the API is..."</em>), URLs, file paths, dates.
-</FlowStep>
-
-<FlowStep step={3} color="amber" title="Compaction">
-  History summarized into <code>session.summary</code>. Old messages truncated. Summary injected as context in future turns. <code>compaction_count</code> incremented.
-</FlowStep>
-
-<FlowStep step={4} color="amber" title="Indexing">
-  Flushed memory documents are chunked (paragraph boundaries), embedded via <code>EmbeddingProvider</code>, and stored with both <code>vector(1536)</code> and <code>tsvector</code> indexes for future hybrid search.
-</FlowStep>
-</Card>
-
-## <Label color="rose">4</Label> How They Connect
-
-<Card accent="rose" flush>
-### Agent Loop Integration
-
-During every agent turn, the three systems interact through the tool layer:
-
-<FlowStep step="A" color="rose" title="Recall">
-  Agent calls <code>memory_search</code> tool → hybrid search across all memory documents. If knowledge graph is enabled, agent also calls <code>knowledge_graph_search</code> for entity/relationship queries. Results injected into context.
-</FlowStep>
-
-<FlowStep step="B" color="rose" title="Conversation">
-  Messages stored in <code>sessions</code> table as JSONB array. Token counts accumulated. Context window monitored for compaction threshold.
-</FlowStep>
-
-<FlowStep step="C" color="rose" title="Persist">
-  On compaction trigger: memory flush writes to <code>memory_documents</code> → chunks embedded → indexed. Knowledge graph extractor runs on flushed content → entities/relations upserted to <code>kg_entities</code>/<code>kg_relations</code>.
-</FlowStep>
-
-<FlowStep step="D" color="rose" title="Context Files">
-  Separate from memory: <code>agent_context_files</code> (shared across all users) and <code>user_context_files</code> (per-user). Injected into system prompt on every turn. Think <code>AGENTS.md</code> and <code>USER.md</code>.
-</FlowStep>
-</Card>
-
-## Why PostgreSQL?
-
-One database for everything: documents, embeddings, knowledge graph, sessions, and context files. No Redis, no Neo4j, no Pinecone.
-
-<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 my-6">
-<Card>
-
-**pgvector** handles similarity search with HNSW indexes on `vector(1536)` columns.
-
-</Card>
-<Card>
-
-**tsvector** handles full-text search with GIN indexes, `'simple'` config for multilingual support.
-
-</Card>
-<Card>
-
-**JSONB** handles schema-flexible metadata — session messages, entity properties, tool call results.
-
-</Card>
-<Card>
-
-**Low ops** — one database to backup, monitor, and scale. No coordination between separate services.
-
-</Card>
-</div>
-
-<Callout color="teal">
-**The tradeoff is scale** — this architecture works for thousands of agents with millions of memories, but not billions. For a self-hosted AI agent platform, that's the right tradeoff.
-</Callout>
+- **Hybrid search** (vector + full-text) outperforms either alone. The `'simple'` tsvector config works across languages including Vietnamese.
+- **Knowledge graph in PostgreSQL** — no need for Neo4j when your graph queries are bounded to depth 3 BFS traversal.
+- **Pre-compaction memory flush** ensures knowledge is never lost when sessions are truncated. The regex fallback catches what the LLM misses.
+- **Embedding cache** by content hash eliminates redundant API calls — same text is never embedded twice.
+- **Multi-tenant scoping** via `(agent_id, user_id)` on every table provides isolation without separate databases.
