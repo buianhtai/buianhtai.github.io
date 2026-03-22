@@ -14,6 +14,8 @@ import Label from '../../../components/mdx/Label.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
 import HeroGrid from '../../../components/mdx/HeroGrid.astro';
 import Callout from '../../../components/mdx/Callout.astro';
+import Mermaid from '../../../components/mdx/Mermaid.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
 
 Every LLM API speaks a slightly different dialect. Anthropic sends system messages as a separate field. OpenAI expects them inline. Gemini chokes on `additionalProperties`. DeepSeek streams thinking tokens in a dedicated field. GoClaw's provider layer absorbs all of this behind a four-method interface — the agent loop never has to care.
 
@@ -65,6 +67,31 @@ Two methods to implement. That's the entire contract. Everything else — retry 
 
 Providers are registered at startup and resolved by name at runtime. The agent config says `"provider": "anthropic"` — the loop looks it up from the registry and gets a concrete implementation.
 
+<Mermaid
+  chart={`flowchart LR
+    A[Agent Loop]
+    B[Provider Interface]
+    C[Provider Registry]
+    D[Anthropic Provider]
+    E[OpenAI-Compatible Provider]
+    F[Gemini Provider]
+    G[Ollama Provider]
+    H[20+ Backends]
+
+    A --> B
+    B --> C
+    C --> D
+    C --> E
+    C --> F
+    C --> G
+    D --> H
+    E --> H
+    F --> H
+    G --> H
+  `}
+  caption="Single interface and registry fan out to 20+ concrete provider backends"
+/>
+
 <FlowStep number={1} title="Config Loading">
 Read provider configs from `config.json` — API keys, base URLs, default models, custom options.
 </FlowStep>
@@ -98,18 +125,23 @@ config.json                    ProviderRegistry
 
 The OpenAI-compatible provider handles 14 backends through configuration alone — different base URLs, default models, and auth headers, but identical wire protocol:
 
-| Provider | API Base | Default Model |
-|---|---|---|
-| openai | `api.openai.com/v1` | `gpt-4o` |
-| groq | `api.groq.com/openai/v1` | `llama-3.3-70b-versatile` |
-| deepseek | `api.deepseek.com/v1` | `deepseek-chat` |
-| gemini | `generativelanguage.googleapis.com/v1beta/openai` | `gemini-2.0-flash` |
-| ollama | `localhost:11434/v1` | `llama3.3` |
-| openrouter | `openrouter.ai/api/v1` | `anthropic/claude-sonnet-4-5-20250929` |
-| mistral | `api.mistral.ai/v1` | `mistral-large-latest` |
-| xai | `api.x.ai/v1` | `grok-3-mini` |
-| perplexity | `api.perplexity.ai` | `sonar-pro` |
-| cohere | `api.cohere.ai/compatibility/v1` | `command-a` |
+<DataTable
+  headers={["Provider", "API Base", "Default Model"]}
+  rows={[
+    { "Provider": "openai", "API Base": "api.openai.com/v1", "Default Model": "gpt-4o" },
+    { "Provider": "groq", "API Base": "api.groq.com/openai/v1", "Default Model": "llama-3.3-70b-versatile" },
+    { "Provider": "deepseek", "API Base": "api.deepseek.com/v1", "Default Model": "deepseek-chat" },
+    { "Provider": "gemini", "API Base": "generativelanguage.googleapis.com/v1beta/openai", "Default Model": "gemini-2.0-flash" },
+    { "Provider": "ollama", "API Base": "localhost:11434/v1", "Default Model": "llama3.3" },
+    { "Provider": "openrouter", "API Base": "openrouter.ai/api/v1", "Default Model": "anthropic/claude-sonnet-4-5-20250929" },
+    { "Provider": "mistral", "API Base": "api.mistral.ai/v1", "Default Model": "mistral-large-latest" },
+    { "Provider": "xai", "API Base": "api.x.ai/v1", "Default Model": "grok-3-mini" },
+    { "Provider": "perplexity", "API Base": "api.perplexity.ai", "Default Model": "sonar-pro" },
+    { "Provider": "cohere", "API Base": "api.cohere.ai/compatibility/v1", "Default Model": "command-a" },
+  ]}
+  caption="Representative OpenAI-compatible backends mapped by configuration"
+  accent="teal"
+/>
 
 </Card>
 
@@ -252,10 +284,15 @@ Attempt 2: 600ms  ±60ms   → 540ms..660ms
 Attempt 3: 1200ms ±120ms  → 1080ms..1320ms
 ```
 
-| Category | Status Codes / Errors |
-|---|---|
-| **Retryable** | 429, 500, 502, 503, 504, `net.Error`, connection reset, broken pipe, EOF, timeout |
-| **Not retryable** | 400, 401, 403, 404, all other status codes |
+<DataTable
+  headers={["Category", "Status Codes / Errors"]}
+  rows={[
+    { "Category": "Retryable", "Status Codes / Errors": "429, 500, 502, 503, 504, net.Error, connection reset, broken pipe, EOF, timeout" },
+    { "Category": "Not retryable", "Status Codes / Errors": "400, 401, 403, 404, all other status codes" },
+  ]}
+  caption="Retry classifier used by RetryDo"
+  accent="teal"
+/>
 
 If the response includes a `Retry-After` header (common with 429 rate limits), the header value **replaces** the computed backoff entirely. Parsed as integer seconds or RFC 1123 date format.
 
@@ -271,11 +308,16 @@ Different providers accept different JSON Schema features in tool definitions. A
 
 `CleanSchemaForProvider()` recursively walks the entire schema tree — including nested `properties`, `anyOf`, `oneOf`, and `allOf` — and removes fields the target provider rejects.
 
-| Provider | Fields Removed |
-|---|---|
-| **Gemini** | `$ref`, `$defs`, `additionalProperties`, `examples`, `default` |
-| **Anthropic** | `$ref`, `$defs` |
-| **All others** | No cleaning needed |
+<DataTable
+  headers={["Provider", "Fields Removed"]}
+  rows={[
+    { "Provider": "Gemini", "Fields Removed": "$ref, $defs, additionalProperties, examples, default" },
+    { "Provider": "Anthropic", "Fields Removed": "$ref, $defs" },
+    { "Provider": "All others", "Fields Removed": "No cleaning needed" },
+  ]}
+  caption="Schema normalization rules by provider family"
+  accent="teal"
+/>
 
 The Anthropic provider calls this when converting tool definitions to the native `input_schema` format. The OpenAI-compatible provider applies it per-provider name — so Gemini tools get cleaned even though they go through the OpenAI-compatible wire format.
 

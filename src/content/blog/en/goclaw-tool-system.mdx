@@ -14,6 +14,8 @@ import Label from '../../../components/mdx/Label.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
 import HeroGrid from '../../../components/mdx/HeroGrid.astro';
 import Callout from '../../../components/mdx/Callout.astro';
+import Mermaid from '../../../components/mdx/Mermaid.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
 
 When an LLM emits a tool call, most frameworks just... run it. GoClaw interposes an 8-step pipeline between intent and execution — policy checks, rate limiting, credential scrubbing — all before a single byte touches the filesystem. The tool registry isn't a convenience layer. It's the enforcement boundary.
 
@@ -31,18 +33,23 @@ When an LLM emits a tool call, most frameworks just... run it. GoClaw interposes
 
 Every tool belongs to a group. Groups map to policy scopes — disable `media_gen` for an agent and all four generation tools go dark. No per-tool whack-a-mole.
 
-| Group | Tools |
-|-------|-------|
-| **Filesystem** | `read_file`, `write_file`, `edit`, `list_files`, `search`, `glob` |
-| **Runtime** | `exec`, `credentialed_exec` |
-| **Web** | `web_search`, `web_fetch` |
-| **Memory** | `memory_search`, `memory_get` |
-| **Sessions** | `sessions_list`, `sessions_history`, `spawn` |
-| **Knowledge** | `knowledge_graph_search`, `skill_search` |
-| **Media Gen** | `create_image`, `create_audio`, `tts`, `create_video` |
-| **Media Read** | `read_image`, `read_audio`, `read_document`, `read_video` |
-| **Teams** | `team_tasks`, `team_message` |
-| **Automation** | `cron`, `datetime` |
+<DataTable
+  headers={["Group", "Tools"]}
+  rows={[
+    { "Group": "Filesystem", "Tools": "read_file, write_file, edit, list_files, search, glob" },
+    { "Group": "Runtime", "Tools": "exec, credentialed_exec" },
+    { "Group": "Web", "Tools": "web_search, web_fetch" },
+    { "Group": "Memory", "Tools": "memory_search, memory_get" },
+    { "Group": "Sessions", "Tools": "sessions_list, sessions_history, spawn" },
+    { "Group": "Knowledge", "Tools": "knowledge_graph_search, skill_search" },
+    { "Group": "Media Gen", "Tools": "create_image, create_audio, tts, create_video" },
+    { "Group": "Media Read", "Tools": "read_image, read_audio, read_document, read_video" },
+    { "Group": "Teams", "Tools": "team_tasks, team_message" },
+    { "Group": "Automation", "Tools": "cron, datetime" },
+  ]}
+  caption="Tool groups used by policy scopes and runtime enable/disable controls"
+  accent="teal"
+/>
 
 Tools are stateless structs that implement a single interface. The registry holds one instance per tool name, shared across all concurrent goroutines — context keys carry per-call values like channel ID, chat ID, and sandbox key.
 
@@ -55,6 +62,22 @@ Tools are stateless structs that implement a single interface. The registry hold
 <Card>
 
 `ExecuteWithContext` is the only path from LLM intent to tool execution. Every tool call — filesystem, web, media, shell — passes through the same 8 steps. No shortcuts, no backdoors.
+
+<Mermaid
+  chart={`flowchart LR
+    A[Tool Registration]
+    B[Registry Discovery]
+    C[Policy + Rate Limit]
+    D[Argument Validation]
+    E[Tool Execute]
+    F[Scrub + Sanitize]
+    G[Events + Return]
+
+    A --> B --> C --> D --> E --> F --> G
+    G --> H[Next LLM Iteration]
+  `}
+  caption="Tool lifecycle: register once, discover per call, execute through guarded pipeline"
+/>
 
 <FlowStep number={1} title="Registry Lookup">
 Lock the registry mutex, resolve the tool by name from the registered map, unlock. Unknown tool names return an error immediately — the LLM gets feedback in the same iteration.

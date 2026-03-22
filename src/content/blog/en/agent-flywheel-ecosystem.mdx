@@ -16,6 +16,8 @@ import HeroGrid from '../../../components/mdx/HeroGrid.astro';
 import Callout from '../../../components/mdx/Callout.astro';
 import ArchLayer from '../../../components/mdx/ArchLayer.astro';
 import Pipeline from '../../../components/mdx/Pipeline.astro';
+import Mermaid from '../../../components/mdx/Mermaid.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
 
 Running multiple AI coding agents isn't hard. Making them work *together* without destroying each other's work — that's the unsolved problem. Jeffrey Emanuel has been building toward a solution: six open-source tools that form a self-reinforcing loop he calls the **Agent Flywheel**.
 
@@ -216,6 +218,34 @@ Coverage across 14 categories:
 <ArchLayer badge="K8S" badgeColor="teal" label="Infrastructure" items={["kubectl", "helm", "terraform", "ansible", "pulumi"]} />
 <ArchLayer badge="CLOUD" badgeColor="green" label="Cloud" items={["aws", "azure", "gcp", "s3", "secrets"]} />
 
+<DataTable
+  headers={["Category", "Representative Packs", "Notes"]}
+  rows={[
+    {
+      Category: "Always On",
+      "Representative Packs": "git, filesystem",
+      Notes: "Loaded by default for every command evaluation"
+    },
+    {
+      Category: "Databases",
+      "Representative Packs": "postgresql, mysql, mongodb, redis, sqlite",
+      Notes: "Protects destructive DDL/DML and data-loss operations"
+    },
+    {
+      Category: "Infrastructure",
+      "Representative Packs": "kubectl, helm, terraform, ansible, pulumi",
+      Notes: "Blocks high-blast-radius infra mutations"
+    },
+    {
+      Category: "Cloud",
+      "Representative Packs": "aws, azure, gcp, s3, secrets",
+      Notes: "Guards account-wide, bucket-wide, and secret operations"
+    }
+  ]}
+  caption="Representative coverage from the 49+ security packs by category."
+  accent="rose"
+/>
+
 Every pack defines patterns like:
 ```rust
 destructive_pattern!(
@@ -237,11 +267,25 @@ destructive_pattern!(
 <Card>
 ### What It Catches
 
-| Severity | Categories |
-|----------|-----------|
-| **Critical** | Null safety, XSS/injection, async/await bugs, memory leaks, type coercion |
-| **Warning** | Division safety, resource lifecycle, error handling, promise chains |
-| **Info** | Debug code, TODO markers, TypeScript strictness |
+<DataTable
+  headers={["Severity", "Categories"]}
+  rows={[
+    {
+      Severity: "Critical",
+      Categories: "Null safety, XSS/injection, async/await bugs, memory leaks, type coercion"
+    },
+    {
+      Severity: "Warning",
+      Categories: "Division safety, resource lifecycle, error handling, promise chains"
+    },
+    {
+      Severity: "Info",
+      Categories: "Debug code, TODO markers, TypeScript strictness"
+    }
+  ]}
+  caption="Core bug classes flagged by ultimate_bug_scanner."
+  accent="teal"
+/>
 
 **Language-specific:** React hooks deps (JS), `open()` without `with` (Python), nil pointers (Go), `.unwrap()` panics (Rust), buffer overflows (C/C++).
 </Card>
@@ -286,6 +330,28 @@ These tools aren't independent utilities — they form a coordination loop:
     { label: "clean", direction: "right" }
   ]}
   footer="Each cycle refines the next: cass indexes the session, cm extracts rules, bv re-ranks priorities, br tracks completion. The flywheel accelerates."
+/>
+
+<Mermaid
+  chart={`flowchart LR
+    A[br / bv\nPick highest-impact task] --> B[Agent Mail\nCoordinate files + reservations]
+    B --> C[dcg\nGuard destructive commands]
+    C --> D[ubs\nScan for LLM-introduced bugs]
+    D --> E[cass / cm\nIndex sessions + distill rules]
+    E --> A
+
+    classDef pick fill:#cffafe,stroke:#0e7490,stroke-width:1px,color:#0f172a;
+    classDef coord fill:#dcfce7,stroke:#16a34a,stroke-width:1px,color:#0f172a;
+    classDef safe fill:#ede9fe,stroke:#7c3aed,stroke-width:1px,color:#0f172a;
+    classDef scan fill:#ffedd5,stroke:#ea580c,stroke-width:1px,color:#0f172a;
+    classDef learn fill:#fee2e2,stroke:#e11d48,stroke-width:1px,color:#0f172a;
+
+    class A pick;
+    class B coord;
+    class C safe;
+    class D scan;
+    class E learn;`}
+  caption="Agent Flywheel loop: prioritize, coordinate, guard, scan, learn, repeat."
 />
 
 1. **br/bv** picks the highest-impact task from the dependency graph

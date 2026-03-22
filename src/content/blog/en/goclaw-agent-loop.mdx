@@ -14,6 +14,8 @@ import Label from '../../../components/mdx/Label.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
 import HeroGrid from '../../../components/mdx/HeroGrid.astro';
 import Callout from '../../../components/mdx/Callout.astro';
+import Mermaid from '../../../components/mdx/Mermaid.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
 
 Most AI agent frameworks hide the execution model behind abstractions. GoClaw exposes a clean 7-phase loop that handles everything from input validation to mid-loop compaction — all in a single Go binary.
 
@@ -97,6 +99,24 @@ Trigger at 50+ messages or 75% context, per-session `TryLock` prevents concurren
 
 </Card>
 
+<Mermaid
+  chart={`flowchart LR
+    A[Setup]
+    B[Input Validation]
+    C[Build Messages]
+    D[LLM Iteration]
+    E[Tool Execution]
+    F[Response Finalization]
+    G[Auto-Summarization]
+
+    A --> B --> C --> D --> E --> F --> G
+    G --> H{Another turn?}
+    H -->|yes| D
+    H -->|no| I[Run Complete]
+  `}
+  caption="GoClaw's 7-phase loop with iterative Think → Act → Observe cycles"
+/>
+
 ---
 
 ## <Label color="amber">3</Label> Think → Act → Observe
@@ -145,19 +165,24 @@ Mid-loop compaction is the key insight — rather than failing when context over
 
 The system prompt is not a single string — it's assembled from 19 configurable sections. Each section is independently toggleable, and some are dynamically generated based on the agent's runtime context.
 
-| Section | Purpose |
-|---|---|
-| Identity | Agent name, role, base instructions |
-| Persona (SOUL.md) | Character, tone, behavioral guidelines |
-| Tooling | Policy-filtered tool descriptions |
-| Skills | Loaded skill instructions and workflows |
-| MCP Tools | Dynamically discovered MCP server tools |
-| Team Workspace | Shared file paths and conventions |
-| Sandbox | Docker sandbox configuration and rules |
-| User Identity | Current user name, ID, preferences |
-| Channel Formatting | Slack/Discord/Web formatting rules |
-| Sub-Agent Spawning | How to delegate to child agents |
-| Runtime Info | Current date, timezone, OS context |
+<DataTable
+  headers={["Section", "Purpose"]}
+  rows={[
+    { "Section": "Identity", "Purpose": "Agent name, role, base instructions" },
+    { "Section": "Persona (SOUL.md)", "Purpose": "Character, tone, behavioral guidelines" },
+    { "Section": "Tooling", "Purpose": "Policy-filtered tool descriptions" },
+    { "Section": "Skills", "Purpose": "Loaded skill instructions and workflows" },
+    { "Section": "MCP Tools", "Purpose": "Dynamically discovered MCP server tools" },
+    { "Section": "Team Workspace", "Purpose": "Shared file paths and conventions" },
+    { "Section": "Sandbox", "Purpose": "Docker sandbox configuration and rules" },
+    { "Section": "User Identity", "Purpose": "Current user name, ID, preferences" },
+    { "Section": "Channel Formatting", "Purpose": "Slack/Discord/Web formatting rules" },
+    { "Section": "Sub-Agent Spawning", "Purpose": "How to delegate to child agents" },
+    { "Section": "Runtime Info", "Purpose": "Current date, timezone, OS context" },
+  ]}
+  caption="Representative sections from the 19-part system prompt builder"
+  accent="teal"
+/>
 
 </Card>
 
@@ -214,14 +239,19 @@ One interface, 20+ implementations — Anthropic (native HTTP+SSE), OpenAI, Groq
 
 The agent loop is configured through `AgentDefaults`, which provides sensible defaults that can be overridden per-agent. These values control the fundamental behavior of the Think → Act → Observe cycle.
 
-| Field | Default | Purpose |
-|---|---|---|
-| `MaxToolIterations` | 20 | Max Think-Act-Observe cycles |
-| `ContextWindow` | varies | Per-agent context budget |
-| `MaxToolCalls` | 25 | Max tools per iteration |
-| `Compaction.MaxHistoryShare` | 0.75 | Trigger compaction at 75% |
-| `Compaction.KeepLastMessages` | 4 | Messages preserved after compaction |
-| `Sandbox.Mode` | `"off"` | Docker sandbox: off/non-main/all |
+<DataTable
+  headers={["Field", "Default", "Purpose"]}
+  rows={[
+    { "Field": "MaxToolIterations", "Default": "20", "Purpose": "Max Think-Act-Observe cycles" },
+    { "Field": "ContextWindow", "Default": "varies", "Purpose": "Per-agent context budget" },
+    { "Field": "MaxToolCalls", "Default": "25", "Purpose": "Max tools per iteration" },
+    { "Field": "Compaction.MaxHistoryShare", "Default": "0.75", "Purpose": "Trigger compaction at 75%" },
+    { "Field": "Compaction.KeepLastMessages", "Default": "4", "Purpose": "Messages preserved after compaction" },
+    { "Field": "Sandbox.Mode", "Default": "off", "Purpose": "Docker sandbox: off/non-main/all" },
+  ]}
+  caption="Core AgentDefaults values that shape loop behavior"
+  accent="teal"
+/>
 
 The `ContextWindow` varies by provider and model — GoClaw queries each provider for its model's context limit and uses that as the budget. Compaction triggers are calculated as a percentage of this budget, making the system adaptive to any model size.
 

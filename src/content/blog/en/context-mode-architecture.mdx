@@ -14,6 +14,8 @@ import Label from '../../../components/mdx/Label.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
 import HeroGrid from '../../../components/mdx/HeroGrid.astro';
 import Callout from '../../../components/mdx/Callout.astro';
+import Mermaid from '../../../components/mdx/Mermaid.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
 
 Every MCP tool call dumps raw data into the AI's context window. A Playwright snapshot costs 56 KB. Twenty GitHub issues cost 59 KB. One access log eats 45 KB. After 30 minutes of real work, 40% of your context budget is gone — and when the conversation compacts, the agent forgets which files it was editing.
 
@@ -25,6 +27,41 @@ Every MCP tool call dumps raw data into the AI's context window. A Playwright sn
   { label: "FTS5 + BM25", sublabel: "Dual tokenizers\nReciprocal Rank Fusion", color: "#d97706" },
   { label: "Session Resume", sublabel: "Priority-budgeted snapshots\nSurvives compaction", color: "#e11d48" },
 ]} />
+
+<Mermaid
+  chart={`flowchart LR
+    RO[Raw Output] --> SX[Sandbox]
+    SX --> FI[FTS5 Index]
+    FI --> CS[ctx_search]
+    CS --> CW[Context Window]
+
+    subgraph P1[Sandboxed Execution]
+      SX1[11 languages]
+      SX2[env sanitization]
+    end
+
+    subgraph P2[FTS5 Knowledge Base]
+      FI1[BM25 ranking]
+      FI2[dual tokenizers]
+      FI3[RRF fusion]
+    end
+
+    subgraph P3[Session Continuity]
+      SC1[event tracking]
+      SC2[priority budgets]
+      SC3[resume snapshots]
+    end
+
+    SX --- SX1
+    SX --- SX2
+    FI --- FI1
+    FI --- FI2
+    FI --- FI3
+    CS --- SC1
+    CS --- SC2
+    CS --- SC3`}
+  caption="context-mode's three-pillar architecture and end-to-end context flow"
+/>
 
 ---
 
@@ -174,11 +211,16 @@ When the AI conversation compacts, the agent loses all working memory. context-m
 
 Every file edit, git commit, task creation, error, and decision is stored as a session event with a priority tier:
 
-| Priority | Budget | Categories |
-|----------|--------|-----------|
-| P1 (50%) | ~1024 bytes | file, task, rule |
-| P2 (35%) | ~716 bytes | cwd, error, decision, env, git |
-| P3-P4 (15%) | ~308 bytes | subagent, skill, role, intent |
+<DataTable
+  headers={["Priority", "Budget", "Categories"]}
+  rows={[
+    { Priority: "P1 (50%)", Budget: "~1024 bytes", Categories: "file, task, rule" },
+    { Priority: "P2 (35%)", Budget: "~716 bytes", Categories: "cwd, error, decision, env, git" },
+    { Priority: "P3-P4 (15%)", Budget: "~308 bytes", Categories: "subagent, skill, role, intent" },
+  ]}
+  caption="Priority-tier budget allocation for session continuity events"
+  accent="teal"
+/>
 
 Deduplication uses SHA256 hashing — the same file read won't be stored twice within a sliding window:
 

@@ -14,6 +14,8 @@ import Label from '../../../components/mdx/Label.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
 import HeroGrid from '../../../components/mdx/HeroGrid.astro';
 import Callout from '../../../components/mdx/Callout.astro';
+import Mermaid from '../../../components/mdx/Mermaid.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
 
 Most multi-agent systems bolt coordination on as an afterthought — shared memory, message queues, supervisors watching supervisors. GoClaw takes a radically different approach: **everything agents know about their team comes from a generated markdown file.** No special APIs, no team-aware code paths in the loop. The loop is team-agnostic — TEAM.md is the entire abstraction.
 
@@ -62,6 +64,28 @@ Every delegation from a lead must be linked to a task on the board. The system e
 <Card accent="green" flush>
 
 `TEAM.md` is a **virtual file** — it doesn't exist on disk or in the database. It's generated dynamically during agent resolution and injected into the system prompt wrapped in `<system_context>` tags. The content varies by role:
+
+<Mermaid
+  chart={`flowchart LR
+    A[Team Config]
+    B[BuildTeamMD]
+    C[Lead Prompt]
+    D[Member Prompt]
+    E[Lead Delegates Tasks]
+    F[Members Execute + Report]
+    G[Task Board Updated]
+
+    A --> B
+    B --> C
+    B --> D
+    C --> E
+    D --> F
+    E --> G
+    F --> G
+    G --> C
+  `}
+  caption="TEAM.md drives role-specific prompts and closes the coordination loop via the task board"
+/>
 
 **Lead gets the full playbook:**
 - Team name, description, complete member list with roles and expertise
@@ -186,12 +210,17 @@ func (t *SpawnTool) Execute(ctx, args) *Result {
 
 Four actions are available:
 
-| Action | Purpose |
-|---|---|
-| `spawn` | Create a child agent with `depth+1`, linked to a team task |
-| `list` | Show all active child agents for the current parent |
-| `cancel` | Terminate a specific child agent by ID |
-| `steer` | Send a mid-execution message to redirect a running child |
+<DataTable
+  headers={["Action", "Purpose"]}
+  rows={[
+    { "Action": "spawn", "Purpose": "Create a child agent with depth+1, linked to a team task" },
+    { "Action": "list", "Purpose": "Show all active child agents for the current parent" },
+    { "Action": "cancel", "Purpose": "Terminate a specific child agent by ID" },
+    { "Action": "steer", "Purpose": "Send a mid-execution message to redirect a running child" },
+  ]}
+  caption="Spawn tool actions for child-agent lifecycle management"
+  accent="teal"
+/>
 
 </Card>
 
@@ -222,14 +251,19 @@ blocked        cancelled                   approved
 
 ### Key Actions
 
-| Action | Who | Description |
-|---|---|---|
-| `create` | Lead | Create task with subject, priority, assignee, blocked_by |
-| `claim` | Members | Atomically claim a pending task (DB-level locking) |
-| `complete` | Members | Mark task done with result summary |
-| `search` | All | Full-text search over subject + description |
-| `comment` | All | Add feedback or clarification to a task |
-| `progress` | Members | Update percent complete and current step |
+<DataTable
+  headers={["Action", "Who", "Description"]}
+  rows={[
+    { "Action": "create", "Who": "Lead", "Description": "Create task with subject, priority, assignee, blocked_by" },
+    { "Action": "claim", "Who": "Members", "Description": "Atomically claim a pending task (DB-level locking)" },
+    { "Action": "complete", "Who": "Members", "Description": "Mark task done with result summary" },
+    { "Action": "search", "Who": "All", "Description": "Full-text search over subject + description" },
+    { "Action": "comment", "Who": "All", "Description": "Add feedback or clarification to a task" },
+    { "Action": "progress", "Who": "Members", "Description": "Update percent complete and current step" },
+  ]}
+  caption="Team task-board actions and role permissions"
+  accent="teal"
+/>
 
 ### Atomic Claiming
 

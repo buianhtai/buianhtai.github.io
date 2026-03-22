@@ -14,10 +14,27 @@ import Label from '../../../components/mdx/Label.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
 import HeroGrid from '../../../components/mdx/HeroGrid.astro';
 import Callout from '../../../components/mdx/Callout.astro';
+import Mermaid from '../../../components/mdx/Mermaid.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
 
 Most AI agents are stateless. They forget everything the moment a conversation ends. GoClaw takes a different approach — it gives every agent a durable, searchable memory that survives across sessions, users, and even compaction cycles.
 
 The system has three layers, all backed by PostgreSQL.
+
+<Mermaid
+  chart={`flowchart LR
+    A[Short-Term Session Buffer]
+    B[Working Memory Files]
+    C[Long-Term Memory Index]
+    D[pgvector + tsvector Search]
+
+    A -->|compaction trigger| B
+    B -->|chunk + embed| C
+    C --> D
+    D -->|recall| A
+  `}
+  caption="Three-layer memory path: session context flows into indexed long-term recall"
+/>
 
 <HeroGrid items={[
   { label: "Memory", sublabel: "Documents + chunks + embeddings\nHybrid search: pgvector + tsvector", color: "#0891b2" },
@@ -34,11 +51,16 @@ The system has three layers, all backed by PostgreSQL.
 
 Three-tier storage: documents → chunks → embeddings. Every document is scoped to `(agent_id, user_id)` for tenant isolation.
 
-| Table | Key Columns | Purpose |
-|---|---|---|
-| `memory_documents` | `agent_id`, `user_id`, `path`, `content`, `hash` | Full markdown files (e.g., `MEMORY.md`, `memory/2026-03-22.md`) |
-| `memory_chunks` | `document_id`, `text`, `embedding vector(1536)`, `tsv tsvector` | Paragraph-level chunks with both vector embedding and full-text search index |
-| `embedding_cache` | `hash`, `provider`, `model`, `embedding` | Deduplication cache — same text+model never re-embedded |
+<DataTable
+  headers={["Table", "Key Columns", "Purpose"]}
+  rows={[
+    { "Table": "memory_documents", "Key Columns": "agent_id, user_id, path, content, hash", "Purpose": "Full markdown files (e.g., MEMORY.md, memory/2026-03-22.md)" },
+    { "Table": "memory_chunks", "Key Columns": "document_id, text, embedding vector(1536), tsv tsvector", "Purpose": "Paragraph-level chunks with vector embedding and full-text index" },
+    { "Table": "embedding_cache", "Key Columns": "hash, provider, model, embedding", "Purpose": "Deduplication cache so identical text+model is not re-embedded" },
+  ]}
+  caption="Core tables for document storage, chunk indexing, and embedding reuse"
+  accent="teal"
+/>
 </Card>
 
 <Card>
@@ -87,24 +109,34 @@ Classic property graph stored in PostgreSQL (not Neo4j). Entities and relations 
 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 not-prose">
 <div>
 
-| kg_entities | |
-|---|---|
-| `external_id` | Canonical lowercase ID (e.g., "john-doe") |
-| `name` | Display name in original language |
-| `entity_type` | person, project, task, event, concept, location, organization |
-| `description` | 1-sentence summary |
-| `confidence` | 0.0–1.0 (extraction certainty) |
-| `properties` | JSONB for arbitrary metadata |
+<DataTable
+  headers={["kg_entities", "Field Purpose"]}
+  rows={[
+    { "kg_entities": "external_id", "Field Purpose": "Canonical lowercase ID (e.g., john-doe)" },
+    { "kg_entities": "name", "Field Purpose": "Display name in original language" },
+    { "kg_entities": "entity_type", "Field Purpose": "person, project, task, event, concept, location, organization" },
+    { "kg_entities": "description", "Field Purpose": "1-sentence summary" },
+    { "kg_entities": "confidence", "Field Purpose": "0.0-1.0 extraction certainty" },
+    { "kg_entities": "properties", "Field Purpose": "JSONB for arbitrary metadata" },
+  ]}
+  caption="Entity node schema"
+  accent="teal"
+/>
 
 </div>
 <div>
 
-| kg_relations | |
-|---|---|
-| `source_entity_id` | FK → kg_entities(id) |
-| `relation_type` | works_on, manages, depends_on, uses, etc. |
-| `target_entity_id` | FK → kg_entities(id) |
-| `confidence` | Extraction confidence score |
+<DataTable
+  headers={["kg_relations", "Field Purpose"]}
+  rows={[
+    { "kg_relations": "source_entity_id", "Field Purpose": "FK to kg_entities(id)" },
+    { "kg_relations": "relation_type", "Field Purpose": "works_on, manages, depends_on, uses, etc." },
+    { "kg_relations": "target_entity_id", "Field Purpose": "FK to kg_entities(id)" },
+    { "kg_relations": "confidence", "Field Purpose": "Extraction confidence score" },
+  ]}
+  caption="Relation edge schema"
+  accent="teal"
+/>
 
 </div>
 </div>
@@ -173,18 +205,23 @@ type KnowledgeGraphStore interface {
 <Card>
 ### Session Data Structure
 
-| Field | Type | Purpose |
-|---|---|---|
-| `session_key` | VARCHAR(500) | Unique key (format: `{agent}:{channel}:{chatID}`) |
-| `messages` | JSONB | Full message array (role, content, tool_calls, tool_call_id) |
-| `summary` | TEXT | Compaction summary — condensed history for context window management |
-| `agent_id` / `user_id` | UUID / VARCHAR | Multi-tenant scoping |
-| `model` / `provider` | VARCHAR | Which LLM served this session |
-| `input_tokens` / `output_tokens` | BIGINT | Cumulative token usage tracking |
-| `compaction_count` | INT | How many times history was compacted |
-| `memory_flush_compaction_count` | INT | Dedup guard — prevents duplicate memory flushes per compaction cycle |
-| `spawned_by` / `spawn_depth` | VARCHAR / INT | Agent delegation chain tracking |
-| `context_window` / `last_prompt_tokens` | INT | Adaptive throttling — scheduler reads without DB lookup |
+<DataTable
+  headers={["Field", "Type", "Purpose"]}
+  rows={[
+    { "Field": "session_key", "Type": "VARCHAR(500)", "Purpose": "Unique key (format: {agent}:{channel}:{chatID})" },
+    { "Field": "messages", "Type": "JSONB", "Purpose": "Full message array (role, content, tool_calls, tool_call_id)" },
+    { "Field": "summary", "Type": "TEXT", "Purpose": "Compaction summary for context window management" },
+    { "Field": "agent_id / user_id", "Type": "UUID / VARCHAR", "Purpose": "Multi-tenant scoping" },
+    { "Field": "model / provider", "Type": "VARCHAR", "Purpose": "Which LLM served this session" },
+    { "Field": "input_tokens / output_tokens", "Type": "BIGINT", "Purpose": "Cumulative token usage tracking" },
+    { "Field": "compaction_count", "Type": "INT", "Purpose": "How many times history was compacted" },
+    { "Field": "memory_flush_compaction_count", "Type": "INT", "Purpose": "Dedup guard for memory flush per compaction cycle" },
+    { "Field": "spawned_by / spawn_depth", "Type": "VARCHAR / INT", "Purpose": "Agent delegation chain tracking" },
+    { "Field": "context_window / last_prompt_tokens", "Type": "INT", "Purpose": "Adaptive throttling without extra DB lookup" },
+  ]}
+  caption="Session metadata used for persistence, compaction, and scheduling"
+  accent="teal"
+/>
 </Card>
 
 <Card>
@@ -262,20 +299,25 @@ type EmbeddingProvider interface {
 
 <Card>
 
-| Layer | File | Role |
-|---|---|---|
-| <Label color="teal">Store</Label> | `internal/store/memory_store.go` | MemoryStore interface + types |
-| | `internal/store/knowledge_graph_store.go` | KnowledgeGraphStore interface + types |
-| | `internal/store/session_store.go` | SessionStore interface + SessionData struct |
-| <Label color="green">Core</Label> | `internal/memory/embeddings.go` | EmbeddingProvider, chunking, cosine similarity |
-| | `internal/knowledgegraph/extractor.go` | LLM extraction pipeline, JSON parsing, chunk merging |
-| <Label color="amber">Agent</Label> | `internal/agent/memoryflush.go` | Pre-compaction memory flush orchestration |
-| | `internal/agent/extractive_memory.go` | Regex-based fallback extraction |
-| <Label color="rose">Tools</Label> | `internal/tools/memory.go` | memory_search + memory_get tools (agent-facing) |
-| | `internal/tools/knowledge_graph.go` | knowledge_graph_search tool (search + traverse) |
-| <Label color="teal">Schema</Label> | `migrations/000001_init_schema.up.sql` | memory_documents, memory_chunks, sessions, embedding_cache |
-| | `migrations/000013_knowledge_graph.up.sql` | kg_entities, kg_relations |
-| | `migrations/000025_kg_entity_embeddings.up.sql` | Adds vector embeddings to KG entities |
+<DataTable
+  headers={["Layer", "File", "Role"]}
+  rows={[
+    { "Layer": "Store", "File": "internal/store/memory_store.go", "Role": "MemoryStore interface + types" },
+    { "Layer": "Store", "File": "internal/store/knowledge_graph_store.go", "Role": "KnowledgeGraphStore interface + types" },
+    { "Layer": "Store", "File": "internal/store/session_store.go", "Role": "SessionStore interface + SessionData struct" },
+    { "Layer": "Core", "File": "internal/memory/embeddings.go", "Role": "EmbeddingProvider, chunking, cosine similarity" },
+    { "Layer": "Core", "File": "internal/knowledgegraph/extractor.go", "Role": "LLM extraction pipeline, JSON parsing, chunk merging" },
+    { "Layer": "Agent", "File": "internal/agent/memoryflush.go", "Role": "Pre-compaction memory flush orchestration" },
+    { "Layer": "Agent", "File": "internal/agent/extractive_memory.go", "Role": "Regex-based fallback extraction" },
+    { "Layer": "Tools", "File": "internal/tools/memory.go", "Role": "memory_search + memory_get tools (agent-facing)" },
+    { "Layer": "Tools", "File": "internal/tools/knowledge_graph.go", "Role": "knowledge_graph_search tool (search + traverse)" },
+    { "Layer": "Schema", "File": "migrations/000001_init_schema.up.sql", "Role": "memory_documents, memory_chunks, sessions, embedding_cache" },
+    { "Layer": "Schema", "File": "migrations/000013_knowledge_graph.up.sql", "Role": "kg_entities, kg_relations" },
+    { "Layer": "Schema", "File": "migrations/000025_kg_entity_embeddings.up.sql", "Role": "Adds vector embeddings to KG entities" },
+  ]}
+  caption="Code map across store, core memory logic, tools, and schema migrations"
+  accent="teal"
+/>
 
 </Card>
 

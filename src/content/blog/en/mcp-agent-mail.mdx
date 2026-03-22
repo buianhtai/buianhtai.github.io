@@ -16,6 +16,8 @@ import HeroGrid from '../../../components/mdx/HeroGrid.astro';
 import Callout from '../../../components/mdx/Callout.astro';
 import ArchLayer from '../../../components/mdx/ArchLayer.astro';
 import Pipeline from '../../../components/mdx/Pipeline.astro';
+import Mermaid from '../../../components/mdx/Mermaid.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
 
 Run three AI agents on the same codebase — backend, frontend, infrastructure — and watch them overwrite each other's files, lose context from parallel workstreams, and force you to manually relay messages between them. There's no shared memory, no coordination protocol, no audit trail.
 
@@ -36,13 +38,18 @@ Before diving into the architecture, here's why existing coordination methods br
 
 <Card>
 
-| Approach | Problem |
-|----------|---------|
-| Shared files / clipboard | No structure, no history, race conditions |
-| Agents calling each other | Tight coupling, circular dependencies, no persistence |
-| Human-mediated messaging | Bottleneck — you become the router |
-| Shared database only | No audit trail, developers can't review agent decisions |
-| Git hooks alone | Post-hoc detection, no proactive coordination |
+<DataTable
+  headers={["Approach", "Problem"]}
+  rows={[
+    { Approach: "Shared files / clipboard", Problem: "No structure, no history, race conditions" },
+    { Approach: "Agents calling each other", Problem: "Tight coupling, circular dependencies, no persistence" },
+    { Approach: "Human-mediated messaging", Problem: "Bottleneck - you become the router" },
+    { Approach: "Shared database only", Problem: "No audit trail, developers can't review agent decisions" },
+    { Approach: "Git hooks alone", Problem: "Post-hoc detection, no proactive coordination" },
+  ]}
+  caption="Why common multi-agent coordination patterns fail under real workload"
+  accent="teal"
+/>
 
 The core insight: agents need **asynchronous, structured communication** with both machine-speed indexing (SQLite) and human-readable history (Git). Neither alone is sufficient.
 
@@ -91,6 +98,24 @@ All written files are committed atomically: `mail: GreenCastle -> BlueLake | API
 </FlowStep>
 
 </Card>
+
+<Mermaid
+  chart={`sequenceDiagram
+    actor A as Agent A
+    participant S as MCP Agent Mail Server
+    participant D as SQLite (DB Insert)
+    participant C as Canonical Copy
+    participant I as Inbox/Outbox
+    participant G as Git
+
+    A->>S: send_message()
+    S->>D: Step 1: insert message + recipients
+    S->>C: Step 2: write messages/YYYY/MM/{id}.md
+    S->>I: Step 3: write sender outbox + recipient inbox
+    S->>G: Step 4: atomic commit
+    G-->>A: audit trail available`}
+  caption="Four-step Agent Mail write path from send_message to auditable Git commit"
+/>
 
 <Card>
 ### Message Format
@@ -190,12 +215,17 @@ Names like **GreenCastle**, **BlueLake**, **RedForest** — instantly recognizab
 
 Agents control who can message them:
 
-| Policy | Behavior |
-|--------|----------|
-| `open` | Anyone can message |
-| `auto` | Auto-accept from same project |
-| `contacts_only` | Must be in contact list |
-| `block_all` | No incoming messages |
+<DataTable
+  headers={["Policy", "Behavior"]}
+  rows={[
+    { Policy: "open", Behavior: "Anyone can message" },
+    { Policy: "auto", Behavior: "Auto-accept from same project" },
+    { Policy: "contacts_only", Behavior: "Must be in contact list" },
+    { Policy: "block_all", Behavior: "No incoming messages" },
+  ]}
+  caption="Agent contact policies and their message acceptance behavior"
+  accent="teal"
+/>
 
 Cross-project communication requires explicit `AgentLink` approval — preventing unauthorized agents from spamming across projects.
 
@@ -238,6 +268,19 @@ CLOSED (normal) → 5 failures → OPEN (fail fast, 30s)
                               success → CLOSED
 ```
 
+<Mermaid
+  chart={`flowchart LR
+    C[CLOSED]
+    O[OPEN (30s)]
+    H[HALF_OPEN]
+
+    C -->|5 failures| O
+    O -->|30s elapsed| H
+    H -->|success| C
+    H -->|failure| O`}
+  caption="Circuit breaker state machine used for database reliability under repeated failures"
+/>
+
 </Card>
 
 <Card>
@@ -263,12 +306,17 @@ Not every agent needs every tool. Agent Mail exposes **filtered tool profiles** 
 
 <Card>
 
-| Profile | Tools Exposed | Use Case |
-|---------|--------------|----------|
-| `full` | All clusters, all tools | Development, debugging |
-| `core` | Identity + messaging + files + macros | Standard agent workflows |
-| `minimal` | 6 tools only | Lightweight agents with small context |
-| `messaging` | Identity + messaging + contacts + search | Communication-focused agents |
+<DataTable
+  headers={["Profile", "Tools Exposed", "Use Case"]}
+  rows={[
+    { Profile: "full", "Tools Exposed": "All clusters, all tools", "Use Case": "Development, debugging" },
+    { Profile: "core", "Tools Exposed": "Identity + messaging + files + macros", "Use Case": "Standard agent workflows" },
+    { Profile: "minimal", "Tools Exposed": "6 tools only", "Use Case": "Lightweight agents with small context" },
+    { Profile: "messaging", "Tools Exposed": "Identity + messaging + contacts + search", "Use Case": "Communication-focused agents" },
+  ]}
+  caption="Tool exposure profiles for balancing capability vs. context footprint"
+  accent="teal"
+/>
 
 ```python
 TOOL_FILTER_PROFILES = {

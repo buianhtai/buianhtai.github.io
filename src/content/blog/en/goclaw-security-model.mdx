@@ -14,6 +14,8 @@ import Label from '../../../components/mdx/Label.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
 import HeroGrid from '../../../components/mdx/HeroGrid.astro';
 import Callout from '../../../components/mdx/Callout.astro';
+import Mermaid from '../../../components/mdx/Mermaid.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
 
 An LLM can read files, run shell commands, fetch URLs, and call APIs. Hand it credentials and internet access in production, and you've built an SSRF vector that takes instructions from strangers. GoClaw's security model doesn't bolt on protections after the fact — it threads five independent defense layers through every request, so that even if one layer fails, four more stand between the attacker and your infrastructure.
 
@@ -30,6 +32,21 @@ An LLM can read files, run shell commands, fetch URLs, and call APIs. Hand it cr
 <Card accent="teal" flush>
 
 Every request passes through five independent security layers. Each layer operates autonomously — a bypass at layer 2 doesn't compromise layers 3 through 5. This is defense-in-depth, not defense-in-series.
+
+<Mermaid
+  chart={`flowchart TD
+    A[User Message]
+    B[Layer 1: Gateway Authentication]
+    C[Layer 2: Global Tool Policy]
+    D[Layer 3: Per-Agent Policy]
+    E[Layer 4: Per-Channel Restrictions]
+    F[Layer 5: Owner-Only Operations]
+    G[Tool Execution or Response]
+
+    A --> B --> C --> D --> E --> F --> G
+  `}
+  caption="Five security layers applied in order before privileged operations"
+/>
 
 ```
 Request Flow Through Security Layers:
@@ -121,13 +138,18 @@ InputGuard runs **before** the message reaches the LLM — it's the first line o
 
 All user API keys — LLM provider keys, MCP server keys, custom tool environment variables — are encrypted with **AES-256-GCM** before storage in PostgreSQL.
 
-| Property | Detail |
-|----------|--------|
-| **Algorithm** | AES-256-GCM (authenticated encryption) |
-| **Key scope** | Per-instance encryption key (not per-user) |
-| **Storage** | Database stores ciphertext + nonce, never plaintext |
-| **Decryption** | Keys decrypted only at provider call time |
-| **Logging** | Decrypted values are never logged at any level |
+<DataTable
+  headers={["Property", "Detail"]}
+  rows={[
+    { "Property": "Algorithm", "Detail": "AES-256-GCM (authenticated encryption)" },
+    { "Property": "Key scope", "Detail": "Per-instance encryption key (not per-user)" },
+    { "Property": "Storage", "Detail": "Database stores ciphertext + nonce, never plaintext" },
+    { "Property": "Decryption", "Detail": "Keys decrypted only at provider call time" },
+    { "Property": "Logging", "Detail": "Decrypted values are never logged at any level" },
+  ]}
+  caption="Encryption-at-rest guarantees for stored credentials"
+  accent="teal"
+/>
 
 The encryption key is loaded from the instance configuration at startup. API keys are decrypted in memory only when a provider call is being constructed — the decrypted value exists for the duration of the HTTP request to the LLM provider, then is eligible for garbage collection. No tool, no log statement, and no database query ever returns a plaintext key.
 
@@ -141,11 +163,16 @@ The encryption key is loaded from the instance configuration at startup. API key
 
 The `web_fetch` tool validates every URL through a 3-step pipeline before making any HTTP request. AI agents with web access are SSRF vectors by default — GoClaw blocks private network access at the tool level.
 
-| Step | Validation |
-|------|------------|
-| **Blocked hostnames** | `localhost`, `*.local`, `*.internal`, `metadata.google.internal` |
-| **Private IP ranges** | `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `127.0.0.0/8`, `169.254.0.0/16`, IPv6 loopback and link-local |
-| **DNS pinning** | Resolves domain, checks every resolved IP against blocked ranges. Also applied to redirect targets. |
+<DataTable
+  headers={["Step", "Validation"]}
+  rows={[
+    { "Step": "Blocked hostnames", "Validation": "localhost, *.local, *.internal, metadata.google.internal" },
+    { "Step": "Private IP ranges", "Validation": "10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.0/8, 169.254.0.0/16, IPv6 loopback and link-local" },
+    { "Step": "DNS pinning", "Validation": "Resolves domain, checks every resolved IP against blocked ranges, and validates redirect targets" },
+  ]}
+  caption="SSRF validation stages before outbound HTTP is allowed"
+  accent="teal"
+/>
 
 DNS rebinding is defeated by the pinning step: even if a domain resolves to a public IP initially but rebinds to `127.0.0.1` on the actual request, the resolved IPs are checked before the connection is established. Redirect targets go through the same validation — a redirect from a public URL to `http://169.254.169.254/metadata` (cloud provider metadata endpoint) is blocked.
 
@@ -167,15 +194,20 @@ The `exec` tool runs commands in **direct mode** — `exec.CommandContext(binary
 
 On top of direct execution, per-binary regex deny lists block 7 categories of dangerous commands:
 
-| Category | Blocked Examples |
-|----------|-----------------|
-| **Destructive file ops** | `rm -rf`, `del /f`, `rmdir /s` |
-| **Destructive disk ops** | `mkfs`, `dd if=`, `> /dev/sd*` |
-| **System commands** | `shutdown`, `reboot`, `poweroff` |
-| **Fork bombs** | `:(){ ... };:` |
-| **Remote code execution** | `curl \| sh`, `wget -O - \| sh` |
-| **Reverse shells** | `/dev/tcp/`, `nc -e` |
-| **Eval injection** | `eval $()`, `base64 -d \| sh` |
+<DataTable
+  headers={["Category", "Blocked Examples"]}
+  rows={[
+    { "Category": "Destructive file ops", "Blocked Examples": "rm -rf, del /f, rmdir /s" },
+    { "Category": "Destructive disk ops", "Blocked Examples": "mkfs, dd if=, > /dev/sd*" },
+    { "Category": "System commands", "Blocked Examples": "shutdown, reboot, poweroff" },
+    { "Category": "Fork bombs", "Blocked Examples": ":(){ ... };:" },
+    { "Category": "Remote code execution", "Blocked Examples": "curl | sh, wget -O - | sh" },
+    { "Category": "Reverse shells", "Blocked Examples": "/dev/tcp/, nc -e" },
+    { "Category": "Eval injection", "Blocked Examples": "eval $(), base64 -d | sh" },
+  ]}
+  caption="Shell deny categories enforced before command execution"
+  accent="teal"
+/>
 
 Credentials are injected via environment variables — never passed as command-line arguments where they'd be visible in `ps` output or shell history. Path verification via `exec.LookPath()` + config match prevents binary spoofing (e.g., a `./gh` planted in the workspace).
 
@@ -206,13 +238,18 @@ After every tool execution, output is scanned for leaked credentials before it e
 
 **Static scrubbing** — regex patterns detect known credential formats:
 
-| Pattern | Examples |
-|---------|----------|
-| LLM provider keys | `sk-[a-zA-Z0-9]{20,}`, `sk-ant-[a-zA-Z0-9-]{20,}` |
-| GitHub tokens | `ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_` + 36 chars |
-| AWS keys | `AKIA[A-Z0-9]{16}` |
-| Connection strings | `postgres://`, `mysql://`, `mongodb://`, `redis://`, `amqp://` URLs |
-| Generic secrets | `API_KEY`, `SECRET`, `PASSWORD`, `BEARER`, `AUTHORIZATION` + 8+ chars |
+<DataTable
+  headers={["Pattern", "Examples"]}
+  rows={[
+    { "Pattern": "LLM provider keys", "Examples": "sk-[a-zA-Z0-9]{20,}, sk-ant-[a-zA-Z0-9-]{20,}" },
+    { "Pattern": "GitHub tokens", "Examples": "ghp_, gho_, ghu_, ghs_, ghr_ + 36 chars" },
+    { "Pattern": "AWS keys", "Examples": "AKIA[A-Z0-9]{16}" },
+    { "Pattern": "Connection strings", "Examples": "postgres://, mysql://, mongodb://, redis://, amqp:// URLs" },
+    { "Pattern": "Generic secrets", "Examples": "API_KEY, SECRET, PASSWORD, BEARER, AUTHORIZATION + 8+ chars" },
+  ]}
+  caption="Static credential patterns applied to tool outputs"
+  accent="teal"
+/>
 
 **Dynamic scrubbing** — credential values registered at runtime via `AddCredentialScrubValues()`. When an API key is decrypted for a provider call, its value is registered for scrubbing. If that value appears anywhere in tool output, it's replaced with `[REDACTED]`. Minimum 6 characters to avoid false positives.
 
