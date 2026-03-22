@@ -1,0 +1,271 @@
+---
+title: "Agent Teams: How GoClaw Orchestrates Multi-Agent Collaboration"
+description: "Inside GoClaw's team system — Lead/Member roles, TEAM.md injection, depth-limited spawning, task boards, and inter-agent delegation patterns."
+pubDate: 2026-03-22
+tags: ["ai", "golang", "architecture", "agents"]
+lang: "en"
+category: "architecture"
+---
+
+import Card from '../../../components/mdx/Card.astro';
+import Label from '../../../components/mdx/Label.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+
+Most multi-agent systems bolt coordination on as an afterthought — shared memory, message queues, supervisors watching supervisors. GoClaw takes a radically different approach: **everything agents know about their team comes from a generated markdown file.** No special APIs, no team-aware code paths in the loop. The loop is team-agnostic — TEAM.md is the entire abstraction.
+
+<HeroGrid items={[
+  { label: "Teams", sublabel: "Lead + Members with shared\nworkspace and task board", color: "#0891b2" },
+  { label: "Delegation", sublabel: "Sync + async, mandatory\ntask tracking, parallel batching", color: "#059669" },
+  { label: "Task Boards", sublabel: "Shared mutable state across\nagents with atomic claiming", color: "#d97706" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> Team Architecture
+
+<Card accent="teal" flush>
+
+A team is a **lead agent** plus one or more **member agents** sharing a workspace and task board. The lead orchestrates — it receives user messages, breaks work into tasks, delegates to members, and synthesizes results. Members execute tasks independently and report back.
+
+```
+┌─────────────────────────────────────────┐
+│              TEAM                        │
+│  ┌──────────┐     ┌──────────────────┐  │
+│  │   Lead   │────▶│  Shared Workspace │  │
+│  │  Agent   │     │  TEAM.md          │  │
+│  └──────────┘     │  Task Board       │  │
+│       │           └──────────────────┘  │
+│       │ delegate:                        │
+│  ┌────▼─────┐  ┌──────────┐             │
+│  │ Member A │  │ Member B │             │
+│  │ (writer) │  │ (coder)  │             │
+│  └──────────┘  └──────────┘             │
+└─────────────────────────────────────────┘
+```
+
+The design is **lead-centric** by intention. Only the lead gets full orchestration instructions in its system prompt. Members discover context on demand through tools — no wasted tokens on idle agents. When multiple members finish simultaneously, results are **batched into a single combined announcement** delivered to the lead.
+
+</Card>
+
+<Callout color="teal">
+Every delegation from a lead must be linked to a task on the board. The system enforces this — delegations without a `team_task_id` are rejected. This is mandatory, not optional.
+</Callout>
+
+---
+
+## <Label color="green">2</Label> TEAM.md Injection
+
+<Card accent="green" flush>
+
+`TEAM.md` is a **virtual file** — it doesn't exist on disk or in the database. It's generated dynamically during agent resolution and injected into the system prompt wrapped in `<system_context>` tags. The content varies by role:
+
+**Lead gets the full playbook:**
+- Team name, description, complete member list with roles and expertise
+- Mandatory workflow: always create a task first, then delegate with the task ID
+- Orchestration patterns: sequential (A→B), iterative (A→B→A), parallel (A+B→review)
+- Communication guidelines: notify user when assigning work, share progress
+
+**Members get a focused brief:**
+- Team name and teammate list
+- Instructions to focus on executing delegated work
+- How to send progress updates to the lead via mailbox
+- Limited task board actions (list, get, search — no create/delegate)
+
+**Non-team agents get negative context:**
+- "You are NOT part of any team. Do not use team_tasks or team_message tools."
+- "You have NO delegation targets. Do not use spawn with agent parameter."
+- This prevents wasted LLM iterations probing unavailable capabilities
+
+</Card>
+
+<Card>
+
+### The Injection Pipeline
+
+<FlowStep step={1} color="green" title="Resolver loads team config">
+During agent resolution, if the agent belongs to a team, load team data and all member records from the database.
+</FlowStep>
+
+<FlowStep step={2} color="green" title="BuildTeamMD() generates role-specific markdown">
+Render a markdown document tailored to the agent's role — full orchestration for leads, focused execution for members, negative context for unaffiliated agents.
+</FlowStep>
+
+<FlowStep step={3} color="green" title="Injected into system prompt alongside AGENTS.md">
+The generated TEAM.md is added as a context file in the system prompt, alongside the agent's identity, persona, tools, and skills sections.
+</FlowStep>
+
+<FlowStep step={4} color="green" title="Agent sees team context on every turn">
+The team context is part of every LLM call — the agent doesn't need to "discover" its team, it's baked into its worldview from the first token.
+</FlowStep>
+
+</Card>
+
+<Callout color="green">
+The loop code has zero team-awareness. It doesn't know if it's running a solo agent, a team lead, or a member — TEAM.md handles all coordination semantics through prompt engineering alone.
+</Callout>
+
+---
+
+## <Label color="amber">3</Label> Delegation Patterns
+
+<Card accent="amber" flush>
+
+GoClaw supports three delegation modes, each with different coordination semantics:
+
+### `delegate:agent_name` — Synchronous Delegation
+
+The lead spawns a member agent and waits for the result. The linked task is auto-claimed when delegation starts and auto-completed when it finishes. Results flow back to the lead's original session.
+
+### `teammate:agent_name` — Team Mailbox
+
+Peer-to-peer messaging between team members via the `team_message` tool. Supports `send` (direct message by agent key), `broadcast` (message all teammates), and `read` (fetch unread messages). Messages are prefixed with `[Team message from {sender_key}]` and routed through the team scheduler lane.
+
+### `spawn` — Async Child Agent
+
+Spawns a child agent with depth tracking. Each spawn increments the depth counter. The parent can list, cancel, or steer active children. Results arrive via callback.
+
+```
+Delegation Types:
+
+delegate:writer    teammate:coder    spawn (async)
+┌──────┐          ┌──────┐          ┌──────┐
+│ Lead │──sync──▶ │Writer│          │ Lead │──async──▶ │ Child  │
+│      │◀─result─ │      │          │      │◀─callback─│depth+1 │
+└──────┘          └──────┘          └──────┘           └────────┘
+```
+
+</Card>
+
+<Card>
+
+### Parallel Delegation Batching
+
+When the lead delegates to multiple members simultaneously:
+
+1. Each delegation runs independently in the team lane
+2. Intermediate completions accumulate their results (artifacts)
+3. When the **last** sibling delegation finishes, all results are collected
+4. A **single combined announcement** is delivered to the lead
+5. Each task is still auto-completed independently — batching only affects the announcement
+
+The announcement includes results from each member, deliverables, elapsed time stats, and guidance for the lead on next steps.
+
+</Card>
+
+---
+
+## <Label color="rose">4</Label> Depth-Limited Spawning
+
+<Card accent="rose" flush>
+
+The `SpawnTool` tracks delegation depth via `t.depth`, incremented on each spawn. This prevents infinite agent recursion — a real risk when agents can spawn other agents. Maximum depth is configurable (default: 3).
+
+```go
+type SpawnTool struct {
+    subagentMgr *SubagentManager
+    depth       int  // incremented on each spawn
+}
+
+func (t *SpawnTool) Execute(ctx, args) *Result {
+    switch action {
+    case "spawn":
+        return t.subagentMgr.Spawn(ctx, parentID, t.depth+1, task)
+    case "list":
+        return t.subagentMgr.List(ctx, parentID)
+    case "cancel":
+        return t.subagentMgr.Cancel(ctx, args["id"])
+    case "steer":
+        return t.subagentMgr.Steer(ctx, args["id"], args["message"])
+    }
+}
+```
+
+Four actions are available:
+
+| Action | Purpose |
+|---|---|
+| `spawn` | Create a child agent with `depth+1`, linked to a team task |
+| `list` | Show all active child agents for the current parent |
+| `cancel` | Terminate a specific child agent by ID |
+| `steer` | Send a mid-execution message to redirect a running child |
+
+</Card>
+
+<Callout color="rose">
+Depth limiting prevents infinite agent recursion — a real risk when agents can spawn other agents. Without it, a lead could delegate to a member, which delegates to another member, which spawns a sub-agent, forever. The depth counter is the circuit breaker.
+</Callout>
+
+---
+
+## <Label color="green">5</Label> Task Boards
+
+<Card accent="green" flush>
+
+The task board is the shared mutable state that holds a team together. Every team member accesses it through the `team_tasks` tool — but leads and members have different permissions.
+
+### Task Lifecycle
+
+```
+pending ──▶ in_progress ──▶ in_review ──▶ completed
+   │              │                           │
+   ▼              ▼                           ▼
+blocked        cancelled                   approved
+   │                                          │
+   ▼                                          ▼
+(unblocked when                           rejected
+ deps complete)
+```
+
+### Key Actions
+
+| Action | Who | Description |
+|---|---|---|
+| `create` | Lead | Create task with subject, priority, assignee, blocked_by |
+| `claim` | Members | Atomically claim a pending task (DB-level locking) |
+| `complete` | Members | Mark task done with result summary |
+| `search` | All | Full-text search over subject + description |
+| `comment` | All | Add feedback or clarification to a task |
+| `progress` | Members | Update percent complete and current step |
+
+### Atomic Claiming
+
+Two agents grabbing the same task is prevented at the database level:
+
+```sql
+UPDATE tasks
+SET status = 'in_progress', owner = $agent
+WHERE status = 'pending' AND owner IS NULL
+```
+
+One row updated means claimed. Zero rows means someone else got it first. No distributed mutex needed — PostgreSQL handles the concurrency.
+
+</Card>
+
+<Card>
+
+### Task Dependencies
+
+Tasks can declare `blocked_by` — a list of prerequisite task IDs. Blocked tasks automatically transition from `blocked` → `pending` when all their dependencies complete. Cancelled tasks also unblock their dependents.
+
+### Auto-Completion
+
+When a delegation finishes, the linked task is automatically marked complete. Files created during execution are auto-linked. Events are recorded. The delegation session is cleaned up. No manual bookkeeping.
+
+</Card>
+
+---
+
+## The Power of TEAM.md
+
+<HeroGrid items={[
+  { label: "Lead-Centric", sublabel: "Full orchestration playbook\nfor the lead — focused briefs\nfor members", color: "#0891b2" },
+  { label: "Zero Loop Changes", sublabel: "The agent loop has no\nteam-aware code paths —\nTEAM.md is the abstraction", color: "#059669" },
+  { label: "Task Enforcement", sublabel: "Every delegation requires\na task ID — no work\nhappens off-the-books", color: "#d97706" },
+  { label: "Depth Safety", sublabel: "Configurable spawn depth\nprevents infinite recursion\nin agent chains", color: "#be123c" },
+]} />
+
+<Callout color="teal">
+Everything agents know about their team comes from a generated markdown file. No special APIs, no team-aware code paths in the loop. The loop is team-agnostic — TEAM.md is the entire abstraction. This means teams are a **configuration concern**, not an architectural one — you can add, remove, or restructure teams without touching the core agent loop.
+</Callout>

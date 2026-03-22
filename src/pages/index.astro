@@ -1,3 +1,23 @@
 ---
-return Astro.redirect('/en/');
+import BaseLayout from '../layouts/BaseLayout.astro';
 ---
+
+<BaseLayout title="tai.bui" lang="en">
+  <div class="min-h-[60vh] flex items-center justify-center">
+    <div class="text-center px-4">
+      <h1 class="text-4xl font-bold mb-2 font-mono text-[var(--color-accent)]">tai.bui</h1>
+      <p class="text-[var(--color-text-dim)] mb-6">Redirecting to your language...</p>
+      <noscript>
+        <div class="flex gap-4 justify-center">
+          <a href="/en/" class="px-6 py-3 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] hover:border-[var(--color-accent)] transition-colors">🇬🇧 English</a>
+          <a href="/vi/" class="px-6 py-3 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] hover:border-[var(--color-accent)] transition-colors">🇻🇳 Tiếng Việt</a>
+        </div>
+      </noscript>
+    </div>
+  </div>
+</BaseLayout>
+
+<script is:inline>
+  const lang = (navigator.language || '').startsWith('vi') ? 'vi' : 'en';
+  window.location.replace('/' + lang + '/');
+</script>

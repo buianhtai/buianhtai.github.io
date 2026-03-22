@@ -1,0 +1,299 @@
+---
+title: "One Interface, 20 Providers: GoClaw's LLM Abstraction Layer"
+description: "How GoClaw abstracts 20+ LLM providers behind a single Go interface — from Anthropic's native SSE to OpenAI-compatible endpoints, with streaming, extended thinking, and retry logic."
+pubDate: 2026-03-22
+tags: ["ai", "golang", "architecture", "llm"]
+lang: "en"
+category: "architecture"
+---
+
+import Card from '../../../components/mdx/Card.astro';
+import Label from '../../../components/mdx/Label.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+
+Every LLM API speaks a slightly different dialect. Anthropic sends system messages as a separate field. OpenAI expects them inline. Gemini chokes on `additionalProperties`. DeepSeek streams thinking tokens in a dedicated field. GoClaw's provider layer absorbs all of this behind a four-method interface — the agent loop never has to care.
+
+<HeroGrid items={[
+  { label: "1 Interface", sublabel: "Chat + ChatStream — that's it.\nFour methods, zero inheritance.", color: "#0891b2" },
+  { label: "20+ Providers", sublabel: "Anthropic, OpenAI, Groq, DeepSeek,\nGemini, Ollama, Codex, DashScope...", color: "#059669" },
+  { label: "Strategy Pattern", sublabel: "Each provider implements\nits own wire protocol", color: "#d97706" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> The Provider Interface
+
+<Card>
+
+This is the entire contract. Every LLM backend in GoClaw — from Anthropic's native HTTP+SSE to a local Ollama instance — implements these four methods.
+
+```go
+type Provider interface {
+    // Chat sends messages and returns a complete response.
+    Chat(ctx context.Context, req ChatRequest) (*ChatResponse, error)
+
+    // ChatStream sends messages and streams response chunks via callback.
+    // Returns the final complete response after streaming ends.
+    ChatStream(ctx context.Context, req ChatRequest,
+        onChunk func(StreamChunk)) (*ChatResponse, error)
+
+    // DefaultModel returns the provider's default model name.
+    DefaultModel() string
+
+    // Name returns the provider identifier (e.g. "anthropic", "openai").
+    Name() string
+}
+```
+
+The `ChatRequest` carries messages, tool definitions, model override, and an options map for provider-specific settings like `temperature` or `thinking_level`. The `ChatResponse` unifies content, thinking output, tool calls, finish reason, and token usage — regardless of which backend produced it.
+
+</Card>
+
+<Callout color="teal">
+Two methods to implement. That's the entire contract. Everything else — retry logic, schema cleaning, token counting — lives outside the interface.
+</Callout>
+
+---
+
+## <Label color="green">2</Label> Provider Registry
+
+<Card>
+
+Providers are registered at startup and resolved by name at runtime. The agent config says `"provider": "anthropic"` — the loop looks it up from the registry and gets a concrete implementation.
+
+<FlowStep number={1} title="Config Loading">
+Read provider configs from `config.json` — API keys, base URLs, default models, custom options.
+</FlowStep>
+
+<FlowStep number={2} title="Provider Creation">
+`NewAnthropicProvider()`, `NewOpenAIProvider()`, etc. — each takes functional options for base URL, API key, timeout, and model overrides.
+</FlowStep>
+
+<FlowStep number={3} title="Registry.Register">
+Store the provider by name in a thread-safe map. Database providers can override config providers with the same name.
+</FlowStep>
+
+<FlowStep number={4} title="Resolution">
+Agent config references a provider by name. The Loop resolves it at runtime — the agent never holds a direct reference to the implementation.
+</FlowStep>
+
+```
+config.json                    ProviderRegistry
+┌──────────────┐              ┌────────────────────┐
+│ providers:   │              │ "anthropic" → impl │
+│   anthropic: │──Register──▶│ "openai"    → impl │
+│   openai:    │              │ "groq"      → impl │
+│   ollama:    │              │ "ollama"    → impl │
+└──────────────┘              └────────────────────┘
+                                       │
+                              agent.Provider = "anthropic"
+                                       │
+                                       ▼
+                              Loop gets AnthropicProvider
+```
+
+The OpenAI-compatible provider handles 14 backends through configuration alone — different base URLs, default models, and auth headers, but identical wire protocol:
+
+| Provider | API Base | Default Model |
+|---|---|---|
+| openai | `api.openai.com/v1` | `gpt-4o` |
+| groq | `api.groq.com/openai/v1` | `llama-3.3-70b-versatile` |
+| deepseek | `api.deepseek.com/v1` | `deepseek-chat` |
+| gemini | `generativelanguage.googleapis.com/v1beta/openai` | `gemini-2.0-flash` |
+| ollama | `localhost:11434/v1` | `llama3.3` |
+| openrouter | `openrouter.ai/api/v1` | `anthropic/claude-sonnet-4-5-20250929` |
+| mistral | `api.mistral.ai/v1` | `mistral-large-latest` |
+| xai | `api.x.ai/v1` | `grok-3-mini` |
+| perplexity | `api.perplexity.ai` | `sonar-pro` |
+| cohere | `api.cohere.ai/compatibility/v1` | `command-a` |
+
+</Card>
+
+---
+
+## <Label color="amber">3</Label> Streaming vs Non-Streaming
+
+<Card>
+
+Both `Chat()` and `ChatStream()` return the same `ChatResponse` — the difference is *when* the caller sees data.
+
+**`Chat()`** — Single request/response. The provider makes an HTTP POST, waits for the complete JSON body, parses it, and returns. Simple. Used when the caller doesn't need real-time output (sub-agent calls, background tasks).
+
+**`ChatStream()`** — SSE stream with `onChunk` callback. The provider opens a streaming HTTP connection, reads server-sent events line by line, and fires the callback for each content delta. Internally it accumulates everything and returns the final assembled response when the stream ends.
+
+```go
+func (p *OpenAIProvider) ChatStream(
+    ctx context.Context,
+    req ChatRequest,
+    onChunk func(StreamChunk),
+) (*ChatResponse, error) {
+    body := p.buildRequestBody(req, true) // stream: true
+    resp, err := p.doRequest(ctx, body)   // HTTP POST
+    if err != nil { return nil, err }
+    defer resp.Body.Close()
+
+    var accumulated string
+    scanner := bufio.NewScanner(resp.Body) // SSE line reader
+    for scanner.Scan() {
+        line := scanner.Text()
+        if !strings.HasPrefix(line, "data: ") { continue }
+
+        chunk := parseSSEDelta(line)
+        if chunk.Done { break }
+
+        onChunk(StreamChunk{Content: chunk.Delta}) // Emit to caller
+        accumulated += chunk.Delta
+    }
+
+    return &ChatResponse{Content: accumulated}, nil
+}
+```
+
+</Card>
+
+<Callout color="amber">
+Key difference for retry: non-streaming wraps the entire request in `RetryDo`. Streaming retries only the connection phase — once SSE events start flowing, no retry occurs mid-stream.
+</Callout>
+
+---
+
+## <Label color="rose">4</Label> Extended Thinking
+
+<Card>
+
+Not all providers support reasoning tokens. Some do — Anthropic has `budget_tokens`, OpenAI has `reasoning_effort`, DashScope has `thinking_budget`. GoClaw handles this through a separate `ThinkingCapable` interface that providers can optionally implement.
+
+```go
+// ThinkingCapable is optionally implemented by providers
+// that support extended thinking / reasoning tokens.
+type ThinkingCapable interface {
+    SupportsThinking() bool
+}
+```
+
+The agent loop checks at runtime:
+
+```go
+if tc, ok := provider.(providers.ThinkingCapable); ok && tc.SupportsThinking() {
+    req.Options["enable_thinking"] = true
+    req.Options["thinking_budget"] = agentConfig.ThinkingBudget
+}
+```
+
+Thinking content streams separately from regular content. The `StreamChunk` struct has distinct `Content` and `Thinking` fields — the UI can render them differently (e.g., collapsible reasoning panel vs. main output).
+
+```go
+type StreamChunk struct {
+    Content  string // Regular response content
+    Thinking string // Extended thinking / reasoning
+    Done     bool   // Stream complete
+}
+```
+
+Each provider maps its native thinking format to this unified struct:
+- **Anthropic**: `thinking` content blocks with `budget_tokens` config
+- **OpenAI**: `reasoning_content` field with `reasoning_effort` (low/medium/high)
+- **DashScope**: `thought` field with `thinking_budget` parameter
+- **DeepSeek**: `reasoning_content` on the message object
+
+</Card>
+
+<Callout color="rose">
+Not all providers support thinking. The `ThinkingCapable` interface lets the loop check at runtime without breaking non-thinking providers. It's Go's version of optional capabilities — no inheritance, just interface assertion.
+</Callout>
+
+---
+
+## <Label color="green">5</Label> Retry Logic & Resilience
+
+<Card>
+
+Every provider call is wrapped in `RetryDo` — a generic function with exponential backoff, jitter, and context cancellation.
+
+```go
+func RetryDo[T any](
+    ctx context.Context,
+    cfg RetryConfig,
+    fn  func() (T, error),
+) (T, error) {
+    for attempt := 0; attempt < cfg.Attempts; attempt++ {
+        result, err := fn()
+        if err == nil {
+            return result, nil
+        }
+        if !IsRetryableError(err) {
+            return result, err
+        }
+
+        // Exponential backoff with jitter
+        delay := min(cfg.MinDelay * (1 << attempt), cfg.MaxDelay)
+        jitter := time.Duration(rand.Int63n(int64(float64(delay) * cfg.Jitter)))
+        delay += jitter
+
+        select {
+        case <-ctx.Done():
+            return result, ctx.Err()
+        case <-time.After(delay):
+        }
+    }
+    return zero, fmt.Errorf("all %d attempts exhausted", cfg.Attempts)
+}
+```
+
+The backoff schedule with default config (3 attempts, 300ms min, 30s max, 10% jitter):
+
+```
+Attempt 1: 300ms  ±30ms   → 270ms..330ms
+Attempt 2: 600ms  ±60ms   → 540ms..660ms
+Attempt 3: 1200ms ±120ms  → 1080ms..1320ms
+```
+
+| Category | Status Codes / Errors |
+|---|---|
+| **Retryable** | 429, 500, 502, 503, 504, `net.Error`, connection reset, broken pipe, EOF, timeout |
+| **Not retryable** | 400, 401, 403, 404, all other status codes |
+
+If the response includes a `Retry-After` header (common with 429 rate limits), the header value **replaces** the computed backoff entirely. Parsed as integer seconds or RFC 1123 date format.
+
+</Card>
+
+---
+
+## <Label color="teal">6</Label> Schema Cleaning
+
+<Card>
+
+Different providers accept different JSON Schema features in tool definitions. An agent writes one tool definition — the provider layer silently strips unsupported fields before sending them over the wire.
+
+`CleanSchemaForProvider()` recursively walks the entire schema tree — including nested `properties`, `anyOf`, `oneOf`, and `allOf` — and removes fields the target provider rejects.
+
+| Provider | Fields Removed |
+|---|---|
+| **Gemini** | `$ref`, `$defs`, `additionalProperties`, `examples`, `default` |
+| **Anthropic** | `$ref`, `$defs` |
+| **All others** | No cleaning needed |
+
+The Anthropic provider calls this when converting tool definitions to the native `input_schema` format. The OpenAI-compatible provider applies it per-provider name — so Gemini tools get cleaned even though they go through the OpenAI-compatible wire format.
+
+</Card>
+
+<Callout color="teal">
+Schema cleaning is invisible to the agent — it writes one tool definition, and the provider layer adapts it for each backend. No conditional logic in agent code, ever.
+</Callout>
+
+---
+
+## Why Strategy Pattern Works Here
+
+<HeroGrid items={[
+  { label: "Protocol Isolation", sublabel: "Anthropic uses native HTTP+SSE.\nOpenAI uses chat/completions.\nEach speaks its own dialect.", color: "#0891b2" },
+  { label: "Zero Agent Changes", sublabel: "Switch from GPT-4o to Claude\nto Llama — agent code is identical.", color: "#059669" },
+  { label: "Additive Extension", sublabel: "New provider? Implement 4 methods.\nRegister it. Done.", color: "#d97706" },
+  { label: "Optional Capabilities", sublabel: "ThinkingCapable, TokenSource —\ninterface assertions, not inheritance.", color: "#e11d48" },
+]} />
+
+<Callout color="green">
+The agent loop doesn't know or care which provider is running. It calls `Chat` or `ChatStream`. The provider handles protocol, authentication, streaming format, and error mapping. This is textbook strategy pattern in Go — interfaces over inheritance, composition over configuration.
+</Callout>

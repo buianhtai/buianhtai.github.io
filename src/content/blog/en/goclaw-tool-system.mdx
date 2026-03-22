@@ -1,0 +1,182 @@
+---
+title: "Registry, Policy, Execute: How GoClaw's Tool System Enforces RBAC at Runtime"
+description: "A deep dive into GoClaw's 8-step tool execution pipeline — from registry lookup to credential scrubbing, with policy-driven RBAC and parallel goroutine dispatch."
+pubDate: 2026-03-22
+tags: ["ai", "golang", "security", "architecture"]
+lang: "en"
+category: "architecture"
+---
+
+import Card from '../../../components/mdx/Card.astro';
+import Label from '../../../components/mdx/Label.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+
+When an LLM emits a tool call, most frameworks just... run it. GoClaw interposes an 8-step pipeline between intent and execution — policy checks, rate limiting, credential scrubbing — all before a single byte touches the filesystem. The tool registry isn't a convenience layer. It's the enforcement boundary.
+
+<HeroGrid items={[
+  { label: "35+ Tools", sublabel: "Filesystem, Web, Memory\nMedia, Teams", color: "#0891b2" },
+  { label: "8-Step Pipeline", sublabel: "Registry → Policy → Rate Limit\nExecute → Scrub", color: "#059669" },
+  { label: "5-Layer RBAC", sublabel: "Gateway → Global → Agent\nChannel → Owner", color: "#d97706" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> Tool Inventory
+
+<Card>
+
+Every tool belongs to a group. Groups map to policy scopes — disable `media_gen` for an agent and all four generation tools go dark. No per-tool whack-a-mole.
+
+| Group | Tools |
+|-------|-------|
+| **Filesystem** | `read_file`, `write_file`, `edit`, `list_files`, `search`, `glob` |
+| **Runtime** | `exec`, `credentialed_exec` |
+| **Web** | `web_search`, `web_fetch` |
+| **Memory** | `memory_search`, `memory_get` |
+| **Sessions** | `sessions_list`, `sessions_history`, `spawn` |
+| **Knowledge** | `knowledge_graph_search`, `skill_search` |
+| **Media Gen** | `create_image`, `create_audio`, `tts`, `create_video` |
+| **Media Read** | `read_image`, `read_audio`, `read_document`, `read_video` |
+| **Teams** | `team_tasks`, `team_message` |
+| **Automation** | `cron`, `datetime` |
+
+Tools are stateless structs that implement a single interface. The registry holds one instance per tool name, shared across all concurrent goroutines — context keys carry per-call values like channel ID, chat ID, and sandbox key.
+
+</Card>
+
+---
+
+## <Label color="green">2</Label> The 8-Step Execution Pipeline
+
+<Card>
+
+`ExecuteWithContext` is the only path from LLM intent to tool execution. Every tool call — filesystem, web, media, shell — passes through the same 8 steps. No shortcuts, no backdoors.
+
+<FlowStep number={1} title="Registry Lookup">
+Lock the registry mutex, resolve the tool by name from the registered map, unlock. Unknown tool names return an error immediately — the LLM gets feedback in the same iteration.
+</FlowStep>
+
+<FlowStep number={2} title="Policy Check">
+The PolicyEngine evaluates the call against 5 layers: gateway defaults, global rules, agent-specific overrides, channel restrictions, and owner-level permissions. A single `deny` at any layer kills the call.
+</FlowStep>
+
+<FlowStep number={3} title="Rate Limiting">
+Per-tool, per-agent, per-session rate limits via `rateLimiter.Allow(sessionKey)`. Prevents a runaway agent from hammering `web_fetch` 200 times in a single loop iteration.
+</FlowStep>
+
+<FlowStep number={4} title="Argument Validation">
+Schema validation against the tool's `ToolDefinition` — required fields, type checks, enum constraints. Invalid arguments are rejected before execution, saving compute and preventing garbage-in/garbage-out.
+</FlowStep>
+
+<FlowStep number={5} title="Tool Execution">
+`tool.Execute(ctx, args)` runs with a timeout derived from the tool's configuration. Context carries per-call values injected in steps 1-4: channel, chat ID, peer kind, sandbox key.
+</FlowStep>
+
+<FlowStep number={6} title="Credential Scrubbing">
+`ScrubCredentials()` strips API keys, tokens, and passwords from both `ForLLM` and `ForUser` output fields. The LLM never sees raw credentials in tool results — even if the tool itself leaks them.
+</FlowStep>
+
+<FlowStep number={7} title="Result Sanitization">
+Truncate oversized outputs, normalize response format, ensure consistent structure for the agent loop. Large file reads or verbose command outputs get trimmed to fit the context window.
+</FlowStep>
+
+<FlowStep number={8} title="Event Emission">
+Emit `tool.call` and `tool.result` events for distributed tracing. Duration is logged — slow tools surface in metrics without any instrumentation inside the tool itself.
+</FlowStep>
+
+</Card>
+
+<Callout color="green">
+Context keys — not mutable struct fields — carry per-call values. This is what makes tool instances safely shareable across concurrent goroutines. One `read_file` instance serves every agent in the process.
+</Callout>
+
+---
+
+## <Label color="amber">3</Label> Sequential vs Parallel Execution
+
+<Card>
+
+When the LLM emits multiple tool calls in a single response, GoClaw dispatches them as parallel goroutines. Each call runs through the full 8-step pipeline independently — policy, rate limiting, scrubbing — then results merge before the next LLM iteration.
+
+```
+Single tool call:          Multiple tool calls:
+┌──────────┐               ┌──────────┐ ┌──────────┐ ┌──────────┐
+│  Tool A  │               │  Tool A  │ │  Tool B  │ │  Tool C  │
+│  (sync)  │               │ goroutine│ │ goroutine│ │ goroutine│
+└────┬─────┘               └────┬─────┘ └────┬─────┘ └────┬─────┘
+     │                          │             │             │
+     ▼                          └──────┬──────┘─────────────┘
+  Result                               │
+                                  Merge Results
+```
+
+This isn't fire-and-forget. Each goroutine gets its own context (channel, chat ID, sandbox key), runs through policy and rate limiting independently, and returns a typed result. The merge step preserves tool call ordering so the LLM sees results in the same sequence it requested them.
+
+The key constraint: **parallel execution happens within a single LLM iteration**. Across iterations, execution is always sequential — the agent loop waits for all tools to complete before sending results back to the LLM.
+
+</Card>
+
+---
+
+## <Label color="rose">4</Label> Virtual FS Routing
+
+<Card>
+
+`read_file` and `write_file` don't go straight to disk. Three interceptor layers route specific paths to entirely different backends — the tool itself doesn't know the difference.
+
+<FlowStep number={1} title="Context File Interceptor">
+Intercepts 7 known filenames — `SOUL.md`, `IDENTITY.md`, `AGENTS.md`, `TOOLS.md`, `USER.md`, `BOOTSTRAP.md` — and routes them to PostgreSQL. Open agents get per-user context files; predefined agents share agent-level files with only `USER.md` per-user.
+</FlowStep>
+
+<FlowStep number={2} title="Memory Interceptor">
+Routes `memory/*.md` paths to the memory document store. Writes automatically trigger `IndexDocument()` — chunking and embedding happen inline, so memories are searchable immediately after creation.
+</FlowStep>
+
+<FlowStep number={3} title="Sandbox / Host FS">
+Everything else falls through to the actual filesystem. If sandboxing is enabled, this means a Docker container with its own isolated mount. Otherwise, `resolvePath()` joins with the workspace root and validates with `HasPrefix()` to block path traversal.
+</FlowStep>
+
+</Card>
+
+<Callout color="rose">
+7 context files are stored in PostgreSQL, not the filesystem — enabling per-user persistence without directory isolation.
+</Callout>
+
+---
+
+## <Label color="green">5</Label> Credentialed CLI
+
+<Card>
+
+The `exec` tool runs shell commands. `credentialed_exec` does something fundamentally different — it runs binaries with injected credentials, using direct `exec` (no shell), so there's no command injection surface.
+
+**How `credentialed_exec` works:**
+
+1. **Credential lookup** — Binary name maps to encrypted environment variables in the `secure_cli_binaries` database table
+2. **Shell operator detection** — Blocks `;`, `|`, `&&`, `||`, `>`, `<`, `$()`, backticks. If any are found, the call is rejected before execution
+3. **Path verification** — Binary is resolved to an absolute path and matched against the configured path. A workspace-local `./gh` can't masquerade as the system `gh`
+4. **Per-binary deny patterns** — Optional regex patterns block dangerous arguments (e.g., `auth\s+`, `ssh-key` for the `gh` binary)
+5. **Direct exec** — `exec.CommandContext(binary, args...)` with credentials injected as environment variables. No shell involved, ever
+
+**Available presets:** `gh`, `gcloud`, `aws`, `kubectl`, `terraform`
+
+</Card>
+
+<Callout color="green">
+Credentials are injected via environment variables, never as command arguments. They're also registered with the scrubber — if a credential leaks into stdout, it gets redacted before the LLM sees it.
+</Callout>
+
+---
+
+## What This Gets You
+
+<HeroGrid items={[
+  { label: "Policy-first", sublabel: "Every tool call passes through\n5-layer RBAC before execution", color: "#0891b2" },
+  { label: "Parallel by default", sublabel: "Multiple tool calls dispatch\nas independent goroutines", color: "#059669" },
+  { label: "Credential-safe", sublabel: "Direct exec, env injection\nauto-scrubbing on output", color: "#f43f5e" },
+  { label: "Trace everything", sublabel: "tool.call + tool.result events\nwith duration metrics", color: "#d97706" },
+]} />
+
+The tool system isn't where GoClaw does clever things. It's where GoClaw does *correct* things — enforcement, isolation, scrubbing — so the clever parts (agent loop, memory, teams) can operate on a foundation that doesn't leak credentials or bypass policy. The boring infrastructure that makes the interesting parts safe.

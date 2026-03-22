@@ -1,0 +1,265 @@
+---
+title: "5 Layers Deep: GoClaw's Production Security Architecture"
+description: "How GoClaw secures AI agents in production — gateway auth, policy engines, AES-256-GCM encryption, prompt injection detection, SSRF protection, and shell deny patterns."
+pubDate: 2026-03-22
+tags: ["ai", "golang", "security", "architecture"]
+lang: "en"
+category: "architecture"
+---
+
+import Card from '../../../components/mdx/Card.astro';
+import Label from '../../../components/mdx/Label.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+
+An LLM can read files, run shell commands, fetch URLs, and call APIs. Hand it credentials and internet access in production, and you've built an SSRF vector that takes instructions from strangers. GoClaw's security model doesn't bolt on protections after the fact — it threads five independent defense layers through every request, so that even if one layer fails, four more stand between the attacker and your infrastructure.
+
+<HeroGrid items={[
+  { label: "5 Layers", sublabel: "Gateway → Global → Agent\nChannel → Owner", color: "#0891b2" },
+  { label: "AES-256-GCM", sublabel: "All API keys encrypted at rest\nDecrypted only at call time", color: "#059669" },
+  { label: "6 Injection Patterns", sublabel: "InputGuard scans every message\nBefore LLM sees it", color: "#be123c" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> The 5-Layer Permission Model
+
+<Card accent="teal" flush>
+
+Every request passes through five independent security layers. Each layer operates autonomously — a bypass at layer 2 doesn't compromise layers 3 through 5. This is defense-in-depth, not defense-in-series.
+
+```
+Request Flow Through Security Layers:
+
+User Message
+     │
+     ▼
+┌─────────────────────┐
+│ Layer 1: Gateway    │  API key / webhook signature validation
+│ Authentication      │  Rate limiting per-IP
+└─────────┬───────────┘
+          ▼
+┌─────────────────────┐
+│ Layer 2: Global     │  Global tool policy (deny list)
+│ Tool Policy         │  System-wide restrictions
+└─────────┬───────────┘
+          ▼
+┌─────────────────────┐
+│ Layer 3: Per-Agent  │  Agent-specific tool allowlist
+│ Tool Policy         │  Model/provider restrictions
+└─────────┬───────────┘
+          ▼
+┌─────────────────────┐
+│ Layer 4: Per-Channel│  Channel-specific restrictions
+│ Restrictions        │  DM vs group policies
+└─────────┬───────────┘
+          ▼
+┌─────────────────────┐
+│ Layer 5: Owner-Only │  Admin commands, config changes
+│ Operations          │  Require owner verification
+└─────────────────────┘
+```
+
+**Layer 1** handles transport — CORS validation, WebSocket message limits (512KB), HTTP body limits (1MB), and timing-safe token comparison via `crypto/subtle.ConstantTimeCompare`. Rate limiting uses token buckets configurable per user/IP.
+
+**Layer 2** applies system-wide deny lists. If `exec` is globally disabled, no agent on the instance can run shell commands. Period.
+
+**Layer 3** narrows further per-agent. An agent configured for customer support gets `web_search` and `memory_search` but not `exec` or `write_file`. The policy engine enforces this at every tool call, not just at configuration time.
+
+**Layer 4** distinguishes between DMs and group chats. A financial agent might allow portfolio queries in DMs but restrict them in group channels where other users can observe the output.
+
+**Layer 5** gates admin operations — config changes, agent creation, credential management — behind owner verification. These commands never reach the LLM.
+
+</Card>
+
+---
+
+## <Label color="rose">2</Label> Input Guard — Prompt Injection Detection
+
+<Card accent="rose" flush>
+
+The input guard scans every incoming message against 6 injection patterns before the LLM processes it. The action on detection is configurable: `log` (info-level, continue), `warn` (warning-level, continue), or `block` (reject the message entirely).
+
+<FlowStep step={1} color="rose" title="System prompt override attempts">
+Detects "ignore all previous instructions," "disregard prior directives," and variants. Case-insensitive regex matching covers natural language paraphrasing — `ignore` + `previous/prior/above/earlier/preceding` + `instructions/rules/prompts/directives/guidelines`.
+</FlowStep>
+
+<FlowStep step={2} color="rose" title="Role injection">
+Catches "you are now...", "from now on you are...", "pretend you are...", "act as if you are...", "imagine you are..." — attempts to override the agent's identity at the input layer.
+</FlowStep>
+
+<FlowStep step={3} color="rose" title="Delimiter attacks">
+Scans for `<system>`, `[SYSTEM]`, `[INST]`, `<<SYS>>`, `<|im_start|>system` — markers that LLMs may interpret as prompt boundary crossings. Also catches closing tags like `</instructions>`, `</rules>`, `</prompt>`.
+</FlowStep>
+
+<FlowStep step={4} color="rose" title="Tool manipulation">
+Detects "new instructions:", "override:", "system prompt:" — attempts to inject instructions that the LLM might interpret as authoritative directives rather than user input.
+</FlowStep>
+
+<FlowStep step={5} color="rose" title="Data exfiltration via null bytes">
+Raw `\x00` byte detection catches obfuscation attempts that use null characters to hide injection payloads from text-based scanners while still being processed by the LLM tokenizer.
+</FlowStep>
+
+<FlowStep step={6} color="rose" title="Delimiter escape sequences">
+Matches "end of system", "begin user input", `</instructions>`, `</context>` — attempts to convince the model it has left the system prompt and entered a new context where restrictions don't apply.
+</FlowStep>
+
+</Card>
+
+<Callout color="rose">
+InputGuard runs **before** the message reaches the LLM — it's the first line of defense, not the last. Messages exceeding `max_message_chars` (default 32K) are truncated, not rejected, and the LLM is notified of the truncation.
+</Callout>
+
+---
+
+## <Label color="green">3</Label> Encryption at Rest
+
+<Card accent="green" flush>
+
+All user API keys — LLM provider keys, MCP server keys, custom tool environment variables — are encrypted with **AES-256-GCM** before storage in PostgreSQL.
+
+| Property | Detail |
+|----------|--------|
+| **Algorithm** | AES-256-GCM (authenticated encryption) |
+| **Key scope** | Per-instance encryption key (not per-user) |
+| **Storage** | Database stores ciphertext + nonce, never plaintext |
+| **Decryption** | Keys decrypted only at provider call time |
+| **Logging** | Decrypted values are never logged at any level |
+
+The encryption key is loaded from the instance configuration at startup. API keys are decrypted in memory only when a provider call is being constructed — the decrypted value exists for the duration of the HTTP request to the LLM provider, then is eligible for garbage collection. No tool, no log statement, and no database query ever returns a plaintext key.
+
+</Card>
+
+---
+
+## <Label color="amber">4</Label> SSRF Protection
+
+<Card accent="amber" flush>
+
+The `web_fetch` tool validates every URL through a 3-step pipeline before making any HTTP request. AI agents with web access are SSRF vectors by default — GoClaw blocks private network access at the tool level.
+
+| Step | Validation |
+|------|------------|
+| **Blocked hostnames** | `localhost`, `*.local`, `*.internal`, `metadata.google.internal` |
+| **Private IP ranges** | `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `127.0.0.0/8`, `169.254.0.0/16`, IPv6 loopback and link-local |
+| **DNS pinning** | Resolves domain, checks every resolved IP against blocked ranges. Also applied to redirect targets. |
+
+DNS rebinding is defeated by the pinning step: even if a domain resolves to a public IP initially but rebinds to `127.0.0.1` on the actual request, the resolved IPs are checked before the connection is established. Redirect targets go through the same validation — a redirect from a public URL to `http://169.254.169.254/metadata` (cloud provider metadata endpoint) is blocked.
+
+Fetched web content is wrapped in `<<<EXTERNAL_UNTRUSTED_CONTENT>>>` tags with a security warning, ensuring the LLM treats the content as untrusted input rather than authoritative instructions.
+
+</Card>
+
+<Callout color="amber">
+AI agents with web access are SSRF vectors by default. GoClaw blocks private network access at the tool level — `10.x`, `172.16-31.x`, `192.168.x`, localhost, and cloud metadata endpoints are all denied before any HTTP request is made.
+</Callout>
+
+---
+
+## <Label color="rose">5</Label> Shell Deny Patterns
+
+<Card accent="rose" flush>
+
+The `exec` tool runs commands in **direct mode** — `exec.CommandContext(binary, args...)`, never `sh -c`. This eliminates shell injection, environment variable expansion, and pipe-based attacks at the execution layer.
+
+On top of direct execution, per-binary regex deny lists block 7 categories of dangerous commands:
+
+| Category | Blocked Examples |
+|----------|-----------------|
+| **Destructive file ops** | `rm -rf`, `del /f`, `rmdir /s` |
+| **Destructive disk ops** | `mkfs`, `dd if=`, `> /dev/sd*` |
+| **System commands** | `shutdown`, `reboot`, `poweroff` |
+| **Fork bombs** | `:(){ ... };:` |
+| **Remote code execution** | `curl \| sh`, `wget -O - \| sh` |
+| **Reverse shells** | `/dev/tcp/`, `nc -e` |
+| **Eval injection** | `eval $()`, `base64 -d \| sh` |
+
+Credentials are injected via environment variables — never passed as command-line arguments where they'd be visible in `ps` output or shell history. Path verification via `exec.LookPath()` + config match prevents binary spoofing (e.g., a `./gh` planted in the workspace).
+
+**Docker sandbox** provides container-based isolation for untrusted execution:
+
+```go
+type SandboxConfig struct {
+    Mode            string  // "off", "non-main", "all"
+    Image           string  // "goclaw-sandbox:bookworm-slim"
+    MemoryMB        int     // default 512
+    TimeoutSec      int     // default 300
+    NetworkEnabled  bool    // default false
+    MaxOutputBytes  int     // default 1MB
+}
+```
+
+When sandbox mode is enabled, commands run inside a Docker container with read-only root filesystem, all capabilities dropped, no new privileges, network disabled, PID limits enforced, and tmpfs mounts for writable directories. The sandbox is the last resort — most attacks are stopped before execution ever reaches this layer.
+
+</Card>
+
+---
+
+## <Label color="teal">6</Label> Credential Scrubbing
+
+<Card accent="teal" flush>
+
+After every tool execution, output is scanned for leaked credentials before it enters session history or reaches the LLM. This operates at two levels:
+
+**Static scrubbing** — regex patterns detect known credential formats:
+
+| Pattern | Examples |
+|---------|----------|
+| LLM provider keys | `sk-[a-zA-Z0-9]{20,}`, `sk-ant-[a-zA-Z0-9-]{20,}` |
+| GitHub tokens | `ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_` + 36 chars |
+| AWS keys | `AKIA[A-Z0-9]{16}` |
+| Connection strings | `postgres://`, `mysql://`, `mongodb://`, `redis://`, `amqp://` URLs |
+| Generic secrets | `API_KEY`, `SECRET`, `PASSWORD`, `BEARER`, `AUTHORIZATION` + 8+ chars |
+
+**Dynamic scrubbing** — credential values registered at runtime via `AddCredentialScrubValues()`. When an API key is decrypted for a provider call, its value is registered for scrubbing. If that value appears anywhere in tool output, it's replaced with `[REDACTED]`. Minimum 6 characters to avoid false positives.
+
+Additionally, server IPs and runtime-discovered sensitive values are registered via `AddDynamicScrubValues()` and replaced with `[SERVER_IP]` — preventing SSRF reconnaissance through error messages that leak internal addresses.
+
+</Card>
+
+---
+
+## Defense in Depth
+
+The four-phase model ensures that no single vulnerability — in the LLM, in a tool, or in the transport layer — results in a security breach.
+
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 my-6">
+
+<Card accent="teal" flush>
+
+### Pre-input
+
+InputGuard scans for 6 injection patterns before the LLM ever sees the message. Malicious prompts are detected and optionally blocked at the gateway.
+
+</Card>
+
+<Card accent="green" flush>
+
+### Pre-execution
+
+PolicyEngine enforces 5-layer RBAC + rate limiting before any tool runs. A denied tool call never reaches the execution layer.
+
+</Card>
+
+<Card accent="amber" flush>
+
+### Post-execution
+
+Credential scrubbing (static + dynamic) strips secrets from tool output before it enters session history or the LLM context.
+
+</Card>
+
+<Card accent="rose" flush>
+
+### At rest
+
+AES-256-GCM encryption for all stored secrets. Keys decrypted only at call time, never logged, never returned by any query.
+
+</Card>
+
+</div>
+
+<Callout color="teal">
+Security in AI systems isn't a feature — it's a constraint on every layer. GoClaw treats security as architecture, not an afterthought.
+</Callout>
