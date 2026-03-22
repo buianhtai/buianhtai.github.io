@@ -1,0 +1,281 @@
+---
+title: "Graph-First Issue Tracking: How Beads Gives AI Agents Persistent Context"
+description: "A deep dive into Beads — Steve Yegge's distributed issue tracker built for AI coding agents. Hash-based IDs, dependency DAGs, Dolt-backed versioning, and multi-agent coordination via swarms and gates."
+pubDate: 2026-03-22
+tags: ["ai", "golang", "architecture", "agents"]
+lang: "en"
+category: "architecture"
+---
+
+import Card from '../../../components/mdx/Card.astro';
+import Label from '../../../components/mdx/Label.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+
+AI coding agents are stateless by nature. Every session starts fresh — no memory of what was attempted, what's blocked, or what's ready to work on. Traditional issue trackers (Jira, GitHub Issues, Linear) don't help: they're built for humans clicking through GUIs, not agents running `--json` commands at machine speed.
+
+[Beads](https://github.com/steveyegge/beads) (`bd`) is Steve Yegge's answer: a distributed graph issue tracker where **dependency-aware readiness** is the core abstraction. Issues are nodes in a DAG. The system automatically computes what's unblocked. Agents run `bd ready` and get to work.
+
+<HeroGrid items={[
+  { label: "DAG-First", sublabel: "Dependency graph\nTransitive blocker analysis", color: "#0891b2" },
+  { label: "Hash IDs", sublabel: "Content-hashed\nZero merge conflicts", color: "#059669" },
+  { label: "Dolt Backend", sublabel: "Git for data\nCell-level merge", color: "#d97706" },
+  { label: "Multi-Agent", sublabel: "Swarms, gates, molecules\nAsync coordination", color: "#e11d48" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> The Dependency Graph
+
+Traditional trackers treat issues as flat lists with optional labels. Beads treats them as **nodes in a directed acyclic graph** where task readiness is automatically computed through transitive closure.
+
+<Card>
+### Ready Work Computation
+
+The core query is a recursive CTE that walks the dependency graph to find all transitively blocked issues, then returns everything that's unblocked:
+
+```sql
+WITH RECURSIVE
+  blocked_directly AS (
+    SELECT DISTINCT d.issue_id
+    FROM dependencies d
+    WHERE d.type = 'blocks'
+      AND EXISTS (
+        SELECT 1 FROM issues blocker
+        WHERE blocker.id = d.depends_on_id
+          AND blocker.status NOT IN ('closed', 'pinned')
+      )
+  ),
+  blocked_transitively AS (
+    SELECT issue_id, 0 as depth FROM blocked_directly
+    UNION ALL
+    SELECT d.issue_id, bt.depth + 1
+    FROM blocked_transitively bt
+    JOIN dependencies d ON d.depends_on_id = bt.issue_id
+    WHERE d.type = 'parent-child' AND bt.depth < 50
+  )
+SELECT i.* FROM issues i
+LEFT JOIN blocked_transitively bt ON bt.issue_id = i.id
+WHERE i.status = 'open' AND bt.issue_id IS NULL;
+```
+
+An agent doesn't need to understand the graph. It runs `bd ready --json` and gets back only issues where **every transitive blocker is resolved**.
+
+</Card>
+
+<Card>
+### Dependency Types
+
+Six edge types model different relationships between issues:
+
+| Type | Semantics | Blocks Ready? |
+|------|-----------|:---:|
+| `blocks` | Hard blocker — must close first | ✓ |
+| `parent-child` | Hierarchy — child blocked until parent done | ✓ |
+| `relates-to` | Soft link — informational | ✗ |
+| `duplicate-of` | Duplicate tracking | ✗ |
+| `supersedes` | Replacement chain | ✗ |
+| `waits-for` | Gate fan-in coordination | ✓ |
+
+Only three types actually affect readiness computation. The rest exist for context — helping agents understand why an issue exists without gating their ability to work.
+
+</Card>
+
+<Callout color="teal">
+Wave analysis: `bd swarm status` groups ready issues into parallel waves. Wave 0 has no dependencies, Wave 1 depends only on Wave 0, and so on. This tells you the critical path and maximum parallelism.
+</Callout>
+
+---
+
+## <Label color="green">2</Label> Hash-Based IDs
+
+Sequential IDs (GitHub's `#1`, `#2`, `#3`) break in multi-agent workflows. Two agents on different branches both create issue `#47` — instant merge conflict.
+
+<Card>
+### Content Hashing
+
+Beads derives IDs from a SHA256 hash of the issue content:
+
+```go
+func (i *Issue) ComputeContentHash() string {
+    h := sha256.New()
+    // Hash: title, description, status, priority, type...
+    return fmt.Sprintf("%x", h.Sum(nil))[:8]
+}
+// Result: "bd-f4e2a1b3"
+```
+
+Two agents creating "Fix auth bug" with the same description produce the **same hash** — no collision, no conflict. Two agents creating different issues always produce different hashes. This is what makes Beads safe for distributed, multi-branch, multi-agent workflows.
+
+</Card>
+
+<Card>
+### Hierarchical IDs
+
+Epics use dotted notation for parent-child relationships:
+
+```bash
+bd create "Payment system" -t epic     # → bd-a3f8
+bd create "Add Stripe" --parent bd-a3f8  # → bd-a3f8.1
+bd create "Add PayPal" --parent bd-a3f8  # → bd-a3f8.2
+```
+
+The ID structure encodes the hierarchy directly — no separate parent field lookup needed.
+
+</Card>
+
+---
+
+## <Label color="amber">3</Label> Dolt: Git for Data
+
+Beads stores everything in [Dolt](https://github.com/dolthub/dolt) — a SQL database that implements Git's version control model (commits, branches, diffs, remotes) at the cell level.
+
+<Card>
+### Why Not SQLite or Postgres?
+
+<FlowStep step={1} color="amber" title="Cell-Level Merge">
+Dolt can merge two branches that modified different cells in the same row without conflicts. Traditional databases require row-level or table-level locking.
+</FlowStep>
+
+<FlowStep step={2} color="amber" title="Native Branching">
+Each agent can work on a Dolt branch. Changes merge cleanly because hash-based IDs prevent collisions and cell-level merge handles concurrent edits.
+</FlowStep>
+
+<FlowStep step={3} color="amber" title="Push/Pull Like Git">
+`bd dolt push` and `bd dolt pull` sync issue data to a remote — stored in `refs/dolt/data/` on the same Git repository. No separate infrastructure needed.
+</FlowStep>
+
+</Card>
+
+<Card>
+### Sync Architecture
+
+```bash
+# Add remote (piggybacks on the existing Git remote)
+bd dolt remote add origin git+ssh://git@github.com/org/repo.git
+
+# Push/pull issue data
+bd dolt push    # Commits + pushes to refs/dolt/data/
+bd dolt pull    # Pulls + merges remote changes
+
+# Auto-commit after every write (optional)
+bd config set dolt.auto-commit on
+```
+
+The key insight: issue data travels with the code repository. No separate SaaS backend, no API tokens, no account required. Clone the repo, run `bd init`, and you have the full issue graph locally.
+
+</Card>
+
+---
+
+## <Label color="rose">4</Label> Multi-Agent Coordination
+
+When multiple agents work in parallel, you need more than a flat task list. Beads provides three coordination primitives.
+
+<Card>
+### Swarms
+
+A swarm takes an epic and decomposes it into parallelizable waves:
+
+```bash
+bd swarm create bd-a3f8    # Create swarm from epic
+bd swarm validate bd-a3f8  # Validate DAG structure
+bd swarm status bd-a3f8    # Show parallel waves
+```
+
+The status output shows which tasks can run simultaneously:
+
+```
+Wave 0:  foundation ──────┬──► component-a
+                          │
+Wave 1:  messages (→fnd)──┤
+                          └──► component-b
+
+Wave 2:  integration (→a+b)
+```
+
+Each wave contains tasks whose dependencies are fully resolved by prior waves. Agents claim from the current wave via `bd update <id> --claim` (atomic: sets assignee + status in one operation).
+
+</Card>
+
+<Card>
+### Gates (Async Coordination)
+
+Gates are await primitives for external events — CI pipelines, PR reviews, timers, or human decisions:
+
+```bash
+bd gate create "CI must pass"              # Create gate
+bd gate await <gate-id> <step-id>          # Step waits for gate
+bd gate open <gate-id> --type gh:run/12345 # Auto-open on CI pass
+```
+
+Gate types include `gh:run` (GitHub Actions), `gh:pr` (PR merge), `timer` (scheduled), and `human` (manual decision). Waiters are automatically unblocked when the gate opens.
+
+</Card>
+
+<Card>
+### Work Types
+
+Two assignment models control how agents claim work:
+
+| WorkType | Semantics |
+|----------|-----------|
+| `mutex` (default) | One assignee at a time — prevents duplicate work |
+| `open_competition` | Multiple agents can claim — first to close wins |
+
+Mutex is the safe default. Open competition is useful for speculative work where you want multiple approaches and will pick the best result.
+
+</Card>
+
+---
+
+## <Label color="purple">5</Label> Formula System
+
+Repeatable workflows are defined as formula templates with variable substitution:
+
+<Card>
+### Template Syntax
+
+```toml
+# deploy.formula.toml
+[vars]
+project = { required = true }
+tier = { default = "staging", enum = ["staging", "production"] }
+
+[[steps]]
+id = "deploy"
+title = "Deploy {{project}} to {{tier}}"
+description = "Run deployment pipeline for {{project}}"
+
+[[steps]]
+id = "verify"
+title = "Verify {{project}} on {{tier}}"
+depends_on = ["deploy"]
+```
+
+Pour a formula to instantiate the workflow:
+
+```bash
+bd mol pour deploy --set project=auth --set tier=staging
+```
+
+This creates concrete issues from the template, wires up the dependencies, and the resulting DAG is immediately available via `bd ready`.
+
+</Card>
+
+---
+
+## What Makes It Different
+
+The fundamental insight behind Beads is that issue tracking for AI agents is a **graph problem**, not a list problem:
+
+1. **`bd ready` is the only command agents need** — the graph does the scheduling
+2. **Hash IDs eliminate the coordination tax** — no merge conflicts, no central server
+3. **Dolt makes issue data versionable** — branches, diffs, and merges just like code
+4. **Gates and swarms handle async orchestration** — agents don't poll, they get unblocked
+5. **Formulas encode institutional knowledge** — repeatable workflows without human intervention
+
+Traditional trackers ask: "What's the status?" Beads asks: "What's ready to work on right now?" — and computes the answer automatically from the dependency graph.
+
+The project is open source: [github.com/steveyegge/beads](https://github.com/steveyegge/beads) (19.5k+ stars, Go, Elastic-2.0 license).
