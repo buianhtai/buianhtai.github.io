@@ -560,5 +560,17 @@
     </div>
 
   </div>
+<script>
+  function notifyParent() {
+    if (window.parent !== window) {
+      window.parent.postMessage(
+        { type: 'diagram-resize', height: document.documentElement.scrollHeight },
+        '*'
+      );
+    }
+  }
+  window.addEventListener('load', notifyParent);
+  new ResizeObserver(notifyParent).observe(document.documentElement);
+</script>
 </body>
 </html>

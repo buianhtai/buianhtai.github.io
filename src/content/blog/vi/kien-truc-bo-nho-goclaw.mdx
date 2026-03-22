@@ -11,11 +11,21 @@ Phần lớn AI agent là stateless — chúng quên mọi thứ khi cuộc hộ
 Hệ thống gồm ba tầng, tất cả dựa trên PostgreSQL: **Memory Store** (tài liệu + chunk + embedding với tìm kiếm lai), **Knowledge Graph** (thực thể và quan hệ trích xuất bằng LLM), và **Session History** (với chu kỳ nén và flush bộ nhớ).
 
 <iframe
+  id="diagram-frame"
   src="/diagrams/goclaw-memory-architecture.html"
-  style="width: 100%; height: 3200px; border: none; border-radius: 8px; margin: 2rem 0;"
+  style="width: 100%; border: none; border-radius: 8px; margin: 2rem 0; min-height: 600px;"
   title="Kiến Trúc Bộ Nhớ GoClaw"
   loading="lazy"
 />
+
+<script>{`
+  window.addEventListener('message', (e) => {
+    if (e.data?.type === 'diagram-resize') {
+      const frame = document.getElementById('diagram-frame');
+      if (frame) frame.style.height = e.data.height + 'px';
+    }
+  });
+`}</script>
 
 ## Tại Sao Kiến Trúc Này?
 

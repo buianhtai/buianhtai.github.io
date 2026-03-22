@@ -1,16 +1,22 @@
 ---
 import { getCollection } from 'astro:content';
 import BaseLayout from '../../../layouts/BaseLayout.astro';
+import { t } from '../../../i18n/strings';
+import { getPostSlug } from '../../../lib/posts';
 
 export async function getStaticPaths() {
   const posts = await getCollection('blog', (p) => !p.data.draft);
-  const langs = ['en', 'vi'];
-  const allTags = new Set<string>();
-  posts.forEach(p => p.data.tags.forEach(t => allTags.add(t)));
+  const langTagMap = new Map<string, Set<string>>();
 
-  const paths: any[] = [];
-  for (const lang of langs) {
-    for (const tag of allTags) {
+  for (const post of posts) {
+    const lang = post.data.lang;
+    if (!langTagMap.has(lang)) langTagMap.set(lang, new Set());
+    post.data.tags.forEach(tag => langTagMap.get(lang)!.add(tag));
+  }
+
+  const paths: { params: { lang: string; tag: string } }[] = [];
+  for (const [lang, tags] of langTagMap) {
+    for (const tag of tags) {
       paths.push({ params: { lang, tag } });
     }
   }
@@ -27,23 +33,19 @@ const posts = (await getCollection('blog', (p) => p.data.lang === lang && !p.dat
     <h1 class="text-3xl font-bold mb-2">
       <span class="font-mono text-[var(--color-accent)]">#</span>{tag}
     </h1>
-    <p class="text-[var(--color-text-dim)] mb-8">{posts.length} {lang === 'vi' ? 'bai viet' : 'posts'}</p>
+    <p class="text-[var(--color-text-dim)] mb-8">{posts.length} {t(lang, 'posts')}</p>
     <ul class="space-y-4">
-      {posts.map(post => {
-        const [, ...slugParts] = post.id.split('/');
-        const slug = slugParts.join('/').replace(/\.(md|mdx)$/, '');
-        return (
-          <li>
-            <a href={`/${lang}/blog/${slug}`} class="group block p-4 -mx-4 rounded-lg hover:bg-[var(--color-surface)] transition-colors">
-              <h2 class="font-semibold group-hover:text-[var(--color-accent)] transition-colors">{post.data.title}</h2>
-              <p class="text-sm text-[var(--color-text-dim)] mt-1">{post.data.description}</p>
-            </a>
-          </li>
-        );
-      })}
+      {posts.map(post => (
+        <li>
+          <a href={`/${lang}/blog/${getPostSlug(post)}`} class="group block p-4 -mx-4 rounded-lg hover:bg-[var(--color-surface)] transition-colors">
+            <h2 class="font-semibold group-hover:text-[var(--color-accent)] transition-colors">{post.data.title}</h2>
+            <p class="text-sm text-[var(--color-text-dim)] mt-1">{post.data.description}</p>
+          </a>
+        </li>
+      ))}
     </ul>
     <a href={`/${lang}/tags`} class="inline-block mt-6 text-sm text-[var(--color-accent)] hover:underline">
-      {lang === 'vi' ? '← Tat ca tags' : '← All tags'}
+      {t(lang, 'allTags')}
     </a>
   </div>
 </BaseLayout>
