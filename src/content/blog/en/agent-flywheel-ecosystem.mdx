@@ -1,0 +1,296 @@
+---
+title: "The Agent Flywheel: Six Tools That Make Multi-Agent Coding Actually Work"
+description: "A deep dive into Jeffrey Emanuel's open-source ecosystem — from issue tracking (beads) to memory (cass), command safety (dcg), bug scanning (ubs), agent messaging (mail), and graph-aware triage (viewer)."
+pubDate: 2026-03-22
+tags: ["ai", "agents", "architecture", "rust", "golang"]
+lang: "en"
+category: "architecture"
+---
+
+import Card from '../../../components/mdx/Card.astro';
+import Label from '../../../components/mdx/Label.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import ArchLayer from '../../../components/mdx/ArchLayer.astro';
+import Pipeline from '../../../components/mdx/Pipeline.astro';
+
+Running multiple AI coding agents isn't hard. Making them work *together* without destroying each other's work — that's the unsolved problem. Jeffrey Emanuel has been building toward a solution: six open-source tools that form a self-reinforcing loop he calls the **Agent Flywheel**.
+
+Each tool solves one coordination problem. Together, they cover the full lifecycle: track work → claim tasks → coordinate files → guard against catastrophic commands → scan for bugs → remember what was learned.
+
+<HeroGrid items={[
+  { label: "beads_rust", sublabel: "Issue tracking\nDependency DAG + hash IDs", color: "#0891b2" },
+  { label: "beads_viewer", sublabel: "Graph triage\n9 metrics + PageRank", color: "#059669" },
+  { label: "cass + memory", sublabel: "Session search\n3-layer cognitive memory", color: "#d97706" },
+  { label: "dcg + ubs", sublabel: "Safety + quality\nCommand guard + bug scanner", color: "#e11d48" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> beads_rust — Issue Tracking in Rust
+
+[beads_rust](https://github.com/Dicklesworthstone/beads_rust) (`br`) is a Rust port of Steve Yegge's beads tracker, frozen at the "classic" SQLite + JSONL architecture. 762 stars.
+
+<Card>
+### Why a Rust Rewrite?
+
+When Yegge evolved beads toward GasTown with new approaches, Emanuel's entire agent system depended on the classic architecture. Rather than fight merge conflicts on a Go fork, he rewrote in Rust — with Yegge's endorsement.
+
+**Key differentiator:** Pure-Rust SQLite via FrankenSQLite (no C bindings), single-binary distribution, and built-in MCP server support.
+
+```bash
+br ready              # Shows unblocked issues (same as bd)
+br create "Fix auth" --priority 1
+br dep add bd-abc bd-xyz
+br sync               # Import/export JSONL
+```
+</Card>
+
+<Card>
+### Atomic JSONL Writes
+
+```rust
+struct TempFileGuard {
+    path: PathBuf,
+    persist: bool,
+}
+
+impl Drop for TempFileGuard {
+    fn drop(&mut self) {
+        if !self.persist {
+            let _ = fs::remove_file(&self.path);
+        }
+    }
+}
+```
+
+Write to temp file → rename on success. If the process crashes mid-write, the guard auto-cleans. No corrupted JSONL files.
+</Card>
+
+---
+
+## <Label color="green">2</Label> beads_viewer — Graph-Aware Triage
+
+[beads_viewer](https://github.com/Dicklesworthstone/beads_viewer) (`bv`) transforms flat issue lists into a dependency graph and extracts actionable intelligence. 1,408 stars. Go + ForceGraph + D3 + WASM.
+
+<Card>
+### Nine Graph Metrics
+
+Not just "what's open" — `bv` computes which issues *matter most*:
+
+| Metric | What It Measures |
+|--------|-----------------|
+| **PageRank** | Recursive dependency importance |
+| **Betweenness** | Bridge nodes connecting clusters |
+| **HITS** | Hub/authority duality (epics vs utilities) |
+| **Critical Path** | Longest dependency chain (zero-slack) |
+| **Eigenvector** | Influence via connected neighbors |
+| **K-Core** | Densely connected subgraphs |
+| **Articulation** | Nodes whose removal disconnects the graph |
+| **Cycles** | Circular dependencies (errors!) |
+| **Slack** | Parallelizable tasks with float |
+
+</Card>
+
+<Card>
+### Robot Mode for Agents
+
+Never run bare `bv` in an agent context — always use `--robot-*`:
+
+```bash
+bv --robot-triage    # Full triage: top picks + claim commands
+bv --robot-next      # Single highest-priority unblocked task
+bv --robot-insights  # All 9 metrics as JSON
+bv --robot-plan      # Parallel execution tracks
+```
+
+Output includes ready-to-run claim commands: `bd claim bd-123` — zero friction from analysis to action.
+</Card>
+
+<Card>
+### What-If Simulation
+
+Click any node to simulate closing it. The WASM engine cascades through the DAG, showing which blocked issues would unblock:
+
+```javascript
+export function performWhatIf(node) {
+    const closedSet = buildClosedSet();
+    let result = store.wasmGraph.whatIfClose(idx, closedSet);
+    animateWhatIfCascade(node, result);
+    return result;
+}
+```
+
+The animation ripples outward from the closed node — green highlights for newly unblocked tasks. "If I close this, what opens up?"
+</Card>
+
+---
+
+## <Label color="amber">3</Label> cass — Session Search Across 11 Agents
+
+[coding_agent_session_search](https://github.com/Dicklesworthstone/coding_agent_session_search) (`cass`) aggregates session histories from Claude Code, Codex, Cursor, ChatGPT, Cline, Aider, OpenCode, Gemini CLI, Pi-Agent, Amp, and Factory into a single searchable index. Rust, MIT license.
+
+<Card>
+### Three-Tier Search
+
+<FlowStep step={1} color="amber" title="Lexical (BM25 + N-grams)">
+FrankenSQLite FTS5 + Tantivy for full-text search. Edge n-grams for prefix matching. Fast, cheap, handles typos.
+</FlowStep>
+
+<FlowStep step={2} color="amber" title="Semantic (Embeddings)">
+Two strategies: FNV-1a hash embeddings (deterministic, no GPU) or FastEmbed MiniLM model (ML-quality). Progressive refinement: fast hash narrows candidates, ML refines.
+</FlowStep>
+
+<FlowStep step={3} color="amber" title="Hybrid (RRF Fusion)">
+Reciprocal Rank Fusion merges BM25 + semantic rankings. K=60. Results appearing in both rankers get boosted.
+</FlowStep>
+
+</Card>
+
+---
+
+## <Label color="rose">4</Label> cass-memory — Cognitive Memory for Agents
+
+[cass_memory_system](https://github.com/Dicklesworthstone/cass_memory_system) (`cm`) transforms raw session logs into confidence-tracked rules that persist across all agents. 290 stars. TypeScript/Bun, MCP server.
+
+<Card>
+### Three-Layer Cognitive Architecture
+
+| Layer | Purpose | Example |
+|-------|---------|---------|
+| **Episodic** | Raw session logs | Via `cass` CLI search |
+| **Working** | Structured session summaries | Diary entries with decisions, challenges |
+| **Procedural** | Distilled rules ("bullets") | "Always check for null before `.map()`" |
+
+Rules have maturity levels: **candidate → established → proven → deprecated**. Confidence decays exponentially with a 90-day half-life unless reinforced by positive feedback.
+</Card>
+
+<Card>
+### Scoring with Decay
+
+```typescript
+// Exponential decay: rules lose relevance unless reinforced
+effectiveScore = (decayedHelpful - 4 * decayedHarmful) * maturityMultiplier
+
+// Maturity multipliers:
+// candidate=0.5, established=1.0, proven=1.5
+```
+
+A rule that helped 10 times a month ago scores higher than one that helped 20 times a year ago. Harmful feedback is weighted 4x — one "this broke my build" outweighs four "this was useful."
+
+</Card>
+
+---
+
+## <Label color="purple">5</Label> destructive_command_guard — The Safety Net
+
+[destructive_command_guard](https://github.com/Dicklesworthstone/destructive_command_guard) (`dcg`) intercepts catastrophic shell commands before AI agents execute them. Rust, 49+ security packs, sub-millisecond.
+
+<Card>
+### Three-Tier Detection
+
+<FlowStep step={1} color="purple" title="Tier 1: Quick Reject (<10μs)">
+SIMD-accelerated `memchr` keyword match. No dangerous keywords → ALLOW immediately (fast path). Most commands never reach Tier 2.
+</FlowStep>
+
+<FlowStep step={2} color="purple" title="Tier 2: Safe Patterns">
+Known-safe patterns matched first to reduce false positives. `rm -rf /tmp/build` is fine — `/tmp/*` is on the safe list.
+</FlowStep>
+
+<FlowStep step={3} color="purple" title="Tier 3: Danger Patterns → BLOCK">
+Full regex evaluation with suggestions. Every blocked command includes a safer alternative: `git stash` instead of `git reset --hard`.
+</FlowStep>
+
+</Card>
+
+<Card>
+### 49+ Security Packs
+
+Coverage across 14 categories:
+
+<ArchLayer badge="CORE" badgeColor="rose" label="Always On" items={["git", "filesystem"]} />
+<ArchLayer badge="DB" badgeColor="amber" label="Databases" items={["postgresql", "mysql", "mongodb", "redis", "sqlite"]} />
+<ArchLayer badge="K8S" badgeColor="teal" label="Infrastructure" items={["kubectl", "helm", "terraform", "ansible", "pulumi"]} />
+<ArchLayer badge="CLOUD" badgeColor="green" label="Cloud" items={["aws", "azure", "gcp", "s3", "secrets"]} />
+
+Every pack defines patterns like:
+```rust
+destructive_pattern!(
+    "reset-hard",
+    r"(?:^|[^[:alnum:]_-])git\s+(?:\S+\s+)*reset\s+--hard",
+    "git reset --hard destroys uncommitted changes.",
+    Critical,
+    &[PatternSuggestion::new("git stash", "Save changes first")]
+)
+```
+</Card>
+
+---
+
+## <Label color="teal">6</Label> ultimate_bug_scanner — Quality Gate
+
+[ultimate_bug_scanner](https://github.com/Dicklesworthstone/ultimate_bug_scanner) (`ubs`) is a static analysis tool that catches bugs LLMs commonly introduce. Bash + ripgrep, 9 languages, 18 detection categories. 203 stars.
+
+<Card>
+### What It Catches
+
+| Severity | Categories |
+|----------|-----------|
+| **Critical** | Null safety, XSS/injection, async/await bugs, memory leaks, type coercion |
+| **Warning** | Division safety, resource lifecycle, error handling, promise chains |
+| **Info** | Debug code, TODO markers, TypeScript strictness |
+
+**Language-specific:** React hooks deps (JS), `open()` without `with` (Python), nil pointers (Go), `.unwrap()` panics (Rust), buffer overflows (C/C++).
+</Card>
+
+<Card>
+### Agent Integration
+
+Not an MCP tool — integrates via hooks:
+
+```bash
+# Claude Code: scans on every file write
+.claude/hooks/on-file-write.sh
+
+# Git: pre-commit quality gate  
+.git/hooks/pre-commit
+
+# Token-optimized output (~50% smaller)
+ubs . --format=toon
+```
+
+10,000+ lines/second. Use `--staged` for changed-files-only scanning in CI.
+</Card>
+
+---
+
+## The Flywheel
+
+These tools aren't independent utilities — they form a coordination loop:
+
+<Pipeline
+  nodes={[
+    { title: "br ready", subtitle: "Find unblocked work" },
+    { title: "bv --robot-triage", subtitle: "Prioritize by graph metrics" },
+    { title: "dcg", subtitle: "Guard destructive commands" },
+    { title: "ubs --staged", subtitle: "Scan for bugs before commit" },
+    { title: "cm context", subtitle: "Apply learned rules" }
+  ]}
+  arrows={[
+    { label: "claim", direction: "right" },
+    { label: "work", direction: "right" },
+    { label: "safe", direction: "right" },
+    { label: "clean", direction: "right" }
+  ]}
+  footer="Each cycle refines the next: cass indexes the session, cm extracts rules, bv re-ranks priorities, br tracks completion. The flywheel accelerates."
+/>
+
+1. **br/bv** picks the highest-impact task from the dependency graph
+2. **Agent Mail** coordinates file reservations across agents
+3. **dcg** prevents catastrophic commands during implementation
+4. **ubs** catches LLM-introduced bugs before commit
+5. **cass/cm** indexes the session and extracts reusable rules
+6. Next cycle starts with better context, cleaner priorities, and learned patterns
+
+The full ecosystem is open source — all MIT licensed, all from [github.com/Dicklesworthstone](https://github.com/Dicklesworthstone).
