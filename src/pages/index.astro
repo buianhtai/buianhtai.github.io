@@ -9,7 +9,6 @@ const recentPosts = allPosts
   .slice(0, 4);
 
 const techStack = ['Java', 'Quarkus', 'Spring Boot', 'Neo4j', 'PostgreSQL', 'MongoDB', 'Keycloak', 'Kafka', 'Docker', 'Kubernetes', 'AWS', 'AI/LLM'];
-const goclawTech = ['Go', 'PostgreSQL', 'Docker', 'OpenTelemetry'];
 ---
 
 <BaseLayout title="tai.bui">
@@ -132,37 +131,98 @@ const goclawTech = ['Go', 'PostgreSQL', 'Docker', 'OpenTelemetry'];
   </section>
 
   <!-- SECTION 3: Projects -->
-  <section class="py-12">
+  <section id="projects" class="py-12">
     <div class="max-w-3xl mx-auto px-4">
       <h2 class="text-2xl font-bold mb-8">
         <span class="text-[var(--color-accent)] font-mono">#</span> Open Source I Study
       </h2>
 
-      <a
-        href="https://github.com/nextlevelbuilder/goclaw"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="block p-6 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-accent)] transition-colors group"
-      >
-        <div class="flex items-center justify-between mb-3">
-          <h3 class="text-lg font-bold text-[var(--color-text)] group-hover:text-[var(--color-accent)] transition-colors">
-            GoClaw
-          </h3>
-          <span class="text-xs font-mono text-[var(--color-text-dim)] border border-[var(--color-border)] px-2 py-0.5 rounded">
-            Architecture Study
-          </span>
-        </div>
-        <p class="text-sm text-[var(--color-text-dim)] mb-4 leading-relaxed">
-          An open-source multi-agent AI gateway built in Go. I study its architecture and write deep dives on its design — provider abstraction, security model, memory systems, and agent orchestration.
-        </p>
-        <div class="flex flex-wrap gap-2">
-          {goclawTech.map((tech) => (
-            <span class="text-xs font-mono px-2 py-1 rounded bg-[var(--color-bg)] text-[var(--color-text-dim)] border border-[var(--color-border)]">
-              {tech}
+      <div class="grid gap-4 sm:grid-cols-2">
+        <a
+          href="/en/blog"
+          class="block p-5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-accent)] transition-colors group"
+        >
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="font-bold text-[var(--color-text)] group-hover:text-[var(--color-accent)] transition-colors">
+              GoClaw
+            </h3>
+            <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--color-bg)] text-[var(--color-text-dim)] border border-[var(--color-border)]">
+              Go
             </span>
-          ))}
-        </div>
-      </a>
+          </div>
+          <p class="text-sm text-[var(--color-text-dim)] leading-relaxed">
+            Multi-agent AI gateway — 6-part deep dive series
+          </p>
+        </a>
+
+        <a
+          href="/en/blog/context-mode-architecture"
+          class="block p-5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-accent)] transition-colors group"
+        >
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="font-bold text-[var(--color-text)] group-hover:text-[var(--color-accent)] transition-colors">
+              context-mode
+            </h3>
+            <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--color-bg)] text-[var(--color-text-dim)] border border-[var(--color-border)]">
+              TypeScript
+            </span>
+          </div>
+          <p class="text-sm text-[var(--color-text-dim)] leading-relaxed">
+            AI context management with sandboxed execution
+          </p>
+        </a>
+
+        <a
+          href="/en/blog/beads-issue-tracker"
+          class="block p-5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-accent)] transition-colors group"
+        >
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="font-bold text-[var(--color-text)] group-hover:text-[var(--color-accent)] transition-colors">
+              Beads
+            </h3>
+            <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--color-bg)] text-[var(--color-text-dim)] border border-[var(--color-border)]">
+              Go / Rust
+            </span>
+          </div>
+          <p class="text-sm text-[var(--color-text-dim)] leading-relaxed">
+            Graph-first issue tracking for AI agents
+          </p>
+        </a>
+
+        <a
+          href="/en/blog/mcp-agent-mail"
+          class="block p-5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-accent)] transition-colors group"
+        >
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="font-bold text-[var(--color-text)] group-hover:text-[var(--color-accent)] transition-colors">
+              MCP Agent Mail
+            </h3>
+            <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--color-bg)] text-[var(--color-text-dim)] border border-[var(--color-border)]">
+              Python
+            </span>
+          </div>
+          <p class="text-sm text-[var(--color-text-dim)] leading-relaxed">
+            Async coordination for multi-agent workflows
+          </p>
+        </a>
+
+        <a
+          href="/en/blog/agent-flywheel-ecosystem"
+          class="block p-5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-accent)] transition-colors group sm:col-span-2"
+        >
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="font-bold text-[var(--color-text)] group-hover:text-[var(--color-accent)] transition-colors">
+              Agent Flywheel
+            </h3>
+            <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--color-bg)] text-[var(--color-text-dim)] border border-[var(--color-border)]">
+              Rust / Go / Python
+            </span>
+          </div>
+          <p class="text-sm text-[var(--color-text-dim)] leading-relaxed">
+            6-tool ecosystem — beads, cass, dcg, ubs, mail, and viewer working together
+          </p>
+        </a>
+      </div>
     </div>
   </section>
 

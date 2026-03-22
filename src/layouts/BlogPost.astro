@@ -3,16 +3,19 @@ import type { CollectionEntry } from 'astro:content';
 import BaseLayout from './BaseLayout.astro';
 import ReadingTime from '../components/ReadingTime.astro';
 import TableOfContents from '../components/TableOfContents.astro';
+import SeriesNav from '../components/SeriesNav.astro';
 import Giscus from '../components/Giscus.astro';
+import { getPostSlug } from '../lib/posts';
 
 interface Props {
   post: CollectionEntry<'blog'>;
   headings: { depth: number; slug: string; text: string }[];
   rawContent: string;
+  seriesPosts?: CollectionEntry<'blog'>[];
 }
 
-const { post, headings, rawContent } = Astro.props;
-const { title, description, pubDate, updatedDate, tags, lang, heroImage } = post.data;
+const { post, headings, rawContent, seriesPosts = [] } = Astro.props;
+const { title, description, pubDate, updatedDate, tags, lang, heroImage, series } = post.data;
 
 const dateFmt = (d: Date) =>
   d.toLocaleDateString(lang === 'vi' ? 'vi-VN' : 'en-US', {
@@ -44,6 +47,15 @@ const dateFmt = (d: Date) =>
         </div>
       )}
     </header>
+
+    {series && seriesPosts.length > 0 && (
+      <SeriesNav
+        currentSlug={getPostSlug(post)}
+        series={series}
+        lang={lang}
+        seriesPosts={seriesPosts}
+      />
+    )}
 
     {heroImage && (
       <img src={heroImage} alt={title} class="w-full rounded-lg mb-10" loading="eager" />

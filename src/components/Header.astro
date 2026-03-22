@@ -14,6 +14,7 @@ const switchedPath = currentPath.replace(`/${lang}/`, `/${otherLang}/`);
     </a>
     <div class="flex items-center gap-4">
       <a href={`/${lang}/blog`} class="text-sm text-[var(--color-text-dim)] hover:text-[var(--color-text)] transition-colors">Blog</a>
+      <a href="/#projects" class="text-sm text-[var(--color-text-dim)] hover:text-[var(--color-text)] transition-colors">Projects</a>
       <a href={`/${lang}/tags`} class="text-sm text-[var(--color-text-dim)] hover:text-[var(--color-text)] transition-colors">Tags</a>
       <a href={switchedPath} class="text-sm text-[var(--color-text-dim)] hover:text-[var(--color-text)] transition-colors">{langLabel}</a>
       <ThemeToggle />

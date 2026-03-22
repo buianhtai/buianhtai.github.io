@@ -1,0 +1,83 @@
+---
+import type { CollectionEntry } from 'astro:content';
+import { getPostSlug, seriesMeta } from '../lib/posts';
+
+interface Props {
+  currentSlug: string;
+  series: string;
+  lang: string;
+  seriesPosts: CollectionEntry<'blog'>[];
+}
+
+const { currentSlug, series, lang, seriesPosts } = Astro.props;
+const meta = seriesMeta[series];
+const currentIndex = seriesPosts.findIndex((p) => getPostSlug(p) === currentSlug);
+const currentOrder = currentIndex + 1;
+const total = seriesPosts.length;
+const prevPost = currentIndex > 0 ? seriesPosts[currentIndex - 1] : null;
+const nextPost = currentIndex < seriesPosts.length - 1 ? seriesPosts[currentIndex + 1] : null;
+---
+
+<nav class="series-nav mb-10 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
+  <div class="px-5 py-4">
+    <div class="flex items-center justify-between gap-4 mb-3">
+      <span class="text-sm font-medium text-[var(--color-text)]">
+        Part {currentOrder} of {total} in
+        <span class="text-[var(--color-accent)]">{meta?.title ?? series}</span>
+      </span>
+    </div>
+
+    <div class="flex items-center gap-3">
+      {prevPost ? (
+        <a
+          href={`/${lang}/blog/${getPostSlug(prevPost)}`}
+          class="flex-1 flex items-center gap-2 px-3 py-2 rounded-md border border-[var(--color-border)] text-sm text-[var(--color-text-dim)] hover:text-[var(--color-accent)] hover:border-[var(--color-accent)] transition-colors min-w-0"
+        >
+          <span class="shrink-0">&larr;</span>
+          <span class="truncate">{prevPost.data.title}</span>
+        </a>
+      ) : (
+        <div class="flex-1" />
+      )}
+      {nextPost ? (
+        <a
+          href={`/${lang}/blog/${getPostSlug(nextPost)}`}
+          class="flex-1 flex items-center justify-end gap-2 px-3 py-2 rounded-md border border-[var(--color-border)] text-sm text-[var(--color-text-dim)] hover:text-[var(--color-accent)] hover:border-[var(--color-accent)] transition-colors min-w-0 text-right"
+        >
+          <span class="truncate">{nextPost.data.title}</span>
+          <span class="shrink-0">&rarr;</span>
+        </a>
+      ) : (
+        <div class="flex-1" />
+      )}
+    </div>
+  </div>
+
+  <details class="border-t border-[var(--color-border)]">
+    <summary class="px-5 py-3 text-xs font-mono text-[var(--color-text-dim)] cursor-pointer hover:text-[var(--color-text)] transition-colors select-none">
+      All posts in this series
+    </summary>
+    <ol class="px-5 pb-4 space-y-1">
+      {seriesPosts.map((post, idx) => {
+        const slug = getPostSlug(post);
+        const isCurrent = slug === currentSlug;
+        return (
+          <li>
+            <a
+              href={isCurrent ? undefined : `/${lang}/blog/${slug}`}
+              class:list={[
+                'flex items-start gap-2 px-3 py-2 rounded-md text-sm transition-colors',
+                isCurrent
+                  ? 'bg-[var(--color-accent)]/10 text-[var(--color-accent)] font-medium cursor-default'
+                  : 'text-[var(--color-text-dim)] hover:text-[var(--color-text)] hover:bg-[var(--color-bg)]',
+              ]}
+            >
+              <span class="shrink-0 w-5 text-right font-mono text-xs leading-5 opacity-60">{idx + 1}.</span>
+              <span class="leading-5">{post.data.title}</span>
+            </a>
+          </li>
+        );
+      })}
+    </ol>
+  </details>
+</nav>

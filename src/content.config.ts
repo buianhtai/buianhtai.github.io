@@ -12,6 +12,8 @@ const blog = defineCollection({
     tags: z.array(z.string()).default([]),
     lang: z.enum(['en', 'vi']),
     category: z.enum(['architecture', 'golang', 'devops', 'ai', 'tutorial']),
+    series: z.enum(['goclaw', 'ai-agent-tools']).optional(),
+    seriesOrder: z.number().optional(),
     draft: z.boolean().default(false),
   }),
 });

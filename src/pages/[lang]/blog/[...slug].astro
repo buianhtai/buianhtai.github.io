@@ -1,7 +1,7 @@
 ---
 import { getCollection, render } from 'astro:content';
 import BlogPost from '../../../layouts/BlogPost.astro';
-import { getPostSlug, getPostLang } from '../../../lib/posts';
+import { getPostSlug, getPostLang, getSeriesPosts } from '../../../lib/posts';
 
 export async function getStaticPaths() {
   const posts = await getCollection('blog');
@@ -14,8 +14,14 @@ export async function getStaticPaths() {
 const { post } = Astro.props;
 const { Content, headings } = await render(post);
 const rawContent = post.body || '';
+
+let seriesPosts: Awaited<ReturnType<typeof getSeriesPosts>> = [];
+if (post.data.series) {
+  const allPosts = await getCollection('blog', (p) => p.data.lang === post.data.lang && !p.data.draft);
+  seriesPosts = getSeriesPosts(allPosts, post.data.series);
+}
 ---
 
-<BlogPost post={post} headings={headings} rawContent={rawContent}>
+<BlogPost post={post} headings={headings} rawContent={rawContent} seriesPosts={seriesPosts}>
   <Content />
 </BlogPost>

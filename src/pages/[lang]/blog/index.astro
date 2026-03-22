@@ -2,7 +2,7 @@
 import { getCollection } from 'astro:content';
 import BaseLayout from '../../../layouts/BaseLayout.astro';
 import { t } from '../../../i18n/strings';
-import { getPostSlug } from '../../../lib/posts';
+import { getPostSlug, groupPostsBySeries, seriesMeta } from '../../../lib/posts';
 
 export function getStaticPaths() {
   return [{ params: { lang: 'en' } }, { params: { lang: 'vi' } }];
@@ -11,28 +11,66 @@ export function getStaticPaths() {
 const { lang } = Astro.params;
 const posts = (await getCollection('blog', (p) => p.data.lang === lang && !p.data.draft))
   .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
+
+const groups = groupPostsBySeries(posts);
 ---
 
 <BaseLayout title={t(lang, 'allPosts')} lang={lang}>
   <div class="max-w-3xl mx-auto px-4 py-12">
-    <h1 class="text-3xl font-bold mb-8">{t(lang, 'allPosts')}</h1>
-    <ul class="space-y-4">
-      {posts.map(post => (
-        <li>
-          <a href={`/${lang}/blog/${getPostSlug(post)}`} class="group block p-4 -mx-4 rounded-lg hover:bg-[var(--color-surface)] transition-colors">
-            <div class="flex items-baseline justify-between gap-4">
-              <h2 class="font-semibold group-hover:text-[var(--color-accent)] transition-colors">{post.data.title}</h2>
-              <time class="text-xs text-[var(--color-text-dim)] font-mono shrink-0">{post.data.pubDate.toISOString().slice(0, 10)}</time>
-            </div>
-            <p class="text-sm text-[var(--color-text-dim)] mt-1">{post.data.description}</p>
-            <div class="flex gap-2 mt-2">
-              {post.data.tags.map(tag => (
-                <span class="text-xs font-mono text-[var(--color-text-dim)]">#{tag}</span>
-              ))}
-            </div>
-          </a>
-        </li>
-      ))}
-    </ul>
+    <h1 class="text-3xl font-bold mb-10">{t(lang, 'allPosts')}</h1>
+
+    {groups.map((group) => {
+      const meta = group.series ? seriesMeta[group.series] : null;
+      const heading = meta?.title ?? 'Standalone';
+      const desc = meta?.description;
+      const count = group.posts.length;
+
+      return (
+        <section class="mb-12">
+          <div class="flex items-baseline gap-3 mb-2">
+            <h2 class="text-xl font-bold text-[var(--color-text)]">{heading}</h2>
+            <span class="text-xs font-mono px-2 py-0.5 rounded-full bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-dim)]">
+              {count} {count === 1 ? 'post' : 'posts'}
+            </span>
+          </div>
+          {desc && (
+            <p class="text-sm text-[var(--color-text-dim)] mb-4">{desc}</p>
+          )}
+
+          <ul class="space-y-1">
+            {group.posts.map((post, idx) => (
+              <li>
+                <a
+                  href={`/${lang}/blog/${getPostSlug(post)}`}
+                  class="group flex items-start gap-3 p-4 -mx-4 rounded-lg hover:bg-[var(--color-surface)] transition-colors"
+                >
+                  {post.data.seriesOrder != null && (
+                    <span class="shrink-0 w-7 h-7 flex items-center justify-center rounded-md bg-[var(--color-surface)] border border-[var(--color-border)] text-xs font-mono text-[var(--color-text-dim)] mt-0.5">
+                      {post.data.seriesOrder}
+                    </span>
+                  )}
+                  <div class="min-w-0 flex-1">
+                    <div class="flex items-baseline justify-between gap-4">
+                      <h3 class="font-semibold group-hover:text-[var(--color-accent)] transition-colors">
+                        {post.data.title}
+                      </h3>
+                      <time class="text-xs text-[var(--color-text-dim)] font-mono shrink-0">
+                        {post.data.pubDate.toISOString().slice(0, 10)}
+                      </time>
+                    </div>
+                    <p class="text-sm text-[var(--color-text-dim)] mt-1">{post.data.description}</p>
+                    <div class="flex gap-2 mt-2">
+                      {post.data.tags.map((tag: string) => (
+                        <span class="text-xs font-mono text-[var(--color-text-dim)]">#{tag}</span>
+                      ))}
+                    </div>
+                  </div>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      );
+    })}
   </div>
 </BaseLayout>
