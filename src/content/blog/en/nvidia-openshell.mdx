@@ -1,0 +1,242 @@
+---
+title: "NVIDIA OpenShell: How Sandboxed Runtimes Make AI Agents Safe"
+description: "A deep dive into NVIDIA's open-source agent runtime — Landlock + seccomp sandboxing, OPA policy enforcement, privacy-aware inference routing, and K3s-in-Docker deployment."
+pubDate: 2026-03-22
+tags: ["ai", "rust", "architecture", "security", "agents"]
+lang: "en"
+category: "architecture"
+series: "ai-agent-tools"
+seriesOrder: 5
+---
+
+import Card from '../../../components/mdx/Card.astro';
+import Label from '../../../components/mdx/Label.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import ArchLayer from '../../../components/mdx/ArchLayer.astro';
+import Pipeline from '../../../components/mdx/Pipeline.astro';
+
+Give an AI coding agent access to your terminal and it can do extraordinary work. It can also `rm -rf /`, exfiltrate your API keys via a crafted HTTP request, or push secrets to a public repo. The problem isn't the agent's intent — it's the **absence of a security boundary**.
+
+[NVIDIA OpenShell](https://github.com/NVIDIA/OpenShell) provides that boundary: an open-source sandboxed runtime where AI agents execute inside policy-controlled containers with filesystem restrictions, network filtering, and credential isolation. Apache 2.0 license, ~3k stars, written in Rust.
+
+<HeroGrid items={[
+  { label: "Sandboxed", sublabel: "Landlock + seccomp\nKernel-level isolation", color: "#76b900" },
+  { label: "Policy-Driven", sublabel: "YAML → OPA/Regorus\nL7 HTTP enforcement", color: "#0891b2" },
+  { label: "Privacy Router", sublabel: "Credential stripping\nInference isolation", color: "#d97706" },
+  { label: "K3s-in-Docker", sublabel: "Portable deployment\nLaptop to enterprise", color: "#e11d48" },
+]} />
+
+---
+
+## <Label color="green">1</Label> Why Agents Need Sandboxes
+
+AI agents operate with your shell credentials, your filesystem, and your network. Without isolation:
+
+<Card>
+
+| Risk | What Happens |
+|------|-------------|
+| **Data exfiltration** | Agent sends proprietary code to external APIs |
+| **Credential exposure** | API keys in env vars accessible to untrusted code |
+| **Network abuse** | Agent hits production APIs, cloud services, or leaks data |
+| **Filesystem damage** | Agent modifies system files, deletes critical data |
+
+OpenShell's insight: **don't trust the agent — enforce policy at the kernel level.** The agent can request anything; the sandbox decides what's allowed.
+
+</Card>
+
+---
+
+## <Label color="teal">2</Label> Architecture
+
+Four layers from CLI to sandboxed execution:
+
+<ArchLayer badge="CLI" badgeColor="teal" label="User Interface" items={["openshell CLI", "TUI Dashboard", "Python SDK", "gRPC API"]} />
+
+<ArchLayer badge="GW" badgeColor="green" label="Gateway Server" items={["Sandbox Lifecycle", "TLS/mTLS", "Policy Engine", "gRPC + HTTP"]} />
+
+<ArchLayer badge="RT" badgeColor="amber" label="Inference Router" items={["Credential Stripping", "Provider Registry", "Model Routing", "L7 Proxy"]} />
+
+<ArchLayer badge="SB" badgeColor="rose" label="Sandbox Runtime" items={["Landlock FS", "seccomp Syscalls", "Network Policies", "K3s Container"]} />
+
+<Callout color="teal">
+Everything runs as a K3s Kubernetes cluster inside a single Docker container. No separate K8s install needed — scales from a developer laptop to enterprise via Helm charts.
+</Callout>
+
+---
+
+## <Label color="amber">3</Label> Policy Enforcement
+
+Policies are declarative YAML — human-readable, version-controlled, auditable:
+
+<Card>
+### Filesystem Policy
+
+```yaml
+filesystem_policy:
+  read_only: [/usr, /lib, /proc, /dev/urandom, /app, /etc]
+  read_write: [/sandbox, /tmp, /dev/null]
+```
+
+Enforced at the kernel level via **Landlock** (Linux filesystem access control). The agent physically cannot read `/home` or write to `/usr` — it's not a permission check, it's a kernel-enforced boundary.
+
+</Card>
+
+<Card>
+### Network Policy
+
+```yaml
+network_policies:
+  github_api:
+    name: github-api-readonly
+    endpoints:
+      - host: api.github.com
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        access: read-only    # GET allowed, POST/PUT blocked
+    binaries:
+      - { path: /usr/bin/curl }
+```
+
+L7 enforcement: not just "can this host be reached" but "can this HTTP method hit this path." Read-only access to GitHub API means the agent can fetch repos but can't push, create issues, or delete branches.
+
+</Card>
+
+<Card>
+### Multi-Layer Enforcement Stack
+
+<FlowStep step={1} color="amber" title="Landlock — Filesystem">
+Kernel-level filesystem access control. Read-only mounts, write restrictions, path-level granularity. No userspace bypass possible.
+</FlowStep>
+
+<FlowStep step={2} color="amber" title="seccomp — Syscalls">
+Syscall allowlisting at the kernel level. Only permitted syscalls execute — everything else is blocked before it reaches the kernel.
+</FlowStep>
+
+<FlowStep step={3} color="amber" title="Regorus/OPA — Network">
+Rego policy evaluation for HTTP requests. Method + path + host matching with allow/deny decisions. Written in Rust (Regorus) for smaller binary and faster startup than full OPA.
+</FlowStep>
+
+<FlowStep step={4} color="amber" title="L7 Proxy — HTTP">
+HTTP-level inspection: method, path, headers. The proxy sits between the sandbox and the network — every outbound request is evaluated against the policy.
+</FlowStep>
+
+</Card>
+
+---
+
+## <Label color="rose">4</Label> Privacy Router
+
+The most interesting architectural decision: **credential isolation via inference routing**.
+
+<Pipeline
+  nodes={[
+    { title: "Agent", subtitle: "Calls LLM API" },
+    { title: "Privacy Router", subtitle: "Strips agent's creds" },
+    { title: "Backend", subtitle: "Injects real API key" },
+    { title: "LLM Provider", subtitle: "OpenAI / Anthropic" }
+  ]}
+  arrows={[
+    { label: "no API key", direction: "right" },
+    { label: "route + inject", direction: "right" },
+    { label: "authenticated", direction: "right" }
+  ]}
+  footer="The agent never sees the real API key. The router injects backend credentials per-route, enabling multi-provider routing without credential exposure."
+/>
+
+<Card>
+### Route Configuration
+
+```rust
+pub struct RouteConfig {
+    pub name: String,
+    pub endpoint: String,
+    pub model: String,
+    pub provider_type: Option<String>,
+    pub protocols: Vec<String>,
+    pub api_key: Option<String>,      // Direct key
+    pub api_key_env: Option<String>,  // Or env var
+}
+```
+
+Each route maps a model to an endpoint with its own credentials. The agent requests "use gpt-4" — the router resolves the endpoint, injects the API key, and proxies the request. The agent never touches the credential.
+
+</Card>
+
+---
+
+## <Label color="purple">5</Label> Provider Registry
+
+OpenShell supports pluggable AI providers via a trait-based registry:
+
+<Card>
+
+```rust
+// Each provider declares its credential requirements
+pub const SPEC: ProviderDiscoverySpec = ProviderDiscoverySpec {
+    id: "openai",
+    credential_env_vars: &["OPENAI_API_KEY"],
+};
+
+fn discover_existing(&self) -> Result<Option<DiscoveredProvider>> {
+    discover_with_spec(&SPEC, &RealDiscoveryContext)
+}
+```
+
+| Provider | Credential | Status |
+|----------|-----------|--------|
+| Claude Code | `ANTHROPIC_API_KEY` | Base |
+| OpenAI / Codex | `OPENAI_API_KEY` | Base |
+| Copilot CLI | `GITHUB_TOKEN` | Base |
+| OpenRouter | `OPENROUTER_API_KEY` | Base |
+| Ollama | Local | Community |
+
+Adding a new provider: implement the `ProviderPlugin` trait, declare a `SPEC` with credential env vars, and register in `mod.rs`.
+
+</Card>
+
+---
+
+## <Label color="teal">6</Label> Rust-First Security
+
+The entire security boundary is written in Rust — no C dependencies at the enforcement layer:
+
+<Card>
+
+```toml
+# Sandbox enforcement stack
+[target.'cfg(target_os = "linux")'.dependencies]
+landlock = "0.4"        # Filesystem restrictions
+seccompiler = "0.5"     # Syscall filtering
+
+# Policy evaluation (OPA in Rust)
+regorus = { version = "0.9", features = ["std", "arc", "glob", "yaml"] }
+
+# TLS
+rustls = "0.23"         # No OpenSSL dependency
+tokio-rustls = "0.26"   # Async TLS
+```
+
+The gateway server uses `tonic` (gRPC) + `axum` (HTTP), the CLI uses `clap`, and the TUI uses `ratatui` — all pure Rust, compiled to a single binary per component.
+
+</Card>
+
+---
+
+## What Makes It Different
+
+OpenShell isn't another agent framework — it's a **security runtime** that sits underneath any agent:
+
+1. **Kernel-level enforcement** — Landlock + seccomp, not userspace permission checks
+2. **L7 network policies** — HTTP method/path granularity, not just IP/port
+3. **Credential isolation** — agents never see real API keys
+4. **Declarative YAML policies** — version-controlled, auditable, diffable
+5. **K3s-in-Docker** — zero-dependency portable deployment
+6. **Rust at the boundary** — memory safety where it matters most
+
+The project is alpha but production-minded: proper error handling, mTLS, Helm charts, comprehensive proto definitions, and a Python SDK for ergonomic integration.
+
+Open source from NVIDIA: [github.com/NVIDIA/OpenShell](https://github.com/NVIDIA/OpenShell) (~3k stars, Apache 2.0, Rust).
