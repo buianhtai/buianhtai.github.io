@@ -16,7 +16,7 @@ const borderColor = accent && flush ? accentColors[accent] : undefined;
 ---
 
 <div
-  class="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-sm"
+  class="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-sm overflow-hidden"
   style={borderColor ? `border-left: 3px solid ${borderColor}` : undefined}
 >
   <slot />

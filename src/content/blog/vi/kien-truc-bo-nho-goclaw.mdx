@@ -159,6 +159,10 @@ type KnowledgeGraphStore interface {
 }
 ```
 
+<Callout color="teal">
+**Dedup constraint:** `UNIQUE(agent_id, user_id, source, type, target)` — cùng một quan hệ không bao giờ được lưu hai lần.
+</Callout>
+
 ---
 
 ## <Label color="amber">3</Label> Session History
@@ -230,7 +234,28 @@ Trong mỗi lượt agent, ba hệ thống tương tác qua tool layer:
 
 ---
 
-## <Label color="green">5</Label> Bản Đồ Source File
+## <Label color="teal">5</Label> Key Interfaces
+
+<Card>
+### EmbeddingProvider
+
+`internal/memory/embeddings.go` — API tương thích OpenAI, dùng bởi cả Memory và KG
+
+```go
+type EmbeddingProvider interface {
+    Name() string              // "openai", "voyage", "ollama"
+    Model() string             // "text-embedding-3-small"
+    Embed(ctx, texts) [][]float32  // Batch embed, cached by content hash
+}
+
+// Supports WithDimensions() for truncation
+// CosineSimilarity(a, b) for manual scoring
+```
+</Card>
+
+---
+
+## <Label color="green">6</Label> Bản Đồ Source File
 
 <Card>
 
@@ -245,6 +270,9 @@ Trong mỗi lượt agent, ba hệ thống tương tác qua tool layer:
 | | `internal/agent/extractive_memory.go` | Regex-based fallback extraction |
 | <Label color="rose">Tools</Label> | `internal/tools/memory.go` | memory_search + memory_get tools (agent-facing) |
 | | `internal/tools/knowledge_graph.go` | knowledge_graph_search tool (search + traverse) |
+| <Label color="teal">Schema</Label> | `migrations/000001_init_schema.up.sql` | memory_documents, memory_chunks, sessions, embedding_cache |
+| | `migrations/000013_knowledge_graph.up.sql` | kg_entities, kg_relations |
+| | `migrations/000025_kg_entity_embeddings.up.sql` | Adds vector embeddings to KG entities |
 
 </Card>
 
