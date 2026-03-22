@@ -1,0 +1,241 @@
+---
+title: "Think → Act → Observe: Inside GoClaw's Agent Loop"
+description: "A deep dive into GoClaw's 7-phase agent execution model — how a single Go binary orchestrates LLM calls, tool execution, and mid-loop compaction across 20+ providers."
+pubDate: 2026-03-22
+tags: ["ai", "golang", "architecture", "agents"]
+lang: "en"
+category: "architecture"
+---
+
+import Card from '../../../components/mdx/Card.astro';
+import Label from '../../../components/mdx/Label.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+
+Most AI agent frameworks hide the execution model behind abstractions. GoClaw exposes a clean 7-phase loop that handles everything from input validation to mid-loop compaction — all in a single Go binary.
+
+<HeroGrid items={[
+  { label: "7 Phases", sublabel: "Setup → Validation → Build →\nIterate → Execute → Finalize → Compact", color: "#0891b2" },
+  { label: "20 Iterations Max", sublabel: "Think → Act → Observe cycle\nMid-loop compaction at 75% context", color: "#059669" },
+  { label: "20+ Providers", sublabel: "Single Provider interface\nStreaming + non-streaming", color: "#d97706" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> The Run() Entry Point
+
+<Card>
+
+`Run()` in `loop_run.go` handles the per-run lifecycle. Every agent invocation — whether it's a direct message, a sub-agent delegation, or a group chat participant — enters through this single function.
+
+It manages three critical responsibilities: **atomic run counting** for concurrency control, **trace creation** for observability, and **event emission** so the host application can track agent activity in real time.
+
+```go
+func (l *Loop) Run(ctx context.Context, req RunRequest) (*RunResult, error) {
+    l.activeRuns.Add(1)
+    defer l.activeRuns.Add(-1)
+    
+    // Emit run started event
+    emitRun(AgentEvent{Type: protocol.AgentEventRunStarted})
+    
+    // Create or attach trace (parent/child for delegation)
+    traceID := l.createTrace(ctx, req)
+    
+    // Execute the core loop
+    result, err := l.runLoop(ctx, req)
+    
+    // Emit completion with usage stats
+    emitRun(AgentEvent{Type: protocol.AgentEventRunCompleted})
+    return result, nil
+}
+```
+
+</Card>
+
+<Callout color="teal">
+`activeRuns` uses an atomic counter — true concurrency for group chats with `maxConcurrent=3`.
+</Callout>
+
+---
+
+## <Label color="green">2</Label> The 7-Phase runLoop()
+
+<Card>
+
+Every call to `runLoop()` executes these seven phases in order. Each phase has a single responsibility and clear failure semantics — if any phase fails, the run stops and returns a structured error.
+
+<FlowStep number={1} title="Setup">
+Inject agent UUID, user ID, per-user workspace (`sync.Map` cache), team workspace auto-resolution.
+</FlowStep>
+
+<FlowStep number={2} title="Input Validation">
+`InputGuard.Scan` for 6 injection patterns (configurable: log/warn/block). Message truncation at 32K chars.
+</FlowStep>
+
+<FlowStep number={3} title="Build Messages">
+System prompt (19 sections), conversation summary injection, 3-stage history pipeline (limit → prune → sanitize).
+</FlowStep>
+
+<FlowStep number={4} title="LLM Iteration Loop">
+`PolicyEngine` filters available tools, calls `Chat` or `ChatStream`, mid-loop compaction at 75% context window.
+</FlowStep>
+
+<FlowStep number={5} title="Tool Execution">
+Single tool: sequential. Multiple tools: parallel goroutines. Emit `tool.call`/`tool.result` events.
+</FlowStep>
+
+<FlowStep number={6} title="Response Finalization">
+7-step sanitization, `NO_REPLY` detection, atomic session flush with deferred writes.
+</FlowStep>
+
+<FlowStep number={7} title="Auto-Summarization">
+Trigger at 50+ messages or 75% context, per-session `TryLock` prevents concurrent summarization.
+</FlowStep>
+
+</Card>
+
+---
+
+## <Label color="amber">3</Label> Think → Act → Observe
+
+<Card>
+
+The iteration loop is the heart of the agent. Each cycle follows the classic Think → Act → Observe pattern, but with a critical addition: **mid-loop compaction**. When the conversation approaches 75% of the context window, GoClaw summarizes the history *without stopping the loop*.
+
+```go
+for iteration := 0; iteration < maxIterations; iteration++ {
+    // THINK: Call LLM
+    response, err := l.callLLM(ctx, req, messages)
+    
+    // Mid-loop compaction check
+    if shouldCompact(messages, l.contextWindow) {
+        messages = l.compactHistory(ctx, messages)
+    }
+    
+    // OBSERVE: No tool calls → done
+    if len(response.ToolCalls) == 0 {
+        return &RunResult{Content: response.Content}, nil
+    }
+    
+    // ACT: Execute tools (parallel if multiple)
+    for _, tc := range response.ToolCalls {
+        result := l.executeTool(ctx, tc)
+        messages = append(messages, toolResultMsg(result))
+    }
+    // Loop back to THINK
+}
+```
+
+The loop terminates in three ways: the LLM returns a response without tool calls (natural completion), the iteration limit is reached (`maxIterations` default: 20), or an unrecoverable error occurs.
+
+</Card>
+
+<Callout color="amber">
+Mid-loop compaction is the key insight — rather than failing when context overflows, GoClaw summarizes history mid-conversation and keeps going.
+</Callout>
+
+---
+
+## <Label color="rose">4</Label> Building Messages: The 19-Section System Prompt
+
+<Card>
+
+The system prompt is not a single string — it's assembled from 19 configurable sections. Each section is independently toggleable, and some are dynamically generated based on the agent's runtime context.
+
+| Section | Purpose |
+|---|---|
+| Identity | Agent name, role, base instructions |
+| Persona (SOUL.md) | Character, tone, behavioral guidelines |
+| Tooling | Policy-filtered tool descriptions |
+| Skills | Loaded skill instructions and workflows |
+| MCP Tools | Dynamically discovered MCP server tools |
+| Team Workspace | Shared file paths and conventions |
+| Sandbox | Docker sandbox configuration and rules |
+| User Identity | Current user name, ID, preferences |
+| Channel Formatting | Slack/Discord/Web formatting rules |
+| Sub-Agent Spawning | How to delegate to child agents |
+| Runtime Info | Current date, timezone, OS context |
+
+</Card>
+
+<Card>
+
+### The 3-Stage History Pipeline
+
+Before messages reach the LLM, they pass through three processing stages that ensure the conversation fits within the context budget while maintaining coherence.
+
+<FlowStep number={1} title="limitHistoryTurns">
+Truncate to `historyLimit` — keeps only the N most recent conversation turns. Older turns are already captured in the conversation summary.
+</FlowStep>
+
+<FlowStep number={2} title="pruneContextMessages">
+Respect context window budget — measures token count and removes oldest messages first until the total fits within the available context (after accounting for system prompt and response buffer).
+</FlowStep>
+
+<FlowStep number={3} title="sanitizeHistory">
+Fix orphaned `tool_call`/`tool_result` pairs — if pruning removed a tool call but left its result (or vice versa), this stage removes the orphan to prevent LLM confusion.
+</FlowStep>
+
+</Card>
+
+---
+
+## <Label color="green">5</Label> The Provider Interface
+
+<Card>
+
+Every LLM provider in GoClaw implements a single four-method interface. This is the entire contract — no base classes, no inheritance, no framework magic.
+
+```go
+type Provider interface {
+    Chat(ctx context.Context, req ChatRequest) (*ChatResponse, error)
+    ChatStream(ctx context.Context, req ChatRequest, onChunk func(StreamChunk)) (*ChatResponse, error)
+    DefaultModel() string
+    Name() string
+}
+```
+
+The `Chat` method handles synchronous request/response. `ChatStream` handles server-sent events with a chunk callback. Both return the same `ChatResponse` struct — streaming implementations accumulate chunks internally and return the final assembled response.
+
+</Card>
+
+<Callout color="green">
+One interface, 20+ implementations — Anthropic (native HTTP+SSE), OpenAI, Groq, DeepSeek, Gemini, Ollama, Claude CLI, and any OpenAI-compatible endpoint.
+</Callout>
+
+---
+
+## <Label color="teal">6</Label> Config Model
+
+<Card>
+
+The agent loop is configured through `AgentDefaults`, which provides sensible defaults that can be overridden per-agent. These values control the fundamental behavior of the Think → Act → Observe cycle.
+
+| Field | Default | Purpose |
+|---|---|---|
+| `MaxToolIterations` | 20 | Max Think-Act-Observe cycles |
+| `ContextWindow` | varies | Per-agent context budget |
+| `MaxToolCalls` | 25 | Max tools per iteration |
+| `Compaction.MaxHistoryShare` | 0.75 | Trigger compaction at 75% |
+| `Compaction.KeepLastMessages` | 4 | Messages preserved after compaction |
+| `Sandbox.Mode` | `"off"` | Docker sandbox: off/non-main/all |
+
+The `ContextWindow` varies by provider and model — GoClaw queries each provider for its model's context limit and uses that as the budget. Compaction triggers are calculated as a percentage of this budget, making the system adaptive to any model size.
+
+</Card>
+
+---
+
+## Why This Architecture Works
+
+<HeroGrid items={[
+  { label: "Single Binary", sublabel: "No Node.js runtime, no Python\nvirtualenv — <1s cold startup", color: "#0891b2" },
+  { label: "Mid-Loop Compaction", sublabel: "Conversations never fail from\ncontext overflow — they adapt", color: "#059669" },
+  { label: "Provider Agnostic", sublabel: "Switch providers without changing\nagent code or behavior", color: "#d97706" },
+  { label: "Trace Everything", sublabel: "Per-run OpenTelemetry spans\nfor production debugging", color: "#e11d48" },
+]} />
+
+<Callout color="teal">
+The Think-Act-Observe loop is deliberately simple — complexity belongs in the tool system and provider layer, not the orchestration core.
+</Callout>

@@ -11,6 +11,7 @@ const blog = defineCollection({
     heroImage: z.string().optional(),
     tags: z.array(z.string()).default([]),
     lang: z.enum(['en', 'vi']),
+    category: z.enum(['architecture', 'golang', 'devops', 'ai', 'tutorial']),
     draft: z.boolean().default(false),
   }),
 });
