@@ -29,6 +29,7 @@ export default defineConfig({
     locales: ['en', 'vi'],
     routing: {
       prefixDefaultLocale: true,
+      redirectToDefaultLocale: false,
     },
   },
 
