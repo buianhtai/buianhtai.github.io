@@ -14,7 +14,6 @@ import Label from '../../../components/mdx/Label.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
 import HeroGrid from '../../../components/mdx/HeroGrid.astro';
 import Callout from '../../../components/mdx/Callout.astro';
-import Mermaid from '../../../components/mdx/Mermaid.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
 
 Most AI agent frameworks hide the execution model behind abstractions. GoClaw exposes a clean 7-phase loop that handles everything from input validation to mid-loop compaction — all in a single Go binary.
@@ -98,24 +97,6 @@ Trigger at 50+ messages or 75% context, per-session `TryLock` prevents concurren
 </FlowStep>
 
 </Card>
-
-<Mermaid
-  chart={`flowchart LR
-    A[Setup]
-    B[Input Validation]
-    C[Build Messages]
-    D[LLM Iteration]
-    E[Tool Execution]
-    F[Response Finalization]
-    G[Auto-Summarization]
-
-    A --> B --> C --> D --> E --> F --> G
-    G --> H{Another turn?}
-    H -->|yes| D
-    H -->|no| I[Run Complete]
-  `}
-  caption="GoClaw's 7-phase loop with iterative Think → Act → Observe cycles"
-/>
 
 ---
 

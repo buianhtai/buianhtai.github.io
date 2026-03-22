@@ -99,24 +99,6 @@ All written files are committed atomically: `mail: GreenCastle -> BlueLake | API
 
 </Card>
 
-<Mermaid
-  chart={`sequenceDiagram
-    actor A as Agent A
-    participant S as MCP Agent Mail Server
-    participant D as SQLite (DB Insert)
-    participant C as Canonical Copy
-    participant I as Inbox/Outbox
-    participant G as Git
-
-    A->>S: send_message()
-    S->>D: Step 1: insert message + recipients
-    S->>C: Step 2: write messages/YYYY/MM/{id}.md
-    S->>I: Step 3: write sender outbox + recipient inbox
-    S->>G: Step 4: atomic commit
-    G-->>A: audit trail available`}
-  caption="Four-step Agent Mail write path from send_message to auditable Git commit"
-/>
-
 <Card>
 ### Message Format
 

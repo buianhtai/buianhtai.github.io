@@ -18,7 +18,6 @@ import ArchLayer from '../../../components/mdx/ArchLayer.astro';
 import DagGrid from '../../../components/mdx/DagGrid.astro';
 import HashDemo from '../../../components/mdx/HashDemo.astro';
 import Pipeline from '../../../components/mdx/Pipeline.astro';
-import Mermaid from '../../../components/mdx/Mermaid.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
 
 AI coding agents are stateless by nature. Every session starts fresh — no memory of what was attempted, what's blocked, or what's ready to work on. Traditional issue trackers (Jira, GitHub Issues, Linear) don't help: they're built for humans clicking through GUIs, not agents running `--json` commands at machine speed.
@@ -108,44 +107,6 @@ Traditional trackers treat issues as flat lists with optional labels. Beads trea
   { name: "Integration", id: "bd-f1a6", status: "blocked", wave: 2 },
   { name: "E2E tests", id: "bd-g8h4", status: "blocked", wave: 3 },
 ]} />
-
-<Mermaid
-  chart={`flowchart LR
-    subgraph W0[Wave 0]
-      A[bd-a3f8 Foundation\nclosed]
-      B[bd-b2c1 Auth module\nclosed]
-    end
-
-    subgraph W1[Wave 1]
-      C[bd-c7d3 Component A\nin-progress]
-      D[bd-d4e5 Component B\nready]
-      E[bd-e9f2 Messages\nready]
-    end
-
-    subgraph W2[Wave 2]
-      F[bd-f1a6 Integration\nblocked]
-      G[bd-g8h4 E2E tests\nblocked]
-    end
-
-    A --> C
-    A --> D
-    B --> E
-    C --> F
-    D --> F
-    E --> F
-    F --> G
-
-    classDef ready fill:#dcfce7,stroke:#16a34a,stroke-width:1px,color:#0f172a;
-    classDef progress fill:#fef3c7,stroke:#d97706,stroke-width:1px,color:#0f172a;
-    classDef blocked fill:#ffe4e6,stroke:#e11d48,stroke-width:1px,color:#0f172a;
-    classDef closed fill:#e5e7eb,stroke:#6b7280,stroke-width:1px,color:#0f172a;
-
-    class A,B closed;
-    class C progress;
-    class D,E ready;
-    class F,G blocked;`}
-  caption="Dependency DAG wave analysis: ready work (green) is computable after closed prerequisites in earlier waves."
-/>
 
 The core query is a recursive CTE that walks the graph to find all transitively blocked issues, then returns everything that's unblocked:
 
@@ -276,23 +237,6 @@ Beads stores everything in [Dolt](https://github.com/dolthub/dolt) — a SQL dat
     { label: "bd dolt pull", direction: "left" },
   ]}
   footer="Cell-level merge: two agents editing different fields on the same issue merge without conflict. No locking, no coordination server."
-/>
-
-<Mermaid
-  chart={`sequenceDiagram
-    participant L1 as Local DB (Agent A)
-    participant P as bd dolt push
-    participant R as refs/dolt/data/
-    participant U as bd dolt pull
-    participant L2 as Local DB (Agent B)
-
-    L1->>P: Commit issue cell updates
-    P->>R: Push Dolt objects
-    Note over R: Stored alongside Git refs
-    R->>U: Remote data available
-    U->>L2: Pull + apply cell-level merge
-    Note over L1,L2: Different cells in same row merge cleanly`}
-  caption="Dolt sync pipeline used by `bd dolt push`/`bd dolt pull`, with cell-level merge behavior."
 />
 
 <Card>

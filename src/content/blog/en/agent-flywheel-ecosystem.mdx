@@ -16,7 +16,6 @@ import HeroGrid from '../../../components/mdx/HeroGrid.astro';
 import Callout from '../../../components/mdx/Callout.astro';
 import ArchLayer from '../../../components/mdx/ArchLayer.astro';
 import Pipeline from '../../../components/mdx/Pipeline.astro';
-import Mermaid from '../../../components/mdx/Mermaid.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
 
 Running multiple AI coding agents isn't hard. Making them work *together* without destroying each other's work — that's the unsolved problem. Jeffrey Emanuel has been building toward a solution: six open-source tools that form a self-reinforcing loop he calls the **Agent Flywheel**.
@@ -330,28 +329,6 @@ These tools aren't independent utilities — they form a coordination loop:
     { label: "clean", direction: "right" }
   ]}
   footer="Each cycle refines the next: cass indexes the session, cm extracts rules, bv re-ranks priorities, br tracks completion. The flywheel accelerates."
-/>
-
-<Mermaid
-  chart={`flowchart LR
-    A[br / bv\nPick highest-impact task] --> B[Agent Mail\nCoordinate files + reservations]
-    B --> C[dcg\nGuard destructive commands]
-    C --> D[ubs\nScan for LLM-introduced bugs]
-    D --> E[cass / cm\nIndex sessions + distill rules]
-    E --> A
-
-    classDef pick fill:#cffafe,stroke:#0e7490,stroke-width:1px,color:#0f172a;
-    classDef coord fill:#dcfce7,stroke:#16a34a,stroke-width:1px,color:#0f172a;
-    classDef safe fill:#ede9fe,stroke:#7c3aed,stroke-width:1px,color:#0f172a;
-    classDef scan fill:#ffedd5,stroke:#ea580c,stroke-width:1px,color:#0f172a;
-    classDef learn fill:#fee2e2,stroke:#e11d48,stroke-width:1px,color:#0f172a;
-
-    class A pick;
-    class B coord;
-    class C safe;
-    class D scan;
-    class E learn;`}
-  caption="Agent Flywheel loop: prioritize, coordinate, guard, scan, learn, repeat."
 />
 
 1. **br/bv** picks the highest-impact task from the dependency graph
