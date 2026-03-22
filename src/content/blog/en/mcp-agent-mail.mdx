@@ -1,0 +1,300 @@
+---
+title: "Gmail for AI Agents: How MCP Agent Mail Coordinates Multi-Agent Workflows"
+description: "A deep dive into MCP Agent Mail — async coordination for AI coding agents via named identities, threaded messages, advisory file leases, and dual Git+SQLite persistence."
+pubDate: 2026-03-22
+tags: ["ai", "mcp", "architecture", "python", "agents"]
+lang: "en"
+category: "architecture"
+---
+
+import Card from '../../../components/mdx/Card.astro';
+import Label from '../../../components/mdx/Label.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import ArchLayer from '../../../components/mdx/ArchLayer.astro';
+import Pipeline from '../../../components/mdx/Pipeline.astro';
+
+Run three AI agents on the same codebase — backend, frontend, infrastructure — and watch them overwrite each other's files, lose context from parallel workstreams, and force you to manually relay messages between them. There's no shared memory, no coordination protocol, no audit trail.
+
+[MCP Agent Mail](https://github.com/Dicklesworthstone/mcp_agent_mail) solves this by giving agents what humans have had for decades: **email**. Named identities, threaded conversations, inbox/outbox semantics, and advisory file leases — all exposed as MCP tools over HTTP, backed by SQLite for fast queries and Git for human-auditable history.
+
+<HeroGrid items={[
+  { label: "Named Agents", sublabel: "GreenCastle, BlueLake\nAuto-generated identities", color: "#0891b2" },
+  { label: "Threaded Mail", sublabel: "Inbox/outbox/ack\nMarkdown messages", color: "#059669" },
+  { label: "File Leases", sublabel: "Advisory reservations\nTTL-based expiration", color: "#d97706" },
+  { label: "Dual Persistence", sublabel: "SQLite + FTS5 queries\nGit audit trail", color: "#e11d48" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> Why Traditional Approaches Fail
+
+Before diving into the architecture, here's why existing coordination methods break down at agent-speed:
+
+<Card>
+
+| Approach | Problem |
+|----------|---------|
+| Shared files / clipboard | No structure, no history, race conditions |
+| Agents calling each other | Tight coupling, circular dependencies, no persistence |
+| Human-mediated messaging | Bottleneck — you become the router |
+| Shared database only | No audit trail, developers can't review agent decisions |
+| Git hooks alone | Post-hoc detection, no proactive coordination |
+
+The core insight: agents need **asynchronous, structured communication** with both machine-speed indexing (SQLite) and human-readable history (Git). Neither alone is sufficient.
+
+</Card>
+
+---
+
+## <Label color="green">2</Label> Architecture
+
+The system runs as an HTTP-only FastMCP server with four layers:
+
+<ArchLayer badge="MCP" badgeColor="teal" label="Tool Surface" items={["send_message", "fetch_inbox", "acknowledge", "search", "reserve_files", "whois"]} />
+
+<ArchLayer badge="API" badgeColor="green" label="Web Interface" items={["FastAPI", "Inbox UI", "Thread View", "Overseer Dashboard"]} />
+
+<ArchLayer badge="DATA" badgeColor="amber" label="Storage Engine" items={["SQLite + WAL", "FTS5 Search", "SQLModel ORM", "Circuit Breaker"]} />
+
+<ArchLayer badge="GIT" badgeColor="rose" label="Audit Archive" items={["messages/YYYY/MM/", "agents/*/inbox/", "agents/*/outbox/", "file_reservations/"]} />
+
+<Callout color="green">
+Every message write is dual-persisted: SQLite for fast queries and FTS5 search, Git for human-readable Markdown artifacts organized by date and agent. Developers can browse the Git history to audit every agent decision.
+</Callout>
+
+---
+
+## <Label color="amber">3</Label> Message Flow
+
+When an agent sends a message, the server writes to four locations atomically:
+
+<Card>
+
+<FlowStep step={1} color="teal" title="Database Insert">
+The message and per-recipient records (to/cc/bcc) are written to SQLite. FTS5 triggers auto-index the subject and body for search.
+</FlowStep>
+
+<FlowStep step={2} color="green" title="Canonical Copy">
+A Markdown file with JSON frontmatter is written to `messages/YYYY/MM/{id}.md` — the single source of truth.
+</FlowStep>
+
+<FlowStep step={3} color="amber" title="Outbox + Inbox Copies">
+The sender gets an outbox copy at `agents/{sender}/outbox/`. Each recipient gets an inbox copy at `agents/{name}/inbox/`.
+</FlowStep>
+
+<FlowStep step={4} color="rose" title="Git Commit">
+All written files are committed atomically: `mail: GreenCastle -> BlueLake | API design for /users`
+</FlowStep>
+
+</Card>
+
+<Card>
+### Message Format
+
+Each message is stored as Markdown with JSON frontmatter — human-readable AND machine-parseable:
+
+```markdown
+---json
+{
+  "id": "msg_20260322_a1b2c3d4",
+  "thread_id": "FEAT-users-api",
+  "from": "GreenCastle",
+  "to": ["BlueLake"],
+  "importance": "high",
+  "ack_required": true
+}
+---
+
+# Build plan for /api/users routes
+
+I've sketched the OpenAPI spec for the user endpoints...
+```
+
+</Card>
+
+---
+
+## <Label color="rose">4</Label> File Reservations (Leases)
+
+When Agent A is editing `src/api/*.py`, Agent B shouldn't touch those files. File reservations signal intent without hard locking:
+
+<Pipeline
+  nodes={[
+    { title: "Agent A", subtitle: "reserve(\"src/api/*.py\")" },
+    { title: "Server", subtitle: "Check conflicts → grant" },
+    { title: "Agent B", subtitle: "reserve(\"src/api/*.py\")" },
+    { title: "Server", subtitle: "Conflict! Agent A holds it" }
+  ]}
+  arrows={[
+    { label: "exclusive=true", direction: "right" },
+    { label: "granted ✓", direction: "right" },
+    { label: "exclusive=true", direction: "right" }
+  ]}
+  footer="Reservations are advisory with TTL-based expiration — no manual cleanup needed. Leases auto-expire, and the Git archive records who held what and when."
+/>
+
+<Card>
+### Conflict Detection
+
+```python
+# Check for existing reservations on the same path
+rows = conn.execute("""
+  SELECT agent_name, path, exclusive, expires_ts
+  FROM file_reservations
+  WHERE project_id=? AND released_ts IS NULL
+    AND expires_ts > ? AND path=?
+""", (project_id, now, path)).fetchall()
+
+# Conflict if anyone holds exclusive, or we want exclusive
+if any(r["exclusive"] or exclusive for r in rows
+       if r["agent_name"] != agent_name):
+    conflicts.append({"path": path, "holders": [dict(r) for r in rows]})
+```
+
+Returns `{ "granted": [...], "conflicts": [...] }` — the agent decides how to proceed.
+
+</Card>
+
+---
+
+## <Label color="purple">5</Label> Agent Identity & Discovery
+
+Agents aren't anonymous processes — they have memorable names, programs, and models:
+
+<Card>
+### Auto-Generated Names
+
+```python
+# Adjective + Noun composition for unique agent names
+def _unique_agent_name(conn, project_id, hint):
+    if hint:
+        candidate = re.sub(r"[^a-zA-Z0-9]", "", hint)[:40]
+        if not exists(conn, project_id, candidate):
+            return candidate
+    for _ in range(1000):
+        candidate = f"{random.choice(ADJECTIVES)}{random.choice(NOUNS)}"
+        if not exists(conn, project_id, candidate):
+            return candidate
+```
+
+Names like **GreenCastle**, **BlueLake**, **RedForest** — instantly recognizable in logs and Git commits. Each agent also stores its `program` (Claude Code, Codex CLI) and `model` (claude-sonnet-4, gpt-5-pro) for context.
+
+</Card>
+
+<Card>
+### Contact Policies
+
+Agents control who can message them:
+
+| Policy | Behavior |
+|--------|----------|
+| `open` | Anyone can message |
+| `auto` | Auto-accept from same project |
+| `contacts_only` | Must be in contact list |
+| `block_all` | No incoming messages |
+
+Cross-project communication requires explicit `AgentLink` approval — preventing unauthorized agents from spamming across projects.
+
+</Card>
+
+---
+
+## <Label color="teal">6</Label> Concurrency & Reliability
+
+Running multiple agents means concurrent database access. Agent Mail handles this with three patterns:
+
+<Card>
+### SQLite WAL + Exponential Backoff
+
+```python
+# WAL mode for concurrent reads during writes
+cursor.execute("PRAGMA journal_mode=WAL")
+cursor.execute("PRAGMA busy_timeout=60000")  # 60s
+
+# Retry with exponential backoff + jitter
+@retry_on_db_lock(max_retries=7, base_delay=0.05, max_delay=8.0)
+async def get_session():
+    # 0.05s → 0.1s → 0.2s → 0.4s → 0.8s → 1.6s → 3.2s
+    delay = base_delay * (2 ** attempt)
+    jitter = delay * 0.25 * random.uniform(-1, 1)
+```
+
+</Card>
+
+<Card>
+### Circuit Breaker
+
+After 5 consecutive database failures, the circuit opens — failing fast instead of piling up retries:
+
+```
+CLOSED (normal) → 5 failures → OPEN (fail fast, 30s)
+                                    ↓
+                              HALF_OPEN (try one)
+                                    ↓
+                              success → CLOSED
+```
+
+</Card>
+
+<Card>
+### Git Commit Batching
+
+A `_CommitQueue` batches non-conflicting commits to reduce lock contention:
+
+```python
+class _CommitQueue:
+    max_batch_size = 10   # Up to 10 commits per batch
+    max_wait_ms = 50.0    # Wait up to 50ms for more commits
+```
+
+Under high load, 10 agent messages become 1 Git commit instead of 10 — reducing lock acquisition cycles by 90%.
+
+</Card>
+
+---
+
+## <Label color="green">7</Label> Tool Profiles
+
+Not every agent needs every tool. Agent Mail exposes **filtered tool profiles** to reduce context overhead:
+
+<Card>
+
+| Profile | Tools Exposed | Use Case |
+|---------|--------------|----------|
+| `full` | All clusters, all tools | Development, debugging |
+| `core` | Identity + messaging + files + macros | Standard agent workflows |
+| `minimal` | 6 tools only | Lightweight agents with small context |
+| `messaging` | Identity + messaging + contacts + search | Communication-focused agents |
+
+```python
+TOOL_FILTER_PROFILES = {
+    "minimal": {
+        "tools": ["health_check", "ensure_project",
+                  "register_agent", "send_message",
+                  "fetch_inbox", "acknowledge_message"]
+    },
+}
+```
+
+An agent with a 32K context window gets 6 tool definitions instead of 30+ — keeping the system prompt lean.
+
+</Card>
+
+---
+
+## What Makes It Work
+
+The key design decisions behind MCP Agent Mail:
+
+1. **Dual persistence** — SQLite for machine-speed queries, Git for human-auditable history
+2. **Advisory leases, not hard locks** — agents signal intent without blocking each other
+3. **Named identities** — GreenCastle is instantly recognizable in logs, diffs, and conversations
+4. **Thread-based conversations** — `thread_id` preserves context across message chains
+5. **Profile-based tool exposure** — reduce context overhead for constrained agents
+6. **Commit batching** — 10 messages → 1 Git commit under load
+
+It's not real-time pub/sub. It's not a shared database. It's **email** — the coordination protocol that scaled human organizations for 50 years, adapted for AI agents that work at machine speed.
+
+The project is open source: [github.com/Dicklesworthstone/mcp_agent_mail](https://github.com/Dicklesworthstone/mcp_agent_mail) (1.8k+ stars, Python, MIT license).
