@@ -111,7 +111,7 @@ const dateFmt = (d: Date) =>
         signalColor: '#e2e8f0',
         signalTextColor: '#e2e8f0',
         fontFamily: 'IBM Plex Mono, monospace',
-        fontSize: '13px',
+        fontSize: '14px',
       } : {
         primaryColor: '#f0f4fa',
         primaryTextColor: '#1e293b',
@@ -129,10 +129,106 @@ const dateFmt = (d: Date) =>
         signalColor: '#1e293b',
         signalTextColor: '#1e293b',
         fontFamily: 'IBM Plex Mono, monospace',
-        fontSize: '13px',
+        fontSize: '14px',
       },
       flowchart: { curve: 'basis', padding: 20 },
-      sequence: { actorMargin: 50, messageMargin: 40 },
+      sequence: { actorMargin: 60, messageMargin: 50, width: 200 },
+    });
+
+    // Wait for Mermaid to render, then attach zoom/pan to each viewport
+    await mermaid.run();
+
+    document.querySelectorAll('.mermaid-viewport').forEach(viewport => {
+      const canvas = viewport.querySelector('.mermaid-canvas');
+      if (!canvas) return;
+
+      let zoom = 1;
+      let panX = 0;
+      let panY = 0;
+      let isDragging = false;
+      let startX = 0;
+      let startY = 0;
+
+      const MIN_ZOOM = 0.3;
+      const MAX_ZOOM = 4;
+      const ZOOM_STEP = 0.15;
+
+      function applyTransform(smooth = false) {
+        canvas.style.transition = smooth ? 'transform 0.25s ease-out' : 'none';
+        canvas.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
+      }
+
+      function fitToView() {
+        const svg = canvas.querySelector('svg');
+        if (!svg) return;
+        const vw = viewport.clientWidth;
+        const vh = viewport.clientHeight;
+        const sw = svg.getBoundingClientRect().width / zoom;
+        const sh = svg.getBoundingClientRect().height / zoom;
+        zoom = Math.min(vw / sw, vh / sh, 2) * 0.9;
+        panX = (vw - sw * zoom) / 2;
+        panY = (vh - sh * zoom) / 2;
+        applyTransform(true);
+      }
+
+      // Ctrl/Cmd + wheel to zoom
+      viewport.addEventListener('wheel', (e) => {
+        if (!e.ctrlKey && !e.metaKey) return;
+        e.preventDefault();
+        const rect = viewport.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+
+        const oldZoom = zoom;
+        zoom *= e.deltaY < 0 ? (1 + ZOOM_STEP) : (1 - ZOOM_STEP);
+        zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom));
+
+        // Zoom toward mouse position
+        panX = mouseX - (mouseX - panX) * (zoom / oldZoom);
+        panY = mouseY - (mouseY - panY) * (zoom / oldZoom);
+        applyTransform();
+      }, { passive: false });
+
+      // Drag to pan
+      viewport.addEventListener('pointerdown', (e) => {
+        isDragging = true;
+        startX = e.clientX - panX;
+        startY = e.clientY - panY;
+        viewport.setPointerCapture(e.pointerId);
+      });
+
+      viewport.addEventListener('pointermove', (e) => {
+        if (!isDragging) return;
+        panX = e.clientX - startX;
+        panY = e.clientY - startY;
+        applyTransform();
+      });
+
+      viewport.addEventListener('pointerup', () => { isDragging = false; });
+      viewport.addEventListener('pointercancel', () => { isDragging = false; });
+
+      // Double-click to fit
+      viewport.addEventListener('dblclick', (e) => {
+        e.preventDefault();
+        fitToView();
+      });
+
+      // Button controls
+      const container = viewport.closest('.mermaid-container');
+      container?.querySelector('.mermaid-zoom-in')?.addEventListener('click', () => {
+        zoom = Math.min(MAX_ZOOM, zoom * (1 + ZOOM_STEP));
+        applyTransform(true);
+      });
+      container?.querySelector('.mermaid-zoom-out')?.addEventListener('click', () => {
+        zoom = Math.max(MIN_ZOOM, zoom * (1 - ZOOM_STEP));
+        applyTransform(true);
+      });
+      container?.querySelector('.mermaid-zoom-fit')?.addEventListener('click', () => {
+        fitToView();
+      });
+
+      // Initial fit after render
+      requestAnimationFrame(() => fitToView());
     });
   }
 </script>

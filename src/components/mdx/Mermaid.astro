@@ -7,8 +7,16 @@ const { chart, caption } = Astro.props;
 ---
 
 <div class="mermaid-container">
-  <div class="mermaid-diagram">
-    <pre class="mermaid">{chart}</pre>
+  <div class="mermaid-viewport" data-zoom="1" data-pan-x="0" data-pan-y="0">
+    <div class="mermaid-canvas">
+      <pre class="mermaid">{chart}</pre>
+    </div>
+  </div>
+  <div class="mermaid-controls">
+    <button class="mermaid-btn mermaid-zoom-in" title="Zoom in">+</button>
+    <button class="mermaid-btn mermaid-zoom-out" title="Zoom out">−</button>
+    <button class="mermaid-btn mermaid-zoom-fit" title="Fit to view">⊡</button>
+    <span class="mermaid-hint">Ctrl + wheel to zoom · Drag to pan · Double-click to fit</span>
   </div>
   {caption && <p class="mermaid-caption">{caption}</p>}
 </div>
@@ -21,20 +29,75 @@ const { chart, caption } = Astro.props;
     overflow: hidden;
     background: var(--color-surface);
   }
-  .mermaid-diagram {
-    padding: 1.5rem;
+
+  .mermaid-viewport {
+    position: relative;
+    min-height: 300px;
+    overflow: hidden;
+    cursor: grab;
+    touch-action: none;
+  }
+
+  .mermaid-viewport:active {
+    cursor: grabbing;
+  }
+
+  .mermaid-canvas {
     display: flex;
     justify-content: center;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
+    align-items: center;
+    min-height: 300px;
+    padding: 1.5rem;
+    transform-origin: 0 0;
+    transition: transform 0.1s ease-out;
   }
-  .mermaid-diagram pre.mermaid {
+
+  .mermaid-canvas pre.mermaid {
     background: transparent !important;
     border: none !important;
     padding: 0 !important;
     margin: 0 !important;
-    font-size: 0.85rem;
   }
+
+  .mermaid-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.5rem 1rem;
+    border-top: 1px solid var(--color-border);
+    background: var(--color-bg);
+  }
+
+  .mermaid-btn {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    background: var(--color-surface);
+    color: var(--color-text-dim);
+    font-size: 0.9rem;
+    font-family: 'IBM Plex Mono', monospace;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+    line-height: 1;
+  }
+
+  .mermaid-btn:hover {
+    color: var(--color-accent);
+    border-color: var(--color-accent);
+  }
+
+  .mermaid-hint {
+    font-size: 0.65rem;
+    color: var(--color-text-dim);
+    font-family: 'IBM Plex Mono', monospace;
+    margin-left: 0.5rem;
+    opacity: 0.7;
+  }
+
   .mermaid-caption {
     padding: 0.75rem 1.5rem;
     border-top: 1px solid var(--color-border);
@@ -43,5 +106,11 @@ const { chart, caption } = Astro.props;
     font-family: 'IBM Plex Mono', monospace;
     text-align: center;
     margin: 0;
+  }
+
+  @media (max-width: 640px) {
+    .mermaid-hint { display: none; }
+    .mermaid-canvas { min-height: 200px; }
+    .mermaid-viewport { min-height: 200px; }
   }
 </style>

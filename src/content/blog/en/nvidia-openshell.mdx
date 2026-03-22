@@ -71,37 +71,21 @@ Everything runs as a K3s Kubernetes cluster inside a single Docker container. No
 </Callout>
 
 <Mermaid chart={`flowchart TD
-  CLI["openshell CLI<br/>clap + Python SDK"]
-  GW["Gateway Server<br/>gRPC + HTTP + TLS"]
-  PR["Privacy Router<br/>Credential Isolation"]
-  SB1["Sandbox #1<br/>Agent: Claude Code"]
-  SB2["Sandbox #2<br/>Agent: Codex"]
-  SBN["Sandbox #N<br/>Agent: Custom"]
-  LLM["LLM Providers<br/>OpenAI / Anthropic / Ollama"]
+  CLI["openshell CLI"]:::tealNode
+  CLI -->|"gRPC / HTTP"| GW
 
-  subgraph K3s["K3s-in-Docker"]
-    GW --> PR
-    GW --> SB1
-    GW --> SB2
-    GW --> SBN
-    PR --> LLM
+  subgraph K3S["K3s-in-Docker"]
+    GW["Gateway Server<br/>TLS / mTLS"]:::greenNode
+    GW -->|"credential stripping"| IR["Inference Router<br/>model routing"]:::amberNode
+    GW -->|"sandboxed exec"| SR["Sandbox Runtime<br/>Landlock + seccomp + OPA"]:::roseNode
+    IR -->|"backend injection"| LLM["LLM Providers"]:::amberNode
   end
 
-  CLI --> GW
-
-  classDef cli fill:#0891b2,stroke:#0891b2,color:#fff
-  classDef gw fill:#059669,stroke:#059669,color:#fff
-  classDef router fill:#d97706,stroke:#d97706,color:#fff
-  classDef sandbox fill:#e11d48,stroke:#e11d48,color:#fff
-  classDef llm fill:#76b900,stroke:#76b900,color:#fff
-  classDef k3s fill:transparent,stroke:#6b7a8d,stroke-dasharray:5 5
-
-  class CLI cli
-  class GW gw
-  class PR router
-  class SB1,SB2,SBN sandbox
-  class LLM llm
-`} caption="Architecture: CLI → Gateway → Router → Sandboxes, all inside K3s-in-Docker" />
+  classDef tealNode fill:#0891b222,stroke:#0891b2,stroke-width:2px,color:#0891b2
+  classDef greenNode fill:#05966922,stroke:#059669,stroke-width:2px,color:#059669
+  classDef amberNode fill:#d9770622,stroke:#d97706,stroke-width:2px,color:#d97706
+  classDef roseNode fill:#e11d4822,stroke:#e11d48,stroke-width:2px,color:#e11d48
+`} caption="Architecture: CLI → Gateway → Inference Router + Sandbox Runtime, all inside K3s-in-Docker" />
 
 ---
 
@@ -190,22 +174,20 @@ The most interesting architectural decision: **credential isolation via inferenc
 />
 
 <Mermaid chart={`sequenceDiagram
-  participant Agent as Agent (Sandbox)
+  participant Agent
   participant Router as Privacy Router
-  participant Backend as Backend Credentials
+  participant Inject as Credential Injector
   participant LLM as LLM Provider
 
-  Agent->>Router: API call (no API key)
-  Router->>Router: Strip agent credentials
-  Router->>Router: Match route config
-  Router->>Backend: Resolve API key from env
-  Backend-->>Router: OPENAI_API_KEY=sk-...
-  Router->>LLM: Authenticated request
-  LLM-->>Router: Response
-  Router-->>Agent: Response (key never exposed)
-
-  Note over Agent,LLM: Agent never sees the real API key
-`} caption="Credential isolation: the Privacy Router injects backend credentials per-route" />
+  Agent->>Router: Call LLM API (no API key)
+  Router->>Router: Strip agent creds, resolve route
+  Router->>Inject: Forward with route config
+  Inject->>Inject: Inject OPENAI_API_KEY from env
+  Inject->>LLM: Authenticated request
+  LLM-->>Inject: Response
+  Inject-->>Router: Forward response
+  Router-->>Agent: Clean response (no key exposed)
+`} caption="Credential isolation: the Privacy Router strips agent credentials and injects backend keys per-route" />
 
 <Card>
 ### Route Configuration
