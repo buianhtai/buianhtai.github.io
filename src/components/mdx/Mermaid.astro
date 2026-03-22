@@ -1,0 +1,47 @@
+---
+interface Props {
+  chart: string;
+  caption?: string;
+}
+const { chart, caption } = Astro.props;
+---
+
+<div class="mermaid-container">
+  <div class="mermaid-diagram">
+    <pre class="mermaid">{chart}</pre>
+  </div>
+  {caption && <p class="mermaid-caption">{caption}</p>}
+</div>
+
+<style>
+  .mermaid-container {
+    margin: 1.5rem 0;
+    border: 1px solid var(--color-border);
+    border-radius: 0.75rem;
+    overflow: hidden;
+    background: var(--color-surface);
+  }
+  .mermaid-diagram {
+    padding: 1.5rem;
+    display: flex;
+    justify-content: center;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .mermaid-diagram pre.mermaid {
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    font-size: 0.85rem;
+  }
+  .mermaid-caption {
+    padding: 0.75rem 1.5rem;
+    border-top: 1px solid var(--color-border);
+    font-size: 0.8rem;
+    color: var(--color-text-dim);
+    font-family: 'IBM Plex Mono', monospace;
+    text-align: center;
+    margin: 0;
+  }
+</style>

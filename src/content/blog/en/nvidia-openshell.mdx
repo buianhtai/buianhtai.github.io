@@ -16,6 +16,8 @@ import HeroGrid from '../../../components/mdx/HeroGrid.astro';
 import Callout from '../../../components/mdx/Callout.astro';
 import ArchLayer from '../../../components/mdx/ArchLayer.astro';
 import Pipeline from '../../../components/mdx/Pipeline.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import Mermaid from '../../../components/mdx/Mermaid.astro';
 import PolicyStack from '../../../components/mdx/PolicyStack.astro';
 import ProviderGrid from '../../../components/mdx/ProviderGrid.astro';
 import EnforceRule from '../../../components/mdx/EnforceRule.astro';
@@ -67,6 +69,39 @@ Four layers from CLI to sandboxed execution:
 <Callout color="teal">
 Everything runs as a K3s Kubernetes cluster inside a single Docker container. No separate K8s install needed — scales from a developer laptop to enterprise via Helm charts.
 </Callout>
+
+<Mermaid chart={`flowchart TD
+  CLI["openshell CLI<br/>clap + Python SDK"]
+  GW["Gateway Server<br/>gRPC + HTTP + TLS"]
+  PR["Privacy Router<br/>Credential Isolation"]
+  SB1["Sandbox #1<br/>Agent: Claude Code"]
+  SB2["Sandbox #2<br/>Agent: Codex"]
+  SBN["Sandbox #N<br/>Agent: Custom"]
+  LLM["LLM Providers<br/>OpenAI / Anthropic / Ollama"]
+
+  subgraph K3s["K3s-in-Docker"]
+    GW --> PR
+    GW --> SB1
+    GW --> SB2
+    GW --> SBN
+    PR --> LLM
+  end
+
+  CLI --> GW
+
+  classDef cli fill:#0891b2,stroke:#0891b2,color:#fff
+  classDef gw fill:#059669,stroke:#059669,color:#fff
+  classDef router fill:#d97706,stroke:#d97706,color:#fff
+  classDef sandbox fill:#e11d48,stroke:#e11d48,color:#fff
+  classDef llm fill:#76b900,stroke:#76b900,color:#fff
+  classDef k3s fill:transparent,stroke:#6b7a8d,stroke-dasharray:5 5
+
+  class CLI cli
+  class GW gw
+  class PR router
+  class SB1,SB2,SBN sandbox
+  class LLM llm
+`} caption="Architecture: CLI → Gateway → Router → Sandboxes, all inside K3s-in-Docker" />
 
 ---
 
@@ -154,6 +189,24 @@ The most interesting architectural decision: **credential isolation via inferenc
   footer="The agent never sees the real API key. The router injects backend credentials per-route, enabling multi-provider routing without credential exposure."
 />
 
+<Mermaid chart={`sequenceDiagram
+  participant Agent as Agent (Sandbox)
+  participant Router as Privacy Router
+  participant Backend as Backend Credentials
+  participant LLM as LLM Provider
+
+  Agent->>Router: API call (no API key)
+  Router->>Router: Strip agent credentials
+  Router->>Router: Match route config
+  Router->>Backend: Resolve API key from env
+  Backend-->>Router: OPENAI_API_KEY=sk-...
+  Router->>LLM: Authenticated request
+  LLM-->>Router: Response
+  Router-->>Agent: Response (key never exposed)
+
+  Note over Agent,LLM: Agent never sees the real API key
+`} caption="Credential isolation: the Privacy Router injects backend credentials per-route" />
+
 <Card>
 ### Route Configuration
 
@@ -208,11 +261,28 @@ Adding a new provider: implement the `ProviderPlugin` trait, declare a `SPEC` wi
 
 ---
 
-## <Label color="teal">6</Label> Rust-First Security
+## <Label color="teal">6</Label> Rust Crate Architecture
 
-The entire security boundary is written in Rust — no C dependencies at the enforcement layer:
+Seven workspace crates with clear separation of concerns. All inter-crate communication uses shared types from `openshell-core`:
+
+<DataTable
+  caption="Workspace Crates"
+  accent="teal"
+  headers={["Crate", "Purpose", "Key Dependencies"]}
+  rows={[
+    { "Crate": "openshell-cli", "Purpose": "CLI entry point — command parsing, gateway resolution", "Key Dependencies": "clap, clap_complete" },
+    { "Crate": "openshell-server", "Purpose": "Gateway server — sandbox lifecycle, gRPC + HTTP", "Key Dependencies": "tokio, tonic, axum, rustls" },
+    { "Crate": "openshell-sandbox", "Purpose": "Sandbox runtime — policy enforcement, isolation", "Key Dependencies": "landlock, seccompiler, regorus" },
+    { "Crate": "openshell-core", "Purpose": "Shared types, config, TLS, error handling", "Key Dependencies": "serde, sqlx, rustls" },
+    { "Crate": "openshell-router", "Purpose": "Inference routing — credential injection, model routing", "Key Dependencies": "reqwest, serde_yaml" },
+    { "Crate": "openshell-providers", "Purpose": "AI provider registry — pluggable ProviderPlugin trait", "Key Dependencies": "provider trait, env discovery" },
+    { "Crate": "openshell-tui", "Purpose": "Terminal dashboard — gateway/sandbox monitoring", "Key Dependencies": "ratatui, crossterm" },
+  ]}
+/>
 
 <Card>
+
+The entire security boundary is written in Rust — no C dependencies at the enforcement layer:
 
 ```toml
 # Sandbox enforcement stack
@@ -228,7 +298,7 @@ rustls = "0.23"         # No OpenSSL dependency
 tokio-rustls = "0.26"   # Async TLS
 ```
 
-The gateway server uses `tonic` (gRPC) + `axum` (HTTP), the CLI uses `clap`, and the TUI uses `ratatui` — all pure Rust, compiled to a single binary per component.
+All pure Rust, compiled to a single binary per component. No OpenSSL, no C bindings at the security boundary.
 
 </Card>
 

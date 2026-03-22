@@ -1,0 +1,144 @@
+---
+interface Props {
+  headers: string[];
+  rows: Array<Record<string, string>>;
+  caption?: string;
+  accent?: string;
+}
+
+const { headers, rows, caption, accent = 'teal' } = Astro.props;
+
+const accentColors: Record<string, string> = {
+  teal: 'var(--color-accent)',
+  green: '#059669',
+  amber: '#d97706',
+  rose: '#e11d48',
+  purple: '#7c3aed',
+};
+
+const accentColor = accentColors[accent] || accentColors.teal;
+---
+
+<div class="data-table-wrap">
+  {caption && (
+    <div class="data-table-caption">
+      <span class="data-table-dot" style={`background: ${accentColor};`}></span>
+      {caption}
+    </div>
+  )}
+  <div class="data-table-scroll">
+    <table class="data-table">
+      <thead>
+        <tr>
+          {headers.map((h) => (
+            <th>{h}</th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row, i) => (
+          <tr>
+            {headers.map((h, j) => (
+              <td>
+                {j === 0 ? (
+                  <code class="data-table-code">{row[h]}</code>
+                ) : (
+                  <Fragment set:html={row[h]} />
+                )}
+              </td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<style>
+  .data-table-wrap {
+    margin: 1.5rem 0;
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--color-surface);
+  }
+
+  .data-table-caption {
+    padding: 0.75rem 1.25rem;
+    border-bottom: 1px solid var(--color-border);
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--color-text);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+
+  .data-table-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .data-table-scroll {
+    overflow-x: auto;
+  }
+
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+  }
+
+  .data-table th {
+    text-align: left;
+    padding: 0.65rem 1.25rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-dim);
+    border-bottom: 1px solid var(--color-border);
+    font-family: 'IBM Plex Mono', monospace;
+    white-space: nowrap;
+  }
+
+  .data-table td {
+    padding: 0.6rem 1.25rem;
+    border-bottom: 1px solid var(--color-border);
+    color: var(--color-text);
+    line-height: 1.5;
+  }
+
+  .data-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .data-table tbody tr:nth-child(even) {
+    background: rgba(0, 0, 0, 0.015);
+  }
+
+  :global(.dark) .data-table tbody tr:nth-child(even) {
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  .data-table tbody tr:hover {
+    background: rgba(0, 0, 0, 0.03);
+  }
+
+  :global(.dark) .data-table tbody tr:hover {
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  .data-table-code {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.8rem;
+    background: var(--color-bg);
+    padding: 0.15rem 0.45rem;
+    border-radius: 4px;
+    border: 1px solid var(--color-border);
+    white-space: nowrap;
+  }
+</style>
