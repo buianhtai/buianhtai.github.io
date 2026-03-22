@@ -1,0 +1,78 @@
+---
+import type { CollectionEntry } from 'astro:content';
+import BaseLayout from './BaseLayout.astro';
+import ReadingTime from '../components/ReadingTime.astro';
+import TableOfContents from '../components/TableOfContents.astro';
+import Giscus from '../components/Giscus.astro';
+
+interface Props {
+  post: CollectionEntry<'blog'>;
+  headings: { depth: number; slug: string; text: string }[];
+  rawContent: string;
+}
+
+const { post, headings, rawContent } = Astro.props;
+const { title, description, pubDate, updatedDate, tags, lang, heroImage } = post.data;
+
+const dateFmt = (d: Date) =>
+  d.toLocaleDateString(lang === 'vi' ? 'vi-VN' : 'en-US', {
+    year: 'numeric', month: 'long', day: 'numeric',
+  });
+---
+
+<BaseLayout title={title} description={description} lang={lang} ogImage={heroImage}>
+  <article class="max-w-3xl mx-auto px-4 py-12">
+    <header class="mb-10">
+      <div class="flex items-center gap-3 text-sm text-[var(--color-text-dim)] mb-4">
+        <time datetime={pubDate.toISOString()}>{dateFmt(pubDate)}</time>
+        {updatedDate && <span>· Updated {dateFmt(updatedDate)}</span>}
+        <span>·</span>
+        <ReadingTime content={rawContent} lang={lang} />
+      </div>
+
+      <h1 class="text-3xl md:text-4xl font-bold mb-4">{title}</h1>
+      <p class="text-lg text-[var(--color-text-dim)]">{description}</p>
+
+      {tags.length > 0 && (
+        <div class="flex flex-wrap gap-2 mt-4">
+          {tags.map(tag => (
+            <a href={`/${lang}/tags/${tag}`}
+               class="text-xs font-mono px-2 py-1 rounded bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-dim)] hover:text-[var(--color-accent)] transition-colors">
+              #{tag}
+            </a>
+          ))}
+        </div>
+      )}
+    </header>
+
+    {heroImage && (
+      <img src={heroImage} alt={title} class="w-full rounded-lg mb-10" loading="eager" />
+    )}
+
+    <TableOfContents headings={headings} />
+
+    <div class="prose prose-invert prose-lg max-w-none
+      prose-headings:font-bold
+      prose-a:text-[var(--color-accent)] prose-a:no-underline hover:prose-a:underline
+      prose-code:bg-[var(--color-surface)] prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-sm
+      prose-pre:bg-[#1a1b26] prose-pre:rounded-lg">
+      <slot />
+    </div>
+
+    <footer class="mt-12 pt-6 border-t border-[var(--color-border)] flex items-center justify-between">
+      <div class="flex flex-wrap gap-2">
+        {tags.map(tag => (
+          <a href={`/${lang}/tags/${tag}`}
+             class="text-xs font-mono px-2 py-1 rounded bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-dim)] hover:text-[var(--color-accent)]">
+            #{tag}
+          </a>
+        ))}
+      </div>
+      <a href={`/${lang}/blog`} class="text-sm text-[var(--color-accent)] hover:underline">
+        {lang === 'vi' ? '← Về blog' : '← Back to blog'}
+      </a>
+    </footer>
+
+    <Giscus />
+  </article>
+</BaseLayout>

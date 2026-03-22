@@ -1,0 +1,14 @@
+---
+const year = new Date().getFullYear();
+---
+
+<footer class="border-t border-[var(--color-border)] py-8 mt-16">
+  <div class="max-w-4xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-[var(--color-text-dim)]">
+    <p>&copy; {year} Tai Bui. Built with Astro.</p>
+    <div class="flex gap-4">
+      <a href="https://github.com/buianhtai" class="hover:text-[var(--color-text)] transition-colors">GitHub</a>
+      <a href="https://twitter.com/buianhtai90" class="hover:text-[var(--color-text)] transition-colors">X</a>
+      <a href="/rss.xml" class="hover:text-[var(--color-text)] transition-colors">RSS</a>
+    </div>
+  </div>
+</footer>

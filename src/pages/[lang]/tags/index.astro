@@ -1,0 +1,28 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+
+export function getStaticPaths() {
+  return [{ params: { lang: 'en' } }, { params: { lang: 'vi' } }];
+}
+
+const { lang } = Astro.params;
+const posts = await getCollection('blog', (p) => p.data.lang === lang && !p.data.draft);
+const tagCounts = new Map<string, number>();
+posts.forEach(p => p.data.tags.forEach(t => tagCounts.set(t, (tagCounts.get(t) || 0) + 1)));
+const tags = [...tagCounts.entries()].sort((a, b) => b[1] - a[1]);
+---
+
+<BaseLayout title="Tags" lang={lang}>
+  <div class="max-w-3xl mx-auto px-4 py-12">
+    <h1 class="text-3xl font-bold mb-8">Tags</h1>
+    <div class="flex flex-wrap gap-3">
+      {tags.map(([tag, count]) => (
+        <a href={`/${lang}/tags/${tag}`}
+           class="px-3 py-1.5 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] text-sm font-mono hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] transition-colors">
+          #{tag} <span class="text-[var(--color-text-dim)]">({count})</span>
+        </a>
+      ))}
+    </div>
+  </div>
+</BaseLayout>

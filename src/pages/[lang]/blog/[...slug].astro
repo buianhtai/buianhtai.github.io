@@ -1,0 +1,23 @@
+---
+import { getCollection, render } from 'astro:content';
+import BlogPost from '../../../layouts/BlogPost.astro';
+
+export async function getStaticPaths() {
+  const posts = await getCollection('blog');
+  return posts.map(post => {
+    const [lang, ...slugParts] = post.id.split('/');
+    return {
+      params: { lang, slug: slugParts.join('/').replace(/\.(md|mdx)$/, '') },
+      props: { post },
+    };
+  });
+}
+
+const { post } = Astro.props;
+const { Content, headings } = await render(post);
+const rawContent = post.body || '';
+---
+
+<BlogPost post={post} headings={headings} rawContent={rawContent}>
+  <Content />
+</BlogPost>

@@ -1,0 +1,82 @@
+---
+title: "Building a Three-Layer Memory System for AI Agents"
+description: "How GoClaw stores and retrieves knowledge using PostgreSQL, pgvector, and LLM-extracted knowledge graphs — a deep dive into the architecture behind persistent AI memory."
+pubDate: 2026-03-22
+tags: ["ai", "golang", "postgresql", "architecture"]
+lang: "en"
+---
+
+# Building a Three-Layer Memory System for AI Agents
+
+Most AI agents are stateless. They forget everything the moment a conversation ends. GoClaw takes a different approach — it gives every agent a durable, searchable memory that survives across sessions, users, and even compaction cycles.
+
+The system has three layers, all backed by PostgreSQL.
+
+## 1. Memory Store — Documents, Chunks, Embeddings
+
+The foundation is a document store. Agents write markdown files (think `MEMORY.md` or dated notes like `memory/2026-03-22.md`), and these get chunked at paragraph boundaries, embedded via an OpenAI-compatible API, and indexed for hybrid search.
+
+Every document is scoped to `(agent_id, user_id)` for multi-tenant isolation. An agent's global memories use `user_id = NULL`; personal memories are keyed to a channel identity like `telegram:12345`.
+
+The search pipeline runs **two queries in parallel**:
+
+- **Vector search** — cosine similarity against `memory_chunks.embedding` using an HNSW index on `vector(1536)` columns
+- **Full-text search** — PostgreSQL `tsvector` with the `'simple'` config (no stemming, so it works for Vietnamese and other non-English text)
+
+Results are fused with configurable `VectorWeight` and `TextWeight` per agent, filtered by a `MinScore` threshold.
+
+```go
+type MemoryStore interface {
+    PutDocument(ctx, agentID, userID, path, content)
+    Search(ctx, query, agentID, userID, opts) []SearchResult
+    IndexDocument(ctx, agentID, userID, path)
+}
+```
+
+The embedding layer uses an `EmbeddingProvider` interface — pluggable for OpenAI, Voyage, or Ollama. An `embedding_cache` table deduplicates by content hash, so identical text is never re-embedded.
+
+## 2. Knowledge Graph — Entities and Relations
+
+Raw memory is good for recall, but it doesn't capture *relationships*. GoClaw extracts a property graph from conversation text using an LLM pipeline.
+
+The schema is simple — two tables in PostgreSQL (not Neo4j):
+
+- **`kg_entities`** — external_id, name, entity_type (person/project/task/event/concept/location/organization), description, confidence score, JSONB properties
+- **`kg_relations`** — source → relation_type → target, with confidence and a unique constraint on `(agent_id, user_id, source, type, target)`
+
+The extraction pipeline:
+
+1. **Chunk** long text at paragraph boundaries (max 12k chars)
+2. **LLM extract** — structured prompt defines 7 entity types and 15 relation types. Temperature=0, max_tokens=8192. Returns JSON.
+3. **Filter** — drop entities below `minConfidence` (default 0.75). Cross-chunk dedup by `external_id`.
+4. **Upsert** — `IngestExtraction()` bulk-upserts into PostgreSQL.
+
+Graph queries support text search on entity names and BFS traversal up to depth 3. `PruneByConfidence()` garbage-collects low-quality extractions.
+
+## 3. Session History — Compaction and Memory Flush
+
+Sessions store the full message array as JSONB, plus metadata: token counts, model/provider, compaction count, and spawn chain tracking for agent delegation.
+
+The interesting part is the **compaction cycle**. When a session approaches the context window limit:
+
+1. **Memory flush** — a pre-compaction step that sends a flush prompt to the LLM with file tools enabled. The agent writes durable memories to `memory/*.md`. If the LLM fails or returns `NO_REPLY`, a regex-based fallback extracts decisions, preferences, technical facts, URLs, and dates.
+2. **Compaction** — history is summarized into `session.summary`, old messages truncated. The summary is injected as context in future turns.
+3. **Indexing** — flushed documents are chunked, embedded, and stored with both vector and tsvector indexes.
+
+A `memory_flush_compaction_count` field prevents duplicate flushes within the same compaction cycle.
+
+## How They Connect
+
+During every agent turn, the three systems interact through the tool layer:
+
+- **Recall** — agent calls `memory_search` for hybrid retrieval, `knowledge_graph_search` for entity/relationship queries
+- **Conversation** — messages accumulate in the session, token counts tracked
+- **Persist** — on compaction trigger, memory flush writes documents, KG extractor runs on flushed content
+
+Separate from memory, `agent_context_files` and `user_context_files` are injected into the system prompt on every turn — think `AGENTS.md` for the agent and `USER.md` for the user.
+
+## Why PostgreSQL?
+
+One database for everything: documents, embeddings, knowledge graph, sessions, and context files. No Redis, no Neo4j, no Pinecone. pgvector handles similarity search. tsvector handles full-text. JSONB handles schema-flexible metadata. The operational complexity stays low.
+
+The tradeoff is scale — this architecture works for thousands of agents with millions of memories, but not billions. For a self-hosted AI agent platform, that's the right tradeoff.

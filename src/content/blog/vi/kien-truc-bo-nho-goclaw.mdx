@@ -1,0 +1,56 @@
+---
+title: "Xây Dựng Hệ Thống Bộ Nhớ Ba Tầng Cho AI Agent"
+description: "GoClaw lưu trữ và truy xuất kiến thức như thế nào với PostgreSQL, pgvector, và knowledge graph — phân tích sâu kiến trúc bộ nhớ bền vững cho AI."
+pubDate: 2026-03-22
+tags: ["ai", "golang", "postgresql", "architecture"]
+lang: "vi"
+---
+
+# Xây Dựng Hệ Thống Bộ Nhớ Ba Tầng Cho AI Agent
+
+Phần lớn AI agent là stateless — chúng quên mọi thứ khi cuộc hội thoại kết thúc. GoClaw chọn hướng tiếp cận khác: mỗi agent có một bộ nhớ bền vững, có thể tìm kiếm, tồn tại xuyên suốt các phiên, người dùng, và cả các chu kỳ nén.
+
+Hệ thống gồm ba tầng, tất cả đều dựa trên PostgreSQL.
+
+## 1. Memory Store — Tài Liệu, Chunk, và Embedding
+
+Nền tảng là một document store. Agent ghi các file markdown (ví dụ `MEMORY.md` hoặc ghi chú theo ngày `memory/2026-03-22.md`), sau đó được chia chunk theo đoạn văn, nhúng embedding qua API tương thích OpenAI, và lập chỉ mục cho tìm kiếm lai.
+
+Mỗi tài liệu được phân quyền theo `(agent_id, user_id)` cho multi-tenant. Bộ nhớ chung dùng `user_id = NULL`; bộ nhớ cá nhân được gắn với danh tính kênh như `telegram:12345`.
+
+Pipeline tìm kiếm chạy **hai truy vấn song song**:
+
+- **Vector search** — cosine similarity trên `memory_chunks.embedding` sử dụng HNSW index trên cột `vector(1536)`
+- **Full-text search** — PostgreSQL `tsvector` với config `'simple'` (không stemming, hoạt động tốt với tiếng Việt)
+
+Kết quả được hợp nhất với `VectorWeight` và `TextWeight` có thể cấu hình theo agent, lọc qua ngưỡng `MinScore`.
+
+## 2. Knowledge Graph — Thực Thể và Quan Hệ
+
+Bộ nhớ thô tốt cho việc recall, nhưng không nắm bắt được *mối quan hệ*. GoClaw trích xuất property graph từ văn bản hội thoại bằng LLM pipeline.
+
+Schema đơn giản — hai bảng trong PostgreSQL (không phải Neo4j):
+
+- **`kg_entities`** — external_id, name, entity_type (person/project/task/event/concept/location/organization), description, confidence score
+- **`kg_relations`** — source → relation_type → target, với confidence và unique constraint
+
+Pipeline trích xuất:
+
+1. **Chunk** văn bản dài tại ranh giới đoạn (tối đa 12k ký tự)
+2. **LLM extract** — prompt cấu trúc định nghĩa 7 loại entity và 15 loại relation. Temperature=0.
+3. **Filter** — loại bỏ entity dưới `minConfidence` (mặc định 0.75). Dedup cross-chunk theo `external_id`.
+4. **Upsert** — `IngestExtraction()` bulk-upsert vào PostgreSQL.
+
+## 3. Session History — Nén và Flush Bộ Nhớ
+
+Session lưu toàn bộ mảng message dạng JSONB, cùng metadata: token count, model/provider, compaction count, và spawn chain tracking.
+
+Phần thú vị là **chu kỳ nén**. Khi session tiến gần giới hạn context window:
+
+1. **Memory flush** — gửi flush prompt tới LLM với file tools. Agent ghi bộ nhớ bền vào `memory/*.md`. Nếu LLM thất bại, fallback regex trích xuất quyết định, sở thích, dữ kiện kỹ thuật.
+2. **Compaction** — lịch sử được tóm tắt vào `session.summary`, tin nhắn cũ bị cắt bớt.
+3. **Indexing** — tài liệu flush được chunk, nhúng embedding, và lưu với cả vector và tsvector index.
+
+## Tại Sao PostgreSQL?
+
+Một database cho mọi thứ: tài liệu, embedding, knowledge graph, session, và context file. Không cần Redis, Neo4j, hay Pinecone. pgvector xử lý tìm kiếm tương đồng. tsvector xử lý full-text. JSONB xử lý metadata linh hoạt. Độ phức tạp vận hành được giữ ở mức thấp.

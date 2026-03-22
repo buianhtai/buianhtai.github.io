@@ -1,0 +1,22 @@
+---
+import ThemeToggle from './ThemeToggle.astro';
+const { lang = 'en' } = Astro.props;
+const otherLang = lang === 'en' ? 'vi' : 'en';
+const langLabel = lang === 'en' ? '🇻🇳 VI' : '🇬🇧 EN';
+const currentPath = Astro.url.pathname;
+const switchedPath = currentPath.replace(`/${lang}/`, `/${otherLang}/`);
+---
+
+<header class="border-b border-[var(--color-border)] sticky top-0 z-50 backdrop-blur-md bg-[var(--color-bg)]/80">
+  <nav class="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
+    <a href={`/${lang}/`} class="text-lg font-bold font-mono text-[var(--color-accent)]">
+      tai.bui
+    </a>
+    <div class="flex items-center gap-4">
+      <a href={`/${lang}/blog`} class="text-sm text-[var(--color-text-dim)] hover:text-[var(--color-text)] transition-colors">Blog</a>
+      <a href={`/${lang}/tags`} class="text-sm text-[var(--color-text-dim)] hover:text-[var(--color-text)] transition-colors">Tags</a>
+      <a href={switchedPath} class="text-sm text-[var(--color-text-dim)] hover:text-[var(--color-text)] transition-colors">{langLabel}</a>
+      <ThemeToggle />
+    </div>
+  </nav>
+</header>

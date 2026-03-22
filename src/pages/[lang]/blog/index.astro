@@ -1,0 +1,40 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+
+export function getStaticPaths() {
+  return [{ params: { lang: 'en' } }, { params: { lang: 'vi' } }];
+}
+
+const { lang } = Astro.params;
+const posts = (await getCollection('blog', (p) => p.data.lang === lang && !p.data.draft))
+  .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
+---
+
+<BaseLayout title={lang === 'vi' ? 'Tat ca bai viet' : 'All Posts'} lang={lang}>
+  <div class="max-w-3xl mx-auto px-4 py-12">
+    <h1 class="text-3xl font-bold mb-8">{lang === 'vi' ? 'Tat ca bai viet' : 'All Posts'}</h1>
+    <ul class="space-y-4">
+      {posts.map(post => {
+        const [, ...slugParts] = post.id.split('/');
+        const slug = slugParts.join('/').replace(/\.(md|mdx)$/, '');
+        return (
+          <li>
+            <a href={`/${lang}/blog/${slug}`} class="group block p-4 -mx-4 rounded-lg hover:bg-[var(--color-surface)] transition-colors">
+              <div class="flex items-baseline justify-between gap-4">
+                <h2 class="font-semibold group-hover:text-[var(--color-accent)] transition-colors">{post.data.title}</h2>
+                <time class="text-xs text-[var(--color-text-dim)] font-mono shrink-0">{post.data.pubDate.toISOString().slice(0, 10)}</time>
+              </div>
+              <p class="text-sm text-[var(--color-text-dim)] mt-1">{post.data.description}</p>
+              <div class="flex gap-2 mt-2">
+                {post.data.tags.map(tag => (
+                  <span class="text-xs font-mono text-[var(--color-text-dim)]">#{tag}</span>
+                ))}
+              </div>
+            </a>
+          </li>
+        );
+      })}
+    </ul>
+  </div>
+</BaseLayout>
