@@ -1,0 +1,118 @@
+---
+interface Provider {
+  name: string;
+  envVar: string;
+  status: 'base' | 'community' | 'extensible';
+}
+
+interface Props {
+  providers: Provider[];
+}
+
+const { providers } = Astro.props;
+
+const statusConfig = {
+  base: {
+    bg: 'rgba(5,150,105,0.12)',
+    fg: '#059669',
+    label: 'Base',
+  },
+  community: {
+    bg: 'rgba(217,119,6,0.12)',
+    fg: '#d97706',
+    label: 'Community',
+  },
+  extensible: {
+    bg: 'rgba(8,145,178,0.12)',
+    fg: '#0891b2',
+    label: 'Extensible',
+  },
+};
+---
+
+<div class="provider-grid">
+  {providers.map((provider) => {
+    const cfg = statusConfig[provider.status];
+    return (
+      <div class="provider-card">
+        <div class="provider-name">{provider.name}</div>
+        <code class="provider-env">{provider.envVar}</code>
+        <span
+          class="provider-status"
+          style={`background: ${cfg.bg}; color: ${cfg.fg};`}
+        >
+          {cfg.label}
+        </span>
+      </div>
+    );
+  })}
+</div>
+
+<style>
+  .provider-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.625rem;
+    margin: 1rem 0;
+  }
+
+  .provider-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+    padding: 0.875rem 1rem;
+    border: 1px solid var(--color-border);
+    border-radius: 0.5rem;
+    background: var(--color-surface);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .provider-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  }
+
+  .provider-name {
+    font-weight: 700;
+    font-size: 0.875rem;
+    color: var(--color-text);
+  }
+
+  .provider-env {
+    font-family: 'IBM Plex Mono', 'Fira Code', monospace;
+    font-size: 0.7rem;
+    padding: 0.2rem 0.5rem;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 0.25rem;
+    color: var(--color-accent);
+    width: fit-content;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+
+  .provider-status {
+    font-family: 'IBM Plex Mono', 'Fira Code', monospace;
+    font-size: 0.6rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 0.125rem 0.5rem;
+    border-radius: 9999px;
+    width: fit-content;
+  }
+
+  @media (max-width: 768px) {
+    .provider-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  @media (max-width: 480px) {
+    .provider-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

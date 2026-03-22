@@ -1,0 +1,178 @@
+---
+interface Rule {
+  action: string;
+  method: string;
+  allowed: boolean;
+}
+
+interface Props {
+  rules: Rule[];
+}
+
+const { rules } = Astro.props;
+
+const methodColors: Record<string, { bg: string; fg: string }> = {
+  GET:    { bg: 'rgba(5,150,105,0.12)',  fg: '#059669' },
+  POST:   { bg: 'rgba(217,119,6,0.12)',  fg: '#d97706' },
+  PUT:    { bg: 'rgba(217,119,6,0.12)',  fg: '#d97706' },
+  DELETE: { bg: 'rgba(190,18,60,0.12)',  fg: '#be123c' },
+  PATCH:  { bg: 'rgba(8,145,178,0.12)',  fg: '#0891b2' },
+};
+
+const fallbackMethod = { bg: 'rgba(148,163,184,0.12)', fg: '#94a3b8' };
+---
+
+<div class="enforce-container">
+  <div class="enforce-header">
+    <span class="enforce-header-cell enforce-col-method">Method</span>
+    <span class="enforce-header-cell enforce-col-action">Action</span>
+    <span class="enforce-header-cell enforce-col-status">Status</span>
+  </div>
+  {rules.map((rule) => {
+    const mc = methodColors[rule.method.toUpperCase()] || fallbackMethod;
+    return (
+      <div class:list={['enforce-row', rule.allowed ? 'enforce-allowed' : 'enforce-denied']}>
+        <span
+          class="enforce-method"
+          style={`background: ${mc.bg}; color: ${mc.fg};`}
+        >
+          {rule.method.toUpperCase()}
+        </span>
+        <span class="enforce-action">{rule.action}</span>
+        <span class="enforce-status">
+          {rule.allowed ? (
+            <span class="enforce-icon enforce-icon-allow">✓</span>
+          ) : (
+            <span class="enforce-icon enforce-icon-deny">✕</span>
+          )}
+          <span class="enforce-label">
+            {rule.allowed ? 'Allowed' : 'Denied'}
+          </span>
+        </span>
+      </div>
+    );
+  })}
+</div>
+
+<style>
+  .enforce-container {
+    border: 1px solid var(--color-border);
+    border-radius: 0.5rem;
+    overflow: hidden;
+    margin: 1rem 0;
+  }
+
+  .enforce-header {
+    display: flex;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+    gap: 1rem;
+  }
+
+  .enforce-header-cell {
+    font-family: 'IBM Plex Mono', 'Fira Code', monospace;
+    font-size: 0.6rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-text-dim);
+    opacity: 0.7;
+  }
+
+  .enforce-col-method { width: 5rem; flex-shrink: 0; }
+  .enforce-col-action { flex: 1; }
+  .enforce-col-status { width: 6rem; flex-shrink: 0; text-align: right; }
+
+  .enforce-row {
+    display: flex;
+    align-items: center;
+    padding: 0.625rem 1rem;
+    gap: 1rem;
+    border-bottom: 1px solid var(--color-border);
+    transition: background 0.1s ease;
+  }
+
+  .enforce-row:last-child {
+    border-bottom: none;
+  }
+
+  .enforce-row:hover {
+    background: var(--color-surface);
+  }
+
+  .enforce-method {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 5rem;
+    flex-shrink: 0;
+    padding: 0.2rem 0;
+    border-radius: 0.25rem;
+    font-family: 'IBM Plex Mono', 'Fira Code', monospace;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-align: center;
+  }
+
+  .enforce-action {
+    flex: 1;
+    font-size: 0.8rem;
+    color: var(--color-text);
+  }
+
+  .enforce-status {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.375rem;
+    width: 6rem;
+    flex-shrink: 0;
+  }
+
+  .enforce-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.25rem;
+    height: 1.25rem;
+    border-radius: 9999px;
+    font-size: 0.65rem;
+    font-weight: 700;
+  }
+
+  .enforce-icon-allow {
+    background: rgba(5,150,105,0.15);
+    color: #059669;
+  }
+
+  .enforce-icon-deny {
+    background: rgba(190,18,60,0.15);
+    color: #be123c;
+  }
+
+  .enforce-label {
+    font-family: 'IBM Plex Mono', 'Fira Code', monospace;
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .enforce-allowed .enforce-label { color: #059669; }
+  .enforce-denied .enforce-label { color: #be123c; }
+
+  @media (max-width: 480px) {
+    .enforce-header { display: none; }
+
+    .enforce-row {
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .enforce-method { width: auto; }
+    .enforce-status { width: auto; margin-left: auto; }
+  }
+</style>

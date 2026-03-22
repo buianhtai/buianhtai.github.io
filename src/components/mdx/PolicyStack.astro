@@ -1,0 +1,174 @@
+---
+interface Layer {
+  name: string;
+  scope: 'kernel' | 'userspace';
+  controls: string;
+  example: string;
+}
+
+interface Props {
+  layers: Layer[];
+}
+
+const { layers } = Astro.props;
+
+const scopeConfig = {
+  kernel: {
+    border: '#be123c',
+    bg: 'rgba(190,18,60,0.06)',
+    pillBg: 'rgba(190,18,60,0.12)',
+    pillFg: '#be123c',
+  },
+  userspace: {
+    border: '#d97706',
+    bg: 'transparent',
+    pillBg: 'rgba(217,119,6,0.12)',
+    pillFg: '#d97706',
+  },
+};
+---
+
+<div class="policy-stack">
+  {layers.map((layer, i) => {
+    const cfg = scopeConfig[layer.scope];
+    const isFirst = i === 0;
+    const isLast = i === layers.length - 1;
+
+    const radius = [
+      isFirst ? '0.5rem' : '0',
+      isFirst ? '0.5rem' : '0',
+      isLast ? '0.5rem' : '0',
+      isLast ? '0.5rem' : '0',
+    ].join(' ');
+
+    return (
+      <div
+        class="policy-layer"
+        style={`border-left-color: ${cfg.border}; background: ${cfg.bg}; border-radius: ${radius}; ${!isLast ? 'border-bottom-color: transparent;' : ''}`}
+      >
+        <div class="policy-header">
+          <span
+            class="policy-number"
+            style={`background: ${cfg.pillBg}; color: ${cfg.pillFg};`}
+          >
+            {i + 1}
+          </span>
+          <span class="policy-name">{layer.name}</span>
+          <span
+            class="policy-scope"
+            style={`background: ${cfg.pillBg}; color: ${cfg.pillFg};`}
+          >
+            {layer.scope.toUpperCase()}
+          </span>
+        </div>
+        <div class="policy-meta">
+          <div class="policy-meta-item">
+            <span class="policy-meta-label">Controls</span>
+            <span class="policy-meta-value">{layer.controls}</span>
+          </div>
+          <div class="policy-meta-item">
+            <span class="policy-meta-label">Example</span>
+            <span class="policy-meta-value">{layer.example}</span>
+          </div>
+        </div>
+      </div>
+    );
+  })}
+</div>
+
+<style>
+  .policy-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin: 1rem 0;
+    border: 1px solid var(--color-border);
+    border-radius: 0.5rem;
+    overflow: hidden;
+  }
+
+  .policy-layer {
+    border-left: 3px solid;
+    border-bottom: 1px solid var(--color-border);
+    padding: 0.875rem 1rem;
+    transition: background 0.15s ease;
+  }
+
+  .policy-layer:last-child {
+    border-bottom: none;
+  }
+
+  .policy-header {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .policy-number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 9999px;
+    font-family: 'IBM Plex Mono', 'Fira Code', monospace;
+    font-size: 0.7rem;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  .policy-name {
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: var(--color-text);
+    letter-spacing: -0.01em;
+  }
+
+  .policy-scope {
+    padding: 0.125rem 0.5rem;
+    border-radius: 9999px;
+    font-family: 'IBM Plex Mono', 'Fira Code', monospace;
+    font-size: 0.6rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .policy-meta {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.375rem 1.5rem;
+    padding-left: 2.125rem;
+  }
+
+  .policy-meta-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+  }
+
+  .policy-meta-label {
+    font-family: 'IBM Plex Mono', 'Fira Code', monospace;
+    font-size: 0.6rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-text-dim);
+    opacity: 0.7;
+  }
+
+  .policy-meta-value {
+    font-size: 0.775rem;
+    color: var(--color-text-dim);
+    line-height: 1.4;
+  }
+
+  @media (max-width: 480px) {
+    .policy-meta {
+      grid-template-columns: 1fr;
+      padding-left: 0;
+      margin-top: 0.25rem;
+    }
+  }
+</style>

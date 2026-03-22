@@ -16,6 +16,9 @@ import HeroGrid from '../../../components/mdx/HeroGrid.astro';
 import Callout from '../../../components/mdx/Callout.astro';
 import ArchLayer from '../../../components/mdx/ArchLayer.astro';
 import Pipeline from '../../../components/mdx/Pipeline.astro';
+import PolicyStack from '../../../components/mdx/PolicyStack.astro';
+import ProviderGrid from '../../../components/mdx/ProviderGrid.astro';
+import EnforceRule from '../../../components/mdx/EnforceRule.astro';
 
 Give an AI coding agent access to your terminal and it can do extraordinary work. It can also `rm -rf /`, exfiltrate your API keys via a crafted HTTP request, or push secrets to a public repo. The problem isn't the agent's intent — it's the **absence of a security boundary**.
 
@@ -105,26 +108,30 @@ L7 enforcement: not just "can this host be reached" but "can this HTTP method hi
 
 </Card>
 
-<Card>
+**What this looks like in practice** — a read-only GitHub policy enforces method-level access:
+
+<EnforceRule rules={[
+  { action: "List repositories", method: "GET", allowed: true },
+  { action: "Create repository", method: "POST", allowed: false },
+  { action: "Delete repository", method: "DELETE", allowed: false },
+  { action: "Read pull requests", method: "GET", allowed: true },
+  { action: "Merge pull request", method: "PUT", allowed: false },
+]} />
+
 ### Multi-Layer Enforcement Stack
 
-<FlowStep step={1} color="amber" title="Landlock — Filesystem">
-Kernel-level filesystem access control. Read-only mounts, write restrictions, path-level granularity. No userspace bypass possible.
-</FlowStep>
+Four layers of defense, from kernel to application — each one narrows the attack surface:
 
-<FlowStep step={2} color="amber" title="seccomp — Syscalls">
-Syscall allowlisting at the kernel level. Only permitted syscalls execute — everything else is blocked before it reaches the kernel.
-</FlowStep>
+<PolicyStack layers={[
+  { name: "Landlock", scope: "kernel", controls: "Filesystem access", example: "/usr read-only, /sandbox read-write" },
+  { name: "seccomp", scope: "kernel", controls: "Syscall filtering", example: "Only allowlisted syscalls execute" },
+  { name: "Regorus / OPA", scope: "userspace", controls: "Network policies", example: "HTTP method + path + host rules" },
+  { name: "L7 Proxy", scope: "userspace", controls: "HTTP inspection", example: "GET allowed, POST blocked per-route" },
+]} />
 
-<FlowStep step={3} color="amber" title="Regorus/OPA — Network">
-Rego policy evaluation for HTTP requests. Method + path + host matching with allow/deny decisions. Written in Rust (Regorus) for smaller binary and faster startup than full OPA.
-</FlowStep>
-
-<FlowStep step={4} color="amber" title="L7 Proxy — HTTP">
-HTTP-level inspection: method, path, headers. The proxy sits between the sandbox and the network — every outbound request is evaluated against the policy.
-</FlowStep>
-
-</Card>
+<Callout color="amber">
+Kernel layers (Landlock, seccomp) cannot be bypassed from userspace — even if an agent compromises the application, the kernel-level restrictions remain intact.
+</Callout>
 
 ---
 
@@ -186,17 +193,18 @@ fn discover_existing(&self) -> Result<Option<DiscoveredProvider>> {
 }
 ```
 
-| Provider | Credential | Status |
-|----------|-----------|--------|
-| Claude Code | `ANTHROPIC_API_KEY` | Base |
-| OpenAI / Codex | `OPENAI_API_KEY` | Base |
-| Copilot CLI | `GITHUB_TOKEN` | Base |
-| OpenRouter | `OPENROUTER_API_KEY` | Base |
-| Ollama | Local | Community |
-
 Adding a new provider: implement the `ProviderPlugin` trait, declare a `SPEC` with credential env vars, and register in `mod.rs`.
 
 </Card>
+
+<ProviderGrid providers={[
+  { name: "Claude Code", envVar: "ANTHROPIC_API_KEY", status: "base" },
+  { name: "OpenAI / Codex", envVar: "OPENAI_API_KEY", status: "base" },
+  { name: "Copilot CLI", envVar: "GITHUB_TOKEN", status: "base" },
+  { name: "OpenRouter", envVar: "OPENROUTER_API_KEY", status: "base" },
+  { name: "Ollama", envVar: "Local", status: "community" },
+  { name: "Custom", envVar: "ProviderPlugin trait", status: "extensible" },
+]} />
 
 ---
 
