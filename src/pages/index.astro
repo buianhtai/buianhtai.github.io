@@ -1,23 +1,221 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import { getCollection } from 'astro:content';
+import { getPostSlug } from '../lib/posts';
+
+const allPosts = await getCollection('blog');
+const recentPosts = allPosts
+  .sort((a, b) => new Date(b.data.pubDate).getTime() - new Date(a.data.pubDate).getTime())
+  .slice(0, 4);
+
+const techStack = ['Java', 'Go', 'PostgreSQL', 'Docker', 'Kubernetes', 'AWS', 'AI/LLM'];
+const goclawTech = ['Go', 'PostgreSQL', 'Docker', 'OpenTelemetry'];
 ---
 
-<BaseLayout title="tai.bui" lang="en">
-  <div class="min-h-[60vh] flex items-center justify-center">
-    <div class="text-center px-4">
-      <h1 class="text-4xl font-bold mb-2 font-mono text-[var(--color-accent)]">tai.bui</h1>
-      <p class="text-[var(--color-text-dim)] mb-6">Redirecting to your language...</p>
-      <noscript>
-        <div class="flex gap-4 justify-center">
-          <a href="/en/" class="px-6 py-3 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] hover:border-[var(--color-accent)] transition-colors">🇬🇧 English</a>
-          <a href="/vi/" class="px-6 py-3 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] hover:border-[var(--color-accent)] transition-colors">🇻🇳 Tiếng Việt</a>
-        </div>
-      </noscript>
-    </div>
-  </div>
-</BaseLayout>
+<BaseLayout title="tai.bui">
 
-<script is:inline>
-  const lang = (navigator.language || '').startsWith('vi') ? 'vi' : 'en';
-  window.location.replace('/' + lang + '/');
-</script>
+  <!-- SECTION 1: Terminal Hero -->
+  <section class="py-16 md:py-24">
+    <div class="max-w-3xl mx-auto px-4">
+      <div class="terminal rounded-lg border border-[var(--color-border)] overflow-hidden shadow-lg shadow-black/20">
+        <!-- Title bar -->
+        <div class="flex items-center gap-2 px-4 py-3 border-b border-[var(--color-border)] bg-[var(--color-surface)]">
+          <span class="w-3 h-3 rounded-full bg-[#ef4444]"></span>
+          <span class="w-3 h-3 rounded-full bg-[#eab308]"></span>
+          <span class="w-3 h-3 rounded-full bg-[#22c55e]"></span>
+          <span class="ml-3 text-xs text-[var(--color-text-dim)] font-mono">~/tai.bui</span>
+        </div>
+        <!-- Terminal body -->
+        <div class="p-6 font-mono text-sm leading-relaxed" style="background: rgba(0,0,0,0.3);">
+          <div class="mb-4">
+            <span class="text-[var(--color-accent)]">$</span>
+            <span class="text-[var(--color-text-dim)]"> whoami</span>
+            <div class="text-[var(--color-text)] mt-1">tai.bui</div>
+          </div>
+          <div class="mb-4">
+            <span class="text-[var(--color-accent)]">$</span>
+            <span class="text-[var(--color-text-dim)]"> cat role.txt</span>
+            <div class="text-[var(--color-text)] mt-1">Backend Engineer — Java, Go, AI, PostgreSQL</div>
+          </div>
+          <div>
+            <span class="text-[var(--color-accent)]">$</span>
+            <span class="text-[var(--color-text-dim)]"> echo $MISSION</span>
+            <div class="text-[var(--color-text)] mt-1">Building intelligent systems that remember, reason, and act.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CTAs -->
+      <div class="mt-8 flex flex-wrap items-center gap-4">
+        <a
+          href="/en/blog"
+          class="px-6 py-3 rounded-lg bg-[var(--color-accent)] text-[var(--color-bg)] font-medium hover:opacity-90 transition-opacity"
+        >
+          Read Blog &rarr;
+        </a>
+        <a
+          href="https://github.com/buianhtai"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="px-6 py-3 rounded-lg border border-[var(--color-border)] text-[var(--color-text)] hover:border-[var(--color-accent)] transition-colors"
+        >
+          GitHub
+        </a>
+      </div>
+
+      <!-- Language switcher -->
+      <div class="mt-4 flex items-center gap-2 text-sm text-[var(--color-text-dim)]">
+        <a href="/en/" class="hover:text-[var(--color-accent)] transition-colors">EN</a>
+        <span>|</span>
+        <a href="/vi/" class="hover:text-[var(--color-accent)] transition-colors">VI</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 2: Featured Posts -->
+  <section class="py-12">
+    <div class="max-w-3xl mx-auto px-4">
+      <h2 class="text-2xl font-bold mb-8">
+        <span class="text-[var(--color-accent)] font-mono">#</span> Recent Writing
+      </h2>
+
+      <div class="grid gap-4 sm:grid-cols-2">
+        {recentPosts.map((post) => {
+          const lang = post.data.lang;
+          const url = `/${lang}/blog/${getPostSlug(post)}`;
+          return (
+            <a
+              href={url}
+              class="block p-5 rounded-lg border border-[var(--color-border)] hover:bg-[var(--color-surface)] transition-colors group"
+            >
+              <div class="flex items-center gap-2 mb-2">
+                <span class="text-[10px] font-mono font-medium uppercase px-1.5 py-0.5 rounded bg-[var(--color-accent)] text-[var(--color-bg)]">
+                  {lang}
+                </span>
+                <time class="text-xs text-[var(--color-text-dim)]">
+                  {new Date(post.data.pubDate).toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                  })}
+                </time>
+              </div>
+              <h3 class="font-semibold text-[var(--color-text)] group-hover:text-[var(--color-accent)] transition-colors leading-snug mb-2">
+                {post.data.title}
+              </h3>
+              <p class="text-sm text-[var(--color-text-dim)] line-clamp-2 mb-3">
+                {post.data.description}
+              </p>
+              {post.data.tags && (
+                <div class="flex flex-wrap gap-1.5">
+                  {post.data.tags.map((tag: string) => (
+                    <span class="text-[11px] font-mono text-[var(--color-text-dim)] px-1.5 py-0.5 rounded border border-[var(--color-border)]">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </a>
+          );
+        })}
+      </div>
+
+      <div class="mt-6">
+        <a
+          href="/en/blog"
+          class="text-sm text-[var(--color-accent)] hover:underline"
+        >
+          View all posts &rarr;
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 3: Projects -->
+  <section class="py-12">
+    <div class="max-w-3xl mx-auto px-4">
+      <h2 class="text-2xl font-bold mb-8">
+        <span class="text-[var(--color-accent)] font-mono">#</span> Projects
+      </h2>
+
+      <a
+        href="https://github.com/nextlevelbuilder/goclaw"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="block p-6 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-accent)] transition-colors group"
+      >
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-lg font-bold text-[var(--color-text)] group-hover:text-[var(--color-accent)] transition-colors">
+            GoClaw
+          </h3>
+          <span class="text-xs font-mono text-[var(--color-accent)] border border-[var(--color-accent)] px-2 py-0.5 rounded">
+            Open Source
+          </span>
+        </div>
+        <p class="text-sm text-[var(--color-text-dim)] mb-4 leading-relaxed">
+          Enterprise AI Agent Platform — multi-agent gateway built in Go. 20+ LLM providers, 7 channels, multi-tenant PostgreSQL.
+        </p>
+        <div class="flex flex-wrap gap-2">
+          {goclawTech.map((tech) => (
+            <span class="text-xs font-mono px-2 py-1 rounded bg-[var(--color-bg)] text-[var(--color-text-dim)] border border-[var(--color-border)]">
+              {tech}
+            </span>
+          ))}
+        </div>
+      </a>
+    </div>
+  </section>
+
+  <!-- SECTION 4: About -->
+  <section class="py-12 pb-16">
+    <div class="max-w-3xl mx-auto px-4">
+      <h2 class="text-2xl font-bold mb-6">
+        <span class="text-[var(--color-accent)] font-mono">#</span> About
+      </h2>
+
+      <p class="text-[var(--color-text-dim)] leading-relaxed mb-6">
+        Backend engineer based in Vietnam. I build AI agent platforms, distributed systems, and developer tools.
+        Currently working on GoClaw — an enterprise multi-agent gateway.
+        I write about architecture decisions, Go patterns, and AI systems.
+      </p>
+
+      <!-- Tech stack pills -->
+      <div class="flex flex-wrap gap-2 mb-8">
+        {techStack.map((tech) => (
+          <span class="text-xs font-mono px-2.5 py-1 rounded-full bg-[var(--color-surface)] text-[var(--color-text-dim)] border border-[var(--color-border)]">
+            {tech}
+          </span>
+        ))}
+      </div>
+
+      <!-- Social links -->
+      <div class="flex items-center gap-4 text-sm">
+        <a
+          href="https://github.com/buianhtai"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="text-[var(--color-text-dim)] hover:text-[var(--color-accent)] transition-colors"
+        >
+          GitHub
+        </a>
+        <span class="text-[var(--color-border)]">/</span>
+        <a
+          href="https://x.com/buianhtai90"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="text-[var(--color-text-dim)] hover:text-[var(--color-accent)] transition-colors"
+        >
+          X
+        </a>
+        <span class="text-[var(--color-border)]">/</span>
+        <a
+          href="/rss.xml"
+          class="text-[var(--color-text-dim)] hover:text-[var(--color-accent)] transition-colors"
+        >
+          RSS
+        </a>
+      </div>
+    </div>
+  </section>
+
+</BaseLayout>
