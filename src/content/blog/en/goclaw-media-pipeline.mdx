@@ -1,0 +1,408 @@
+---
+title: "From Pixels to Speech: GoClaw's Multi-Provider Media Pipeline"
+description: "How GoClaw generates images, audio, and video across 7+ providers — DashScope, MiniMax, OpenAI, ElevenLabs, Suno, Veo — with persistent MediaRef storage and provider chain fallbacks."
+pubDate: 2026-03-23
+tags: ["ai", "golang", "architecture", "llm"]
+lang: "en"
+category: "architecture"
+series: "goclaw"
+seriesOrder: 9
+---
+
+import Card from '../../../components/mdx/Card.astro';
+import Label from '../../../components/mdx/Label.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import TreeView from '../../../components/mdx/TreeView.astro';
+import MetricBar from '../../../components/mdx/MetricBar.astro';
+import Pipeline from '../../../components/mdx/Pipeline.astro';
+
+Most agent stacks still treat media as a side feature.
+GoClaw treats it as a first-class execution path.
+
+Image,
+audio,
+video,
+and document ingestion are not bolted-on handlers.
+They are organized as a tool family with shared routing patterns,
+shared storage references,
+and provider abstraction that can evolve without changing caller behavior.
+
+The total implementation for media tools is large:
+`internal/tools/create_*.go` and `read_*.go` contribute roughly 3,500 lines,
+and `internal/tts/` adds another ~778 lines.
+The result is a unified media subsystem spanning multiple vendors,
+multiple payload shapes,
+and multiple runtime behaviors.
+
+---
+
+## <Label color="teal">1</Label> The Media Tool Family (teal)
+
+<Card>
+
+GoClaw exposes a broad media surface through tool names that remain stable,
+even when providers differ underneath.
+That stability is the key interface contract for agents.
+
+The tool family includes seven core media tools,
+plus text-to-speech behavior handled by the TTS subsystem.
+Creation tools and read tools are intentionally paired.
+One side generates assets.
+The other side extracts meaning from assets.
+
+At architecture level,
+this pairing keeps media in the same control plane as any other tool call:
+input validation,
+provider dispatch,
+result normalization,
+and channel delivery.
+
+<DataTable
+  caption="GoClaw Media Tools and Runtime Capabilities"
+  accent="teal"
+  headers={['Tool', 'Primary Providers', 'Capabilities', 'Output Shape']}
+  rows={[
+    {
+      Tool: 'create_image',
+      'Primary Providers': 'DashScope, MiniMax',
+      Capabilities: 'Text-to-image generation through provider-specific APIs behind one tool contract',
+      'Output Shape': 'Persistent media reference and metadata suitable for follow-up tool calls',
+    },
+    {
+      Tool: 'create_audio',
+      'Primary Providers': 'OpenAI, ElevenLabs, MiniMax, Suno',
+      Capabilities: 'Audio generation with multiple backends selected through provider chain dispatch',
+      'Output Shape': 'Audio asset reference routed through channel delivery and storage interfaces',
+    },
+    {
+      Tool: 'create_video',
+      'Primary Providers': 'MiniMax, Veo',
+      Capabilities: 'Asynchronous video generation with status polling and completion retrieval',
+      'Output Shape': 'Video reference for downstream read or delivery operations',
+    },
+    {
+      Tool: 'read_document',
+      'Primary Providers': 'Document analysis pipeline',
+      Capabilities: 'Extract structured or textual information from uploaded document content',
+      'Output Shape': 'Normalized textual payload for agent reasoning context',
+    },
+    {
+      Tool: 'read_image',
+      'Primary Providers': 'Vision-capable backends',
+      Capabilities: 'Image understanding and analysis over stored or uploaded visual assets',
+      'Output Shape': 'Semantic description or extracted details as text response',
+    },
+    {
+      Tool: 'read_audio',
+      'Primary Providers': 'Speech transcription backends',
+      Capabilities: 'Audio-to-text transcription and interpretation for conversational workflows',
+      'Output Shape': 'Transcript or interpreted text for downstream planning',
+    },
+    {
+      Tool: 'read_video',
+      'Primary Providers': 'Video analysis pipeline',
+      Capabilities: 'Temporal media understanding from video assets stored by generation or upload paths',
+      'Output Shape': 'Textual scene or content interpretation in normalized format',
+    },
+    {
+      Tool: 'tts',
+      'Primary Providers': 'OpenAI, ElevenLabs, MiniMax, additional TTS integrations',
+      Capabilities: 'Text-to-speech rendering through dedicated manager in `internal/tts/`',
+      'Output Shape': 'Audio bytes + metadata forwarded through channel delivery path',
+    },
+  ]}
+/>
+
+The critical detail is not only provider count.
+It is the consistency of the interface.
+Agents invoke stable tool names.
+GoClaw handles provider differences below that boundary.
+
+</Card>
+
+---
+
+## <Label color="green">2</Label> Provider Chain Pattern (cyan)
+
+<Card>
+
+`media_provider_chain.go` is the routing core.
+It chooses backend providers for creation tools,
+applies fallback behavior,
+and keeps dispatch logic centralized.
+
+This is a strategy-chain architecture.
+A tool request enters once,
+and the chain selects a provider implementation that can satisfy the request.
+If a provider is unavailable or unsuitable,
+the chain can move to the next candidate according to configured policy.
+
+The architectural win is decoupling.
+Tool handlers do not need custom routing branches for every vendor.
+Provider-specific logic stays in provider files,
+while orchestration stays in the chain.
+
+<TreeView
+  root={{
+    label: 'Media Provider Chain',
+    detail: 'Request routing core',
+    color: 'teal',
+    children: [
+      {
+        label: 'create_image',
+        detail: 'Image dispatch',
+        color: 'green',
+        children: [
+          { label: 'DashScope Provider', detail: 'Primary image API', color: 'green' },
+          { label: 'MiniMax Provider', detail: 'Alternative image backend', color: 'green' },
+        ],
+      },
+      {
+        label: 'create_audio',
+        detail: 'Audio generation dispatch',
+        color: 'amber',
+        children: [
+          { label: 'OpenAI Provider', detail: 'Speech/audio generation', color: 'amber' },
+          { label: 'ElevenLabs Provider', detail: 'Voice synthesis path', color: 'amber' },
+          { label: 'MiniMax Provider', detail: 'Alternative audio backend', color: 'amber' },
+          { label: 'Suno Provider', detail: 'Music/audio generation path', color: 'amber' },
+        ],
+      },
+      {
+        label: 'create_video',
+        detail: 'Video generation dispatch',
+        color: 'rose',
+        children: [
+          { label: 'MiniMax Provider', detail: 'Video generation + polling', color: 'rose' },
+          { label: 'Veo Provider', detail: 'Alternative video backend', color: 'rose' },
+        ],
+      },
+    ],
+  }}
+/>
+
+This same pattern reduces the blast radius of provider churn.
+When an API changes,
+the provider adapter changes.
+The top-level tool contract remains stable.
+
+That is why multi-provider support can scale without turning each tool into a giant conditional block.
+
+</Card>
+
+<Callout color="teal">
+Provider chains are the difference between multi-provider architecture and multi-provider spaghetti.
+</Callout>
+
+---
+
+## <Label color="amber">3</Label> MediaRef: 60 Bytes vs Megabytes (blue)
+
+<Card>
+
+Large media payloads are expensive to pass inline,
+especially in agent loops where context size is a hard limit.
+GoClaw uses a MediaRef pattern to avoid this trap.
+
+Instead of embedding full base64 media in every response,
+tools persist media and return a lightweight reference object.
+That object points to storage,
+carries media type,
+and keeps payload transfer separate from reasoning context.
+
+The canonical shape is compact:
+`ID`,
+`MimeType`,
+`Kind`,
+`Path`.
+
+That makes it feasible to pass media across tool boundaries,
+chat channels,
+and follow-up read operations,
+without repeatedly inflating memory and token usage.
+
+<MetricBar
+  title="Payload Footprint: Inline Base64 vs MediaRef"
+  metrics={[
+    {
+      label: 'Inline Base64',
+      value: 2500000,
+      maxValue: 2500000,
+      displayValue: '2.5 MB typical',
+      color: 'rose',
+    },
+    {
+      label: 'MediaRef Object',
+      value: 60,
+      maxValue: 2500000,
+      displayValue: '~60 B',
+      color: 'teal',
+    },
+  ]}
+/>
+
+This is not just a storage optimization.
+It is an architectural boundary.
+The agent reasons about references,
+while media bytes are handled by the delivery and persistence layers.
+
+That boundary keeps long conversations healthy,
+reduces repeated serialization cost,
+and enables reuse of generated assets across subsequent tool calls.
+
+</Card>
+
+---
+
+## <Label color="rose">4</Label> Image Generation (violet)
+
+<Card>
+
+Image generation in GoClaw is implemented with provider-specific files,
+including `create_image_dashscope.go` and `create_image_minimax.go`.
+
+The APIs differ,
+but the tool interface does not.
+That means callers invoke `create_image` once,
+and the provider chain handles request shaping,
+invocation,
+and response normalization.
+
+This design protects upstream code from vendor drift.
+A backend can change request parameters,
+auth shape,
+or response payload format,
+without forcing changes in every agent workflow that consumes image generation.
+
+Image output also benefits from MediaRef semantics.
+Generated image bytes can be persisted,
+returned as references,
+and reused by read tools,
+rather than repeatedly embedded in context.
+
+Operationally,
+this provides a stable image path for both synchronous agent tasks
+and longer multi-step workflows where generated images are analyzed later.
+
+</Card>
+
+---
+
+## <Label color="teal">5</Label> Audio Pipeline (purple)
+
+<Card>
+
+Audio is where GoClaw combines breadth and structure.
+`create_audio` supports multiple providers,
+`read_audio` handles transcription,
+and the dedicated TTS system in `internal/tts/` (about 778 lines)
+provides a manager-based synthesis path across four providers.
+
+The important point is coordination,
+not just provider count.
+Text input,
+provider dispatch,
+byte output,
+and channel delivery are explicitly staged.
+
+<Pipeline
+  nodes={[
+    { title: 'Text', subtitle: 'Prompt or generated content' },
+    { title: 'TTS Manager', subtitle: 'Provider selection + orchestration' },
+    { title: 'Provider', subtitle: 'OpenAI/ElevenLabs/MiniMax/others' },
+    { title: 'Audio Bytes', subtitle: 'Generated waveform payload' },
+    { title: 'Channel Delivery', subtitle: 'Store + return MediaRef/result' },
+  ]}
+  arrows={[
+    { label: 'dispatch', direction: 'right' },
+    { label: 'render', direction: 'right' },
+    { label: 'normalize', direction: 'right' },
+    { label: 'publish', direction: 'right' },
+  ]}
+  footer="Creation and transcription stay in one media control plane, so audio can move through generate → read loops without custom glue code."
+/>
+
+When transcription is needed,
+`read_audio` can process stored assets and return text.
+That closes the loop between generation and interpretation,
+which is useful for verification workflows,
+voice interfaces,
+and multi-modal agent tasks.
+
+The shared dispatch pattern keeps the audio path maintainable,
+even as providers evolve at different speeds.
+
+</Card>
+
+<Callout color="green">
+GoClaw's audio architecture is not "one provider plus fallback." It is a stable manager contract with provider pluralism by design.
+</Callout>
+
+---
+
+## <Label color="green">6</Label> Video Generation (fuchsia)
+
+<Card>
+
+Video generation is inherently asynchronous for many providers.
+GoClaw models that reality directly.
+
+With MiniMax and Veo-backed paths,
+`create_video` can submit generation requests,
+track job status,
+poll for completion,
+and normalize final outputs into the same reference-first response model.
+
+`create_video_minimax.go` represents this async shape clearly:
+request initiation and completion retrieval are separate concerns.
+That allows the agent runtime to manage waiting semantics
+without pretending video generation is immediate.
+
+The architectural implication is important.
+Asynchronous generation becomes a normal tool behavior,
+not an exception path.
+The media subsystem can therefore support long-running workloads
+without leaking provider-specific state handling into callers.
+
+Combined with MediaRef,
+completed video assets are reusable across subsequent read operations,
+summaries,
+and downstream workflows.
+
+</Card>
+
+---
+
+## The Strategy Pattern at Scale
+
+GoClaw's media subsystem demonstrates strategy pattern discipline across modalities.
+Each media type follows the same top-level dispatch model:
+stable tool contract,
+provider chain selection,
+normalized output,
+reference-based persistence.
+
+That consistency is the scalability lever.
+Adding a new provider is mostly a targeted adapter addition,
+not a rewrite of caller contracts.
+
+Across images,
+audio,
+and video,
+the architecture repeats intentionally.
+Repeated structure is what keeps a multi-provider system operable over time.
+
+The result is a media pipeline that can grow with provider ecosystems
+while keeping agent behavior predictable,
+maintainable,
+and cost-aware.
+
+In short,
+this is strategy pattern at production scale:
+many backends,
+one tool language,
+and clean boundaries between orchestration and implementation.
+
+That is why GoClaw can expand media capabilities quickly
+without fragmenting the rest of the platform.

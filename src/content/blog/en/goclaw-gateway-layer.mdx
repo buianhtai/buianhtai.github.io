@@ -1,0 +1,402 @@
+---
+title: "The Gateway Layer: API Keys, Hooks, and WebSocket RPC in GoClaw"
+description: "Inside GoClaw's gateway infrastructure — multi-key RBAC authentication, event-driven hooks with blocking gates, and the WebSocket v3 protocol powering the real-time dashboard."
+pubDate: 2026-03-23
+tags: ["ai", "golang", "security", "architecture"]
+lang: "en"
+category: "architecture"
+series: "goclaw"
+seriesOrder: 11
+---
+
+import Card from '../../../components/mdx/Card.astro';
+import Label from '../../../components/mdx/Label.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import Pipeline from '../../../components/mdx/Pipeline.astro';
+import TreeView from '../../../components/mdx/TreeView.astro';
+import SequenceFlow from '../../../components/mdx/SequenceFlow.astro';
+import MetricBar from '../../../components/mdx/MetricBar.astro';
+
+The most visible parts of GoClaw are agent behavior and tool execution.
+
+The most foundational part is the gateway.
+
+It is where authentication is enforced, where policy hooks are evaluated, and where both WebSocket and REST clients converge on the same runtime methods.
+
+This layer is what makes GoClaw usable by humans, automations, and external systems at the same time.
+
+The architecture is intentionally unified.
+
+Different access protocols are supported, but execution authority stays centralized.
+
+That keeps policy, auditing, and behavior consistent across interfaces.
+
+---
+
+## <Label color="teal">1</Label> API Key Authentication (teal)
+
+<Card>
+
+GoClaw's gateway uses multi-key authentication with RBAC-aware scopes.
+
+Keys are not stored as plaintext.
+
+The system stores SHA-256 hashes of key material and compares hashed values during request authentication.
+
+That design narrows the blast radius if storage is exposed.
+
+Key creation follows a show-once pattern.
+
+The full token is displayed once at creation time and is not retrievable later.
+
+Operationally, this prevents accidental long-term key leakage through dashboards or logs.
+
+Keys can also include optional expiration and revocation.
+
+That gives teams practical lifecycle controls for machine credentials.
+
+<Pipeline
+  nodes={[
+    { title: 'Request', subtitle: 'Incoming API call' },
+    { title: 'Extract Key', subtitle: 'Authorization parsing' },
+    { title: 'SHA-256 Hash', subtitle: 'Deterministic digest' },
+    { title: 'Lookup', subtitle: 'Hashed key record' },
+    { title: 'Scope Check', subtitle: 'RBAC validation' },
+    { title: 'Route', subtitle: 'Gateway method' }
+  ]}
+  arrows={[
+    { label: 'parse', direction: 'right' },
+    { label: 'hash', direction: 'right' },
+    { label: 'query', direction: 'right' },
+    { label: 'authorize', direction: 'right' },
+    { label: 'allow', direction: 'right' }
+  ]}
+  footer="Authentication executes before gateway method dispatch, with hash-based key matching and scope enforcement."
+/>
+
+This is a practical security baseline.
+
+Machine access remains easy to integrate,
+but security defaults are safer than naive token storage.
+
+</Card>
+
+<Callout color="teal">
+Hash-at-rest plus show-once key issuance reduces accidental credential exposure in daily operations.
+</Callout>
+
+---
+
+## <Label color="green">2</Label> RBAC Scopes (cyan)
+
+<Card>
+
+Authentication proves identity.
+
+Authorization defines capability.
+
+GoClaw scopes API keys across a hierarchy:
+
+gateway-level,
+agent-level,
+and channel-level permissions.
+
+This allows one key to be broad enough for infrastructure automation while another key is tightly constrained to one agent or channel workflow.
+
+Scope granularity matters because gateway methods can perform powerful actions.
+
+A flat all-or-nothing key model would force teams to over-provision access.
+
+GoClaw avoids that by letting permissions match operational intent.
+
+<TreeView
+  root={{
+    label: 'Gateway Scope',
+    detail: 'Global permissions and method access',
+    color: 'teal',
+    children: [
+      {
+        label: 'Agent Scope',
+        detail: 'Allowed agents and agent operations',
+        color: 'green',
+        children: [
+          {
+            label: 'Channel Scope',
+            detail: 'Allowed channels and session boundaries',
+            color: 'amber'
+          }
+        ]
+      }
+    ]
+  }}
+/>
+
+This hierarchy has two operational effects.
+
+First, key blast radius can be minimized.
+
+Second, audit trails are easier to interpret because capability boundaries are explicit in policy.
+
+When a request is denied, teams can reason about where the policy boundary was crossed.
+
+That is much easier than debugging a monolithic permission model.
+
+</Card>
+
+---
+
+## <Label color="amber">3</Label> Event-Driven Hooks (blue)
+
+<Card>
+
+Hooks let the gateway enforce policy at runtime events.
+
+Events can include tool execution, message send paths, and other lifecycle points where external checks should run.
+
+GoClaw supports two evaluator types.
+
+The command evaluator runs a shell command and uses exit code semantics.
+
+The agent evaluator delegates review logic to another agent.
+
+Both can be configured as blocking gates.
+
+That means an operation can be paused until hook evaluation returns an allow outcome.
+
+Auto-retry support helps absorb transient failures.
+
+One critical safety rule is recursion protection.
+
+Hook evaluations do not trigger more hooks.
+
+Without that guard, policy checks could recurse into infinite policy loops.
+
+With that guard, hooks remain deterministic and bounded.
+
+<DataTable
+  headers={["Evaluator", "Execution Model", "Typical Use", "Gate Behavior"]}
+  rows={[
+    {
+      "Evaluator": "Command Evaluator",
+      "Execution Model": "Shell command with exit-code result",
+      "Typical Use": "External policy scripts and environment checks",
+      "Gate Behavior": "Can block route until success"
+    },
+    {
+      "Evaluator": "Agent Evaluator",
+      "Execution Model": "Delegated review to evaluator agent",
+      "Typical Use": "Semantic policy checks and reviewer workflows",
+      "Gate Behavior": "Can block route with retry policy"
+    }
+  ]}
+  caption="Hook evaluator types in the gateway layer"
+  accent="teal"
+/>
+
+These hooks make gateway policy extensible without fragmenting core routing logic.
+
+You keep one execution path,
+then insert programmable checks where governance needs them.
+
+</Card>
+
+<Callout color="amber">
+Recursion-safe hook execution is a reliability requirement, not a convenience feature.
+</Callout>
+
+---
+
+## <Label color="rose">4</Label> WebSocket RPC v3 (violet)
+
+<Card>
+
+The real-time dashboard is powered by WebSocket RPC v3.
+
+The protocol handles connection handshake, authentication, subscriptions, chat streaming, and server-pushed events.
+
+This is the transport that gives operators and users low-latency visibility into live system behavior.
+
+A typical session flow is straightforward.
+
+The client connects,
+authenticates,
+subscribes to channels or streams,
+then receives both chat responses and gateway events over the same persistent connection.
+
+<SequenceFlow
+  actors={[
+    { name: 'Client', color: 'teal' },
+    { name: 'Gateway WS', color: 'amber' },
+    { name: 'Auth Layer', color: 'green' },
+    { name: 'RPC Stream', color: 'rose' }
+  ]}
+  messages={[
+    { from: 0, to: 1, label: 'Connect', type: 'request' },
+    { from: 1, to: 2, label: 'Auth', type: 'request' },
+    { from: 2, to: 1, label: 'Authorized', type: 'response' },
+    { from: 0, to: 1, label: 'Subscribe', type: 'request' },
+    { from: 1, to: 3, label: 'Chat Stream', type: 'async' },
+    { from: 3, to: 0, label: 'Events', type: 'async' }
+  ]}
+/>
+
+The protocol is not a side channel.
+
+It is the primary path for interactive and operational real-time behavior in the UI.
+
+That design keeps the dashboard responsive and consistent with underlying gateway events.
+
+</Card>
+
+---
+
+## <Label color="teal">5</Label> The Web Dashboard (purple)
+
+<Card>
+
+GoClaw's web dashboard is substantial: 419 TypeScript files and roughly 50K LOC.
+
+That size reflects breadth of operational surface,
+not duplicated architecture.
+
+Major pages include channels,
+agents,
+pairing,
+traces,
+skills,
+MCP,
+cron,
+sessions,
+teams,
+and config.
+
+The key architectural point is transport consistency.
+
+Dashboard data flows through WebSocket RPC,
+not a separate REST-only model for the UI.
+
+That means the same real-time method contracts are used across chat streaming and operational state updates.
+
+The UI becomes a live client of gateway methods rather than a disconnected frontend with parallel logic.
+
+<MetricBar
+  title="Dashboard Scope Snapshot"
+  metrics={[
+    {
+      label: 'TypeScript Files',
+      value: 419,
+      maxValue: 500,
+      displayValue: '419 files',
+      color: 'teal'
+    },
+    {
+      label: 'Approx LOC',
+      value: 50000,
+      maxValue: 55000,
+      displayValue: '~50K LOC',
+      color: 'green'
+    },
+    {
+      label: 'Primary Pages',
+      value: 10,
+      maxValue: 12,
+      displayValue: '10 key areas',
+      color: 'amber'
+    },
+    {
+      label: 'Transport Model',
+      value: 100,
+      maxValue: 100,
+      displayValue: 'WebSocket RPC',
+      color: 'rose'
+    }
+  ]}
+/>
+
+This architecture avoids a common drift problem where dashboard behavior and API behavior diverge over time.
+
+By using the same gateway methods,
+features and policy changes propagate consistently.
+
+</Card>
+
+---
+
+## <Label color="green">6</Label> REST API (fuchsia)
+
+<Card>
+
+GoClaw also exposes REST endpoints for integrations.
+
+Examples include `/v1/chat/completions` (OpenAI-compatible), `/v1/agents`, `/v1/skills`, and related resources.
+
+Interactive API exploration is available at `/docs` via Swagger UI.
+
+The REST layer is intentionally thin.
+
+It wraps the same gateway methods used by WebSocket RPC.
+
+That gives integrators standard HTTP ergonomics while preserving one core execution model behind the interface.
+
+A thin wrapper architecture has concrete benefits:
+
+- less duplicate business logic,
+- consistent auth and hook enforcement,
+- fewer mismatches between protocol surfaces,
+- easier testability and maintenance.
+
+<DataTable
+  headers={["Surface", "Audience", "Strength", "Backed By"]}
+  rows={[
+    {
+      "Surface": "WebSocket RPC v3",
+      "Audience": "Realtime dashboard and live clients",
+      "Strength": "Streaming and push events",
+      "Backed By": "Gateway methods"
+    },
+    {
+      "Surface": "REST API (/v1/*)",
+      "Audience": "External integrations and scripts",
+      "Strength": "HTTP compatibility and tooling",
+      "Backed By": "Same gateway methods"
+    },
+    {
+      "Surface": "Swagger UI (/docs)",
+      "Audience": "Developers and operators",
+      "Strength": "Discoverability and interactive testing",
+      "Backed By": "REST wrapper endpoints"
+    }
+  ]}
+  caption="Protocol surfaces mapped to one gateway core"
+  accent="purple"
+/>
+
+This is not "two systems."
+
+It is one gateway with multiple access shapes.
+
+That distinction is what keeps policy and behavior coherent across machine and human clients.
+
+</Card>
+
+---
+
+## One Gateway, Multiple Faces
+
+GoClaw intentionally supports three access patterns with one shared core:
+
+WebSocket for real-time interaction,
+REST for integration compatibility,
+and API keys for controlled machine access.
+
+Hooks enforce programmable policy at runtime,
+RBAC scopes constrain capability,
+and hashed key storage protects credentials at rest.
+
+The result is a gateway layer that is flexible at the edges but consistent in execution.
+
+Different clients can enter through different doors,
+but they all meet the same method model,
+the same policy checks,
+and the same operational guarantees.

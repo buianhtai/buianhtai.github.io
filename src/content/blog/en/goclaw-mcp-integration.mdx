@@ -1,0 +1,352 @@
+---
+title: "MCP Inside Out: How GoClaw Bridges stdio, SSE, and Streamable-HTTP"
+description: "How GoClaw integrates Model Context Protocol servers — three transports, lazy activation, connection pooling, BM25 tool search, and per-user credential grants."
+pubDate: 2026-03-23
+tags: ["ai", "golang", "mcp", "architecture"]
+lang: "en"
+category: "architecture"
+series: "goclaw"
+seriesOrder: 8
+---
+
+import Card from '../../../components/mdx/Card.astro';
+import Label from '../../../components/mdx/Label.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import Pipeline from '../../../components/mdx/Pipeline.astro';
+import SequenceFlow from '../../../components/mdx/SequenceFlow.astro';
+
+MCP support in GoClaw is not a thin adapter layer.
+It is a full subsystem that treats external MCP servers as first-class runtime dependencies.
+The value is not only tool access.
+The value is operational behavior under load, across users, across transports, and across long-lived sessions.
+
+The core implementation lives in `internal/mcp/`.
+The HTTP-facing integration points live in `internal/http/mcp*.go`.
+Together, they let an agent call remote tools as if they were local,
+while still preserving tenancy boundaries, grants, and credentials.
+
+---
+
+## <Label color="teal">1</Label> The MCP Manager (teal)
+
+<Card>
+
+`manager.go` is the orchestrator.
+At roughly 472 lines,
+it centralizes server lifecycle,
+tool discovery,
+registration into the agent tool catalog,
+and health coordination for active integrations.
+
+Think of it as the bridge between static configuration and dynamic runtime execution.
+Configuration says what can exist.
+The manager decides what should be connected now,
+what should be deferred,
+and what should be recycled from the pool.
+
+The architecture is intentionally staged.
+Each stage has a narrow responsibility.
+That keeps failures explicit,
+which matters when one broken integration should not collapse the entire agent loop.
+
+<Pipeline
+  nodes={[
+    { title: 'Config', subtitle: 'Parse MCP server definitions' },
+    { title: 'Connect', subtitle: 'Open transport session' },
+    { title: 'Discover Tools', subtitle: 'Fetch tool schemas + metadata' },
+    { title: 'Register', subtitle: 'Publish tools into agent catalog' },
+    { title: 'Pool', subtitle: 'Keep sessions warm + monitored' },
+  ]}
+  arrows={[
+    { label: 'init', direction: 'right' },
+    { label: 'handshake', direction: 'right' },
+    { label: 'index', direction: 'right' },
+    { label: 'reuse', direction: 'right' },
+  ]}
+  footer="The manager applies this flow per server, then feeds pooled sessions back into runtime tool execution."
+/>
+
+Operationally,
+this pattern avoids two common MCP anti-patterns:
+eagerly holding expensive connections that may never be used,
+and repeatedly reconnecting for every tool call.
+
+The manager also owns health posture.
+When a server is unhealthy,
+it can quarantine, reconnect, or skip registration,
+without corrupting the global tool registry.
+
+This separation is why GoClaw can run mixed MCP fleets:
+local subprocess servers,
+remote stream endpoints,
+and enterprise gateways,
+all in one runtime.
+
+</Card>
+
+<Callout color="teal">
+The manager is where transport concerns stop and tool concerns begin. That boundary makes the rest of the system transport-agnostic.
+</Callout>
+
+---
+
+## <Label color="green">2</Label> Three Transports (cyan)
+
+<Card>
+
+GoClaw supports three transport models for MCP servers:
+`stdio`,
+`SSE`,
+and `streamable-http`.
+
+The transport is a runtime concern,
+not an agent concern.
+An agent asks for a tool.
+The manager and pool decide how that tool is reached.
+
+Each transport maps to a different deployment shape.
+`stdio` is ideal for colocated binaries.
+`SSE` fits long-running server push channels.
+`streamable-http` aligns with modern HTTP-native infrastructure.
+
+<DataTable
+  caption="MCP Transport Comparison in GoClaw"
+  accent="teal"
+  headers={['Transport', 'Protocol', 'Use Case', 'Connection Model']}
+  rows={[
+    {
+      Transport: 'stdio',
+      Protocol: 'JSON-RPC over process stdio',
+      'Use Case': 'Local tools, sidecar binaries, low-latency colocated execution',
+      'Connection Model': 'Subprocess lifecycle managed by MCP manager and pooled as reusable client sessions',
+    },
+    {
+      Transport: 'sse',
+      Protocol: 'HTTP + Server-Sent Events stream',
+      'Use Case': 'Remote MCP servers that push event streams and keep long-lived channels',
+      'Connection Model': 'Persistent network session with heartbeat/health monitoring and reconnect handling',
+    },
+    {
+      Transport: 'streamable-http',
+      Protocol: 'HTTP streaming request/response model',
+      'Use Case': 'Gateway-friendly MCP deployments and infra where plain HTTP semantics are preferred',
+      'Connection Model': 'Managed HTTP client sessions integrated with pool reuse and per-server connection constraints',
+    },
+  ]}
+/>
+
+The key architectural decision is to normalize behavior above transport.
+Health checks,
+grants,
+tool registration,
+and lazy activation stay consistent.
+Only the connector changes.
+
+That consistency is what allows mixed environments.
+One team can ship a local `stdio` tool.
+Another team can expose a remote SSE service.
+Agents consume both through a single abstraction.
+
+</Card>
+
+---
+
+## <Label color="amber">3</Label> Connection Pooling (blue)
+
+<Card>
+
+`pool.go` (about 385 lines) manages MCP connections as a reusable runtime asset.
+Without pooling,
+every call would pay setup cost,
+TLS overhead for remote servers,
+and repeated capability negotiation.
+
+Pooling provides:
+stable latency,
+bounded concurrency per server,
+health-aware reuse,
+and auto-reconnect after failure.
+
+The pool also acts as backpressure control.
+Per-server limits prevent one noisy integration from starving others.
+That is critical when multiple agents share the same MCP server fleet.
+
+<SequenceFlow
+  actors={[
+    { name: 'Agent', color: 'teal' },
+    { name: 'Pool', color: 'amber' },
+    { name: 'MCP Server', color: 'green' },
+    { name: 'Tool Result', color: 'rose' },
+  ]}
+  messages={[
+    { from: 0, to: 1, label: 'tool.call(name,args)', type: 'request' },
+    { from: 1, to: 2, label: 'lease + execute', type: 'request' },
+    { from: 2, to: 1, label: 'response payload', type: 'response' },
+    { from: 1, to: 3, label: 'normalized result', type: 'response' },
+    { from: 1, to: 2, label: 'health probe', type: 'async' },
+  ]}
+/>
+
+The flow above looks simple,
+but the reliability behavior sits in the pool boundaries.
+If a lease fails,
+the pool can reattempt with reconnect logic.
+If health degrades,
+the pool can quarantine stale sessions.
+
+This is where MCP integration moves from demo-grade to production-grade.
+A single call path can survive transient transport faults
+without forcing agent-level retry logic into every tool consumer.
+
+</Card>
+
+<Callout color="green">
+Connection pooling makes MCP calls operationally comparable to internal tool calls: predictable, bounded, and recoverable.
+</Callout>
+
+---
+
+## <Label color="rose">4</Label> Lazy Activation (violet)
+
+<Card>
+
+Tool discovery and tool activation are different moments in GoClaw.
+At startup,
+the manager can discover available tools and index their metadata.
+But actual activation is deferred until a tool is called.
+
+`manager_tools.go` handles this deferred path.
+It keeps the catalog visible,
+while delaying expensive runtime activation for cold tools.
+
+This matters in large MCP catalogs.
+A server may advertise many tools,
+but a single run might use only one.
+Lazy activation avoids paying full startup cost for long-tail tools that are never touched.
+
+Search-mode is the practical trigger.
+When a requested tool name is not an exact active match,
+GoClaw enters lookup behavior,
+selects the best candidate,
+and activates only what is needed for execution.
+
+That model gives two wins at once:
+fast startup for broad catalogs,
+and precise runtime cost for actual demand.
+
+It also improves multi-tenant fairness.
+One user invoking a niche tool does not force every user to preload the same integration path.
+
+</Card>
+
+---
+
+## <Label color="teal">5</Label> BM25 Tool Search (purple)
+
+<Card>
+
+`bm25_index.go` (about 180 lines) adds lexical retrieval to MCP tool resolution.
+Instead of failing hard on unknown tool names,
+GoClaw can search indexed tool descriptions and choose the closest match.
+
+This is not fuzzy magic.
+It is deterministic ranking over indexed metadata.
+The input is the attempted tool name,
+plus available descriptions and aliases.
+The output is a best candidate to activate and execute.
+
+In practice,
+this absorbs naming drift between agent prompts and tool registries.
+Humans and models often use slightly different terms.
+BM25 narrows that gap without forcing rigid prompt conventions.
+
+A robust tool system needs this retrieval layer,
+especially when the catalog grows across teams,
+vendors,
+and independently versioned MCP servers.
+
+BM25 also works cleanly with lazy activation.
+Search identifies candidate tools.
+Deferred activation then loads only the selected match.
+No blanket initialization required.
+
+</Card>
+
+<Callout color="amber">
+BM25 in GoClaw is a control-plane feature: it improves tool discoverability while preserving strict execution boundaries.
+</Callout>
+
+---
+
+## <Label color="green">6</Label> Grants & Credentials (fuchsia)
+
+<Card>
+
+Tool availability is not global by default.
+GoClaw applies grants at the MCP level,
+with both per-agent and per-user scope.
+
+This controls who can invoke which servers,
+and by extension which remote tools are reachable in a run.
+The grant check sits before execution,
+not after.
+
+Credential storage is handled by `mcp_user_credentials.go`.
+Credentials are persisted per user,
+per server,
+with encryption.
+
+That design avoids a dangerous shortcut:
+shared global credentials for all users.
+Each user can be mapped to separate secrets,
+separate permissions,
+and separate audit boundaries.
+
+In multi-tenant systems,
+this is non-negotiable.
+An agent may look unified at the UX layer,
+but backend identity and authority must remain segmented.
+
+Operationally,
+grant-level control enables staged rollout.
+A new MCP server can be registered,
+then selectively granted to specific agents,
+teams,
+or users,
+before broad availability.
+
+</Card>
+
+---
+
+## Why This Matters
+
+GoClaw treats MCP as an extensibility plane,
+not a plugin gimmick.
+
+Three transport options mean deployment flexibility.
+Connection pooling means runtime stability.
+Lazy activation means startup efficiency.
+BM25 search means resilient tool resolution.
+Grants plus encrypted credentials mean tenant-safe operation.
+
+The strategic outcome is simple:
+GoClaw can add new tool capability through MCP server integration,
+without changing core agent code paths,
+while still preserving production-grade control over reliability and access.
+
+That is what makes the tool system extensible in practice,
+not just in architecture diagrams.
+
+And as the MCP ecosystem grows,
+this internal shape lets GoClaw absorb new servers,
+new teams,
+and new workloads,
+without re-architecting the loop.
+
+The practical interpretation is that MCP is now part of the platform contract.
+Teams can iterate on server-side capabilities independently.
+GoClaw remains the stable orchestration layer.
+
+That separation of concerns is why the integration model scales beyond a single demo workflow.

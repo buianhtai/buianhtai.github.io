@@ -1,0 +1,426 @@
+---
+title: "Running Agents in Production: GoClaw's Scheduler, Heartbeat, and Cron"
+description: "How GoClaw manages agent concurrency with lane-based scheduling, monitors health via HEARTBEAT.md check-ins, and automates tasks with cron expressions — the production operations layer."
+pubDate: 2026-03-23
+tags: ["ai", "golang", "devops", "architecture"]
+lang: "en"
+category: "architecture"
+series: "goclaw"
+seriesOrder: 10
+---
+
+import Card from '../../../components/mdx/Card.astro';
+import Label from '../../../components/mdx/Label.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import SequenceFlow from '../../../components/mdx/SequenceFlow.astro';
+import StateGraph from '../../../components/mdx/StateGraph.astro';
+import MetricBar from '../../../components/mdx/MetricBar.astro';
+import Timeline from '../../../components/mdx/Timeline.astro';
+
+Most architecture discussions around agents stay focused on model quality and prompt engineering.
+
+Production reliability is a different discipline.
+
+Once agents are always-on, they handle concurrent users, run delegated work in parallel, execute scheduled tasks, and must remain observable under stress.
+
+GoClaw's production layer is where that operational discipline lives.
+
+The scheduler and heartbeat internals are not optional extras.
+
+They are what make the platform predictable when traffic shape changes hour to hour.
+
+This post covers the systems that keep interactive users fast while automation and health checks continue in the background.
+
+---
+
+## <Label color="teal">1</Label> Lane-Based Scheduling (teal)
+
+<Card>
+
+GoClaw uses lane-based scheduling to isolate workload classes.
+
+`internal/scheduler/lanes.go` (239 LOC) defines four lanes: `main`, `subagent`, `team`, and `cron`.
+
+Each lane has independent capacity controls.
+
+That lets the platform apply policy by workload type instead of forcing one global queue to represent every use case.
+
+This matters in mixed traffic.
+
+A burst of delegated sub-agent work should not degrade direct user chat responsiveness.
+
+A heavy cron window should not block interactive sessions.
+
+A team conversation spike should not consume the same slots as individual chats.
+
+The lane model enforces exactly that separation.
+
+<DataTable
+  headers={["Lane", "Capacity Limits", "Primary Use Case", "Why It Exists"]}
+  rows={[
+    {
+      "Lane": "main",
+      "Capacity Limits": "Bounded high-priority workers",
+      "Primary Use Case": "Direct user interactions",
+      "Why It Exists": "Protects chat responsiveness"
+    },
+    {
+      "Lane": "subagent",
+      "Capacity Limits": "Fan-out caps with throttle",
+      "Primary Use Case": "Delegated agent execution",
+      "Why It Exists": "Prevents delegation storms"
+    },
+    {
+      "Lane": "team",
+      "Capacity Limits": "Shared coordination quota",
+      "Primary Use Case": "Multi-agent team chats",
+      "Why It Exists": "Keeps collaboration scoped"
+    },
+    {
+      "Lane": "cron",
+      "Capacity Limits": "Background lane budget",
+      "Primary Use Case": "Scheduled jobs and wakeMode",
+      "Why It Exists": "Stops automation from starving users"
+    }
+  ]}
+  caption="Scheduler lane partitioning from lanes.go"
+  accent="teal"
+/>
+
+Group chat behavior is a concrete example.
+
+GoClaw supports three concurrent agent runs in group contexts and applies adaptive throttle when pressure rises.
+
+That gives teams parallelism without sacrificing overall fairness.
+
+A lane is not just a queue bucket.
+
+It is a reliability boundary.
+
+When one lane is unhealthy, the blast radius stays contained.
+
+That containment is why GoClaw can run background automation and user conversations on the same runtime without collapsing latency.
+
+</Card>
+
+<Callout color="teal">
+Lane isolation is primarily about fairness and predictable latency, not only raw throughput.
+</Callout>
+
+---
+
+## <Label color="green">2</Label> The Session Queue (cyan)
+
+<Card>
+
+Lane isolation protects workloads from each other.
+
+`internal/scheduler/queue.go` (453 LOC) protects each session from itself.
+
+When multiple messages arrive for the same session, GoClaw enqueues them and executes sequentially.
+
+That ordering rule prevents interleaved history updates, mixed tool outputs, and non-deterministic turn state.
+
+In practice, this queue is what keeps "fast follow-up messages" from turning into race conditions.
+
+The flow is explicit.
+
+A message enters the session queue, waits for lane admission, executes the agent loop, and returns an ordered result.
+
+Session writes are deferred in a controlled path, which helps isolate persisted history from in-flight execution state.
+
+<SequenceFlow
+  actors={[
+    { name: 'Message', color: 'teal' },
+    { name: 'Queue', color: 'amber' },
+    { name: 'Lane Gate', color: 'green' },
+    { name: 'Agent Loop', color: 'rose' }
+  ]}
+  messages={[
+    { from: 0, to: 1, label: 'Message', type: 'request' },
+    { from: 1, to: 2, label: 'Lane Check', type: 'request' },
+    { from: 2, to: 1, label: 'Capacity Granted', type: 'response' },
+    { from: 1, to: 3, label: 'Execute', type: 'request' },
+    { from: 3, to: 1, label: 'Result + Deferred Writes', type: 'response' },
+    { from: 1, to: 0, label: 'Ordered Return', type: 'async' }
+  ]}
+/>
+
+The operational benefit is high.
+
+When a session becomes slow, backlog is understandable and traceable.
+
+When something fails, replayability is cleaner because event order is deterministic.
+
+This is one of those subsystems users never see directly but notice immediately when it is missing.
+
+</Card>
+
+---
+
+## <Label color="amber">3</Label> Heartbeat System (blue)
+
+<Card>
+
+Schedulers decide *when* work runs.
+
+Heartbeats decide whether the system is still healthy while that work runs.
+
+`internal/heartbeat/ticker.go` (485 LOC) powers scheduled health checks through `HEARTBEAT.md` checklists registered by agents.
+
+These checklists let each operational role encode what success looks like.
+
+A heartbeat can verify dependency availability, queue limits, tool access, or workflow invariants.
+
+Wake mode is cron-driven, so heartbeat agents can run on schedule without a human starting a chat.
+
+The strongest production behavior is suppress-on-OK.
+
+Passing checks stay silent.
+
+Failures are reported.
+
+That dramatically improves signal quality because teams only see actionable events.
+
+Active hours are timezone-aware, so schedules and notifications can be aligned with local operating windows.
+
+<Timeline
+  direction="vertical"
+  events={[
+    {
+      date: 'T0',
+      title: 'Cron WakeMode Trigger',
+      description: 'Scheduled heartbeat execution starts.',
+      color: 'teal'
+    },
+    {
+      date: 'T0+1',
+      title: 'Checklist Run',
+      description: 'Agent executes HEARTBEAT.md checks.',
+      color: 'green'
+    },
+    {
+      date: 'T0+2',
+      title: 'Suppress On OK',
+      description: 'Healthy checks produce no noisy update.',
+      color: 'amber'
+    },
+    {
+      date: 'T0+2',
+      title: 'Report On Failure',
+      description: 'Only failing conditions are emitted.',
+      color: 'rose',
+      highlight: true
+    }
+  ]}
+/>
+
+This heartbeat model is intentionally quiet and opinionated.
+
+In production, silence on success and precision on failure is a feature, not a limitation.
+
+</Card>
+
+---
+
+## <Label color="rose">4</Label> Cron Scheduling (violet)
+
+<Card>
+
+GoClaw supports three expression styles for scheduling:
+
+- `at` for one-shot jobs,
+- `every` for interval scheduling,
+- standard cron expressions for calendar patterns.
+
+That tiered approach keeps basic automation simple while preserving power for advanced schedules.
+
+Execution still goes through lane-based scheduling.
+
+That integration is critical.
+
+It means cron jobs cannot monopolize runtime resources and push interactive traffic into starvation.
+
+Job lifecycle is modeled as state transitions rather than one opaque timer callback.
+
+<StateGraph
+  initialState="scheduled"
+  states={[
+    {
+      id: 'scheduled',
+      label: 'Scheduled',
+      description: 'Waiting for trigger',
+      color: 'teal'
+    },
+    {
+      id: 'running',
+      label: 'Running',
+      description: 'Executing in cron lane',
+      color: 'violet'
+    },
+    {
+      id: 'completed',
+      label: 'Completed',
+      description: 'Successful execution',
+      color: 'green'
+    },
+    {
+      id: 'failed',
+      label: 'Failed',
+      description: 'Execution error',
+      color: 'rose'
+    },
+    {
+      id: 'rescheduled',
+      label: 'Rescheduled',
+      description: 'Next run computed',
+      color: 'amber'
+    }
+  ]}
+  transitions={[
+    { from: 'scheduled', to: 'running', label: 'trigger window' },
+    { from: 'running', to: 'completed', label: 'ok' },
+    { from: 'running', to: 'failed', label: 'error' },
+    { from: 'completed', to: 'rescheduled', label: 'repeat schedule' },
+    { from: 'failed', to: 'rescheduled', label: 'retry/backoff' },
+    { from: 'rescheduled', to: 'scheduled', label: 'next cycle' }
+  ]}
+/>
+
+Stateful scheduling makes monitoring clearer.
+
+Operators can see where failures cluster, whether retries recover, and which schedules are becoming expensive under current load.
+
+That visibility is what turns cron from "fire and forget" into a manageable production subsystem.
+
+</Card>
+
+---
+
+## <Label color="teal">5</Label> Adaptive Concurrency (purple)
+
+<Card>
+
+Static quotas keep baseline fairness.
+
+Adaptive concurrency keeps the system stable when behavior degrades.
+
+GoClaw watches runtime signals that indicate a run may be stuck, looping, or consuming capacity without progress.
+
+Key signals include slow tool notifications, read-only streak detection, same-result loop detection, and iteration budget pressure.
+
+Those signals are fed back into scheduling decisions.
+
+If the system detects problematic patterns, it can throttle or constrain impact before one run degrades shared experience.
+
+This is especially important in long loops where local decisions can become globally expensive.
+
+<MetricBar
+  title="Adaptive Scheduler Signals"
+  metrics={[
+    {
+      label: 'Slow Tool Notice',
+      value: 84,
+      maxValue: 100,
+      displayValue: 'High Impact',
+      color: 'teal'
+    },
+    {
+      label: 'Read-Only Streak',
+      value: 71,
+      maxValue: 100,
+      displayValue: 'Escalation Signal',
+      color: 'green'
+    },
+    {
+      label: 'Same Result Loop',
+      value: 93,
+      maxValue: 100,
+      displayValue: 'Critical Signal',
+      color: 'rose'
+    },
+    {
+      label: 'Budget Exhaustion',
+      value: 78,
+      maxValue: 100,
+      displayValue: 'Termination Guard',
+      color: 'amber'
+    }
+  ]}
+/>
+
+Adaptive controls are the scheduler's self-defense mechanism.
+
+Without them, one pathological run can consume disproportionate capacity.
+
+With them, the platform preserves fairness and keeps interactive latency bounded.
+
+</Card>
+
+<Callout color="amber">
+Iteration budget handling is not only loop safety. It is also a production capacity protection mechanism.
+</Callout>
+
+---
+
+## <Label color="green">6</Label> Monitoring Dashboard (fuchsia)
+
+<Card>
+
+A production control plane needs operational visibility.
+
+GoClaw's web dashboard provides it through cron management, session history inspection, and trace/span debugging surfaces.
+
+Cron views show schedule state and outcomes.
+
+Session history views expose ordered turn execution.
+
+Trace/span views reveal where latency accumulates in LLM calls or tool execution.
+
+The goal is not "more telemetry."
+
+The goal is faster diagnosis with less guessing.
+
+<DataTable
+  headers={["Dashboard Surface", "Question Answered", "Operational Outcome"]}
+  rows={[
+    {
+      "Dashboard Surface": "Cron Management",
+      "Question Answered": "Which scheduled jobs are healthy, delayed, or failing?",
+      "Operational Outcome": "Prevents silent automation drift"
+    },
+    {
+      "Dashboard Surface": "Session History",
+      "Question Answered": "Did queue ordering and deferred writes behave correctly?",
+      "Operational Outcome": "Faster replay and root cause analysis"
+    },
+    {
+      "Dashboard Surface": "Trace / Span Viewer",
+      "Question Answered": "Is latency from model calls, queue wait, or tools?",
+      "Operational Outcome": "Precise bottleneck isolation"
+    }
+  ]}
+  caption="Core operations surfaces in the GoClaw dashboard"
+  accent="purple"
+/>
+
+Because the scheduler and dashboard reflect the same runtime model, operators can move directly from symptom to cause.
+
+That tight loop is what makes the platform operable at scale.
+
+</Card>
+
+---
+
+## Production is a Different Game
+
+Production agents are judged by consistency under concurrency, not by one excellent demo run.
+
+GoClaw's lane scheduler, session queue ordering, heartbeat checklists, cron state management, adaptive concurrency, and dashboard observability exist for that reason.
+
+Concurrent users, long-running tasks, and background automation are baseline realities, not exceptions.
+
+These systems turn those realities into predictable behavior.
+
+They are the operations layer that lets agent workflows stay reliable when load and complexity increase.
