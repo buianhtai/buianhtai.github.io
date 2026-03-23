@@ -1,0 +1,293 @@
+---
+interface Props {
+  actors: Array<{ name: string; color?: string }>;
+  messages: Array<{
+    from: number;
+    to: number;
+    label: string;
+    type?: 'request' | 'response' | 'async';
+  }>;
+}
+
+const { actors, messages } = Astro.props;
+const n = actors.length;
+
+const defaultColors = ['teal', 'amber', 'green', 'rose'];
+
+const bgColors: Record<string, string> = {
+  teal: 'rgba(8,145,178,0.12)',
+  amber: 'rgba(217,119,6,0.12)',
+  green: 'rgba(5,150,105,0.12)',
+  rose: 'rgba(190,18,60,0.12)',
+};
+
+const fgColors: Record<string, string> = {
+  teal: '#0891b2',
+  amber: '#d97706',
+  green: '#059669',
+  rose: '#be123c',
+};
+
+function centerPct(idx: number): number {
+  return ((idx + 0.5) / n) * 100;
+}
+
+const validMessages = messages.filter(
+  (m) => m.from >= 0 && m.from < n && m.to >= 0 && m.to < n && m.from !== m.to
+);
+---
+
+<div class="seq-container">
+  <div class="seq-diagram">
+    <div class="seq-actors" style={`display: grid; grid-template-columns: repeat(${n}, 1fr);`}>
+      {actors.map((actor, i) => {
+        const c = (actor.color || defaultColors[i % defaultColors.length]) as keyof typeof bgColors;
+        return (
+          <div class="seq-actor-col">
+            <span
+              class="seq-actor-pill"
+              style={`background: ${bgColors[c]}; color: ${fgColors[c]};`}
+            >
+              {actor.name}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+
+    <div class="seq-body">
+      {actors.map((_, i) => (
+        <div class="seq-lifeline" style={`left: ${centerPct(i)}%;`} />
+      ))}
+      {validMessages.map((msg) => {
+        const fromPct = centerPct(msg.from);
+        const toPct = centerPct(msg.to);
+        const leftPct = Math.min(fromPct, toPct);
+        const widthPct = Math.abs(toPct - fromPct);
+        const goesRight = msg.to > msg.from;
+        const type = msg.type || 'request';
+        const label = type === 'async' ? `${msg.label} ...` : msg.label;
+
+        return (
+          <div class="seq-msg-row">
+            <div
+              class={`seq-arrow seq-type-${type} ${goesRight ? 'seq-dir-right' : 'seq-dir-left'}`}
+              style={`left: ${leftPct}%; width: ${widthPct}%;`}
+            >
+              <span class="seq-label">{label}</span>
+              <span class="seq-line" />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  </div>
+
+  <div class="seq-compact">
+    {validMessages.map((msg) => {
+      const type = msg.type || 'request';
+      const goesRight = msg.to > msg.from;
+      const label = type === 'async' ? `${msg.label} ...` : msg.label;
+      const fromC = (actors[msg.from].color || defaultColors[msg.from % defaultColors.length]) as keyof typeof fgColors;
+      const toC = (actors[msg.to].color || defaultColors[msg.to % defaultColors.length]) as keyof typeof fgColors;
+
+      return (
+        <div class="seq-compact-row">
+          <div class="seq-compact-actors">
+            <span class="seq-compact-name" style={`color: ${fgColors[fromC]};`}>
+              {actors[msg.from].name}
+            </span>
+            <span class={`seq-compact-dir seq-compact-dir--${type}`}>
+              {goesRight ? '\u2192' : '\u2190'}
+            </span>
+            <span class="seq-compact-name" style={`color: ${fgColors[toC]};`}>
+              {actors[msg.to].name}
+            </span>
+          </div>
+          <span class="seq-compact-label">{label}</span>
+        </div>
+      );
+    })}
+  </div>
+</div>
+
+<style>
+  .seq-container {
+    border: 1px solid var(--color-border);
+    border-radius: 0.5rem;
+    background: var(--color-surface);
+    padding: 1.25rem;
+    margin: 1rem 0;
+    overflow-x: auto;
+  }
+
+  .seq-diagram {
+    min-width: 20rem;
+  }
+
+  .seq-actor-col {
+    display: flex;
+    justify-content: center;
+  }
+
+  .seq-actor-pill {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    font-family: 'IBM Plex Mono', 'Fira Code', monospace;
+    font-size: 0.75rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .seq-body {
+    position: relative;
+    margin-top: 0.75rem;
+    padding: 0.375rem 0;
+  }
+
+  .seq-lifeline {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    border-left: 1.5px dotted var(--color-border);
+  }
+
+  .seq-msg-row {
+    position: relative;
+    height: 2.25rem;
+  }
+
+  .seq-arrow {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.1875rem;
+  }
+
+  .seq-label {
+    font-family: 'IBM Plex Mono', 'Fira Code', monospace;
+    font-size: 0.65rem;
+    color: var(--color-text-dim);
+    background: var(--color-surface);
+    padding: 0 0.375rem;
+    white-space: nowrap;
+    line-height: 1;
+    position: relative;
+    z-index: 1;
+  }
+
+  .seq-line {
+    display: block;
+    width: 100%;
+    height: 0;
+    position: relative;
+  }
+
+  /* Arrow line — default solid for request */
+  .seq-line::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    border-top: 1.5px solid var(--color-accent);
+  }
+
+  .seq-type-response .seq-line::before {
+    border-top-style: dashed;
+  }
+
+  .seq-type-async .seq-line::before {
+    border-top-style: dotted;
+  }
+
+  /* Arrowhead right */
+  .seq-dir-right .seq-line::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: -4px;
+    width: 0;
+    height: 0;
+    border-top: 4px solid transparent;
+    border-bottom: 4px solid transparent;
+    border-left: 6px solid var(--color-accent);
+  }
+
+  /* Arrowhead left */
+  .seq-dir-left .seq-line::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: -4px;
+    width: 0;
+    height: 0;
+    border-top: 4px solid transparent;
+    border-bottom: 4px solid transparent;
+    border-right: 6px solid var(--color-accent);
+  }
+
+  /* --- Mobile compact list --- */
+  .seq-compact {
+    display: none;
+  }
+
+  .seq-compact-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .seq-compact-row:last-child {
+    border-bottom: none;
+  }
+
+  .seq-compact-actors {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    flex-shrink: 0;
+  }
+
+  .seq-compact-name {
+    font-family: 'IBM Plex Mono', 'Fira Code', monospace;
+    font-size: 0.7rem;
+    font-weight: 600;
+  }
+
+  .seq-compact-dir {
+    font-size: 0.85rem;
+    color: var(--color-accent);
+    line-height: 1;
+  }
+
+  .seq-compact-dir--response {
+    opacity: 0.6;
+  }
+
+  .seq-compact-dir--async {
+    opacity: 0.5;
+  }
+
+  .seq-compact-label {
+    font-family: 'IBM Plex Mono', 'Fira Code', monospace;
+    font-size: 0.65rem;
+    color: var(--color-text-dim);
+  }
+
+  @media (max-width: 640px) {
+    .seq-diagram {
+      display: none;
+    }
+    .seq-compact {
+      display: block;
+    }
+  }
+</style>

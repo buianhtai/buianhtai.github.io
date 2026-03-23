@@ -1,0 +1,322 @@
+---
+interface Props {
+  states: Array<{
+    id: string;
+    label: string;
+    description?: string;
+    color?: 'teal' | 'green' | 'amber' | 'rose' | 'violet';
+  }>;
+  transitions: Array<{ from: string; to: string; label: string }>;
+  initialState?: string;
+}
+
+const { states, transitions, initialState } = Astro.props;
+
+const bgColors: Record<string, string> = {
+  teal: 'rgba(8,145,178,0.12)',
+  green: 'rgba(5,150,105,0.12)',
+  amber: 'rgba(217,119,6,0.12)',
+  rose: 'rgba(190,18,60,0.12)',
+  violet: 'rgba(139,92,246,0.12)',
+};
+
+const fgColors: Record<string, string> = {
+  teal: '#0891b2',
+  green: '#059669',
+  amber: '#d97706',
+  rose: '#be123c',
+  violet: '#8b5cf6',
+};
+
+const glowColors: Record<string, string> = {
+  teal: 'rgba(8,145,178,0.18)',
+  green: 'rgba(5,150,105,0.18)',
+  amber: 'rgba(217,119,6,0.18)',
+  rose: 'rgba(190,18,60,0.18)',
+  violet: 'rgba(139,92,246,0.18)',
+};
+
+const defaultColor = 'teal';
+
+// Index states by id for transition lookup
+const stateIdx = new Map(states.map((s, i) => [s.id, i]));
+
+// Categorize transitions into adjacent pairs vs non-adjacent
+interface TransitionGroup {
+  forward: Array<{ from: string; to: string; label: string }>;
+  backward: Array<{ from: string; to: string; label: string }>;
+}
+
+const adjacentGroups = new Map<number, TransitionGroup>();
+const nonAdjacent: typeof transitions = [];
+
+for (const t of transitions) {
+  const fi = stateIdx.get(t.from);
+  const ti = stateIdx.get(t.to);
+  if (fi === undefined || ti === undefined) continue;
+
+  if (Math.abs(ti - fi) === 1) {
+    const minI = Math.min(fi, ti);
+    if (!adjacentGroups.has(minI)) {
+      adjacentGroups.set(minI, { forward: [], backward: [] });
+    }
+    const g = adjacentGroups.get(minI)!;
+    if (ti > fi) g.forward.push(t);
+    else g.backward.push(t);
+  } else {
+    nonAdjacent.push(t);
+  }
+}
+
+// Build interleaved elements: state, connector, state, connector, ...
+type El =
+  | { kind: 'state'; state: (typeof states)[0]; isInitial: boolean }
+  | { kind: 'connector'; group: TransitionGroup };
+
+const elements: El[] = [];
+for (let i = 0; i < states.length; i++) {
+  elements.push({
+    kind: 'state',
+    state: states[i],
+    isInitial: states[i].id === initialState,
+  });
+  if (i < states.length - 1) {
+    elements.push({
+      kind: 'connector',
+      group: adjacentGroups.get(i) || { forward: [], backward: [] },
+    });
+  }
+}
+---
+
+<div class="sg-container">
+  <div class="sg-flow">
+    {elements.map((el) => {
+      if (el.kind === 'state') {
+        const s = el.state;
+        const c = (s.color || defaultColor) as keyof typeof fgColors;
+        const borderStyle = `border-left-color: ${fgColors[c]};`;
+        const glowStyle = el.isInitial ? ` box-shadow: 0 0 0 2px ${glowColors[c]};` : '';
+        return (
+          <div
+            class={`sg-state ${el.isInitial ? 'sg-state--initial' : ''}`}
+            style={`${borderStyle}${glowStyle}`}
+          >
+            <div class="sg-state-label">{s.label}</div>
+            {s.description && (
+              <div class="sg-state-desc">{s.description}</div>
+            )}
+          </div>
+        );
+      } else {
+        const { forward, backward } = el.group;
+        const hasArrows = forward.length > 0 || backward.length > 0;
+        if (!hasArrows) {
+          return <div class="sg-connector sg-connector--empty" />;
+        }
+        return (
+          <div class="sg-connector">
+            {forward.map((t) => (
+              <div class="sg-transition sg-transition--forward">
+                <span class="sg-transition-label">{t.label}</span>
+                <span class="sg-transition-arrow">{'\u2192'}</span>
+              </div>
+            ))}
+            {backward.map((t) => (
+              <div class="sg-transition sg-transition--backward">
+                <span class="sg-transition-arrow">{'\u2190'}</span>
+                <span class="sg-transition-label">{t.label}</span>
+              </div>
+            ))}
+          </div>
+        );
+      }
+    })}
+  </div>
+
+  {nonAdjacent.length > 0 && (
+    <div class="sg-extra">
+      {nonAdjacent.map((t) => {
+        const fromState = states.find((s) => s.id === t.from);
+        const toState = states.find((s) => s.id === t.to);
+        const fromC = (fromState?.color || defaultColor) as keyof typeof fgColors;
+        const toC = (toState?.color || defaultColor) as keyof typeof fgColors;
+        return (
+          <div class="sg-extra-row">
+            <span class="sg-extra-state" style={`color: ${fgColors[fromC]};`}>
+              {fromState?.label || t.from}
+            </span>
+            <span class="sg-extra-arrow">{'\u2192'}</span>
+            <span class="sg-extra-state" style={`color: ${fgColors[toC]};`}>
+              {toState?.label || t.to}
+            </span>
+            <span class="sg-extra-label">{t.label}</span>
+          </div>
+        );
+      })}
+    </div>
+  )}
+</div>
+
+<style>
+  .sg-container {
+    border: 1px solid var(--color-border);
+    border-radius: 0.5rem;
+    background: var(--color-surface);
+    padding: 1.25rem;
+    margin: 1rem 0;
+    overflow-x: auto;
+  }
+
+  .sg-flow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: nowrap;
+  }
+
+  /* --- State cards --- */
+  .sg-state {
+    padding: 0.625rem 1rem;
+    border: 1.5px solid var(--color-border);
+    border-left: 3px solid;
+    border-radius: 0.5rem;
+    background: var(--color-bg);
+    text-align: left;
+    flex-shrink: 0;
+    min-width: 6rem;
+  }
+
+  .sg-state-label {
+    font-weight: 700;
+    font-size: 0.8rem;
+    color: var(--color-text);
+    line-height: 1.3;
+  }
+
+  .sg-state-desc {
+    font-family: 'IBM Plex Mono', 'Fira Code', monospace;
+    font-size: 0.65rem;
+    color: var(--color-text-dim);
+    margin-top: 0.125rem;
+  }
+
+  /* --- Connectors between states --- */
+  .sg-connector {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0 0.5rem;
+    flex-shrink: 0;
+  }
+
+  .sg-connector--empty {
+    width: 1.5rem;
+    position: relative;
+  }
+
+  .sg-connector--empty::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    border-top: 1.5px dotted var(--color-border);
+  }
+
+  .sg-transition {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  .sg-transition-label {
+    font-family: 'IBM Plex Mono', 'Fira Code', monospace;
+    font-size: 0.6rem;
+    color: var(--color-text-dim);
+    white-space: nowrap;
+  }
+
+  .sg-transition-arrow {
+    font-size: 1rem;
+    color: var(--color-accent);
+    line-height: 1;
+  }
+
+  .sg-transition--backward {
+    opacity: 0.7;
+  }
+
+  /* --- Non-adjacent transitions footer --- */
+  .sg-extra {
+    margin-top: 0.875rem;
+    padding-top: 0.625rem;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .sg-extra-row {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.25rem 0;
+  }
+
+  .sg-extra-state {
+    font-family: 'IBM Plex Mono', 'Fira Code', monospace;
+    font-size: 0.7rem;
+    font-weight: 600;
+  }
+
+  .sg-extra-arrow {
+    font-size: 0.85rem;
+    color: var(--color-accent);
+    line-height: 1;
+  }
+
+  .sg-extra-label {
+    font-family: 'IBM Plex Mono', 'Fira Code', monospace;
+    font-size: 0.6rem;
+    color: var(--color-text-dim);
+    padding-left: 0.25rem;
+  }
+
+  /* --- Mobile --- */
+  @media (max-width: 640px) {
+    .sg-flow {
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .sg-state {
+      width: 100%;
+      min-width: auto;
+    }
+
+    .sg-connector {
+      padding: 0.375rem 0;
+      flex-direction: row;
+      gap: 0.5rem;
+    }
+
+    .sg-connector--empty {
+      width: auto;
+      height: 1.25rem;
+    }
+
+    .sg-connector--empty::after {
+      top: 0;
+      bottom: 0;
+      left: 50%;
+      right: auto;
+      border-top: none;
+      border-left: 1.5px dotted var(--color-border);
+      height: 100%;
+      width: 0;
+    }
+
+    .sg-transition-arrow {
+      transform: rotate(90deg);
+    }
+  }
+</style>
