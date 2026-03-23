@@ -1,0 +1,480 @@
+---
+title: "Keycloak: How Open Source IAM Serves 33,000 Stars Worth of Trust"
+description: "A deep dive into Keycloak's architecture — Quarkus runtime, SPI extension system, OIDC/SAML/LDAP federation, React admin console, and why CERN, Hitachi, and Accenture bet their auth on it."
+pubDate: 2026-03-23
+tags: ["architecture", "security", "devops", "java"]
+lang: "en"
+category: "architecture"
+---
+
+import Card from '../../../components/mdx/Card.astro';
+import Label from '../../../components/mdx/Label.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import ArchLayer from '../../../components/mdx/ArchLayer.astro';
+import Pipeline from '../../../components/mdx/Pipeline.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import Mermaid from '../../../components/mdx/Mermaid.astro';
+
+Every non-trivial application needs authentication. You can wire up JWT validation, session management, password hashing, MFA, social login, SAML federation, and LDAP sync yourself — or you can deploy a system that's already handled those problems for CERN's 300,000 users, Japanese pharmaceutical networks with 2M+ patients, and Austrian government portals serving millions of businesses.
+
+[Keycloak](https://github.com/keycloak/keycloak) is that system: an open-source identity and access management server, Apache 2.0 licensed, CNCF incubating, backed by Red Hat. It speaks OIDC, OAuth 2.0, and SAML 2.0 natively. It federates against LDAP/Active Directory out of the box. It handles SSO across dozens of applications without your users ever seeing a second login screen.
+
+<HeroGrid items={[
+  { label: "33,500+", sublabel: "GitHub Stars\nCNCF Incubating", color: "#0891b2" },
+  { label: "v26.5", sublabel: "Latest Release\nQuarkus Runtime", color: "#059669" },
+  { label: "1,350+", sublabel: "Contributors\n8,100+ Forks", color: "#d97706" },
+  { label: "$0/user", sublabel: "No Per-MAU Pricing\nApache 2.0", color: "#e11d48" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> Why Keycloak Exists
+
+Building authentication is deceptively complex. A login form is trivial. Enterprise-grade identity management — with SSO, token rotation, MFA, federation, fine-grained authorization, and regulatory compliance — is not.
+
+<Card>
+
+| Problem | DIY Cost | Keycloak Solution |
+|---------|----------|-------------------|
+| **SSO across apps** | Weeks of session/cookie engineering | Built-in, works with any OIDC/SAML client |
+| **LDAP/AD federation** | Custom sync logic, password delegation | Native LDAP provider, configurable sync |
+| **Social login** | OAuth client per provider, profile mapping | 20+ built-in identity providers |
+| **MFA / Passkeys** | TOTP library + WebAuthn integration | Configurable authentication flows |
+| **User management** | Admin UI, self-service, password policies | Full admin console + account console |
+| **Token management** | JWT signing, refresh rotation, revocation | Complete OIDC token lifecycle |
+
+Keycloak's vision follows the 80/20 rule: support 80% of use cases out of the box, and provide SPIs for the remaining 20% through custom extensions.
+
+</Card>
+
+---
+
+## <Label color="green">2</Label> Architecture
+
+Keycloak runs on Quarkus (since v20, replacing the original WildFly distribution) — a cloud-native Java framework optimized for fast startup and low memory. Four layers from HTTP to persistence:
+
+<ArchLayer badge="HTTP" badgeColor="teal" label="Web Layer" items={["RESTEasy 6.2", "Undertow 2.3", "OIDC/SAML Endpoints", "Admin REST API"]} />
+
+<ArchLayer badge="SVC" badgeColor="green" label="Services Layer" items={["Authentication Flows", "Authorization", "User Federation", "Event System"]} />
+
+<ArchLayer badge="SPI" badgeColor="amber" label="Extension Layer" items={["20+ SPIs", "Custom Authenticators", "Protocol Mappers", "User Storage"]} />
+
+<ArchLayer badge="DB" badgeColor="rose" label="Persistence Layer" items={["Hibernate 6.2", "Infinispan 16.0", "Liquibase Migrations", "PostgreSQL/MySQL/Oracle"]} />
+
+<Mermaid chart={`flowchart TD
+  Client["Application / Browser"]:::tealNode
+  Client -->|"OIDC / SAML / OAuth 2.0"| EP
+
+  subgraph KC["Keycloak Server (Quarkus)"]
+    EP["Protocol Endpoints<br/>Token, Auth, UserInfo"]:::tealNode
+    EP --> AF["Authentication Flow Engine<br/>Login, MFA, Step-up"]:::greenNode
+    EP --> AZ["Authorization Services<br/>Policies, Permissions, Resources"]:::greenNode
+    AF --> SPI["SPI Extension Layer<br/>Authenticators, Mappers, Storage"]:::amberNode
+    AZ --> SPI
+    SPI --> UF["User Federation<br/>LDAP, Kerberos, Custom"]:::amberNode
+    SPI --> MODEL["Model Layer<br/>JPA + Infinispan"]:::roseNode
+    MODEL --> DB["Database<br/>PostgreSQL / MySQL"]:::roseNode
+    MODEL --> CACHE["Infinispan Cache<br/>Sessions, Realms, Users"]:::roseNode
+  end
+
+  classDef tealNode fill:#0891b222,stroke:#0891b2,stroke-width:2px,color:#0891b2
+  classDef greenNode fill:#05966922,stroke:#059669,stroke-width:2px,color:#059669
+  classDef amberNode fill:#d9770622,stroke:#d97706,stroke-width:2px,color:#d97706
+  classDef roseNode fill:#e11d4822,stroke:#e11d48,stroke-width:2px,color:#e11d48
+`} caption="Keycloak architecture: protocol endpoints → authentication/authorization → SPI extensions → JPA + Infinispan persistence" />
+
+<Callout color="green">
+The Quarkus migration (completed in v20) reduced container image CVEs by 82%, cut startup time dramatically, and enabled Kubernetes-native deployment via the Keycloak Operator. The WildFly distribution is no longer supported.
+</Callout>
+
+---
+
+## <Label color="amber">3</Label> Module Structure
+
+The Keycloak monorepo spans **11,893 tracked files** — 7,673 Java, 1,037 TypeScript/JavaScript, 470 XML configs, 126 FreeMarker templates — organized into ~30 top-level Maven modules:
+
+<DataTable
+  caption="Core Modules"
+  accent="amber"
+  headers={["Module", "Purpose", "Key Tech"]}
+  rows={[
+    { "Module": "services/", "Purpose": "Core business logic — authentication, authorization, user management, protocol handling", "Key Tech": "Java 17, CDI" },
+    { "Module": "server-spi/", "Purpose": "Public extension API — the stable interface for custom providers", "Key Tech": "Java interfaces" },
+    { "Module": "server-spi-private/", "Purpose": "Internal extension API — broader but less stable interface", "Key Tech": "Java interfaces" },
+    { "Module": "model/jpa/", "Purpose": "Database persistence — entity mappings, queries, migrations", "Key Tech": "Hibernate 6.2, Liquibase" },
+    { "Module": "model/infinispan/", "Purpose": "Distributed cache — sessions, realms, user lookups", "Key Tech": "Infinispan 16.0" },
+    { "Module": "quarkus/", "Purpose": "Quarkus runtime — deployment, configuration, container builds", "Key Tech": "Quarkus 3.33" },
+    { "Module": "js/apps/admin-ui/", "Purpose": "Admin Console — realm, client, user management UI", "Key Tech": "React 18, PatternFly 5, Vite 7" },
+    { "Module": "js/apps/account-ui/", "Purpose": "Account Console — self-service user profile management", "Key Tech": "React 18, PatternFly 5" },
+    { "Module": "federation/ldap/", "Purpose": "LDAP/Active Directory user federation provider", "Key Tech": "JNDI, Kerberos" },
+    { "Module": "authz/", "Purpose": "Authorization services — policy engine, resource permissions", "Key Tech": "UMA 2.0" },
+    { "Module": "operator/", "Purpose": "Kubernetes Operator — CRD-based deployment and lifecycle management", "Key Tech": "Quarkus Operator SDK" },
+    { "Module": "themes/", "Purpose": "Login, account, email, and admin themes — FreeMarker templates + CSS", "Key Tech": "FreeMarker, CSS" },
+  ]}
+/>
+
+The `services/` directory alone contains 40+ sub-packages covering every aspect of identity management:
+
+```
+services/src/main/java/org/keycloak/
+├── authentication/    # Login flows, MFA, step-up auth
+├── authorization/     # Policy evaluation, permissions
+├── broker/            # Identity brokering (social, enterprise IdPs)
+├── credential/        # Password, OTP, WebAuthn credential management
+├── email/             # Email verification, password reset
+├── events/            # Audit events, admin events
+├── forms/             # Registration, profile update forms
+├── keys/              # Key management, rotation, signing
+├── organization/      # Multi-tenancy (Organizations feature)
+├── protocol/          # OIDC, SAML protocol implementations
+├── social/            # Social login providers
+├── userprofile/       # User attribute management
+└── workflow/          # Approval workflows (preview)
+```
+
+---
+
+## <Label color="rose">4</Label> Protocol Support
+
+Keycloak natively speaks three identity protocols — a rarity among open-source IAM solutions:
+
+<Pipeline
+  nodes={[
+    { title: "Application", subtitle: "Your Code" },
+    { title: "Keycloak", subtitle: "Identity Broker" },
+    { title: "Enterprise IdP", subtitle: "SAML / LDAP / AD" }
+  ]}
+  arrows={[
+    { label: "OIDC / OAuth 2.0", direction: "right" },
+    { label: "SAML 2.0 / LDAP", direction: "right" }
+  ]}
+  footer="Your application speaks OIDC. Keycloak handles SAML/LDAP federation upstream. One protocol on your side, any protocol on the identity provider side."
+/>
+
+<DataTable
+  caption="Protocol Matrix"
+  accent="teal"
+  headers={["Protocol", "Use Case", "Keycloak Support"]}
+  rows={[
+    { "Protocol": "OpenID Connect", "Use Case": "Modern web/mobile SSO, API auth", "Keycloak Support": "Full — Authorization Code + PKCE, Client Credentials, Device Auth" },
+    { "Protocol": "OAuth 2.0", "Use Case": "Delegated authorization, API scopes", "Keycloak Support": "Full — Token Exchange, DPoP, FAPI 2.0, JWT Authorization Grants" },
+    { "Protocol": "SAML 2.0", "Use Case": "Enterprise federation, legacy apps", "Keycloak Support": "Full — SP and IdP modes, artifact binding, signed assertions" },
+    { "Protocol": "LDAP/AD", "Use Case": "Corporate directory sync", "Keycloak Support": "Full — Read/write sync, Kerberos/SPNEGO, password delegation" },
+    { "Protocol": "SCIM 2.0", "Use Case": "Cross-domain user provisioning", "Keycloak Support": "New in v26 — inbound provisioning from enterprise IdPs" },
+    { "Protocol": "FIDO2/WebAuthn", "Use Case": "Passwordless, passkeys", "Keycloak Support": "GA since v26.4 — resident keys, platform authenticators" },
+  ]}
+/>
+
+<Callout color="teal">
+**FAPI 2.0 compliance** (GA in v26.4) makes Keycloak suitable for financial-grade APIs — a certification that competitors like Authentik and Ory lack. DPoP (Demonstrating Proof-of-Possession) binds tokens to the client's key pair, preventing token theft.
+</Callout>
+
+---
+
+## <Label color="teal">5</Label> The SPI Extension System
+
+Keycloak's architecture is built around Service Provider Interfaces — 20+ extension points where you plug in custom behavior without forking the core:
+
+<Card>
+
+```java
+// Example: Custom Authenticator
+public class CaptchaAuthenticator implements Authenticator {
+
+    @Override
+    public void authenticate(AuthenticationFlowContext context) {
+        // Show CAPTCHA challenge
+        Response challenge = context.form()
+            .setAttribute("captchaSiteKey", getSiteKey())
+            .createForm("captcha-form.ftl");
+        context.challenge(challenge);
+    }
+
+    @Override
+    public void action(AuthenticationFlowContext context) {
+        String captchaResponse = context.getHttpRequest()
+            .getDecodedFormParameters().getFirst("captcha");
+        if (verifyCaptcha(captchaResponse)) {
+            context.success();
+        } else {
+            context.failureChallenge(AuthenticationFlowError.INVALID_CREDENTIALS,
+                context.form().setError("captchaFailed").createForm("captcha-form.ftl"));
+        }
+    }
+}
+```
+
+Deploy: package as JAR → copy to `providers/` → run `kc.sh build`. Zero core modification.
+
+</Card>
+
+Every SPI follows the same bootstrapping pattern — declare a `Spi` implementation that names the extension point, its provider interface, and its factory:
+
+<Card>
+
+```java
+// How Keycloak discovers SPIs internally (ThemeSpi example)
+public class ThemeSpi implements Spi {
+    @Override
+    public String getName() { return "theme"; }
+
+    @Override
+    public Class<? extends Provider> getProviderClass() {
+        return ThemeProvider.class;
+    }
+
+    @Override
+    public Class<? extends ProviderFactory> getProviderFactoryClass() {
+        return ThemeProviderFactory.class;
+    }
+}
+```
+
+Concrete providers like `FolderThemeProvider` (filesystem) and `JarThemeProviderFactory` (classpath) implement this SPI. At startup, Quarkus's `KeycloakRecorder` discovers all SPIs and wires them into the `KeycloakSessionFactory` — a closed-world set with zero runtime scanning overhead.
+
+</Card>
+
+<DataTable
+  caption="Key Extension Points (SPIs)"
+  accent="green"
+  headers={["SPI", "What You Extend", "Example"]}
+  rows={[
+    { "SPI": "Authenticator", "What You Extend": "Login flow steps", "Example": "CAPTCHA, risk-based auth, hardware tokens" },
+    { "SPI": "ProtocolMapper", "What You Extend": "Token claims", "Example": "Add department, manager, custom attributes to JWT" },
+    { "SPI": "UserStorageProvider", "What You Extend": "User data source", "Example": "Federate from REST API, legacy DB, CSV" },
+    { "SPI": "IdentityProvider", "What You Extend": "External IdP integration", "Example": "Custom enterprise SAML, proprietary SSO" },
+    { "SPI": "EventListener", "What You Extend": "Audit/notification hooks", "Example": "Send Slack alerts on failed logins, sync to SIEM" },
+    { "SPI": "RequiredAction", "What You Extend": "Post-login requirements", "Example": "Terms acceptance, profile completion, forced MFA setup" },
+    { "SPI": "FormAction", "What You Extend": "Registration/profile forms", "Example": "Custom validation, external verification" },
+    { "SPI": "Theme", "What You Extend": "Login/account UI", "Example": "Corporate branding, custom CSS, localization" },
+  ]}
+/>
+
+<Callout color="amber">
+The SPI system has two layers: **`server-spi`** (public, stable API) and **`server-spi-private`** (internal, may change between versions). Build against the public SPI for upgrade safety. The private SPI gives deeper access but carries breaking-change risk.
+</Callout>
+
+---
+
+## <Label color="green">6</Label> The Admin Console (React + PatternFly 5)
+
+The admin console was rewritten from AngularJS to React (completed in v26.x). It's a full single-page application built with modern frontend tooling:
+
+<DataTable
+  caption="Admin Console Tech Stack"
+  accent="green"
+  headers={["Layer", "Technology", "Version"]}
+  rows={[
+    { "Layer": "Framework", "Technology": "React", "Version": "18.3" },
+    { "Layer": "UI Library", "Technology": "PatternFly 5 (Red Hat design system)", "Version": "5.4" },
+    { "Layer": "Build Tool", "Technology": "Vite", "Version": "7.3" },
+    { "Layer": "Testing", "Technology": "Vitest + Playwright", "Version": "4.0 / 1.57" },
+    { "Layer": "Package Manager", "Technology": "pnpm (workspace monorepo)", "Version": "Latest" },
+    { "Layer": "Routing", "Technology": "react-router-dom", "Version": "6.30" },
+    { "Layer": "Forms", "Technology": "react-hook-form", "Version": "7.70" },
+    { "Layer": "Flow Editor", "Technology": "ReactFlow (for auth flow visualization)", "Version": "11.11" },
+    { "Layer": "i18n", "Technology": "i18next", "Version": "25.7" },
+  ]}
+/>
+
+The `js/` directory is a pnpm workspace monorepo:
+
+```
+js/
+├── apps/
+│   ├── admin-ui/          # Full admin console (React SPA)
+│   ├── account-ui/        # Self-service account management
+│   ├── create-keycloak-theme/  # CLI tool for theme scaffolding
+│   └── keycloak-server/   # Dev server for local UI development
+├── libs/
+│   ├── keycloak-admin-client/  # TypeScript admin API client
+│   └── ui-shared/              # Shared React components
+└── themes-vendor/         # Vendored theme dependencies
+```
+
+<Callout color="green">
+The `create-keycloak-theme` CLI tool lets you scaffold a custom admin or login theme in minutes — similar to `create-react-app` but for Keycloak themes. The admin UI itself is published as `@keycloak/keycloak-admin-ui` on npm for embedding in custom admin portals.
+</Callout>
+
+---
+
+## <Label color="amber">7</Label> Performance at Scale
+
+Keycloak publishes official benchmarks (October 2025) running on OpenShift with Aurora PostgreSQL:
+
+<DataTable
+  caption="Scaling Results (100,000 test users, 3 availability zones)"
+  accent="amber"
+  headers={["Login Rate", "Token Refresh Rate", "CPU", "Memory", "Database"]}
+  rows={[
+    { "Login Rate": "500/sec", "Token Refresh Rate": "2,500/sec", "CPU": "4 vCPU", "Memory": "3 GB", "Database": "db.r8g.2xlarge" },
+    { "Login Rate": "1,000/sec", "Token Refresh Rate": "5,000/sec", "CPU": "8 vCPU", "Memory": "3 GB", "Database": "db.r8g.4xlarge" },
+    { "Login Rate": "2,000/sec", "Token Refresh Rate": "10,000/sec", "CPU": "8 vCPU", "Memory": "3 GB", "Database": "db.r8g.16xlarge" },
+  ]}
+/>
+
+**Key scaling rules:**
+- **1 vCPU** ≈ 15 password logins/second
+- **1 GB heap** ≈ 100 concurrent sessions
+- Database latency is the bottleneck — Infinispan caching reduces DB load significantly
+- Near-linear vertical scaling up to 12,000 requests/second
+
+<Callout color="amber">
+**Zero-downtime patching** (enabled by default since v26.6) means you can roll out patch releases without taking the service down. Graceful HTTP shutdown drains active connections before stopping — critical for production deployments behind load balancers.
+</Callout>
+
+---
+
+## <Label color="rose">8</Label> Competitive Landscape
+
+<DataTable
+  caption="Keycloak vs. Alternatives"
+  accent="rose"
+  headers={["Feature", "Keycloak", "Auth0/Okta", "FusionAuth", "Ory", "Authentik"]}
+  rows={[
+    { "Feature": "License", "Keycloak": "Apache 2.0", "Auth0/Okta": "Proprietary", "FusionAuth": "Proprietary (CE free)", "Ory": "Apache 2.0", "Authentik": "GPL → Enterprise" },
+    { "Feature": "Deployment", "Keycloak": "Self-hosted / K8s", "Auth0/Okta": "SaaS only", "FusionAuth": "Self-hosted / Cloud", "Ory": "Self-hosted / Cloud", "Authentik": "Self-hosted" },
+    { "Feature": "SAML 2.0", "Keycloak": "Full (IdP + SP)", "Auth0/Okta": "Full", "FusionAuth": "Full", "Ory": "Limited", "Authentik": "Full" },
+    { "Feature": "LDAP/AD", "Keycloak": "Native federation", "Auth0/Okta": "Enterprise tier", "FusionAuth": "Via connector", "Ory": "Via Keto", "Authentik": "Native" },
+    { "Feature": "FAPI 2.0", "Keycloak": "GA (v26.4)", "Auth0/Okta": "Yes", "FusionAuth": "Limited", "Ory": "Yes", "Authentik": "No" },
+    { "Feature": "Passkeys", "Keycloak": "GA (v26.4)", "Auth0/Okta": "Yes", "FusionAuth": "Yes", "Ory": "Yes", "Authentik": "Yes" },
+    { "Feature": "Pricing at 100K users", "Keycloak": "$0 (infra only)", "Auth0/Okta": "$$$$ (per-MAU)", "FusionAuth": "$$ (tiers)", "Ory": "$0 (infra only)", "Authentik": "$0 (infra only)" },
+    { "Feature": "Enterprise Support", "Keycloak": "Red Hat (RHBK)", "Auth0/Okta": "Included", "FusionAuth": "Included", "Ory": "Ory Cloud", "Authentik": "Enterprise license" },
+  ]}
+/>
+
+**When Keycloak wins:**
+- You need SAML brokering (enterprise federation with legacy IdPs)
+- Data residency requirements mandate self-hosting
+- Cost predictability — no per-MAU pricing surprises at scale
+- You need FAPI 2.0 compliance for financial services
+- Red Hat support is available through your existing subscription
+
+**When alternatives win:**
+- **Auth0/Okta**: Zero operational overhead, managed service
+- **Ory**: API-first headless architecture, better for microservices
+- **FusionAuth**: Simpler admin UX, faster time-to-value
+- **Authentik**: Python stack, simpler for smaller teams
+
+---
+
+## <Label color="teal">9</Label> Getting Started
+
+Three commands to a running identity server:
+
+<FlowStep step="1" color="teal" title="Docker (development)">
+
+```bash
+docker run -p 8080:8080 \
+  -e KC_BOOTSTRAP_ADMIN_USERNAME=admin \
+  -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin \
+  quay.io/keycloak/keycloak:26.5 start-dev
+```
+
+Open `http://localhost:8080` → Admin Console → create a realm, client, and users.
+
+</FlowStep>
+
+<FlowStep step="2" color="green" title="Kubernetes (production)">
+
+```yaml
+# Install the Operator
+kubectl apply -f https://raw.githubusercontent.com/keycloak/keycloak-k8s-resources/26.5/kubernetes/keycloaks.k8s.keycloak.org-v1.yml
+
+# Deploy a Keycloak CR
+apiVersion: k8s.keycloak.org/v2alpha1
+kind: Keycloak
+metadata:
+  name: my-keycloak
+spec:
+  instances: 3
+  db:
+    vendor: postgres
+    url: jdbc:postgresql://postgres:5432/keycloak
+  hostname:
+    hostname: auth.example.com
+```
+
+The Kubernetes Operator handles rolling upgrades, database migrations, and TLS configuration.
+
+</FlowStep>
+
+<FlowStep step="3" color="amber" title="Connect your app (Spring Boot example)">
+
+```yaml
+# application.yml — no Keycloak adapter needed
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: https://auth.example.com/realms/my-realm
+```
+
+```java
+@Configuration
+@EnableWebSecurity
+public class SecurityConfig {
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        http.authorizeHttpRequests(auth -> auth
+            .requestMatchers("/public/**").permitAll()
+            .requestMatchers("/admin/**").hasRole("ADMIN")
+            .anyRequest().authenticated())
+            .oauth2ResourceServer(oauth2 -> oauth2.jwt());
+        return http.build();
+    }
+}
+```
+
+Standard Spring Security — no vendor-specific adapter. Works with any OIDC-compliant server.
+
+</FlowStep>
+
+---
+
+## <Label color="green">10</Label> Version History & Roadmap
+
+<DataTable
+  caption="Major Milestones"
+  accent="teal"
+  headers={["Version", "Date", "Milestone"]}
+  rows={[
+    { "Version": "1.0", "Date": "Sep 2014", "Milestone": "Initial release (WildFly-based)" },
+    { "Version": "17.0", "Date": "Jan 2022", "Milestone": "Quarkus distribution becomes default" },
+    { "Version": "20.0", "Date": "Oct 2023", "Milestone": "WildFly distribution removed" },
+    { "Version": "—", "Date": "Apr 2023", "Milestone": "Accepted as CNCF Incubating project" },
+    { "Version": "26.0", "Date": "Oct 2024", "Milestone": "Organizations (multi-tenancy) GA" },
+    { "Version": "26.1", "Date": "Jan 2025", "Milestone": "PatternFly 5 admin console, Argon2 default" },
+    { "Version": "26.2", "Date": "Apr 2025", "Milestone": "Standard Token Exchange, Fine-grained Admin Permissions v2" },
+    { "Version": "26.4", "Date": "Sep 2025", "Milestone": "Passkeys GA, FAPI 2.0 Final, DPoP GA" },
+    { "Version": "26.5", "Date": "Jan 2026", "Milestone": "Workflows (preview), MCP authorization, OpenTelemetry" },
+    { "Version": "26.6", "Date": "Mar 2026", "Milestone": "JWT Auth Grants, Zero-downtime patching, Java 25 support" },
+  ]}
+/>
+
+**Coming next (v27+ horizon):**
+- Fine-grained Admin Permissions v1 removal (v2 replaces it)
+- Token Exchange v1 deprecation (Standard Token Exchange replaces it)
+- EUDI Wallet integration (verifiable credentials)
+- Workload identity (SPIFFE, Kubernetes service account tokens)
+- Agent-to-agent authentication (MCP authorization server patterns)
+
+---
+
+## What Makes It Different
+
+Keycloak isn't the newest or the flashiest IAM solution. It's the one that organizations choose when they need **protocol completeness, extension depth, and cost predictability at scale**.
+
+1. **Protocol breadth** — OIDC + SAML + LDAP + SCIM + FIDO2 in a single server. Most alternatives lack native SAML brokering.
+2. **SPI architecture** — 20+ extension points. Custom authenticators, protocol mappers, user storage providers — all deployable as JARs without forking.
+3. **Enterprise federation** — LDAP/AD sync, Kerberos/SPNEGO, identity brokering with any SAML/OIDC provider. The glue between modern apps and legacy identity infrastructure.
+4. **Zero per-user cost** — Scales to millions of users with only infrastructure costs. Auth0 pricing becomes prohibitive past 25K MAU.
+5. **CNCF governance** — Community-driven, not controlled by a single vendor's roadmap. 1,350+ contributors, Red Hat backing for enterprise support.
+6. **Kubernetes-native** — Operator-managed deployment, CRD-based configuration, rolling upgrades with zero downtime.
+
+The project is a decade old, actively maintained with quarterly releases, and trusted by organizations from CERN to UnitedHealthcare. For teams with the operational expertise to run it, Keycloak is the most capable open-source identity server available.
+
+Open source: [github.com/keycloak/keycloak](https://github.com/keycloak/keycloak) (33,500 stars, Apache 2.0, Java + TypeScript).
