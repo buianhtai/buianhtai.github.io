@@ -17,12 +17,13 @@ import Callout from '../../../components/mdx/Callout.astro';
 import Mermaid from '../../../components/mdx/Mermaid.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
 
-Most multi-agent systems bolt coordination on as an afterthought — shared memory, message queues, supervisors watching supervisors. GoClaw takes a radically different approach: **everything agents know about their team comes from a generated markdown file.** No special APIs, no team-aware code paths in the loop. The loop is team-agnostic — TEAM.md is the entire abstraction.
+Most multi-agent systems bolt coordination on as an afterthought — shared memory, message queues, supervisors watching supervisors. [GoClaw](https://github.com/nextlevelbuilder/goclaw) takes a radically different approach: **everything agents know about their team comes from a generated markdown file.** No special APIs, no team-aware code paths in the loop. The loop is team-agnostic — TEAM.md is the entire abstraction.
 
 <HeroGrid items={[
   { label: "Teams", sublabel: "Lead + Members with shared\nworkspace and task board", color: "#0891b2" },
   { label: "Delegation", sublabel: "Sync + async, mandatory\ntask tracking, parallel batching", color: "#059669" },
   { label: "Task Boards", sublabel: "Shared mutable state across\nagents with atomic claiming", color: "#d97706" },
+  { label: "v2.0.0+", sublabel: "Blocker Escalation\nAudit Events + Review", color: "#e11d48" },
 ]} />
 
 ---
@@ -288,6 +289,22 @@ Tasks can declare `blocked_by` — a list of prerequisite task IDs. Blocked task
 ### Auto-Completion
 
 When a delegation finishes, the linked task is automatically marked complete. Files created during execution are auto-linked. Events are recorded. The delegation session is cleaned up. No manual bookkeeping.
+
+</Card>
+
+---
+
+## <Label color="rose">7</Label> What v2.0.0+ Adds to Teams
+
+<Card>
+
+**Task Hints for Weak Models** — Smaller or less capable models now receive additional task-board usage hints in the TEAM.md injection. The system detects model capability tiers and adjusts the instructions accordingly, preventing weaker models from misusing the task board API.
+
+**Blocker Escalation** — When a task is blocked and the blocker hasn't been resolved within a configurable timeout, the team lead receives an escalation notification. This prevents tasks from silently stalling in the blocked state.
+
+**Audit Events** — All team operations (task creation, claiming, completion, delegation, mailbox messages) now emit structured audit events. These feed into the delegation history system, giving team leads a queryable trail of who did what and when.
+
+**Review Workflow** — Team tasks can now require explicit review before completion. When a member marks a task as done, it enters a "pending review" state. The lead (or a designated reviewer agent) must approve it before the task closes — preventing premature completion of complex deliverables.
 
 </Card>
 

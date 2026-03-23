@@ -17,12 +17,13 @@ import Callout from '../../../components/mdx/Callout.astro';
 import Mermaid from '../../../components/mdx/Mermaid.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
 
-An LLM can read files, run shell commands, fetch URLs, and call APIs. Hand it credentials and internet access in production, and you've built an SSRF vector that takes instructions from strangers. GoClaw's security model doesn't bolt on protections after the fact — it threads five independent defense layers through every request, so that even if one layer fails, four more stand between the attacker and your infrastructure.
+An LLM can read files, run shell commands, fetch URLs, and call APIs. Hand it credentials and internet access in production, and you've built an SSRF vector that takes instructions from strangers. [GoClaw](https://github.com/nextlevelbuilder/goclaw)'s security model doesn't bolt on protections after the fact — it threads five independent defense layers through every request, so that even if one layer fails, four more stand between the attacker and your infrastructure.
 
 <HeroGrid items={[
   { label: "5 Layers", sublabel: "Gateway → Global → Agent\nChannel → Owner", color: "#0891b2" },
   { label: "AES-256-GCM", sublabel: "All API keys encrypted at rest\nDecrypted only at call time", color: "#059669" },
   { label: "6 Injection Patterns", sublabel: "InputGuard scans every message\nBefore LLM sees it", color: "#be123c" },
+  { label: "v2.0.0", sublabel: "Multi-Tenant Isolation\n6 Security Hardening Passes", color: "#e11d48" },
 ]} />
 
 ---
@@ -254,6 +255,22 @@ After every tool execution, output is scanned for leaked credentials before it e
 **Dynamic scrubbing** — credential values registered at runtime via `AddCredentialScrubValues()`. When an API key is decrypted for a provider call, its value is registered for scrubbing. If that value appears anywhere in tool output, it's replaced with `[REDACTED]`. Minimum 6 characters to avoid false positives.
 
 Additionally, server IPs and runtime-discovered sensitive values are registered via `AddDynamicScrubValues()` and replaced with `[SERVER_IP]` — preventing SSRF reconnaissance through error messages that leak internal addresses.
+
+</Card>
+
+---
+
+## <Label color="rose">6</Label> What v2.0.0 Adds to Security
+
+<Card>
+
+**Multi-Tenant SQL Isolation** — Every database query is scoped by `tenant_id`. No cross-tenant data leakage is possible at the store layer — queries that omit tenant context fail at the type level.
+
+**API Key Management** — Multi-key authentication with RBAC scopes, SHA-256 hashed storage, show-once pattern, optional expiry, and revocation. Keys work across both HTTP and WebSocket.
+
+**MCP Prompt Injection Protection** — MCP tool responses are sanitized before entering the agent context, preventing malicious tool servers from injecting system-level instructions.
+
+**6 Security Hardening Passes** — The v2.0.0 release included six dedicated security audit passes covering SQL injection prevention, path traversal in file tools, `defusedxml` replacing stdlib XML parser, sandbox path isolation with DooD volume mounting, and credential scrubbing for image base64 leak prevention.
 
 </Card>
 

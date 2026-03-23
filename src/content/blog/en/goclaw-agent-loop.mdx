@@ -16,12 +16,13 @@ import HeroGrid from '../../../components/mdx/HeroGrid.astro';
 import Callout from '../../../components/mdx/Callout.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
 
-Most AI agent frameworks hide the execution model behind abstractions. GoClaw exposes a clean 7-phase loop that handles everything from input validation to mid-loop compaction — all in a single Go binary.
+Most AI agent frameworks hide the execution model behind abstractions. [GoClaw](https://github.com/nextlevelbuilder/goclaw) exposes a clean 7-phase loop that handles everything from input validation to mid-loop compaction — all in a single Go binary.
 
 <HeroGrid items={[
   { label: "7 Phases", sublabel: "Setup → Validation → Build →\nIterate → Execute → Finalize → Compact", color: "#0891b2" },
   { label: "20 Iterations Max", sublabel: "Think → Act → Observe cycle\nMid-loop compaction at 75% context", color: "#059669" },
   { label: "20+ Providers", sublabel: "Single Provider interface\nStreaming + non-streaming", color: "#d97706" },
+  { label: "v2.0.0", sublabel: "Multi-Tenant Platform\nKnowledge Graph + Teams", color: "#e11d48" },
 ]} />
 
 ---
@@ -235,6 +236,24 @@ The agent loop is configured through `AgentDefaults`, which provides sensible de
 />
 
 The `ContextWindow` varies by provider and model — GoClaw queries each provider for its model's context limit and uses that as the budget. Compaction triggers are calculated as a percentage of this budget, making the system adaptive to any model size.
+
+</Card>
+
+---
+
+## <Label color="rose">7</Label> What v2.0.0 Adds to the Loop
+
+The core 7-phase loop is unchanged in v2.0.0, but new systems plug into it:
+
+<Card>
+
+**Evaluate Loop** — A generator-evaluator feedback cycle that wraps the standard Think → Act → Observe pattern. The generator produces output, an evaluator agent reviews it, and the loop re-runs if the evaluator rejects — up to a configurable max rounds with pass criteria.
+
+**Heartbeat System** — Periodic agent check-ins via `HEARTBEAT.md` checklists. A cron-based `wakeMode` triggers the agent on schedule, runs the checklist, and delivers results to the configured channel — with suppress-on-OK to avoid noise.
+
+**Mid-Run Message Injection** — DM and WebSocket channels can inject messages into a running agent loop without restarting the session. The loop picks up injected messages between iterations.
+
+**Intent Classification** — Stricter `quickClassify` at the loop entry determines whether incoming messages should steer the current task or start a new one, preventing context pollution.
 
 </Card>
 

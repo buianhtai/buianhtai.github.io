@@ -17,12 +17,13 @@ import Callout from '../../../components/mdx/Callout.astro';
 import Mermaid from '../../../components/mdx/Mermaid.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
 
-When an LLM emits a tool call, most frameworks just... run it. GoClaw interposes an 8-step pipeline between intent and execution — policy checks, rate limiting, credential scrubbing — all before a single byte touches the filesystem. The tool registry isn't a convenience layer. It's the enforcement boundary.
+When an LLM emits a tool call, most frameworks just... run it. [GoClaw](https://github.com/nextlevelbuilder/goclaw) interposes an 8-step pipeline between intent and execution — policy checks, rate limiting, credential scrubbing — all before a single byte touches the filesystem. The tool registry isn't a convenience layer. It's the enforcement boundary.
 
 <HeroGrid items={[
   { label: "35+ Tools", sublabel: "Filesystem, Web, Memory\nMedia, Teams", color: "#0891b2" },
   { label: "8-Step Pipeline", sublabel: "Registry → Policy → Rate Limit\nExecute → Scrub", color: "#059669" },
   { label: "5-Layer RBAC", sublabel: "Gateway → Global → Agent\nChannel → Owner", color: "#d97706" },
+  { label: "v2.0.0", sublabel: "MCP Integration\nMedia + Knowledge Tools", color: "#e11d48" },
 ]} />
 
 ---
@@ -192,6 +193,24 @@ The `exec` tool runs shell commands. `credentialed_exec` does something fundamen
 <Callout color="green">
 Credentials are injected via environment variables, never as command arguments. They're also registered with the scrubber — if a credential leaks into stdout, it gets redacted before the LLM sees it.
 </Callout>
+
+---
+
+## <Label color="rose">7</Label> What v2.0.0 Adds to Tools
+
+<Card>
+
+**MCP Integration** — Tools can now come from external MCP servers via stdio, SSE, or streamable-http transports. MCP tools are lazily activated — they're discovered at startup but only loaded into the agent's tool list when directly called in search mode. Per-agent and per-user MCP grants control which servers each agent can access.
+
+**Media Tools** — `create_image` (DashScope, MiniMax), `create_audio` (OpenAI, ElevenLabs, MiniMax, Suno), `create_video` (MiniMax, Veo), plus `read_document` (Gemini File API), `read_image`, `read_audio`, `read_video`. Media outputs are persisted as `MediaRef` entries — lightweight references instead of inline base64.
+
+**Breaking: Tool Renames** — Memory graph tools are now prefixed: `memory_graph_recall`, `memory_graph_query`, `memory_graph_store`, `memory_graph_update`, `memory_graph_forget`. Transcript tools unified under `transcript` with an `action` parameter replacing the old `transcript_search`/`transcript_stats` split.
+
+**Skill Management** — The new `skill_manage` tool lets agents install, update, and toggle skills at runtime. The `skill_evolve` learning loop lets agents propose skill improvements based on repeated patterns they observe during conversations.
+
+**Tool Aliases** — A registry maps Claude Code and legacy tool names to their GoClaw equivalents, so agents trained on other platforms can call tools by familiar names without prompt engineering.
+
+</Card>
 
 ---
 

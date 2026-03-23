@@ -17,12 +17,13 @@ import Callout from '../../../components/mdx/Callout.astro';
 import Mermaid from '../../../components/mdx/Mermaid.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
 
-Every LLM API speaks a slightly different dialect. Anthropic sends system messages as a separate field. OpenAI expects them inline. Gemini chokes on `additionalProperties`. DeepSeek streams thinking tokens in a dedicated field. GoClaw's provider layer absorbs all of this behind a four-method interface — the agent loop never has to care.
+Every LLM API speaks a slightly different dialect. Anthropic sends system messages as a separate field. OpenAI expects them inline. Gemini chokes on `additionalProperties`. DeepSeek streams thinking tokens in a dedicated field. [GoClaw](https://github.com/nextlevelbuilder/goclaw)'s provider layer absorbs all of this behind a four-method interface — the agent loop never has to care.
 
 <HeroGrid items={[
   { label: "1 Interface", sublabel: "Chat + ChatStream — that's it.\nFour methods, zero inheritance.", color: "#0891b2" },
   { label: "20+ Providers", sublabel: "Anthropic, OpenAI, Groq, DeepSeek,\nGemini, Ollama, Codex, DashScope...", color: "#059669" },
   { label: "Strategy Pattern", sublabel: "Each provider implements\nits own wire protocol", color: "#d97706" },
+  { label: "v2.0.0", sublabel: "Prompt Caching\nCodex + Claude CLI", color: "#e11d48" },
 ]} />
 
 ---
@@ -326,6 +327,24 @@ The Anthropic provider calls this when converting tool definitions to the native
 <Callout color="teal">
 Schema cleaning is invisible to the agent — it writes one tool definition, and the provider layer adapts it for each backend. No conditional logic in agent code, ever.
 </Callout>
+
+---
+
+## <Label color="rose">7</Label> What v2.0.0 Adds to Providers
+
+<Card>
+
+**Breaking: `type` → `driver`** — Provider configurations now use `driver` instead of `type` to specify the backend. Update your `goclaw.json` under `llm.providers` to rename the field.
+
+**Prompt Caching** — Anthropic providers send explicit `cache_control` markers on system prompts and long conversation prefixes. OpenAI, MiniMax, and OpenRouter-compatible providers get automatic caching. Cache hit/miss metrics are tracked per-span in the trace viewer.
+
+**New Providers** — v2.0.0 adds Claude CLI (Anthropic via stdio + MCP bridge) and Codex (OpenAI gpt-5.3-codex via OAuth with `TokenSource` interface). Both implement the same four-method `Provider` interface — the loop doesn't know the difference.
+
+**Extended Response Types** — `ChatResponse` now carries a `Phase` field for Codex (distinguishing "commentary" from "final_answer") and `RawAssistantContent` for Anthropic (preserving thinking blocks through tool loops). `Usage` tracks `CacheCreationTokens`, `CacheReadTokens`, and `ThinkingTokens`.
+
+**MediaRef** — A new lightweight type (~60 bytes) that replaces inline base64 images in session storage. Media files are persisted to disk and referenced by ID, keeping session JSONB small even with heavy image/video workflows.
+
+</Card>
 
 ---
 

@@ -17,7 +17,7 @@ import Callout from '../../../components/mdx/Callout.astro';
 import Mermaid from '../../../components/mdx/Mermaid.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
 
-Most AI agents are stateless. They forget everything the moment a conversation ends. GoClaw takes a different approach — it gives every agent a durable, searchable memory that survives across sessions, users, and even compaction cycles.
+Most AI agents are stateless. They forget everything the moment a conversation ends. [GoClaw](https://github.com/nextlevelbuilder/goclaw) takes a different approach — it gives every agent a durable, searchable memory that survives across sessions, users, and even compaction cycles.
 
 The system has three layers, all backed by PostgreSQL.
 
@@ -40,6 +40,7 @@ The system has three layers, all backed by PostgreSQL.
   { label: "Memory", sublabel: "Documents + chunks + embeddings\nHybrid search: pgvector + tsvector", color: "#0891b2" },
   { label: "Knowledge Graph", sublabel: "Entities + relations + traversal\nLLM-extracted from conversations", color: "#059669" },
   { label: "Sessions", sublabel: "Full message history + metadata\nCompaction + memory flush cycle", color: "#d97706" },
+  { label: "v2.0.0", sublabel: "Shared Knowledge Graph\nAdmin Dashboard", color: "#e11d48" },
 ]} />
 
 ---
@@ -318,6 +319,24 @@ type EmbeddingProvider interface {
   caption="Code map across store, core memory logic, tools, and schema migrations"
   accent="teal"
 />
+
+</Card>
+
+---
+
+## <Label color="rose">7</Label> What v2.0.0 Changes
+
+<Card>
+
+**Breaking: Tool Renames** — Memory graph tools now use explicit prefixes: `memory_graph_recall`, `memory_graph_query`, `memory_graph_store`, `memory_graph_update`, `memory_graph_forget`. Update any tool allowlists or references.
+
+**Breaking: Config Migration** — The legacy `memorySearch` config key moves to `memory.query`. Semantic search settings now live under the new path.
+
+**Shared Knowledge Graph** — Knowledge graphs can now be shared across users within the same agent scope. The controlled vocabulary extraction prompts ensure consistent entity naming across different users' conversations.
+
+**Admin Dashboard** — Memory documents are manageable through the web dashboard: CRUD operations, semantic search testing, chunk/embedding detail inspection, and bulk re-indexing for when you change embedding models.
+
+**Built-in Local Embeddings** — The `hugot-local` provider auto-downloads the all-MiniLM-L6-v2 model on first use, eliminating the need for external embedding API calls in development or air-gapped deployments.
 
 </Card>
 

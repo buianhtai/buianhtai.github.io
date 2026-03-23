@@ -1,0 +1,427 @@
+---
+title: "GoClaw v2.0.0: From Single-User Gateway to Multi-Tenant Platform"
+description: "Everything new in GoClaw v2.0.0 — multi-tenant PostgreSQL, knowledge graph, MCP integration, evaluate loops, heartbeat system, media tools, prompt caching, and the migration path from v1."
+pubDate: 2026-03-23
+tags: ["ai", "golang", "architecture", "devops"]
+lang: "en"
+category: "architecture"
+series: "goclaw"
+seriesOrder: 7
+---
+
+import Card from '../../../components/mdx/Card.astro';
+import Label from '../../../components/mdx/Label.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import Mermaid from '../../../components/mdx/Mermaid.astro';
+
+GoClaw v2.0.0 marks the transition from a single-user AI agent gateway to a production-ready multi-tenant platform. The release includes 371 commits since v1.0.0 and reshapes core runtime architecture around tenant isolation, graph-backed memory, and externally extensible tool execution. The implementation is available in the open at [nextlevelbuilder/goclaw](https://github.com/nextlevelbuilder/goclaw).
+
+<HeroGrid items={[
+  { label: "v2.0.0", sublabel: "371 Commits\nFrom v1.0.0 to Multi-Tenant", color: "#0891b2" },
+  { label: "35+ Tools", sublabel: "MCP + Media + Knowledge\nGraph Search", color: "#059669" },
+  { label: "7 Channels", sublabel: "Telegram, Discord, Slack\nZalo, Feishu, WhatsApp", color: "#d97706" },
+  { label: "20+ Providers", sublabel: "Prompt Caching\nCodex + Claude CLI", color: "#e11d48" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> Multi-Tenant PostgreSQL
+
+<Card>
+v1 stored operational state for a single logical user profile.
+
+v2 moves sessions, workspace bindings, credentials, and profile metadata into a tenant-aware PostgreSQL schema. Every row is scoped by `tenant_id`, and every query path enforces tenant-bound predicates before loading or mutating state.
+
+This shifts isolation from convention to data-model guarantees.
+</Card>
+
+<Card>
+### What changed at the storage boundary
+Per-user workspaces are persisted with deterministic mapping from identity to local path roots.
+
+Session history is now isolated by tenant and user, so concurrent use from multiple organizations does not share timeline state.
+
+Agent profiles are split into global defaults and user-owned overrides, and context files can be attached per user and loaded into prompt composition without crossing identity boundaries.
+</Card>
+
+<Card>
+### Credential handling
+Provider keys are encrypted at rest using AES-256-GCM. Ciphertext, nonce, and key metadata are stored separately from runtime decrypted values.
+
+Decryption happens only when building provider clients, and plaintext is not persisted back to disk or database fields. This design minimizes credential residency time in memory and narrows accidental leakage surfaces.
+</Card>
+
+<Mermaid
+  chart={`graph TD
+    A[Incoming Request] --> B[Resolve Tenant Context]
+    B --> C[Apply tenant_id Scope]
+    C --> D[Load User Workspace]
+    C --> E[Load Session Stream]
+    C --> F[Load Agent Profile]
+    F --> G[Compose Runtime Prompt]
+    E --> H[Run Loop]
+    D --> H
+    G --> H`}
+  caption="Tenant scoping is enforced before workspace/session/profile resolution"
+/>
+
+<Callout type="info">
+Multi-tenant mode is not a UI switch. It is enforced by schema shape, query contracts, and profile/workspace ownership rules.
+</Callout>
+
+---
+
+## <Label color="cyan">2</Label> Knowledge Graph
+
+<Card>
+GoClaw v2 adds a first-class knowledge graph pipeline built on LLM-powered entity extraction.
+
+Agent outputs, tool results, and curated memory events are transformed into entities and relationships. Entity vectors are indexed with `pgvector`, enabling semantic retrieval against graph nodes instead of plain transcript chunks.
+
+The new `knowledge_graph_search` tool exposes this capability directly inside agent runs.
+</Card>
+
+<Card>
+### Retrieval modes now include graph-aware search
+Semantic search over entities for approximate meaning matches.
+
+Graph traversal for relationship-centric queries, such as discovering dependencies, ownership chains, or incident linkage.
+
+Controlled vocabulary normalization to keep entity naming consistent across users and sessions.
+
+Shared graph substrate with scoped read semantics, so collaborative teams can search a common ontology without collapsing tenant boundaries.
+</Card>
+
+<Mermaid
+  chart={`graph LR
+    A[Session Artifacts] --> B[Entity Extraction]
+    B --> C[Entity + Edge Store]
+    C --> D[pgvector Index]
+    C --> E[Graph Traversal Engine]
+    D --> F[knowledge_graph_search]
+    E --> F
+    F --> G[Tool Result for Agent Reasoning]
+    C --> H[Web Dashboard Force Layout]`}
+  caption="Entity extraction feeds both vector retrieval and traversal-based queries"
+/>
+
+<Card>
+### Web dashboard graph view
+The dashboard introduces a force-directed graph visualization layer for interactive exploration. Users can inspect entities, edge types, and neighborhood depth without leaving the agent environment.
+
+This closes the loop between extraction quality and operational usage because graph artifacts become inspectable, not opaque.
+</Card>
+
+<Callout type="tip">
+If entity naming drifts, controlled vocabulary rules are the first place to tighten consistency before tuning extraction prompts.
+</Callout>
+
+---
+
+## <Label color="blue">3</Label> MCP Integration
+
+<Card>
+v2 introduces native MCP client integration across three transports: `stdio`, `sse`, and `streamable-http`.
+
+External MCP tools are discovered and mounted into the same tool registry that hosts built-in tools. From the agent perspective, invocation is uniform.
+
+Transport details and remote server concerns stay in the integration layer.
+</Card>
+
+<Card>
+### Permission model
+Grants are scoped both per agent and per user.
+
+A tool can be available to one agent profile but not another, and further restricted by user-level permissions. This preserves least-privilege behavior when the same host serves automation, support, and engineering assistants with different risk profiles.
+
+The integration does not assume blanket trust for third-party tool servers.
+</Card>
+
+<Card>
+### Activation model
+MCP servers support lazy activation.
+
+Connections are established when a tool is actually required instead of eagerly opening all transports at startup. This reduces idle resource use and keeps cold-start behavior closer to the single-binary performance profile that made v1 attractive.
+</Card>
+
+<FlowStep number={1} title="Resolve Grants">
+Combine per-agent policy and per-user permissions to compute effective tool visibility.
+</FlowStep>
+
+<FlowStep number={2} title="Materialize Tool Registry">
+Merge built-in tools with granted MCP tool descriptors into one runtime registry.
+</FlowStep>
+
+<FlowStep number={3} title="Activate on Demand">
+Open `stdio`, `sse`, or `streamable-http` sessions only when the selected tool is called.
+</FlowStep>
+
+<FlowStep number={4} title="Return Unified Result">
+Normalize external responses to the same tool result contract used by native tools.
+</FlowStep>
+
+<Callout type="warning">
+Treat external MCP servers as separate trust zones. Grant access per tool, not per server, whenever possible.
+</Callout>
+
+---
+
+## <Label color="violet">4</Label> Evaluate Loop & Heartbeat
+
+<Card>
+The evaluate loop introduces a generator-evaluator control pattern for quality-gated outputs.
+
+A generator agent drafts an answer or artifact. An evaluator agent checks it against configurable pass criteria.
+
+If criteria fail, generation iterates until success or a max-round limit is reached.
+</Card>
+
+<Card>
+### Evaluate loop controls
+`maxRounds` bounds retries to avoid unbounded cycles.
+
+Pass criteria can include structured checks, required sections, style constraints, or domain-specific rubric rules. Evaluation feedback is fed back into the next generator round as explicit critique context.
+
+This yields a deterministic quality envelope compared with one-shot completion.
+</Card>
+
+<Mermaid
+  chart={`flowchart TD
+    A[Generator Run] --> B[Evaluator Review]
+    B -->|Pass| C[Finalize Output]
+    B -->|Fail + rounds < maxRounds| D[Attach Feedback]
+    D --> A
+    B -->|Fail + rounds == maxRounds| E[Return Best Attempt + Failure Metadata]`}
+  caption="Generator-evaluator cycle with bounded retry policy"
+/>
+
+<Card>
+Heartbeat adds periodic autonomous check-ins using `HEARTBEAT.md`.
+
+Cron scheduling with `wakeMode` allows agents to wake, run task checks, and report status without manual prompting.
+
+`suppress-on-OK` prevents routine noise by only surfacing deviations, and active-hours windows prevent off-hours message spam while preserving scheduled monitoring behavior.
+</Card>
+
+<FlowStep number={1} title="Schedule Wake">
+Cron rule triggers wakeup under configured `wakeMode` policy.
+</FlowStep>
+
+<FlowStep number={2} title="Load HEARTBEAT.md">
+Agent reads checklist and runtime expectations from heartbeat instructions.
+</FlowStep>
+
+<FlowStep number={3} title="Run Checks">
+Execute verification actions, gather evidence, and classify status.
+</FlowStep>
+
+<FlowStep number={4} title="Emit Notification">
+Publish report only when failure criteria match or when suppression rules allow normal updates.
+</FlowStep>
+
+<Callout type="info">
+Evaluate loops optimize output quality. Heartbeats optimize operational continuity. They solve different control problems and can run independently.
+</Callout>
+
+---
+
+## <Label color="purple">5</Label> Media Pipeline
+
+<Card>
+v2 expands tooling beyond text with a dedicated media pipeline.
+
+Available tools include `create_image`, `create_audio`, `create_video`, `read_document`, `read_image`, `read_audio`, and `read_video`. Media can be generated, parsed, and routed between agents in the same execution loop.
+
+This enables workflows such as multimodal summarization, narration generation, and document-to-video handoffs.
+</Card>
+
+<Card>
+### MediaRef instead of base64 payload bloat
+Large media artifacts are persisted and referenced through `MediaRef` handles.
+
+Typical references are around 60 bytes, replacing megabytes of inline base64 in transcripts.
+
+This keeps session history compact, lowers token pressure, and avoids re-sending binary payloads across iterations. Media can be fetched lazily only when a downstream tool needs full content.
+</Card>
+
+<Card>
+### Provider coverage
+The media stack supports DashScope, MiniMax, OpenAI, ElevenLabs, Suno, Veo, and Gemini File API.
+
+Provider abstraction mirrors text model design so capability routing is controlled by config instead of code forks. When one provider lacks a modality, tool policy can route to another provider while preserving a single tool contract to the agent.
+</Card>
+
+<DataTable
+  headers={["Tool", "Input", "Output", "Typical Use"]}
+  rows={[
+    { "Tool": "create_image", "Input": "Prompt or structured design brief", "Output": "MediaRef(image)", "Typical Use": "Generate diagrams, hero assets, concept art" },
+    { "Tool": "create_audio", "Input": "Script text or prompt", "Output": "MediaRef(audio)", "Typical Use": "Voice narration, alerts, spoken summaries" },
+    { "Tool": "create_video", "Input": "Prompt, script, or storyboard", "Output": "MediaRef(video)", "Typical Use": "Product demos, explainers, visual updates" },
+    { "Tool": "read_document", "Input": "PDF/doc MediaRef", "Output": "Structured text", "Typical Use": "Policy extraction, report parsing" },
+    { "Tool": "read_image", "Input": "Image MediaRef", "Output": "Caption + extracted fields", "Typical Use": "Screenshot analysis, OCR context" },
+    { "Tool": "read_audio", "Input": "Audio MediaRef", "Output": "Transcript + metadata", "Typical Use": "Meeting notes, call analysis" },
+    { "Tool": "read_video", "Input": "Video MediaRef", "Output": "Timeline summary + frames", "Typical Use": "Demo review, visual event extraction" },
+  ]}
+  caption="Media tool surface introduced in v2.0.0"
+  accent="purple"
+/>
+
+<Callout type="warning">
+Do not inline binary payloads in agent memory when `MediaRef` is available. Keep transcripts text-dominant to preserve context budget.
+</Callout>
+
+---
+
+## <Label color="fuchsia">6</Label> Prompt Caching & Observability
+
+<Card>
+Prompt caching in v2 is provider-aware rather than one-size-fits-all.
+
+Anthropic supports explicit caching directives through `cache_control`. OpenAI, MiniMax, and OpenRouter rely on automatic cache behavior where available.
+
+The loop records cache hit/miss indicators directly in tracing spans.
+</Card>
+
+<Card>
+### Trace model
+Every LLM call emits structured spans with timing, model identity, token usage, and cache metadata.
+
+Traces are exposed in the web dashboard for direct inspection of latency distribution and cache effectiveness. OpenTelemetry OTLP export can stream the same telemetry into external observability stacks.
+
+This keeps local and centralized debugging paths aligned instead of split into separate instrumentation systems.
+</Card>
+
+<Mermaid
+  chart={`sequenceDiagram
+    participant U as User/Channel
+    participant L as Agent Loop
+    participant P as Provider
+    participant T as Trace Store
+    participant O as OTLP Backend
+
+    U->>L: Run request
+    L->>P: LLM call (cache metadata enabled)
+    P-->>L: Response + cache signal
+    L->>T: Span(token, latency, cache)
+    L->>O: Export span via OTLP
+    L-->>U: Final response`}
+  caption="Cache metrics and LLM telemetry are first-class trace attributes"
+/>
+
+<DataTable
+  headers={["Capability", "v1.0.0", "v2.0.0"]}
+  rows={[
+    { "Capability": "Anthropic prompt caching", "v1.0.0": "No explicit control", "v2.0.0": "Explicit `cache_control` support" },
+    { "Capability": "Automatic cache routing", "v1.0.0": "Provider dependent, opaque", "v2.0.0": "OpenAI/MiniMax/OpenRouter integrated" },
+    { "Capability": "Cache metrics in traces", "v1.0.0": "Not exposed", "v2.0.0": "Span-level cache fields" },
+    { "Capability": "Web trace dashboard", "v1.0.0": "Limited run view", "v2.0.0": "Traces, spans, cache metrics" },
+    { "Capability": "OTLP export", "v1.0.0": "No", "v2.0.0": "Built-in OpenTelemetry OTLP" },
+  ]}
+  caption="Observability and cache behavior became inspectable runtime primitives"
+  accent="fuchsia"
+/>
+
+<Callout type="tip">
+Cache hit ratio is only useful when read with latency and token metrics together. A high hit ratio with poor latency usually points to queueing or network bottlenecks.
+</Callout>
+
+---
+
+## <Label color="rose">7</Label> Breaking Changes & Migration
+
+<Card>
+v2 includes intentional API and config breakpoints to simplify long-term consistency.
+
+Most changes are mechanical renames, but migration should be treated as a structured pass rather than ad hoc edits. The table below captures each breaking change and the direct migration path.
+</Card>
+
+<DataTable
+  headers={["Breaking Change", "v1", "v2", "Migration Instruction"]}
+  rows={[
+    { "Breaking Change": "Provider config key rename", "v1": "`type`", "v2": "`driver`", "Migration Instruction": "Replace provider config field `type` with `driver` in all agent/provider YAML or JSON definitions." },
+    { "Breaking Change": "Cron schema rename", "v1": "`message`, `sessionTarget`", "v2": "`prompt`, `resultMode`", "Migration Instruction": "Update cron task definitions: map `message -> prompt` and `sessionTarget -> resultMode`; validate scheduler parsing before deploy." },
+    { "Breaking Change": "Transcript tool consolidation", "v1": "Multiple transcript tools", "v2": "Unified transcript tool surface", "Migration Instruction": "Swap legacy transcript tool invocations to the new unified transcript entrypoints and remove deprecated aliases." },
+    { "Breaking Change": "Memory graph tool namespace", "v1": "Unprefixed graph tools", "v2": "`memory_graph_*` prefixed names", "Migration Instruction": "Rename memory graph tool calls to prefixed versions and update policy allowlists for the new identifiers." },
+    { "Breaking Change": "Memory/browser config key updates", "v1": "`memorySearch`, `useJina`", "v2": "`memory.query`, `useBrowser`", "Migration Instruction": "Move memory settings under `memory.query` and replace `useJina` flags with `useBrowser` in runtime configuration." },
+  ]}
+  caption="Five v2.0.0 breaking changes with direct migration actions"
+  accent="rose"
+/>
+
+<Card>
+### Suggested migration sequence
+<FlowStep number={1} title="Run config key rewrite">
+Apply deterministic key renames (`type` to `driver`, cron key updates, memory keys) across all environment configs.
+</FlowStep>
+
+<FlowStep number={2} title="Update tool allowlists">
+Switch transcript and memory graph tool names in policy definitions and tests.
+</FlowStep>
+
+<FlowStep number={3} title="Replay integration scenarios">
+Run representative sessions for cron, memory, and transcript workflows to verify behavior parity.
+</FlowStep>
+
+<FlowStep number={4} title="Enable v2-only features incrementally">
+Turn on MCP, graph search, and media tools behind staged rollout gates after baseline parity is confirmed.
+</FlowStep>
+</Card>
+
+<Callout type="warning">
+Do migration renames before feature adoption. Mixing key migrations with new runtime capabilities in one step makes rollback analysis harder.
+</Callout>
+
+---
+
+## <Label color="amber">8</Label> The Claw Ecosystem
+
+<Card>
+GoClaw now sits in a broader family of deployment targets.
+
+The ecosystem is no longer a single implementation language choice. Each variant optimizes for a specific runtime envelope, from minimal embedded environments to fully multi-tenant orchestration.
+</Card>
+
+<DataTable
+  headers={["Dimension", "OpenClaw", "ZeroClaw", "PicoClaw", "GoClaw"]}
+  rows={[
+    { "Dimension": "Language", "OpenClaw": "TypeScript/Node.js", "ZeroClaw": "Rust", "PicoClaw": "Minimal runtime profile", "GoClaw": "Go" },
+    { "Dimension": "Binary size", "OpenClaw": "Runtime + dependencies", "ZeroClaw": "Compiled binary", "PicoClaw": "Ultra-compact target", "GoClaw": "Single compiled binary" },
+    { "Dimension": "RAM", "OpenClaw": "Higher baseline", "ZeroClaw": "Low", "PicoClaw": "Very low", "GoClaw": "Low and stable" },
+    { "Dimension": "Startup", "OpenClaw": "Depends on Node runtime", "ZeroClaw": "Fast", "PicoClaw": "Very fast", "GoClaw": "Sub-second class startup" },
+    { "Dimension": "Multi-tenant", "OpenClaw": "Limited", "ZeroClaw": "Depends on deployment", "PicoClaw": "Not primary focus", "GoClaw": "Native PostgreSQL tenant model" },
+    { "Dimension": "MCP", "OpenClaw": "Adapter dependent", "ZeroClaw": "Implementation specific", "PicoClaw": "Minimal", "GoClaw": "Built-in stdio/SSE/streamable-http" },
+    { "Dimension": "Agent teams", "OpenClaw": "Basic", "ZeroClaw": "Emerging", "PicoClaw": "Minimal", "GoClaw": "Production-ready orchestration" },
+    { "Dimension": "Security", "OpenClaw": "App-level controls", "ZeroClaw": "Strong low-level safety", "PicoClaw": "Constrained surface", "GoClaw": "AES-256-GCM keys + tenant isolation" },
+    { "Dimension": "Knowledge graph", "OpenClaw": "External add-ons", "ZeroClaw": "Varies", "PicoClaw": "Not standard", "GoClaw": "Built-in entity graph + pgvector" },
+    { "Dimension": "Providers", "OpenClaw": "Broad", "ZeroClaw": "Growing", "PicoClaw": "Selective", "GoClaw": "20+ providers including CLI bridges" },
+  ]}
+  caption="Positioning of the Claw ecosystem by runtime and platform capabilities"
+  accent="amber"
+/>
+
+<Callout type="info">
+Choose by operational constraints first: memory ceiling, tenancy model, and tool-extensibility requirements.
+</Callout>
+
+---
+
+## What This Means
+
+<Card>
+GoClaw v2.0.0 is no longer "OpenClaw rewritten in Go".
+
+It is a platform layer with capabilities the original does not provide: multi-tenant isolation, knowledge graph retrieval, MCP-native extensibility, and team-oriented orchestration controls.
+
+Those features usually imply heavy infrastructure. Here they run in a single binary with low memory overhead, making enterprise-grade behavior viable on a $5 VPS.
+</Card>
+
+<Card>
+The strategic shift is architectural, not cosmetic.
+
+v1 focused on proving efficient agent execution in Go. v2 adds the primitives required for real multi-user operations: scoped storage, explicit grants, inspectable telemetry, and migration-safe evolution.
+
+That combination is what turns a runtime into a platform.
+</Card>
