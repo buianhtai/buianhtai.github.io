@@ -1,0 +1,319 @@
+---
+title: "Parallel AI Agents Without Chaos: Lock-Based Orchestration Patterns"
+description: "How to run multiple AI coding agents in parallel without merge conflicts, file races, or duplicated work using lock-based coordination patterns from Agent Farm."
+pubDate: 2026-03-24
+tags: ["ai", "agents", "architecture", "concurrency"]
+lang: "en"
+category: "architecture"
+series: "ai-agent-tools"
+seriesOrder: 9
+draft: false
+---
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Label from '../../../components/mdx/Label.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import ArchLayer from '../../../components/mdx/ArchLayer.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import Pipeline from '../../../components/mdx/Pipeline.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import Card from '../../../components/mdx/Card.astro';
+
+One AI agent is useful. Three AI agents working in parallel is three times faster — or a complete disaster. The difference is coordination.
+
+Most teams discover this the hard way: once multiple agents edit the same repository at once, collisions move from “occasional Git annoyance” to a systemic reliability problem. Files get overwritten, branches diverge in incompatible ways, and everyone spends more time reconciling work than shipping it.
+
+The [claude_code_agent_farm](https://github.com/Dicklesworthstone/claude_code_agent_farm) project is interesting because it treats parallel agent execution as a distributed systems problem, not a prompt problem. Its lock-based coordination model shows a practical path: make file ownership explicit, make conflicts impossible by protocol, and let parallelism happen only where it is actually safe.
+
+<HeroGrid items={[
+  { label: "~3×", sublabel: "Parallel throughput on independent subtasks", color: "#0891b2" },
+  { label: "0", sublabel: "Target merge conflicts via file reservations", color: "#059669" },
+  { label: "Locks", sublabel: "Advisory file-claim protocol before edits", color: "#d97706" },
+  { label: "744★", sublabel: "Agent Farm GitHub stars (Mar 2026)", color: "#e11d48" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> WHY — The Parallel Problem
+
+Running agents sequentially is boring but safe. If one agent completes before the next starts, there is no write-write conflict by definition. The trade-off is obvious: total delivery time becomes the sum of every task duration.
+
+That cost is manageable for tiny changes, but it compounds on investigation and refactor-heavy work. A 30-40 minute task often contains independent slices that could complete in 10-15 minutes if executed concurrently. Teams try naive parallelism for this reason: launch three agents, point them at one repo, hope they “stay in their lanes.”
+
+The failure modes are predictable:
+
+- **Collision on shared files**: two agents both edit `src/auth/middleware.ts`; one change silently clobbers the other.
+- **Race conditions in intent**: Agent A renames an interface while Agent B adds methods against the old name.
+- **Duplicated effort**: two agents implement equivalent fixes because neither has visibility into active work.
+- **Merge debt explosion**: conflict resolution consumes the time that parallelism was supposed to save.
+
+The central issue is not model capability. It is coordination semantics. If multiple workers can mutate shared state without an ownership protocol, throughput gains are temporary and quality falls over time.
+
+<Callout color="amber">
+Parallel AI execution is fundamentally a concurrency-control problem. Prompt quality matters, but lock discipline matters more.
+</Callout>
+
+Production-safe parallelism requires three guarantees:
+
+1. **Exclusivity for writes**: only one agent may mutate a file at a time.
+2. **Visibility of active scope**: agents must see what others already claimed.
+3. **Automatic recovery**: crashed or stalled workers cannot hold locks forever.
+
+Everything else — chunking strategy, model choice, session tooling, branch structure — builds on top of those guarantees.
+
+A good mental model is a database transaction log applied to source files. You would never let multiple writers update the same row with no lock protocol and hope consistency emerges later. Yet that is exactly what naive multi-agent coding does. It pushes concurrency control to the very end of the workflow, then asks Git to resolve all semantic conflicts as text-level merges. Git is excellent at line-based reconciliation; it is not a coordination engine for autonomous workers.
+
+In other words, parallel execution gives you one of two outcomes:
+
+- **Higher throughput with stable quality** when write ownership is explicit.
+- **Faster chaos** when ownership is implicit.
+
+The rest of this post is about building the first outcome on purpose.
+
+## <Label color="green">2</Label> HOW — Three Isolation Strategies
+
+There is no single “best” isolation pattern. Different task shapes need different boundaries. The practical question is: what unit of isolation buys enough safety without creating more operational overhead than the work itself?
+
+<DataTable
+  caption="Parallel agent isolation strategies"
+  accent="teal"
+  headers={["Approach", "Isolation level", "Overhead", "Best for", "Conflict risk"]}
+  rows={[
+    {
+      "Approach": "File locks / reservations",
+      "Isolation level": "File-level write exclusivity in a shared checkout",
+      "Overhead": "Low (reservation table + lock protocol)",
+      "Best for": "Short-to-medium subtasks touching different files",
+      "Conflict risk": "Low if lock discipline is enforced"
+    },
+    {
+      "Approach": "Git worktrees",
+      "Isolation level": "Full workspace isolation per agent",
+      "Overhead": "Medium (branching, cherry-picks/merges)",
+      "Best for": "Long-running, loosely coupled feature slices",
+      "Conflict risk": "Very low during execution; moderate at integration"
+    },
+    {
+      "Approach": "Container/process isolation",
+      "Isolation level": "Runtime + environment isolation",
+      "Overhead": "High (orchestrator, session infra, resource scheduling)",
+      "Best for": "Large farms, heterogeneous stacks, strict sandboxing",
+      "Conflict risk": "Low at runtime; integration still required"
+    }
+  ]}
+/>
+
+### Strategy 1: File Locks / Reservations (Agent Farm Pattern)
+
+This is the most pragmatic default for teams that want speed without heavy orchestration. All agents operate in one repository checkout, but each write path must be reserved before edits begin.
+
+Mechanically, the pattern uses an active work registry plus lock artifacts (or a reservation database) so every worker can answer one question quickly: “Can I safely edit these files right now?” If yes, proceed. If no, queue or choose another subtask.
+
+Agent Farm describes this directly: unique agent identities, active-work tracking, file claims, stale-lock handling, and lock-aware work selection. The important insight is that conflict prevention happens **before** coding work starts, not after commits collide.
+
+Why this works well:
+
+- You keep one working tree, so there is minimal Git overhead.
+- Lock scope is explicit and human-auditable.
+- Conflict prevention moves from merge-time to claim-time.
+- Throughput remains high when task decomposition is clean.
+- Stale lock detection prevents abandoned sessions from blocking progress.
+
+### Strategy 2: Git Worktrees
+
+Worktrees provide stronger isolation because each agent gets an independent checkout. This is excellent when subtasks are long-lived or touch broad parts of the codebase. Agents cannot trample each other’s unstaged changes because they do not share a filesystem view.
+
+The downside is integration complexity. You pay later with cherry-picks, rebases, or merges. If your subtasks are small and numerous, this overhead can dominate cycle time.
+
+Use worktrees when:
+
+- branch-level experimentation is required,
+- refactors are large and high-risk,
+- merge integration can be planned as a dedicated stage.
+
+### Strategy 3: Container / Process Isolation
+
+In high-scale setups, each agent runs in its own process or container (often with tmux/session orchestration around it). This enables resource controls, per-agent tooling differences, stronger sandbox boundaries, and robust monitoring.
+
+It is powerful, but heavy. For many teams, this is justified only when agent counts, compliance needs, or infrastructure standards already demand it.
+
+Use process isolation when:
+
+- you need per-agent environment boundaries,
+- you run many agents concurrently (10+),
+- observability and auto-recovery are first-class requirements.
+
+### Layering Patterns in Practice
+
+These are not mutually exclusive. A common architecture combines them:
+
+- process isolation for runtime containment,
+- worktrees for branch-level independence on big slices,
+- file reservations for fast coordination inside shared phases.
+
+<ArchLayer badge="P" badgeColor="rose" label="Planning" items={["Task decomposition", "Dependency graph", "Lock scope estimation"]} />
+<ArchLayer badge="C" badgeColor="teal" label="Coordinator" items={["Agent assignment", "Reservation table", "Failure handling"]} />
+<ArchLayer badge="W" badgeColor="green" label="Workers" items={["Claim files", "Implement subtask", "Release locks"]} />
+<ArchLayer badge="I" badgeColor="amber" label="Integration" items={["Validation", "Merge/cherry-pick", "Final test run"]} />
+
+## <Label color="amber">3</Label> HOW — The Lock Protocol in Detail
+
+Lock-based coordination is only reliable when the protocol is explicit, narrow, and machine-checkable. “Please avoid touching my files” is not a protocol; it is a wish.
+
+At minimum, each reservation record needs:
+
+- `agent_id`
+- `paths[]`
+- `mode` (`exclusive` for writes, optional `shared` for read-only access)
+- `created_at` and `expires_at` (TTL)
+- `task_id` (for observability and cleanup)
+
+In pseudocode:
+
+<Card accent="teal" flush={true}>
+
+```ts
+await reserve({
+  agentId: "agent-12",
+  paths: ["src/auth/middleware.ts", "src/auth/types.ts"],
+  mode: "exclusive",
+  ttlSeconds: 1800,
+  taskId: "rate-limit-auth"
+});
+
+// ...apply edits, run checks...
+
+await release({
+  agentId: "agent-12",
+  paths: ["src/auth/middleware.ts", "src/auth/types.ts"],
+  taskId: "rate-limit-auth"
+});
+```
+
+</Card>
+
+Protocol flow for a real subtask:
+
+<FlowStep step="1" color="teal" title="Agent receives scoped task">
+  Example: “modify auth middleware and related type definitions.” The task includes expected files and dependencies.
+</FlowStep>
+
+<FlowStep step="2" color="teal" title="Agent requests reservation">
+  It calls `reserve(["src/auth/middleware.ts", "src/auth/types.ts"])` in exclusive mode before touching disk.
+</FlowStep>
+
+<FlowStep step="3" color="teal" title="Coordinator validates availability">
+  If no conflicting lock exists, reservation is granted and recorded. If locked, agent is queued or reassigned.
+</FlowStep>
+
+<FlowStep step="4" color="teal" title="Agent performs implementation">
+  All writes stay inside reserved paths. Scope drift requires a new reservation request.
+</FlowStep>
+
+<FlowStep step="5" color="teal" title="Agent releases reservation on completion">
+  `release()` is called after checks pass. Result metadata is written to completed-work log.
+</FlowStep>
+
+<FlowStep step="6" color="teal" title="Blocked dependents resume">
+  Waiting agents can now claim previously locked files and continue downstream subtasks.
+</FlowStep>
+
+### Three Design Decisions That Matter
+
+#### 1) TTL Prevents Deadlocks from Crashes
+
+If an agent dies mid-task, its locks must not persist forever. A lease model (lock with expiration) allows automatic reclamation after timeout. Mature systems also renew leases via heartbeat while work remains active.
+
+#### 2) Exclusive vs Shared Reservations
+
+Most edits require exclusive locks. But shared read locks can help when multiple agents need stable read access over generated artifacts or reference files, while one write lock still protects mutating paths.
+
+#### 3) Reservation Granularity
+
+- **File-level** is precise and maximizes parallelism.
+- **Directory-level** is simpler but can over-serialize unrelated edits.
+
+Start with file-level for high-throughput work. Escalate to directory-level only for volatile refactors where path churn makes fine-grained locking too expensive.
+
+### The Coordinator Pattern
+
+Parallelism without a coordinator quickly degrades into self-organized contention. The coordinator is the control plane that keeps the system coherent.
+
+Core responsibilities:
+
+- ingest full task decomposition,
+- schedule independent subtasks first,
+- enforce reservation checks,
+- detect agent failure/stale leases and reclaim locks,
+- reassign stalled work,
+- gate integration once dependency graph converges.
+
+<Pipeline
+  nodes={[
+    { title: "Plan", subtitle: "Decompose + dependency graph" },
+    { title: "Assign", subtitle: "Match tasks to available agents" },
+    { title: "Reserve", subtitle: "Grant/deny file claims" },
+    { title: "Execute", subtitle: "Workers edit within scope" },
+    { title: "Integrate", subtitle: "Validate + merge outputs" },
+  ]}
+  arrows={[
+    { label: "task graph", direction: "right" },
+    { label: "claims", direction: "right" },
+    { label: "status", direction: "left" },
+    { label: "artifacts", direction: "right" },
+  ]}
+  footer="Control boundary lives at reservation grant/release, not at commit time."
+/>
+
+## <Label color="rose">4</Label> FLOW — End-to-End Parallel Execution
+
+Take a concrete objective: **“Add rate limiting.”** A planner decomposes it into four subtasks:
+
+- **A**: gateway routing + config surface
+- **B**: rate-limit service implementation
+- **C**: integration tests (depends on A and B)
+- **D**: docs + examples (depends on A and B)
+
+The coordinator sees A and B are independent and launches them in parallel.
+
+<FlowStep step="1" color="rose" title="Planner emits dependency-aware subtasks">
+  Subtasks include file scope hints and explicit dependency edges: `C <- [A,B]`, `D <- [A,B]`.
+</FlowStep>
+
+<FlowStep step="2" color="rose" title="Coordinator launches Agents 1 and 2 concurrently">
+  Agent 1 reserves gateway files; Agent 2 reserves service files. No overlap means both start immediately.
+</FlowStep>
+
+<FlowStep step="3" color="rose" title="Reservation table blocks accidental collisions">
+  If Agent 2 tries to touch a reserved gateway file, the request is denied and queued instead of creating hidden conflict.
+</FlowStep>
+
+<FlowStep step="4" color="rose" title="Independent work completes and locks release">
+  A and B finish, run checks, publish metadata, and release leases.
+</FlowStep>
+
+<FlowStep step="5" color="rose" title="Downstream tasks C and D become runnable">
+  Agent 3 claims integration test files; Agent 4 updates docs. Both now operate with full context from completed A/B outputs.
+</FlowStep>
+
+<FlowStep step="6" color="rose" title="Coordinator gates final integration">
+  It waits for all required subtasks, runs full validation, and merges in dependency-safe order.
+</FlowStep>
+
+In practice, this is where the time delta appears. A sequential path (A→B→C→D) may take ~40 minutes. A coordinated parallel path runs A and B together, then C and D together, finishing closer to ~15-20 minutes depending on test runtime.
+
+That is the difference between “parallel” as a slogan and parallel as a reliable operating mode.
+
+## What Makes It Different
+
+- **Claim-before-change discipline:** conflicts are prevented at reservation time, not discovered during merge.
+- **Coordination as protocol, not convention:** active work registry + lock lifecycle makes ownership auditable.
+- **Failure-tolerant locking:** TTL + heartbeat-based renewal prevents deadlocks from crashed workers.
+- **Composable isolation:** file locks, worktrees, and process isolation can be layered by task shape.
+- **Dependency-aware scheduling:** coordinator executes independent subtasks concurrently while enforcing order where needed.
+- **Explicit control boundaries:** grant/release semantics create clear system state transitions for automation.
+- **Operational realism:** this pattern works in normal repositories without requiring a full platform rewrite.
+
+If your team is already experimenting with multiple coding agents, this is the key shift: treat the codebase like shared mutable state, then apply the same rigor you would use for any concurrent system.
+
+Repository: [Dicklesworthstone/claude_code_agent_farm](https://github.com/Dicklesworthstone/claude_code_agent_farm)  
+Snapshot (Mar 2026): ~744 stars, Python-based orchestration, lock-oriented multi-agent coordination with stale-lock handling.

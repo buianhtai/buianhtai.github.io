@@ -1,0 +1,276 @@
+---
+title: "Building a Planning Agent: The Missing Piece in Every AI Coding Setup"
+description: "Why reactive AI coding stacks stall, and how a planning agent turns tickets into dependency-ordered, execution-ready plans before any code is written."
+pubDate: 2026-03-24
+tags: ["ai", "agents", "architecture", "planning"]
+lang: "en"
+category: "architecture"
+series: "ai-agent-tools"
+seriesOrder: 7
+draft: false
+---
+import Label from '../../../components/mdx/Label.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import Pipeline from '../../../components/mdx/Pipeline.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+
+Your AI agents are firefighters. They arrive after the fire starts: failing tests, broken integrations, flaky builds, rollback pressure. If your workflow begins at "agent starts coding," you're already paying the highest possible cost.
+
+The missing role is a **planning agent**: one system that takes a ticket, interrogates the real codebase, maps impact, checks historical outcomes, decomposes work in dependency order, and blocks implementation until the plan is accepted. Teams call this overhead right up to the moment they measure rework.
+
+<HeroGrid items={[
+  { label: "85/15", sublabel: "Planning-to-coding leverage thesis", color: "#0891b2" },
+  { label: "6 Capabilities", sublabel: "From ticket parsing to plan persistence", color: "#059669" },
+  { label: "7-Step Workflow", sublabel: "Intake → impact → history → design → decomposition", color: "#d97706" },
+  { label: "0 Code", sublabel: "Implementation starts only after plan approval", color: "#e11d48" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> WHY — The Reactive Trap
+
+Most AI coding setups look mature on paper. They have a debug agent, a test agent, maybe a review agent, sometimes a deployment guard. The problem is sequencing. Every one of those agents activates **after** code exists.
+
+That means your system does this:
+
+1. Ticket arrives.
+2. Coding agent starts implementing from partial context.
+3. Integration edges are discovered late.
+4. Debug/testing/review agents clean up downstream damage.
+5. Team burns cycles on avoidable churn.
+
+This pattern feels productive because there is constant activity. But activity is not progress. If you measure total lead time from ticket to merged, the reactive loop is expensive in three places:
+
+- **Rework inflation**: initial implementation often ignores one or two hidden dependencies, then pays a second-pass tax.
+- **Coordination debt**: multiple agents collide on scope because no shared decomposition existed first.
+- **Quality volatility**: each fix introduces local optimizations without a global dependency model.
+
+The flywheel view inverts that order: **ticket → plan → decompose → execute → verify → remember**. Instead of detecting mistakes late, you reduce mistake probability before code is touched.
+
+This is where the 85/15 planning thesis matters. It does **not** mean engineers sit in meetings all day. It means high-value cognitive work happens early, with concrete artifacts:
+
+- explicit assumptions,
+- dependency-aware scope boundaries,
+- acceptance criteria tied to changed files and interfaces,
+- and known test strategy before first commit.
+
+When teams skip this, they confuse speed with throughput. They are fast at producing diffs, slow at producing reliable outcomes.
+
+<DataTable
+  caption="Reactive loop vs planning-first loop"
+  accent="teal"
+  headers={["Dimension", "Reactive-first", "Planning-first"]}
+  rows={[
+    { Dimension: "Start trigger", "Reactive-first": "Code generation", "Planning-first": "Ticket analysis" },
+    { Dimension: "Dependency handling", "Reactive-first": "Found during breakage", "Planning-first": "Mapped before coding" },
+    { Dimension: "Parallelization", "Reactive-first": "Ad-hoc, conflict-prone", "Planning-first": "Task graph with boundaries" },
+    { Dimension: "QA role", "Reactive-first": "Primary defect discovery", "Planning-first": "Verification against planned acceptance" },
+    { Dimension: "Rework profile", "Reactive-first": "High, late-cycle", "Planning-first": "Lower, front-loaded" },
+  ]}
+/>
+
+You can see this principle in open orchestration systems as well. Public multi-agent frameworks advertise parallel execution at large scale, lock-based coordination, and conflict prevention; notably, they still require each agent to register a detailed plan before claiming work. Even in "many agents, high throughput" environments, planning is treated as a prerequisite, not an optional ceremony.
+
+<Callout color="amber">
+Planning is not a pause before delivery. It is the control surface that lets autonomous agents move quickly <strong>without</strong> creating random blast radius.
+</Callout>
+
+## <Label color="green">2</Label> HOW — Anatomy of a Planning Agent
+
+A planning agent is not a better prompt. It is a workflow system with explicit capabilities, each grounded in real project state.
+
+At minimum, it should perform six operations.
+
+### 1) Ticket Analysis
+
+Input is a ticket from your tracker: feature, bug, or refactor request. The planning agent parses title, body, linked items, comments, and attachments. It extracts:
+
+- functional requirements,
+- acceptance criteria,
+- non-functional constraints (latency, reliability, compliance),
+- and uncertainty flags (missing API contracts, ambiguous behavior, unresolved dependencies).
+
+Output is a normalized requirement object rather than free-form summary text.
+
+### 2) Impact Assessment
+
+The planning agent queries a codebase index or knowledge graph to map blast radius. It should identify:
+
+- touched services/modules,
+- upstream callers and downstream dependents,
+- data model and schema implications,
+- API contract changes,
+- event streams or queue topics potentially affected.
+
+This step transforms "we think this is isolated" into verifiable dependency context.
+
+### 3) History Check
+
+Before inventing new patterns, the agent searches prior tickets, retrospectives, postmortems, and past session logs. The objective is pragmatic reuse:
+
+- which approach succeeded previously,
+- which failure modes recurred,
+- which tests caught regressions last time,
+- and which implementation paths were abandoned for cost or risk reasons.
+
+Planning quality jumps when history becomes queryable memory instead of tribal knowledge.
+
+### 4) Technical Design
+
+Now the agent proposes implementation shape:
+
+- modules to modify,
+- interfaces to add/change,
+- configuration toggles or migrations,
+- rollout strategy,
+- test strategy and observability hooks.
+
+Crucially, this should include alternatives and trade-offs, not a single path presented as inevitable.
+
+### 5) Work Decomposition
+
+The design is split into dependency-ordered subtasks. Each subtask includes:
+
+- file targets,
+- explicit acceptance criteria,
+- expected complexity,
+- required tests,
+- dependency edges to other subtasks.
+
+This is where autonomous execution becomes safe. Agents get bounded scopes instead of vague mandates.
+
+### 6) Plan Persistence
+
+The plan is written back into the delivery system: ticket comments, created subtasks, and memory store entries for future retrieval. A plan that isn't persisted is an ephemeral chat artifact; it won't coordinate teams or feed later learning loops.
+
+<Pipeline
+  nodes={[
+    { title: "1. Analyze", subtitle: "Parse ticket + criteria" },
+    { title: "2. Assess", subtitle: "Map dependency blast radius" },
+    { title: "3. Check", subtitle: "Query prior similar work" },
+    { title: "4. Design", subtitle: "Generate technical spec" },
+    { title: "5. Decompose", subtitle: "Create dependency DAG tasks" },
+    { title: "6. Persist", subtitle: "Save plan to tracker + memory" },
+  ]}
+  arrows={[
+    { label: "evidence", direction: "right" },
+    { label: "execution-ready plan", direction: "right" },
+  ]}
+  footer="No implementation begins until the persisted plan is approved."
+/>
+
+## <Label color="amber">3</Label> HOW — What Makes Planning Different from "Just Thinking Harder"
+
+Plenty of teams claim they already do planning: a senior engineer "thinks through" the ticket, then starts coding. Sometimes this works. It doesn't scale.
+
+The difference is not effort level. It's **information architecture**.
+
+### Planning agent vs ad-hoc reasoning
+
+Ad-hoc reasoning depends on:
+
+- one person's local memory,
+- incomplete awareness of current dependency edges,
+- and narrative output that cannot be validated mechanically.
+
+A planning agent should depend on:
+
+- **live code graph data** (call graph, ownership map, module dependencies),
+- **live contract data** (API schemas, event formats, migration state),
+- **live historical data** (what was attempted, what failed, what succeeded),
+- and **structured outputs** that downstream systems can consume.
+
+That last point is the unlock. Free-form prose cannot reliably orchestrate autonomous execution at scale. Structured artifacts can.
+
+For example, a planning output should resemble this shape conceptually:
+
+- `requirements[]`
+- `impacted_components[]`
+- `risk_register[]`
+- `subtasks[]` with `depends_on[]`
+- `file_targets[]`
+- `test_strategy[]`
+- `rollout_strategy`
+- `acceptance_checks[]`
+
+With this structure, you can automate practical controls:
+
+- block task execution if dependencies are unresolved,
+- block merge if acceptance checks for a subtask are missing,
+- route work to different agents by component ownership,
+- compare outcome quality against plan assumptions for feedback learning.
+
+Without structure, "planning" is a nice conversation that evaporates under delivery pressure.
+
+<Callout color="teal">
+If your planning output cannot be parsed into a DAG and validated against file-level acceptance criteria, you do not have a planning system—you have a planning anecdote.
+</Callout>
+
+There's another practical distinction: planning agents make uncertainty explicit. Human-only planning often hides uncertainty as confidence language. A good planning agent emits unknowns as first-class items ("missing rate-limit policy schema," "no existing gateway integration test fixture"). That creates early escalation paths instead of late surprises.
+
+Finally, planning agents improve over time because they can be measured. You can score plan quality by downstream outcomes:
+
+- how many subtasks required rescoping,
+- which risk flags predicted actual defects,
+- where dependency misses happened,
+- and whether planned tests caught regressions.
+
+This closes the loop from planning to execution to memory, turning strategy into an evolving system rather than a static checklist.
+
+## <Label color="rose">4</Label> FLOW
+
+Let's walk through a concrete example to show the end-to-end behavior.
+
+**Ticket:** "Add rate limiting to the API gateway. Must support per-client limits and runtime configuration changes."
+
+The planning agent executes a seven-step sequence before any coding starts.
+
+<FlowStep step="1" color="teal" title="Ticket intake and requirement extraction">
+The agent parses the ticket and extracts concrete requirements: per-client policy keys, burst behavior, fallback behavior, and config reload expectations. It also flags ambiguous language such as "runtime" (hot reload vs periodic sync).
+</FlowStep>
+
+<FlowStep step="2" color="teal" title="Codebase localization">
+Using the project index/graph, it identifies gateway middleware, authentication context provider, request metadata schema, and existing observability hooks likely needed for rate-limit metrics and audit trails.
+</FlowStep>
+
+<FlowStep step="3" color="green" title="Impact map generation">
+The agent builds a blast-radius view: gateway service touched directly, three downstream services affected by changed backpressure behavior, and one asynchronous audit stream requiring a new event field for throttle decisions.
+</FlowStep>
+
+<FlowStep step="4" color="green" title="Historical pattern retrieval">
+It finds a prior throttling implementation from months earlier in another edge service. That work includes a reusable token-bucket utility and two postmortem notes on clock-skew bugs and missing integration tests.
+</FlowStep>
+
+<FlowStep step="5" color="amber" title="Technical design draft">
+The agent proposes one primary design and one fallback: in-memory limiter with distributed override support vs centralized limiter service. It documents trade-offs (latency, consistency, operational burden) and recommends rollout behind a config gate.
+</FlowStep>
+
+<FlowStep step="6" color="amber" title="Dependency-ordered decomposition">
+The design is split into four subtasks: (A) policy schema + config loader, (B) gateway middleware enforcement, (C) audit event extension, (D) integration and load tests. Dependencies are explicit: B depends on A; D depends on B and C.
+</FlowStep>
+
+<FlowStep step="7" color="rose" title="Persistence and execution handoff">
+The agent posts the full plan to the ticket tracker, creates four linked subtasks, attaches acceptance checks per subtask, and stores the plan snapshot in team memory. Only then do coding agents claim scoped tasks in parallel.
+</FlowStep>
+
+The key outcome here is not prettier documentation. It's execution reliability. Each coding agent gets a bounded scope with known dependencies and predeclared success criteria, so parallelization increases throughput instead of conflict rate.
+
+---
+
+## What Makes It Different
+
+- **Front-loaded leverage:** It treats planning as the highest-leverage stage, not administrative overhead.
+- **Evidence before implementation:** Every design decision is tied to ticket context, dependency analysis, and historical outcomes.
+- **Graph-aware scoping:** Work is decomposed using real code relationships, not guessed module boundaries.
+- **Structured orchestration output:** Plans are machine-consumable (DAGs, file targets, acceptance checks), enabling automated gating.
+- **Safer parallel execution:** Agents can work concurrently because dependency edges and ownership boundaries are explicit.
+- **Measured plan quality:** Outcomes feed back into memory, improving future planning accuracy and reducing repeated mistakes.
+- **Execution discipline:** "No code until plan approved" prevents premature implementation churn.
+
+If your agent stack is strong at debugging, testing, and review but weak at pre-code design, you're optimizing the wrong end of the pipeline. Add a planning agent first. Everything downstream gets easier.
+
+And when downstream gets easier, teams stop celebrating heroic recoveries and start shipping predictable outcomes.
+
+Reference evidence for multi-agent orchestration and planning-before-claim workflows: [Agent Farm README](https://github.com/Dicklesworthstone/claude_code_agent_farm) (public repository; ~744 stars at writing time).
