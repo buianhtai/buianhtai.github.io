@@ -30,6 +30,28 @@ GoClaw v2.0.0 marks the transition from a single-user AI agent gateway to a prod
 
 ## <Label color="teal">1</Label> Multi-Tenant PostgreSQL
 
+```d2
+direction: right
+
+request: "Incoming Request" {
+  style.fill: "#dbeafe"
+}
+
+auth: "Auth + Tenant\nResolution" {
+  style.fill: "#fef3c7"
+}
+
+pg: "PostgreSQL" {
+  sessions: Sessions
+  agents: Agents
+  memory: Memory
+  cron: Cron Jobs
+}
+
+request -> auth: API Key / JWT
+auth -> pg: "tenant_id scoped\nqueries only"
+```
+
 <Card>
 v1 stored operational state for a single logical user profile.
 
