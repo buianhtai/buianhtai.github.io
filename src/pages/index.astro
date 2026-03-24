@@ -1,12 +1,33 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { getCollection } from 'astro:content';
-import { getPostSlug } from '../lib/posts';
+import { getPostSlug, getPostUrl } from '../lib/posts';
+import seriesData from '../content/series.json';
 
 const allPosts = await getCollection('blog');
 const recentPosts = allPosts
   .sort((a, b) => new Date(b.data.pubDate).getTime() - new Date(a.data.pubDate).getTime())
   .slice(0, 4);
+
+const seriesCards = seriesData.map((s) => ({
+  title: s.title,
+  description: s.description,
+  lang: s.lang ?? null,
+  link: s.link ?? `/en/blog#${s.id}`,
+}));
+
+const featuredPosts = await getCollection(
+  'blog',
+  (p) => !p.data.draft && p.data.featured && !p.data.series
+);
+const featuredCards = featuredPosts.map((p) => ({
+  title: p.data.title,
+  description: p.data.description,
+  lang: p.data.category.charAt(0).toUpperCase() + p.data.category.slice(1),
+  link: getPostUrl(p),
+}));
+
+const projectCards = [...seriesCards, ...featuredCards];
 
 const techStack = ['Java', 'Quarkus', 'Spring Boot', 'Neo4j', 'PostgreSQL', 'MongoDB', 'Keycloak', 'Kafka', 'Docker', 'Kubernetes', 'AWS', 'AI/LLM'];
 ---
@@ -138,90 +159,26 @@ const techStack = ['Java', 'Quarkus', 'Spring Boot', 'Neo4j', 'PostgreSQL', 'Mon
       </h2>
 
       <div class="grid gap-4 sm:grid-cols-2">
-        <a
-          href="/en/blog"
-          class="block p-5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-accent)] transition-colors group"
-        >
-          <div class="flex items-center justify-between mb-2">
-            <h3 class="font-bold text-[var(--color-text)] group-hover:text-[var(--color-accent)] transition-colors">
-              GoClaw
-            </h3>
-            <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--color-bg)] text-[var(--color-text-dim)] border border-[var(--color-border)]">
-              Go
-            </span>
-          </div>
-          <p class="text-sm text-[var(--color-text-dim)] leading-relaxed">
-            Multi-agent AI gateway — 6-part deep dive series
-          </p>
-        </a>
-
-        <a
-          href="/en/blog/context-mode-architecture"
-          class="block p-5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-accent)] transition-colors group"
-        >
-          <div class="flex items-center justify-between mb-2">
-            <h3 class="font-bold text-[var(--color-text)] group-hover:text-[var(--color-accent)] transition-colors">
-              context-mode
-            </h3>
-            <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--color-bg)] text-[var(--color-text-dim)] border border-[var(--color-border)]">
-              TypeScript
-            </span>
-          </div>
-          <p class="text-sm text-[var(--color-text-dim)] leading-relaxed">
-            AI context management with sandboxed execution
-          </p>
-        </a>
-
-        <a
-          href="/en/blog/beads-issue-tracker"
-          class="block p-5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-accent)] transition-colors group"
-        >
-          <div class="flex items-center justify-between mb-2">
-            <h3 class="font-bold text-[var(--color-text)] group-hover:text-[var(--color-accent)] transition-colors">
-              Beads
-            </h3>
-            <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--color-bg)] text-[var(--color-text-dim)] border border-[var(--color-border)]">
-              Go / Rust
-            </span>
-          </div>
-          <p class="text-sm text-[var(--color-text-dim)] leading-relaxed">
-            Graph-first issue tracking for AI agents
-          </p>
-        </a>
-
-        <a
-          href="/en/blog/mcp-agent-mail"
-          class="block p-5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-accent)] transition-colors group"
-        >
-          <div class="flex items-center justify-between mb-2">
-            <h3 class="font-bold text-[var(--color-text)] group-hover:text-[var(--color-accent)] transition-colors">
-              MCP Agent Mail
-            </h3>
-            <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--color-bg)] text-[var(--color-text-dim)] border border-[var(--color-border)]">
-              Python
-            </span>
-          </div>
-          <p class="text-sm text-[var(--color-text-dim)] leading-relaxed">
-            Async coordination for multi-agent workflows
-          </p>
-        </a>
-
-        <a
-          href="/en/blog/agent-flywheel-ecosystem"
-          class="block p-5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-accent)] transition-colors group sm:col-span-2"
-        >
-          <div class="flex items-center justify-between mb-2">
-            <h3 class="font-bold text-[var(--color-text)] group-hover:text-[var(--color-accent)] transition-colors">
-              Agent Flywheel
-            </h3>
-            <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--color-bg)] text-[var(--color-text-dim)] border border-[var(--color-border)]">
-              Rust / Go / Python
-            </span>
-          </div>
-          <p class="text-sm text-[var(--color-text-dim)] leading-relaxed">
-            6-tool ecosystem — beads, cass, dcg, ubs, mail, and viewer working together
-          </p>
-        </a>
+        {projectCards.map((card, idx) => (
+          <a
+            href={card.link}
+            class={`block p-5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-accent)] transition-colors group${idx === projectCards.length - 1 && projectCards.length % 2 === 1 ? ' sm:col-span-2' : ''}`}
+          >
+            <div class="flex items-center justify-between mb-2">
+              <h3 class="font-bold text-[var(--color-text)] group-hover:text-[var(--color-accent)] transition-colors">
+                {card.title}
+              </h3>
+              {card.lang && (
+                <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--color-bg)] text-[var(--color-text-dim)] border border-[var(--color-border)]">
+                  {card.lang}
+                </span>
+              )}
+            </div>
+            <p class="text-sm text-[var(--color-text-dim)] leading-relaxed">
+              {card.description}
+            </p>
+          </a>
+        ))}
       </div>
     </div>
   </section>

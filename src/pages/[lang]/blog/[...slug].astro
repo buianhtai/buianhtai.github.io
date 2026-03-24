@@ -4,7 +4,10 @@ import BlogPost from '../../../layouts/BlogPost.astro';
 import { getPostSlug, getPostLang, getSeriesPosts } from '../../../lib/posts';
 
 export async function getStaticPaths() {
-  const posts = await getCollection('blog');
+  const posts = await getCollection('blog', (p) => {
+    if (p.data.draft && !import.meta.env.DEV) return false;
+    return true;
+  });
   return posts.map(post => ({
     params: { lang: getPostLang(post), slug: getPostSlug(post) },
     props: { post },

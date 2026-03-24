@@ -1,4 +1,13 @@
 import type { CollectionEntry } from 'astro:content';
+import seriesData from '../content/series.json';
+
+type SeriesEntry = {
+  id: string;
+  title: string;
+  description: string;
+  lang: string;
+  link: string | null;
+};
 
 export function getPostSlug(post: CollectionEntry<'blog'>): string {
   const [, ...slugParts] = post.id.split('/');
@@ -13,16 +22,9 @@ export function getPostUrl(post: CollectionEntry<'blog'>): string {
   return `/${getPostLang(post)}/blog/${getPostSlug(post)}`;
 }
 
-export const seriesMeta: Record<string, { title: string; description: string }> = {
-  goclaw: {
-    title: 'GoClaw — Multi-Agent AI Gateway',
-    description: 'Deep dives into GoClaw\'s architecture: agent loops, providers, tools, security, memory, and orchestration.',
-  },
-  'ai-agent-tools': {
-    title: 'AI Agent Tools — Open Source Deep Dives',
-    description: 'Architecture studies of open-source tools that make AI coding agents practical.',
-  },
-};
+export const seriesMeta: Record<string, SeriesEntry> = Object.fromEntries(
+  (seriesData as SeriesEntry[]).map((series) => [series.id, series])
+);
 
 export function groupPostsBySeries(posts: CollectionEntry<'blog'>[]) {
   const groups: { series: string | null; posts: CollectionEntry<'blog'>[] }[] = [];
@@ -39,7 +41,7 @@ export function groupPostsBySeries(posts: CollectionEntry<'blog'>[]) {
     }
   }
 
-  const seriesOrder = ['goclaw', 'ai-agent-tools'];
+  const seriesOrder = (seriesData as SeriesEntry[]).map((series) => series.id);
   for (const key of seriesOrder) {
     const seriesPosts = seriesMap.get(key);
     if (seriesPosts) {

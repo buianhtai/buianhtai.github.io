@@ -1,0 +1,16 @@
+[
+  {
+    "id": "goclaw",
+    "title": "GoClaw — Multi-Agent AI Gateway",
+    "description": "Deep dives into GoClaw's architecture: agent loops, providers, tools, security, memory, and orchestration.",
+    "lang": "Go",
+    "link": null
+  },
+  {
+    "id": "ai-agent-tools",
+    "title": "AI Agent Tools — Open Source Deep Dives",
+    "description": "Architecture studies of open-source tools that make AI coding agents practical.",
+    "lang": "TypeScript",
+    "link": null
+  }
+]

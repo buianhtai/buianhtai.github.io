@@ -9,7 +9,11 @@ export function getStaticPaths() {
 }
 
 const { lang } = Astro.params;
-const posts = (await getCollection('blog', (p) => p.data.lang === lang && !p.data.draft))
+const posts = (await getCollection('blog', (p) => {
+  if (p.data.lang !== lang) return false;
+  if (p.data.draft && !import.meta.env.DEV) return false;
+  return true;
+}))
   .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
 
 const groups = groupPostsBySeries(posts);
@@ -26,7 +30,7 @@ const groups = groupPostsBySeries(posts);
       const count = group.posts.length;
 
       return (
-        <section class="mb-12">
+        <section id={group.series ?? undefined} class="mb-12">
           <div class="flex items-baseline gap-3 mb-2">
             <h2 class="text-xl font-bold text-[var(--color-text)]">{heading}</h2>
             <span class="text-xs font-mono px-2 py-0.5 rounded-full bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-dim)]">
@@ -53,6 +57,9 @@ const groups = groupPostsBySeries(posts);
                     <div class="flex items-baseline justify-between gap-4">
                       <h3 class="font-semibold group-hover:text-[var(--color-accent)] transition-colors">
                         {post.data.title}
+                        {post.data.draft && (
+                          <span class="draft-badge">DRAFT</span>
+                        )}
                       </h3>
                       <time class="text-xs text-[var(--color-text-dim)] font-mono shrink-0">
                         {post.data.pubDate.toISOString().slice(0, 10)}
@@ -74,3 +81,20 @@ const groups = groupPostsBySeries(posts);
     })}
   </div>
 </BaseLayout>
+
+<style>
+.draft-badge {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0.1rem 0.4rem;
+  font-size: 0.65rem;
+  font-family: 'IBM Plex Mono', monospace;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: #d97706;
+  background: rgba(217, 119, 6, 0.1);
+  border: 1px solid rgba(217, 119, 6, 0.3);
+  border-radius: 3px;
+  vertical-align: middle;
+}
+</style>

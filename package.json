@@ -6,7 +6,11 @@
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
-    "astro": "astro"
+    "astro": "astro",
+    "blog:series": "npx tsx scripts/series.ts",
+    "blog:new": "npx tsx scripts/blog.ts",
+    "blog:update": "npx tsx scripts/update.ts",
+    "blog:validate": "npx tsx scripts/validate.ts"
   },
   "dependencies": {
     "@astrojs/mdx": "^4.3.14",
