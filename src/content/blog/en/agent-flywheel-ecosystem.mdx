@@ -1,6 +1,6 @@
 ---
-title: "The Agent Flywheel: Six Tools That Make Multi-Agent Coding Actually Work"
-description: "A deep dive into Jeffrey Emanuel's open-source ecosystem — from issue tracking (beads) to memory (cass), command safety (dcg), bug scanning (ubs), agent messaging (mail), and graph-aware triage (viewer)."
+title: "The Agent Flywheel: 12 Tools That Make Multi-Agent Coding Actually Work"
+description: "A full map of Jeffrey Emanuel's 12-tool agentic coding ecosystem, organized as a flywheel loop: Plan → Coordinate → Execute → Verify → Remember."
 pubDate: 2026-03-22
 tags: ["ai", "agents", "architecture", "rust", "golang"]
 lang: "en"
@@ -18,18 +18,92 @@ import ArchLayer from '../../../components/mdx/ArchLayer.astro';
 import Pipeline from '../../../components/mdx/Pipeline.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
 
-Running multiple AI coding agents isn't hard. Making them work *together* without destroying each other's work — that's the unsolved problem. Jeffrey Emanuel has been building toward a solution: six open-source tools that form a self-reinforcing loop he calls the **Agent Flywheel**.
+Running multiple AI coding agents isn't hard. Making them work *together* without race conditions, duplicate effort, unsafe shell commands, and lost institutional memory is the hard part. Jeffrey Emanuel's ecosystem now spans **12 focused tools** that collectively solve that systems problem.
 
-Each tool solves one coordination problem. Together, they cover the full lifecycle: track work → claim tasks → coordinate files → guard against catastrophic commands → scan for bugs → remember what was learned.
+The key insight is architectural, not cosmetic: these tools are designed as a loop. You **plan work**, **coordinate agents**, **execute safely**, **verify aggressively**, and **remember outcomes** so the next cycle starts with better priors.
 
 <HeroGrid items={[
-  { label: "beads_rust", sublabel: "Issue tracking\nDependency DAG + hash IDs", color: "#0891b2" },
-  { label: "beads_viewer", sublabel: "Graph triage\n9 metrics + PageRank", color: "#059669" },
-  { label: "cass + memory", sublabel: "Session search\n3-layer cognitive memory", color: "#d97706" },
-  { label: "dcg + ubs", sublabel: "Safety + quality\nCommand guard + bug scanner", color: "#e11d48" },
+  { label: "12 tools", sublabel: "End-to-end loop\nPlan → Remember", color: "#0891b2" },
+  { label: "7,300+ stars", sublabel: "11 public repos\nplus CAAM auth layer", color: "#059669" },
+  { label: "5 stages", sublabel: "Plan, Coordinate\nExecute, Verify, Remember", color: "#d97706" },
+  { label: "multi-runtime", sublabel: "Rust, Go, Bash\nPython, TypeScript", color: "#e11d48" },
 ]} />
 
 ---
+
+## WHY this matters in production
+
+<DataTable
+  headers={["Failure Mode", "What breaks", "Flywheel countermeasure"]}
+  rows={[
+    {
+      "Failure Mode": "Task chaos",
+      "What breaks": "Agents pick low-value work or block each other",
+      "Flywheel countermeasure": "beads_rust + beads_viewer dependency-aware prioritization"
+    },
+    {
+      "Failure Mode": "Coordination collisions",
+      "What breaks": "Two agents edit same files, duplicate or conflicting output",
+      "Flywheel countermeasure": "Agent Mail reservations + Agent Farm lock-based orchestration"
+    },
+    {
+      "Failure Mode": "Unsafe execution",
+      "What breaks": "Destructive shell/database/cloud commands slip through",
+      "Flywheel countermeasure": "DCG multi-tier command interception"
+    },
+    {
+      "Failure Mode": "Silent code regressions",
+      "What breaks": "LLM-generated bugs survive to commit",
+      "Flywheel countermeasure": "UBS language-specific pattern scanning"
+    },
+    {
+      "Failure Mode": "Knowledge amnesia",
+      "What breaks": "Teams repeatedly solve already-solved problems",
+      "Flywheel countermeasure": "CASS session retrieval + CM rule distillation"
+    }
+  ]}
+  caption="The flywheel is useful because it closes concrete operational failure loops."
+  accent="teal"
+/>
+
+<Callout color="amber">
+The ecosystem is strongest when used as a loop, not as a menu of independent tools.
+</Callout>
+
+## Full 12-tool inventory mapped to the flywheel
+
+<DataTable
+  headers={["Stage", "Tools", "Role in the loop"]}
+  rows={[
+    {
+      Stage: "Plan",
+      Tools: "beads_rust, beads_viewer",
+      "Role in the loop": "Track work in a dependency DAG and prioritize by graph metrics (PageRank, critical path, bottlenecks)."
+    },
+    {
+      Stage: "Coordinate",
+      Tools: "Agent Mail, Agent Farm, NTM, SLB",
+      "Role in the loop": "Message agents, reserve files, orchestrate lock-safe parallel workers, and launch multi-process sessions quickly."
+    },
+    {
+      Stage: "Execute",
+      Tools: "ACFS, CAAM",
+      "Role in the loop": "Bootstrap environments and keep OAuth/account context valid so agents can actually run end-to-end workflows."
+    },
+    {
+      Stage: "Verify",
+      Tools: "UBS, DCG",
+      "Role in the loop": "Catch bug patterns and block catastrophic commands before damage reaches git or infrastructure."
+    },
+    {
+      Stage: "Remember",
+      Tools: "CASS, CM",
+      "Role in the loop": "Index sessions and promote learnings into durable procedural rules for later reuse."
+    }
+  ]}
+  caption="Plan → Coordinate → Execute → Verify → Remember"
+  accent="green"
+/>
 
 ## <Label color="teal">1</Label> beads_rust — Issue Tracking in Rust
 
@@ -310,32 +384,134 @@ ubs . --format=toon
 
 ---
 
+## <Label color="green">7</Label> Agent Mail — Coordination + File Reservations
+
+[MCP Agent Mail](https://github.com/Dicklesworthstone/mcp_agent_mail) gives agents a protocol for messaging and mutual exclusion. This is what turns "many agents" into "cooperating agents".
+
+<Card>
+### Why it matters
+
+Without reservations, parallel agents race on shared files. Agent Mail provides explicit reservation + release semantics, ACK flows, and thread context so distributed work doesn't collapse into merge conflict cleanup.
+
+Typical primitives:
+- initialize a session
+- reserve paths (exclusive/non-exclusive)
+- send update/blocked/completed messages
+- acknowledge + release
+</Card>
+
+---
+
+## <Label color="amber">8</Label> Agent Farm — Lock-Based Parallel Orchestration
+
+[Claude Code Agent Farm](https://github.com/Dicklesworthstone/claude_code_agent_farm) operationalizes parallel workers with lock-based conflict prevention.
+
+<Card>
+### Core pattern
+
+Agent Farm doesn't depend on fragile social coordination. It uses explicit lock/state transitions for deterministic parallel execution:
+
+1. decompose work
+2. assign isolated slices
+3. lock shared resources
+4. run in parallel
+5. merge after verification
+
+The design lesson is bigger than the implementation: parallelism only scales when conflict boundaries are machine-enforced.
+</Card>
+
+---
+
+## <Label color="rose">9</Label> NTM — Named Tmux Manager
+
+[namedtmuxmanager](https://github.com/Dicklesworthstone/namedtmuxmanager) (`ntm`) is the session substrate for multi-agent terminal workflows.
+
+<Card>
+### Operational role
+
+NTM creates predictable named sessions for workers, reviewers, and monitors. In practice, this gives you reproducible terminal topology for long-running agent jobs: easy attach/detach, clearer ownership, and less session drift.
+
+Think of NTM as process locality infrastructure for coordination-heavy runs.
+</Card>
+
+---
+
+## <Label color="teal">10</Label> SLB — Simultaneous Launch Button
+
+[simultaneous-launch-button](https://github.com/Dicklesworthstone/simultaneous-launch-button) (`slb`) launches multiple processes in parallel with coordinated output handling.
+
+<Card>
+### Where it fits
+
+When a workflow needs many services or workers online at once, serial startup adds latency and operator friction. SLB compresses startup overhead and standardizes launch behavior, which is especially useful before benchmark runs and orchestration tests.
+</Card>
+
+---
+
+## <Label color="purple">11</Label> ACFS — Agentic Coding Flywheel Setup
+
+[agentic_coding_flywheel_setup](https://github.com/Dicklesworthstone/agentic_coding_flywheel_setup) (`acfs`) bootstraps the environment that the rest of the flywheel assumes.
+
+<Card>
+### Bootstrap philosophy
+
+ACFS reduces setup entropy: install dependencies, provision runtime scaffolding, and make toolchain bring-up reproducible on fresh machines or VPS instances. This pushes setup from tribal knowledge into executable infrastructure.
+
+In flywheel terms, ACFS is part of **Execute** because it ensures tasks can be run consistently before verification and learning begin.
+</Card>
+
+---
+
+## <Label color="green">12</Label> CAAM — Coding Agent Account Manager
+
+CAAM (Coding Agent Account Manager) handles OAuth/account token lifecycle across providers.
+
+<Card>
+### Why auth belongs in the flywheel
+
+Multi-agent systems fail fast when credentials expire mid-run. CAAM externalizes token refresh, account switching, and auth-state hygiene so execution pipelines don't stall on credential drift.
+
+It is deliberately boring infrastructure — and that is exactly why it is high leverage.
+</Card>
+
+---
+
 ## The Flywheel
 
-These tools aren't independent utilities — they form a coordination loop:
+These 12 tools aren't independent utilities — they form a closed loop:
 
 <Pipeline
   nodes={[
-    { title: "br ready", subtitle: "Find unblocked work" },
-    { title: "bv --robot-triage", subtitle: "Prioritize by graph metrics" },
-    { title: "dcg", subtitle: "Guard destructive commands" },
-    { title: "ubs --staged", subtitle: "Scan for bugs before commit" },
-    { title: "cm context", subtitle: "Apply learned rules" }
+    { title: "Plan", subtitle: "beads_rust + beads_viewer" },
+    { title: "Coordinate", subtitle: "Agent Mail + Agent Farm + NTM + SLB" },
+    { title: "Execute", subtitle: "ACFS + CAAM" },
+    { title: "Verify", subtitle: "UBS + DCG" },
+    { title: "Remember", subtitle: "CASS + CM" }
   ]}
   arrows={[
-    { label: "claim", direction: "right" },
-    { label: "work", direction: "right" },
-    { label: "safe", direction: "right" },
-    { label: "clean", direction: "right" }
+    { label: "prioritize", direction: "right" },
+    { label: "orchestrate", direction: "right" },
+    { label: "ship safely", direction: "right" },
+    { label: "learn", direction: "right" }
   ]}
-  footer="Each cycle refines the next: cass indexes the session, cm extracts rules, bv re-ranks priorities, br tracks completion. The flywheel accelerates."
+  footer="Plan → Coordinate → Execute → Verify → Remember → repeat. Each loop compounds: better planning inputs, safer execution defaults, and stronger procedural memory."
 />
 
-1. **br/bv** picks the highest-impact task from the dependency graph
-2. **Agent Mail** coordinates file reservations across agents
-3. **dcg** prevents catastrophic commands during implementation
-4. **ubs** catches LLM-introduced bugs before commit
-5. **cass/cm** indexes the session and extracts reusable rules
-6. Next cycle starts with better context, cleaner priorities, and learned patterns
+1. **Plan:** `br ready` + `bv --robot-triage` selects highest-impact, dependency-safe work.
+2. **Coordinate:** Agent Mail reservations and Agent Farm/NTM/SLB orchestration keep parallel workers from stepping on each other.
+3. **Execute:** ACFS and CAAM keep environment and auth reliable while work is in-flight.
+4. **Verify:** DCG blocks destructive commands, UBS scans for language-specific bug patterns.
+5. **Remember:** CASS indexes session traces, CM promotes stable lessons into procedural rules.
+6. **Repeat:** the next planning cycle starts with better priorities, better safeguards, and better memory.
 
-The full ecosystem is open source — all MIT licensed, all from [github.com/Dicklesworthstone](https://github.com/Dicklesworthstone).
+## What makes this ecosystem different
+
+- **Graph-first planning:** task priority is derived from dependency structure, not queue order.
+- **Coordination as protocol:** messaging and file reservations are first-class, not ad hoc conventions.
+- **Safety at command boundary:** destructive intent is intercepted before execution.
+- **Verification tuned for agent failure modes:** UBS targets bug classes LLMs repeatedly generate.
+- **Memory as compounding asset:** CASS + CM turn transient sessions into reusable operating rules.
+- **Composable, single-purpose tools:** each utility does one job well and plugs into the loop.
+- **Operational realism:** setup (ACFS), session topology (NTM/SLB), and auth hygiene (CAAM) are treated as core system concerns.
+
+The full ecosystem is open source and actively evolving at [github.com/Dicklesworthstone](https://github.com/Dicklesworthstone), with 7,300+ combined stars across the public repos in this stack.

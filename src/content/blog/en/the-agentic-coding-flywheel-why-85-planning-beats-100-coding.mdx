@@ -1,0 +1,259 @@
+---
+title: "The Agentic Coding Flywheel: Why 85% Planning Beats 100% Coding"
+description: ""
+pubDate: 2026-03-24
+tags: ["ai", "agents", "architecture", "methodology", "productivity"]
+lang: "en"
+category: "architecture"
+series: "ai-agent-tools"
+seriesOrder: 6
+draft: false
+---
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import Pipeline from '../../../components/mdx/Pipeline.astro';
+import ArchLayer from '../../../components/mdx/ArchLayer.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+
+Most teams adopt AI coding the same way they adopted autocomplete: open a ticket, prompt a model, patch whatever breaks, then repeat. That loop feels fast in hour one and expensive in week two, because each quick fix creates hidden coordination debt, review debt, and memory loss. The agentic coding flywheel flips the default: spend most of your effort on planning, decomposition, and verification so the coding step becomes the shortest part of the cycle instead of the riskiest.
+
+<HeroGrid items={[
+  { label: "85 / 15", sublabel: "Planning-first ratio", color: "#0891b2" },
+  { label: "12 Tools", sublabel: "Integrated operating system", color: "#059669" },
+  { label: "4 Model Roles", sublabel: "Planner → builder → reviewer → memory", color: "#d97706" },
+  { label: "Compounding", sublabel: "Each cycle improves the next", color: "#e11d48" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> WHY — The Problem with “Just Ship It”
+
+The most common AI workflow in software teams still looks like this:
+
+1. Ticket arrives.
+2. Prompt a coding model immediately.
+3. Fix whatever failed in tests or review.
+4. Repeat with a bigger context window.
+
+At small scale, that pattern can work. At team scale, it creates predictable failure modes: duplicated edits, conflicting assumptions between agents, brittle changes that pass local checks but fail in integration, and expensive “rediscovery” because no one can find how a similar problem was solved last week.
+
+The flywheel thesis argues that these failures are not model failures first; they are workflow failures first. In the planning notes behind this approach, the central statement is explicit: **allocate roughly 85% of effort to understanding, decomposition, and pre-implementation design, and only ~15% to direct code generation**. Not because coding is unimportant, but because coding quality is downstream of planning quality.
+
+That ratio sounds extreme until you measure rework. If five agents start coding before agreeing on boundaries, they will spend their token budget negotiating conflicts after the fact. If they agree on boundaries first, coding becomes mostly mechanical. In other words, planning is not ceremony. It is concurrency control.
+
+<DataTable
+  caption="Naive AI coding vs flywheel planning-first workflow"
+  accent="teal"
+  headers={["Dimension", "Coding-First Loop", "Flywheel Loop"]}
+  rows={[
+    {
+      Dimension: "Task start",
+      "Coding-First Loop": "Prompt immediately from ticket text",
+      "Flywheel Loop": "Translate ticket into dependency-ordered subtasks first"
+    },
+    {
+      Dimension: "Parallel work",
+      "Coding-First Loop": "Agents collide on files and assumptions",
+      "Flywheel Loop": "Reservations and scope ownership prevent overlap"
+    },
+    {
+      Dimension: "Quality gate",
+      "Coding-First Loop": "Validation happens after merge pressure",
+      "Flywheel Loop": "Verification is a mandatory stage before completion"
+    },
+    {
+      Dimension: "Knowledge retention",
+      "Coding-First Loop": "Context dies in terminal scrollback",
+      "Flywheel Loop": "Sessions indexed and searchable for future tasks"
+    },
+    {
+      Dimension: "Cost profile",
+      "Coding-First Loop": "Lower upfront cost, high rework cost",
+      "Flywheel Loop": "Higher upfront planning, lower total cycle cost"
+    }
+  ]}
+/>
+
+There is useful evidence in the public repositories around this ecosystem. The setup project emphasizes that individual tools are not magic in isolation and that value appears when they work as a system. The orchestration project makes the same point from another angle: many agents can run in parallel, but only with explicit coordination, locking, and planning constraints. Both are workflow claims, not benchmark claims.
+
+As of this writing (2026-03-24), the two anchor repositories are active and sizable: [`agentic_coding_flywheel_setup`](https://github.com/Dicklesworthstone/agentic_coding_flywheel_setup) (~1,320 stars) and [`claude_code_agent_farm`](https://github.com/Dicklesworthstone/claude_code_agent_farm) (~744 stars). The exact numbers will change, but the core pattern is already clear: people are converging on process architecture, not “pick one model and vibe harder.”
+
+## <Label color="green">2</Label> HOW — The Five Stages
+
+The flywheel is easiest to understand as a strict five-stage pipeline. You can run each stage with different tools, but you cannot remove a stage without paying for it later as defects, delays, or duplicated effort.
+
+<Pipeline
+  nodes={[
+    { title: "Plan", subtitle: "Decompose and order work" },
+    { title: "Coordinate", subtitle: "Assign ownership and prevent conflicts" },
+    { title: "Execute", subtitle: "Isolated implementation per subtask" },
+    { title: "Verify", subtitle: "Automated safety and bug scanning" },
+    { title: "Remember", subtitle: "Index sessions and promote learnings" },
+  ]}
+  arrows={[
+    { label: "handoff", direction: "right" },
+    { label: "status", direction: "left" },
+    { label: "artifacts", direction: "right" },
+    { label: "feedback", direction: "left" },
+  ]}
+  footer="Control boundaries are explicit at each stage: scope before code, verification before merge, memory after closure."
+/>
+
+### Stage 1: Plan
+
+Planning converts a vague issue into executable units. In practice this means: define acceptance criteria, identify affected modules, break work into subtasks, and order those subtasks by dependencies. In the flywheel world, those subtasks become beads (graph nodes), not just a bullet list in a chat thread.
+
+The important shift is that planning output is machine-usable. A good plan is not prose; it is a queue with ownership boundaries and completion criteria.
+
+### Stage 2: Coordinate
+
+Coordination turns plan artifacts into safe parallel work. Agent Mail-style messaging shares status; file reservations and lock registries prevent two agents from editing the same surface at once; an agent-farm runner can scale out execution while still preserving queue discipline.
+
+Without this stage, “parallelism” is just merge-conflict generation. With it, parallelism becomes throughput.
+
+### Stage 3: Execute
+
+Execution is intentionally boring. Each agent works in an isolated context (tmux pane, dedicated session, or worktree), with a bounded scope and explicit files. Setup tooling (for example, ACFS bootstrap behavior) reduces environment drift so agents spend time implementing, not repairing shells.
+
+When people say the coding step becomes “easy,” this is what they mean: hard decisions were already made upstream.
+
+### Stage 4: Verify
+
+Verification is the guardrail layer that keeps speed from destroying stability. The pattern here is defense-in-depth:
+
+- static/type/build checks,
+- bug scanning (UBS-style pattern detection),
+- destructive-command prevention (DCG-style command guard),
+- and policy gates before work is considered complete.
+
+The goal is not perfection. The goal is to catch cheap failures early and systematically.
+
+### Stage 5: Remember
+
+Memory makes the loop a flywheel instead of a treadmill. Session search systems (CASS-style indexing) let teams query prior implementations; layered memory models (Episodic → Working → Procedural) turn raw transcripts into reusable rules. That means a solved problem can become a future default rather than a forgotten one-off.
+
+The mechanics can vary, but the architectural claim is stable: every completed cycle should reduce uncertainty in the next cycle.
+
+<ArchLayer badge="P" badgeColor="teal" label="Plan" items={["Ticket analysis", "Task decomposition", "Dependency ordering", "Acceptance criteria"]} />
+<ArchLayer badge="C" badgeColor="green" label="Coordinate" items={["Agent messaging", "File reservations", "Work claiming", "Progress visibility"]} />
+<ArchLayer badge="E" badgeColor="amber" label="Execute" items={["Isolated sessions", "Bounded scope", "Per-task implementation", "Incremental artifacts"]} />
+<ArchLayer badge="V" badgeColor="rose" label="Verify" items={["Type/build/test gates", "UBS scans", "Command guards", "Merge policy"]} />
+<ArchLayer badge="R" badgeColor="teal" label="Remember" items={["Session indexing", "Semantic search", "Rule extraction", "Compounding playbooks"]} />
+
+## <Label color="amber">3</Label> HOW — Multi-Model Blending (Role-Specific AI)
+
+One of the most practical ideas in this methodology is model specialization by stage. The point is not to find “the best model.” The point is to map model strengths to task shape.
+
+Planning and decomposition benefit from deep chain-of-thought and long-horizon reasoning. Execution benefits from speed, iteration, and low latency per edit loop. Verification benefits from broad context handling and review consistency. Memory benefits from embeddings and retrieval quality rather than generation style.
+
+That is why flywheel implementations often mix models in a pipeline such as:
+
+- **Planning**: GPT-o1 Pro or Claude Opus class models
+- **Execution**: Claude Sonnet / GPT-4o class models
+- **Verification review**: Gemini class models for large diff reading
+- **Memory indexing/search**: embedding-focused models
+
+This is the same design logic used in good toolchains: you do not compile, test, lint, and package with one binary if specialized binaries are better at each job.
+
+<DataTable
+  caption="Model selection by workflow stage"
+  accent="amber"
+  headers={["Stage", "Primary Model Profile", "Why This Fit Matters"]}
+  rows={[
+    {
+      Stage: "Plan",
+      "Primary Model Profile": "Deep reasoning (o1 Pro / Opus class)",
+      "Why This Fit Matters": "Better decomposition quality reduces downstream rework"
+    },
+    {
+      Stage: "Execute",
+      "Primary Model Profile": "Fast coding loop (Sonnet / GPT-4o class)",
+      "Why This Fit Matters": "High iteration speed per isolated subtask"
+    },
+    {
+      Stage: "Verify",
+      "Primary Model Profile": "Large-context reviewer (Gemini class)",
+      "Why This Fit Matters": "Cross-file checks and regression spotting in bigger diffs"
+    },
+    {
+      Stage: "Remember",
+      "Primary Model Profile": "Embedding + retrieval stack",
+      "Why This Fit Matters": "Turns prior sessions into searchable implementation memory"
+    }
+  ]}
+/>
+
+<Callout color="amber">
+  Multi-model blending is not a luxury feature. It is risk partitioning. If one model is weak at decomposition, another stage can still perform well — but only if the workflow assigns the right model to the right boundary.
+</Callout>
+
+There is also a cost discipline benefit. The most expensive model can be reserved for the smallest surface area (planning), while higher-volume execution runs on cheaper/faster models. This keeps quality high where it matters most and spend predictable where throughput matters most.
+
+## <Label color="rose">4</Label> FLOW — One Complete Cycle
+
+Below is a concrete, generic cycle using common engineering artifacts (Jira, codebase, CI). No product-specific assumptions are required.
+
+<FlowStep step="1" color="teal" title="Ticket intake and planning kickoff">
+  A Jira issue arrives with acceptance criteria and context links. A planning agent classifies scope, extracts constraints, and produces a dependency-ordered task graph instead of jumping into implementation.
+</FlowStep>
+
+<FlowStep step="2" color="green" title="Decompose into 5 subtasks and score order">
+  The plan is converted into five atomic units (for example: API contract update, validation layer, persistence update, integration tests, rollout doc). A graph scorer such as PageRank-derived weighting prioritizes tasks with the highest dependency centrality.
+</FlowStep>
+
+<FlowStep step="3" color="amber" title="Spawn parallel agents with reservations">
+  An agent farm starts three workers in parallel for independent subtasks while the remaining two stay queued. Each worker claims files and posts state transitions so no two agents modify the same surface simultaneously.
+</FlowStep>
+
+<FlowStep step="4" color="rose" title="Isolated implementation per worker">
+  Each worker runs in an isolated terminal session or worktree with a bounded prompt and explicit acceptance checks. This keeps contexts small and prevents one agent’s mistakes from contaminating another agent’s working state.
+</FlowStep>
+
+<FlowStep step="5" color="teal" title="Verification gates block unsafe output">
+  Before any merge step, automated checks run: build, tests, static analysis, UBS-style bug scan, and DCG-style destructive-command guardrails. Failed checks return work to the queue with actionable diagnostics.
+</FlowStep>
+
+<FlowStep step="6" color="green" title="Merge and index the session">
+  Once verified, changes are merged in dependency order. Session logs, decisions, and patch history are indexed into searchable memory so future agents can discover this exact implementation path.
+</FlowStep>
+
+<FlowStep step="7" color="amber" title="Next ticket starts from prior knowledge">
+  A similar ticket appears two weeks later. Instead of re-solving from scratch, the planner retrieves prior decomposition patterns and known pitfalls from memory. Planning quality improves, cycle time drops, and the flywheel accelerates.
+</FlowStep>
+
+What matters in this flow is not any single command. It is the handoff discipline between stages:
+
+- planning emits executable structure,
+- coordination enforces ownership,
+- execution stays scoped,
+- verification applies non-negotiable gates,
+- memory captures reusable patterns.
+
+Break one boundary and you get noise. Keep the boundaries and you get compounding throughput.
+
+## What Makes It Different
+
+- **Planning as capital allocation**: time spent in decomposition is treated as invested principal, not overhead, because it reduces downstream conflict and defect cost.
+- **Tool synergy over tool count**: the flywheel value comes from interactions between planning, coordination, verification, and memory — not from installing one “best” utility.
+- **Parallelism with conflict controls**: lock/reservation discipline turns many agents into net throughput instead of net chaos.
+- **Verification as a stage, not a checkbox**: UBS/DCG-style gates make quality enforcement part of the workflow architecture.
+- **Memory that compounds**: searchable sessions plus layered promotion (Episodic → Working → Procedural) convert past work into future defaults.
+- **Model specialization by boundary**: planner, builder, reviewer, and retriever roles use different model profiles for better quality/cost trade-offs.
+- **Reusable across stacks**: the process works for web apps, services, infra repos, and polyglot monorepos because it is workflow-centric, not framework-centric.
+- **Flywheel behavior is measurable**: each completed cycle can improve plan templates, guardrails, and retrieval precision for the next cycle.
+
+A practical adoption strategy is to roll this in slices rather than as a big-bang migration. Start with one delivery lane (for example, backend bugfixes), enforce planning + verification there, and measure rework rate over two sprints. Then add coordination primitives (reservations and queue ownership), and only then invest in memory promotion. Teams that adopt in this order usually avoid the “tool overload” trap because each added capability addresses a pain already felt in production.
+
+Primary references:
+
+- [Dicklesworthstone/agentic_coding_flywheel_setup](https://github.com/Dicklesworthstone/agentic_coding_flywheel_setup)
+- [Dicklesworthstone/claude_code_agent_farm](https://github.com/Dicklesworthstone/claude_code_agent_farm)
+
+Snapshot (2026-03-24):
+
+- `agentic_coding_flywheel_setup`: ~1,320★ / 161 forks / 2 open issues
+- `claude_code_agent_farm`: ~744★ / 83 forks / 0 open issues
+
+If you remember one principle, use this: **the fastest way to ship with AI agents is to spend more time before coding, not during bug triage.** In a mature flywheel, code generation is the shortest stage because every other stage has already done the hard work.
