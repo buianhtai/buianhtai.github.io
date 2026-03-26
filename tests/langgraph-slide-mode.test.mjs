@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-test('LangGraph article renders slide-mode markers in built HTML', () => {
+test('LangGraph article renders the custom hero infographic in built HTML', () => {
   const html = readFileSync(
     join(
       process.cwd(),
@@ -12,7 +12,8 @@ test('LangGraph article renders slide-mode markers in built HTML', () => {
     'utf8'
   );
 
-  assert.match(html, /slide-deck/, 'expected slide deck wrapper in built HTML');
-  assert.match(html, /data-slide=/, 'expected slide markers in built HTML');
-  assert.match(html, /slide-nav/, 'expected slide navigation in built HTML');
+  assert.match(html, /langgraph-hero/, 'expected custom hero wrapper in built HTML');
+  assert.match(html, /langgraph-state-capsule/, 'expected animated state capsule in built HTML');
+  assert.match(html, /langgraph-callout--durability/, 'expected durability callout in built HTML');
+  assert.doesNotMatch(html, /slide-nav/, 'did not expect slide navigation in built HTML');
 });
