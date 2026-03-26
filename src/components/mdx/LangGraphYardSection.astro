@@ -1,0 +1,154 @@
+---
+interface PanelItem {
+  label: string;
+  detail: string;
+  tone?: 'teal' | 'blue' | 'rust' | 'red';
+}
+
+interface Props {
+  eyebrow: string;
+  title: string;
+  summary: string;
+  stamp?: string;
+  panels?: PanelItem[];
+}
+
+const { eyebrow, title, summary, stamp = 'CONTROL PANELS', panels = [] } = Astro.props;
+
+const tones = {
+  teal: { ink: '#0f766e', wash: 'rgba(15,118,110,0.10)' },
+  blue: { ink: '#2563eb', wash: 'rgba(37,99,235,0.10)' },
+  rust: { ink: '#c2410c', wash: 'rgba(194,65,12,0.10)' },
+  red: { ink: '#b91c1c', wash: 'rgba(185,28,28,0.09)' },
+};
+---
+
+<section class="langgraph-yard-section not-prose">
+  <div class="langgraph-yard-section__header">
+    <p class="langgraph-yard-section__eyebrow">{eyebrow}</p>
+    <div class="langgraph-yard-section__titles">
+      <h2>{title}</h2>
+      <p>{summary}</p>
+    </div>
+    <span class="langgraph-yard-section__stamp">{stamp}</span>
+  </div>
+
+  {panels.length > 0 && (
+    <div class="langgraph-yard-section__panels">
+      {panels.map((panel) => {
+        const tone = tones[panel.tone || 'teal'];
+        return (
+          <article class="langgraph-yard-panel" style={`--panel-ink:${tone.ink}; --panel-wash:${tone.wash};`}>
+            <h3>{panel.label}</h3>
+            <p>{panel.detail}</p>
+          </article>
+        );
+      })}
+    </div>
+  )}
+
+  <div class="langgraph-yard-section__body">
+    <slot />
+  </div>
+</section>
+
+<style>
+  .langgraph-yard-section {
+    margin: 2.6rem 0;
+    padding: 1.15rem;
+    border-radius: 1.6rem;
+    border: 1px solid rgba(71, 85, 105, 0.18);
+    background:
+      radial-gradient(circle at top left, rgba(15, 118, 110, 0.10), transparent 24%),
+      linear-gradient(180deg, rgba(248, 242, 230, 0.88), rgba(239, 225, 198, 0.94));
+    box-shadow: 0 18px 50px rgba(15, 23, 42, 0.12);
+  }
+
+  .langgraph-yard-section__header {
+    display: grid;
+    gap: 0.85rem;
+    margin-bottom: 1.15rem;
+  }
+
+  .langgraph-yard-section__eyebrow,
+  .langgraph-yard-section__stamp {
+    margin: 0;
+    font: 700 0.74rem/1.2 "IBM Plex Mono", monospace;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  .langgraph-yard-section__eyebrow {
+    color: #0f766e;
+  }
+
+  .langgraph-yard-section__titles {
+    display: grid;
+    gap: 0.55rem;
+  }
+
+  .langgraph-yard-section__titles h2 {
+    margin: 0;
+    font-size: clamp(1.65rem, 3vw, 2.6rem);
+    line-height: 0.98;
+    letter-spacing: -0.05em;
+    color: #17212b;
+  }
+
+  .langgraph-yard-section__titles p {
+    margin: 0;
+    max-width: 52rem;
+    color: #475569;
+    font-size: 0.98rem;
+    line-height: 1.7;
+  }
+
+  .langgraph-yard-section__stamp {
+    justify-self: start;
+    padding: 0.4rem 0.72rem;
+    border-radius: 999px;
+    color: #17212b;
+    background: rgba(255, 251, 244, 0.78);
+    border: 1px solid rgba(71, 85, 105, 0.18);
+  }
+
+  .langgraph-yard-section__panels {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.8rem;
+    margin-bottom: 1.1rem;
+  }
+
+  .langgraph-yard-panel {
+    padding: 0.95rem;
+    border-radius: 1rem;
+    border: 1px solid color-mix(in srgb, var(--panel-ink) 16%, transparent);
+    background: linear-gradient(180deg, var(--panel-wash), rgba(255, 251, 244, 0.82));
+  }
+
+  .langgraph-yard-panel h3 {
+    margin: 0 0 0.45rem;
+    color: var(--panel-ink);
+    font: 700 0.85rem/1.2 "IBM Plex Mono", monospace;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .langgraph-yard-panel p {
+    margin: 0;
+    font-size: 0.83rem;
+    line-height: 1.55;
+    color: #475569;
+  }
+
+  .langgraph-yard-section__body {
+    display: grid;
+    gap: 1rem;
+  }
+
+  @media (max-width: 860px) {
+    .langgraph-yard-section__panels {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

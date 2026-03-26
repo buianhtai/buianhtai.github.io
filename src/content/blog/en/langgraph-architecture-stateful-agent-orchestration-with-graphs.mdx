@@ -9,12 +9,12 @@ series: "ai-agent-tools"
 seriesOrder: 10
 draft: false
 ---
-import DataTable from '../../../components/mdx/DataTable.astro';
-import ArchLayer from '../../../components/mdx/ArchLayer.astro';
-import FlowStep from '../../../components/mdx/FlowStep.astro';
 import Callout from '../../../components/mdx/Callout.astro';
 import Card from '../../../components/mdx/Card.astro';
 import LangGraphHeroInfographic from '../../../components/mdx/LangGraphHeroInfographic.astro';
+import LangGraphYardSection from '../../../components/mdx/LangGraphYardSection.astro';
+import LangGraphControlStrip from '../../../components/mdx/LangGraphControlStrip.astro';
+import LangGraphDecisionBoard from '../../../components/mdx/LangGraphDecisionBoard.astro';
 
 Most agent demos look convincing until they need to survive a retry, pause for human approval, or resume with state that outlives a single request. LangGraph is the layer built for that harder problem.
 
@@ -24,13 +24,31 @@ Most agent demos look convincing until they need to survive a retry, pause for h
   Prompts are inputs to nodes. State is the system of record. That is the architectural shift LangGraph makes explicit.
 </Callout>
 
-## Why graphs beat hidden loops
-
-The project from [langchain-ai/langgraph](https://github.com/langchain-ai/langgraph) treats agents less like chatbots and more like workflow applications that happen to use LLMs inside some steps. Once an agent needs retries, checkpoints, memory, branching, or human review, orchestration becomes the real product surface.
-
-<div class="grid gap-6 xl:grid-cols-[0.9fr_1.1fr] xl:items-start">
-  <div class="space-y-4">
-    <Card accent="teal" flush={true}>
+<LangGraphYardSection
+  eyebrow="Yard 01"
+  title="Why graphs beat hidden loops"
+  summary="The important move is architectural: replace one opaque while-loop with explicit stations, switches, and restart points."
+  panels={[
+    {
+      label: 'Hidden loop',
+      detail: 'One function keeps calling the model and appending context until something feels done.',
+      tone: 'rust'
+    },
+    {
+      label: 'Routing surface',
+      detail: 'Nodes and edges are visible design objects, so branching and review become part of the application.',
+      tone: 'teal'
+    },
+    {
+      label: 'Recovery path',
+      detail: 'When work pauses or fails, the graph can resume from state instead of replaying everything.',
+      tone: 'blue'
+    }
+  ]}
+>
+  <div class="grid gap-6 xl:grid-cols-[0.9fr_1.1fr] xl:items-start">
+    <div class="space-y-4">
+      <Card accent="teal" flush={true}>
 
 ```py
 while not done:
@@ -41,200 +59,273 @@ while not done:
         done = True
 ```
 
-    </Card>
+      </Card>
+
+      <div class="prose prose-lg max-w-none">
+        <p>That pattern works for demos. It breaks when you need:</p>
+        <ul>
+          <li>branching based on structured intermediate state,</li>
+          <li>checkpointing before risky or expensive actions,</li>
+          <li>human approval in the middle of the run,</li>
+          <li>recovery after interruptions or failures.</li>
+        </ul>
+      </div>
+    </div>
 
     <div class="prose prose-lg max-w-none">
-      <p>That pattern works for demos. It breaks when you need:</p>
-      <ul>
-        <li>branching based on structured intermediate state,</li>
-        <li>checkpointing before risky or expensive actions,</li>
-        <li>human approval in the middle of the run,</li>
-        <li>recovery after interruptions or failures.</li>
-      </ul>
+      <p>
+        The project from <a href="https://github.com/langchain-ai/langgraph">langchain-ai/langgraph</a> treats agents
+        less like chatbots and more like workflow applications that happen to use LLMs inside some steps.
+      </p>
+      <p>
+        The center of gravity shifts away from the prompt and toward the graph around it. Nodes become explicit
+        application steps. Edges define control flow. Shared state becomes the contract that every step reads and
+        updates.
+      </p>
+      <Callout color="amber">
+        LangGraph is most useful when the application has durable state and explicit transitions. If the problem is just
+        one model call plus one tool, it is probably too low-level.
+      </Callout>
     </div>
   </div>
+</LangGraphYardSection>
 
-  <div class="prose prose-lg max-w-none">
-    <p>
-      The center of gravity shifts away from the prompt and toward the graph around it. Nodes become explicit
-      application steps. Edges define control flow. Shared state becomes the contract that every step reads and
-      updates.
-    </p>
-    <p>
-      That is why LangGraph feels different from higher-level agent abstractions. Instead of reconstructing history from
-      logs, teams can inspect graph state directly, reason about which node was entered and why, and resume from
-      checkpoints instead of starting from zero.
-    </p>
-    <Callout color="amber">
-      LangGraph is most useful when the application has durable state and explicit transitions. If the problem is just
-      one model call plus one tool, it is probably too low-level.
-    </Callout>
-  </div>
-</div>
-
-## The core primitives are small, but they carry the whole system
-
-<DataTable
-  caption="LangGraph building blocks"
-  accent="amber"
-  headers={["Primitive", "Role", "Why it matters"]}
-  rows={[
+<LangGraphYardSection
+  eyebrow="Yard 02"
+  title="CONTROL PANELS"
+  summary="The primitives are compact, but each one controls a non-trivial part of the machine. Together they form the runtime surface."
+  panels={[
     {
-      Primitive: "State",
-      Role: "Shared snapshot for the run",
-      "Why it matters": "Turns context from prompt text into a typed application contract"
+      label: 'State contract',
+      detail: 'Typed state turns context from loose prompt text into an application boundary.',
+      tone: 'blue'
     },
     {
-      Primitive: "StateGraph",
-      Role: "Builder for nodes and edges",
-      "Why it matters": "Makes topology explicit and validates structure before execution"
+      label: 'Switch logic',
+      detail: 'Conditional edges, Command, and Send move the run through visible topology.',
+      tone: 'teal'
     },
     {
-      Primitive: "Nodes",
-      Role: "Functions that read state and emit updates",
-      "Why it matters": "Separates orchestration from business logic"
-    },
-    {
-      Primitive: "Conditional edges / Command / Send",
-      Role: "Dynamic routing and fan-out",
-      "Why it matters": "Lets complex workflows branch without hiding flow control"
-    },
-    {
-      Primitive: "Reducers",
-      Role: "Merge logic for state updates",
-      "Why it matters": "Controls how incremental or parallel updates land in state"
-    },
-    {
-      Primitive: "Checkpointer",
-      Role: "Persistence for thread state and resume points",
-      "Why it matters": "Enables durable execution, interrupts, and recovery"
+      label: 'Durable floor',
+      detail: 'Checkpointing and thread history keep long-running work inspectable and restartable.',
+      tone: 'rust'
     }
   ]}
-/>
-
-<div class="grid gap-4 lg:grid-cols-3">
-  <ArchLayer badge="S" badgeColor="teal" label="State Contract" items={["TypedDict or Pydantic schema", "MessagesState for chat-centric flows", "Reducers define merge semantics"]} />
-  <ArchLayer badge="G" badgeColor="green" label="Graph Topology" items={["START and END boundaries", "Normal and conditional edges", "Compile checks graph shape"]} />
-  <ArchLayer badge="R" badgeColor="amber" label="Runtime" items={["Checkpointer persists progress", "Interrupts pause cleanly", "Streaming and tracing expose execution"]} />
-</div>
-
-## A production LangGraph app is really four stacked layers
-
-<div class="grid gap-6 xl:grid-cols-[0.95fr_1.05fr] xl:items-start">
-  <div class="space-y-4">
-    <FlowStep step="1" color="teal" title="State layer">
-      Define the durable data model for the run: messages, planner outputs, tool results, retrieved context, flags,
-      and review decisions.
-    </FlowStep>
-
-    <FlowStep step="2" color="green" title="Execution layer">
-      Keep nodes narrow. Good nodes classify, plan, call tools, review output, or finalize. They should feel more like
-      application steps than chat prompts.
-    </FlowStep>
-
-    <FlowStep step="3" color="amber" title="Routing layer">
-      Edges, conditional edges, `Send`, and `Command` decide what happens next. This is the control plane, not an
-      implementation detail.
-    </FlowStep>
-
-    <FlowStep step="4" color="rose" title="Durability layer">
-      Persistence, interrupts, tracing, and deployment turn the graph from notebook logic into a runnable application
-      runtime.
-    </FlowStep>
-  </div>
+>
+  <LangGraphControlStrip
+    items={[
+      {
+        code: 'Panel S',
+        title: 'State',
+        note: 'A shared snapshot for the run. It moves through the graph and gives every node a durable contract.',
+        tone: 'blue'
+      },
+      {
+        code: 'Panel G',
+        title: 'StateGraph',
+        note: 'The graph builder that makes topology explicit and checks the shape before execution.',
+        tone: 'teal'
+      },
+      {
+        code: 'Panel N',
+        title: 'Nodes',
+        note: 'Narrow application steps that read state and emit updates instead of hiding everything in one prompt loop.',
+        tone: 'teal'
+      },
+      {
+        code: 'Panel X',
+        title: 'Conditional edges, Command, and Send',
+        note: 'Dynamic routing, fan-out, and control transfer without burying flow control in opaque code.',
+        tone: 'rust'
+      },
+      {
+        code: 'Panel R',
+        title: 'Reducers',
+        note: 'Merge logic that decides how incremental or parallel updates land in shared state.',
+        tone: 'blue'
+      },
+      {
+        code: 'Panel C',
+        title: 'Checkpointer',
+        note: 'Persistence for thread state and resume points, making interrupts and recovery operationally real.',
+        tone: 'red'
+      }
+    ]}
+  />
 
   <div class="prose prose-lg max-w-none">
     <p>
-      The infographic at the top is useful because it makes these four layers visible at once. State is the capsule on
-      the rails. Routing is the switchboard. Human review is the interrupt gate. Durability is the steel foundation
-      underneath the whole yard.
+      None of these parts are individually flashy. The value comes from how cleanly they fit together. State defines
+      what exists. Nodes do narrow work. Routing decides which station runs next. Checkpointing makes the whole system
+      resumable instead of fragile.
     </p>
+  </div>
+</LangGraphYardSection>
+
+<LangGraphYardSection
+  eyebrow="Yard 03"
+  title="Four runtime layers keep the machine honest"
+  summary="A production LangGraph system is not just a graph. It is a stack where contracts, execution, control flow, and durability each carry a specific responsibility."
+  panels={[
+    {
+      label: 'Layer 1',
+      detail: 'State defines the durable data model for messages, planner outputs, tool results, and decisions.',
+      tone: 'blue'
+    },
+    {
+      label: 'Layer 2',
+      detail: 'Execution nodes stay narrow and composable so each station has one job.',
+      tone: 'teal'
+    },
+    {
+      label: 'Layer 3',
+      detail: 'Routing chooses the path through the yard, including fan-out, review, and human gates.',
+      tone: 'rust'
+    }
+  ]}
+>
+  <LangGraphControlStrip
+    items={[
+      {
+        code: 'L1',
+        title: 'State layer',
+        note: 'Messages, planner outputs, tool results, retrieved context, flags, and review decisions all live here.',
+        tone: 'blue'
+      },
+      {
+        code: 'L2',
+        title: 'Execution layer',
+        note: 'Good nodes classify, plan, call tools, review output, or finalize. They should feel like application steps, not chat hacks.',
+        tone: 'teal'
+      },
+      {
+        code: 'L3',
+        title: 'Routing layer',
+        note: 'Edges, conditional edges, Send, and Command decide what happens next. This is the control plane.',
+        tone: 'rust'
+      },
+      {
+        code: 'L4',
+        title: 'Durability layer',
+        note: 'Persistence, interrupts, tracing, and deployment turn notebook logic into a runnable runtime.',
+        tone: 'red'
+      }
+    ]}
+  />
+
+  <div class="prose prose-lg max-w-none">
     <p>
-      Once you accept that model, many production concerns become natural: long-running threads, resumable work, human
-      checkpoints, and topology changes that can be migrated safely over time.
+      The hero diagram works because it shows these layers at once. State is the capsule on the rails. Routing is the
+      switchboard. Human review is the interrupt gate. Durability is the steel foundation underneath the whole yard.
     </p>
     <Callout color="green">
-      A good LangGraph design feels less like “prompt chaining” and more like a small workflow runtime with typed
-      contracts and clear pause boundaries.
+      A good LangGraph design feels less like prompt chaining and more like a compact workflow runtime with typed
+      contracts and clean pause boundaries.
     </Callout>
   </div>
-</div>
+</LangGraphYardSection>
 
-## The production story is the strongest argument for LangGraph
-
-<DataTable
-  caption="Capabilities that move LangGraph beyond demo status"
-  accent="teal"
-  headers={["Capability", "What it enables", "Architectural consequence"]}
-  rows={[
+<LangGraphYardSection
+  eyebrow="Yard 04"
+  title="The production story is the strongest argument for LangGraph"
+  summary="Durable execution, interrupts, memory, and tracing are not extras. They are the practical reason this system exists."
+  panels={[
     {
-      Capability: "Durable execution",
-      "What it enables": "Resume from checkpoints after failure or long pauses",
-      "Architectural consequence": "Nodes must behave like restartable state transitions"
+      label: 'Durable execution',
+      detail: 'Resume from checkpoints after long pauses or failures instead of replaying everything.',
+      tone: 'rust'
     },
     {
-      Capability: "Interrupts / human-in-the-loop",
-      "What it enables": "Pause before risky actions and review live state",
-      "Architectural consequence": "Approval becomes a graph step, not an ad hoc side channel"
+      label: 'Interrupt gates',
+      detail: 'Pause before risky actions and review live state through a visible control point.',
+      tone: 'red'
     },
     {
-      Capability: "Memory",
-      "What it enables": "Carry short-term and long-term context forward",
-      "Architectural consequence": "The application state outlives one request-response cycle"
-    },
-    {
-      Capability: "Tracing and observability",
-      "What it enables": "See node transitions, timing, and routing behavior",
-      "Architectural consequence": "Debugging becomes graph-aware instead of log archaeology"
+      label: 'Tracing and memory',
+      detail: 'Carry context forward and inspect the path the machine took through the yard.',
+      tone: 'teal'
     }
   ]}
-/>
-
-<div class="grid gap-6 lg:grid-cols-2">
+>
   <div class="prose prose-lg max-w-none">
     <p>
-      The README and docs emphasize the same operational pattern over and over: build agents that can run longer, pause
-      safely, expose their state, and recover without starting from zero.
+      The docs emphasize the same operational pattern over and over: build agents that can run longer, pause safely,
+      expose their state, and recover without starting from zero.
     </p>
     <p>
       That is exactly where many agent frameworks become brittle. They handle tool calling, but not application
       lifecycle.
     </p>
+    <Callout color="amber">
+      If you have ever tried to retrofit checkpointing, approvals, or memory into an agent after the initial demo, you
+      already understand the value proposition of LangGraph.
+    </Callout>
   </div>
+</LangGraphYardSection>
 
-  <Callout color="amber">
-    If you have ever tried to retrofit checkpointing, approvals, or memory into an agent after the initial demo, you
-    already understand the value proposition of LangGraph.
-  </Callout>
-</div>
+<LangGraphYardSection
+  eyebrow="Yard 05"
+  title="Use LangGraph when the workflow is the product"
+  summary="The framework shines when orchestration semantics matter more than the fastest possible prototype."
+  stamp="DEPLOYMENT BOARD"
+>
+  <LangGraphDecisionBoard
+    useItems={[
+      {
+        side: 'use',
+        title: 'Multiple durable steps',
+        reason: 'The agent crosses several stations and needs progress to survive outside a single request.'
+      },
+      {
+        side: 'use',
+        title: 'Typed intermediate state',
+        reason: 'Routing depends on real application data, not just ad hoc prompt text.'
+      },
+      {
+        side: 'use',
+        title: 'Human intervention',
+        reason: 'Approval, edits, or escalation must happen inside the run instead of beside it.'
+      },
+      {
+        side: 'use',
+        title: 'Pause, resume, branch',
+        reason: 'The workflow has meaningful topology and reliability matters more than a tiny demo footprint.'
+      }
+    ]}
+    skipItems={[
+      {
+        side: 'skip',
+        title: 'One prompt plus one tool',
+        reason: 'If the loop is trivial, the graph machinery is probably overhead.'
+      },
+      {
+        side: 'skip',
+        title: 'No durable state',
+        reason: 'When nothing meaningful needs to persist, request-time code is usually enough.'
+      },
+      {
+        side: 'skip',
+        title: 'Still exploring workflow shape',
+        reason: 'If the stations and routes are changing daily, simpler code may be a better first move.'
+      }
+    ]}
+  />
 
-## Use LangGraph when the workflow is the product
-
-<div class="grid gap-6 xl:grid-cols-2">
   <div class="prose prose-lg max-w-none">
-    <h3>Use it when</h3>
-    <ul>
-      <li>the agent has multiple durable steps,</li>
-      <li>routing depends on typed intermediate state,</li>
-      <li>humans may need to intervene,</li>
-      <li>tasks pause, resume, or branch,</li>
-      <li>reliability matters more than a tiny demo footprint.</li>
-    </ul>
+    <p>
+      The real contribution of LangGraph is not that it uses graphs. It is that it makes
+      <strong> stateful, inspectable, durable agent execution</strong> the default mental model.
+    </p>
+    <p>
+      That gives teams a stronger foundation than "call the model again with more context." It turns agents into
+      applications with topology, contracts, replay, pause boundaries, and runtime visibility.
+    </p>
+    <p>
+      Sources:
+      <a href="https://github.com/langchain-ai/langgraph"> GitHub</a>,
+      <a href="https://docs.langchain.com/oss/python/langgraph/overview"> overview</a>,
+      <a href="https://docs.langchain.com/oss/python/langgraph/workflows-agents"> workflows and agents</a>,
+      <a href="https://docs.langchain.com/oss/python/langgraph/graph-api"> Graph API</a>.
+    </p>
   </div>
-
-  <div class="prose prose-lg max-w-none">
-    <h3>Skip it when</h3>
-    <ul>
-      <li>a single prompt plus one tool call solves the problem,</li>
-      <li>there is no durable state to preserve,</li>
-      <li>plain request-time code is enough,</li>
-      <li>the team is still exploring the shape of the workflow.</li>
-    </ul>
-  </div>
-</div>
-
-The real contribution of LangGraph is not that it uses graphs. It is that it makes **stateful, inspectable, durable agent execution** the default mental model.
-
-That gives teams a stronger foundation than "call the model again with more context." It turns agents into applications with topology, contracts, replay, pause boundaries, and runtime visibility.
-
-Sources: [GitHub](https://github.com/langchain-ai/langgraph), [overview](https://docs.langchain.com/oss/python/langgraph/overview), [workflows and agents](https://docs.langchain.com/oss/python/langgraph/workflows-agents), [Graph API](https://docs.langchain.com/oss/python/langgraph/graph-api).
+</LangGraphYardSection>

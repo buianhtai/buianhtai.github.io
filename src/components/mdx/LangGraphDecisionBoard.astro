@@ -1,0 +1,119 @@
+---
+interface DecisionItem {
+  side: 'use' | 'skip';
+  title: string;
+  reason: string;
+}
+
+interface Props {
+  useItems: DecisionItem[];
+  skipItems: DecisionItem[];
+}
+
+const { useItems, skipItems } = Astro.props;
+---
+
+<div class="langgraph-decision-board not-prose">
+  <section class="langgraph-decision-board__column langgraph-decision-board__column--use">
+    <header>
+      <p>DEPLOY LANGGRAPH</p>
+      <h3>Use it when workflow semantics matter</h3>
+    </header>
+    <div class="langgraph-decision-board__list">
+      {useItems.map((item) => (
+        <article class="langgraph-decision-card">
+          <h4>{item.title}</h4>
+          <p>{item.reason}</p>
+        </article>
+      ))}
+    </div>
+  </section>
+
+  <section class="langgraph-decision-board__column langgraph-decision-board__column--skip">
+    <header>
+      <p>BYPASS LANGGRAPH</p>
+      <h3>Skip it when the loop is still trivial</h3>
+    </header>
+    <div class="langgraph-decision-board__list">
+      {skipItems.map((item) => (
+        <article class="langgraph-decision-card">
+          <h4>{item.title}</h4>
+          <p>{item.reason}</p>
+        </article>
+      ))}
+    </div>
+  </section>
+</div>
+
+<style>
+  .langgraph-decision-board {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+  }
+
+  .langgraph-decision-board__column {
+    padding: 1rem;
+    border-radius: 1.2rem;
+    border: 1px solid rgba(71, 85, 105, 0.18);
+    background: rgba(255, 251, 244, 0.8);
+  }
+
+  .langgraph-decision-board__column header {
+    margin-bottom: 0.85rem;
+  }
+
+  .langgraph-decision-board__column p {
+    margin: 0 0 0.4rem;
+    font: 700 0.72rem/1.2 "IBM Plex Mono", monospace;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  .langgraph-decision-board__column h3 {
+    margin: 0;
+    font-size: 1.18rem;
+    line-height: 1.15;
+    color: #17212b;
+  }
+
+  .langgraph-decision-board__column--use p {
+    color: #0f766e;
+  }
+
+  .langgraph-decision-board__column--skip p {
+    color: #c2410c;
+  }
+
+  .langgraph-decision-board__list {
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  .langgraph-decision-card {
+    padding: 0.85rem 0.9rem;
+    border-radius: 0.95rem;
+    border: 1px solid rgba(71, 85, 105, 0.12);
+    background: linear-gradient(180deg, rgba(255,255,255,0.6), rgba(248,242,230,0.82));
+  }
+
+  .langgraph-decision-card h4 {
+    margin: 0 0 0.35rem;
+    font-size: 0.94rem;
+    color: #17212b;
+  }
+
+  .langgraph-decision-card p {
+    margin: 0;
+    font: 400 0.88rem/1.55 "IBM Plex Sans", sans-serif;
+    letter-spacing: normal;
+    text-transform: none;
+    color: #475569;
+  }
+
+  @media (max-width: 760px) {
+    .langgraph-decision-board {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
