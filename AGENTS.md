@@ -2,6 +2,25 @@
 
 This project uses **bd** (beads) for issue tracking. Run `bd onboard` to get started.
 
+## gstack
+
+This repo has a repo-local `gstack` install for Codex under `.agents/skills/gstack`.
+
+- Use the `gstack-browse` skill for web browsing when the task needs gstack's browser workflow.
+- Prefer `gstack` skills from `.agents/skills/gstack-*` over ad hoc copies of the same workflow.
+- If gstack skills stop working after an update or clone, run:
+
+```bash
+cd .agents/skills/gstack && ./setup --host codex
+```
+
+Useful installed skills include:
+- `gstack-browse`
+- `gstack-review`
+- `gstack-qa`
+- `gstack-ship`
+- `gstack-plan-eng-review`
+
 ## Quick Reference
 
 ```bash
