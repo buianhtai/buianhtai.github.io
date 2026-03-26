@@ -1,0 +1,223 @@
+---
+interface SlideMeta {
+  id: string;
+  label: string;
+}
+
+interface Props {
+  slides: SlideMeta[];
+  title?: string;
+}
+
+const { slides, title = 'Slides' } = Astro.props;
+---
+
+<div class="slide-deck not-prose" data-slide-deck>
+  <aside class="slide-nav" aria-label={title}>
+    <div class="slide-nav__inner">
+      <p class="slide-nav__eyebrow">{title}</p>
+      <ol class="slide-nav__list">
+        {slides.map((slide, index) => (
+          <li>
+            <button
+              type="button"
+              class="slide-nav__button"
+              data-slide-target={slide.id}
+              aria-label={`Go to slide ${index + 1}: ${slide.label}`}
+            >
+              <span class="slide-nav__index">{String(index + 1).padStart(2, '0')}</span>
+              <span class="slide-nav__label">{slide.label}</span>
+            </button>
+          </li>
+        ))}
+      </ol>
+    </div>
+  </aside>
+
+  <div class="slide-deck__content">
+    <slot />
+  </div>
+</div>
+
+<script>
+  const decks = document.querySelectorAll('[data-slide-deck]');
+
+  for (const deck of decks) {
+    const slides = [...deck.querySelectorAll('[data-slide]')];
+    const buttons = [...deck.querySelectorAll('[data-slide-target]')];
+    let activeIndex = 0;
+
+    const setActive = (nextIndex) => {
+      activeIndex = nextIndex;
+      buttons.forEach((button, index) => {
+        const active = index === nextIndex;
+        button.toggleAttribute('data-active', active);
+        button.setAttribute('aria-current', active ? 'true' : 'false');
+      });
+    };
+
+    buttons.forEach((button) => {
+      button.addEventListener('click', () => {
+        const id = button.getAttribute('data-slide-target');
+        const slide = id ? deck.querySelector(`[data-slide="${id}"]`) : null;
+        if (slide instanceof HTMLElement) {
+          slide.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+    });
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          const index = slides.indexOf(entry.target);
+          if (index >= 0) setActive(index);
+        }
+      },
+      {
+        rootMargin: '-20% 0px -55% 0px',
+        threshold: [0.25, 0.6],
+      }
+    );
+
+    slides.forEach((slide) => observer.observe(slide));
+    setActive(0);
+
+    deck.addEventListener('keydown', (event) => {
+      if (!(event instanceof KeyboardEvent)) return;
+      if (!['ArrowDown', 'ArrowRight', 'PageDown', 'ArrowUp', 'ArrowLeft', 'PageUp'].includes(event.key)) {
+        return;
+      }
+
+      const delta = ['ArrowDown', 'ArrowRight', 'PageDown'].includes(event.key) ? 1 : -1;
+      const nextIndex = Math.max(0, Math.min(slides.length - 1, activeIndex + delta));
+      if (nextIndex === activeIndex) return;
+
+      event.preventDefault();
+      const nextSlide = slides[nextIndex];
+      if (nextSlide instanceof HTMLElement) {
+        nextSlide.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+
+    if (!deck.hasAttribute('tabindex')) {
+      deck.setAttribute('tabindex', '0');
+    }
+  }
+</script>
+
+<style>
+  .slide-deck {
+    --slide-deck-width: min(1180px, calc(100vw - 1.5rem));
+    width: var(--slide-deck-width);
+    margin: 2rem calc(50% - var(--slide-deck-width) / 2);
+    display: grid;
+    grid-template-columns: minmax(0, 220px) minmax(0, 1fr);
+    gap: 1.5rem;
+    align-items: start;
+    outline: none;
+  }
+
+  .slide-nav {
+    position: sticky;
+    top: 5rem;
+  }
+
+  .slide-nav__inner {
+    border: 1px solid var(--color-border);
+    background:
+      radial-gradient(circle at top right, rgba(56, 189, 248, 0.14), transparent 34%),
+      linear-gradient(180deg, color-mix(in srgb, var(--color-surface) 94%, transparent), var(--color-surface));
+    border-radius: 1.5rem;
+    padding: 1.25rem 1rem;
+    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18);
+    backdrop-filter: blur(10px);
+  }
+
+  .slide-nav__eyebrow {
+    margin: 0 0 0.9rem;
+    font: 600 0.72rem/1.2 'IBM Plex Mono', monospace;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--color-text-dim);
+  }
+
+  .slide-nav__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.45rem;
+  }
+
+  .slide-nav__button {
+    width: 100%;
+    border: 1px solid transparent;
+    border-radius: 1rem;
+    background: transparent;
+    color: inherit;
+    padding: 0.8rem 0.85rem;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.75rem;
+    align-items: baseline;
+    text-align: left;
+    cursor: pointer;
+    transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+  }
+
+  .slide-nav__button:hover,
+  .slide-nav__button:focus-visible {
+    background: color-mix(in srgb, var(--color-surface) 82%, var(--color-accent) 18%);
+    border-color: color-mix(in srgb, var(--color-border) 55%, var(--color-accent) 45%);
+    transform: translateX(2px);
+    outline: none;
+  }
+
+  .slide-nav__button[data-active] {
+    background: color-mix(in srgb, var(--color-surface) 74%, var(--color-accent) 26%);
+    border-color: color-mix(in srgb, var(--color-border) 28%, var(--color-accent) 72%);
+  }
+
+  .slide-nav__index {
+    font: 600 0.72rem/1.1 'IBM Plex Mono', monospace;
+    color: var(--color-accent);
+  }
+
+  .slide-nav__label {
+    font-size: 0.94rem;
+    line-height: 1.35;
+    color: var(--color-text);
+  }
+
+  .slide-deck__content {
+    display: grid;
+    gap: 1.25rem;
+  }
+
+  @media (max-width: 959px) {
+    .slide-deck {
+      grid-template-columns: 1fr;
+      gap: 1rem;
+      width: calc(100vw - 1rem);
+      margin: 1.25rem calc(50% - (100vw - 1rem) / 2);
+    }
+
+    .slide-nav {
+      position: sticky;
+      top: 4rem;
+      z-index: 6;
+    }
+
+    .slide-nav__inner {
+      padding: 0.85rem;
+    }
+
+    .slide-nav__list {
+      grid-auto-flow: column;
+      grid-auto-columns: minmax(180px, 1fr);
+      overflow-x: auto;
+      padding-bottom: 0.2rem;
+    }
+  }
+</style>
