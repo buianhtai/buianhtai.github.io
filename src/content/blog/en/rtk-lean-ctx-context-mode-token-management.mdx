@@ -1,0 +1,263 @@
+---
+title: "RTK, lean-ctx, context-mode: Which Token Tool Should You Actually Use?"
+description: "A technical deep-dive comparing three approaches to reducing LLM token consumption in AI coding sessions — shell compression, MCP caching, and sandbox execution — with architecture diagrams and a clear recommendation."
+pubDate: 2026-04-27
+tags: ["ai", "mcp", "tools", "tokens", "rtk", "lean-ctx", "context-mode", "architecture"]
+lang: "en"
+category: "architecture"
+series: "ai-agent-tools"
+seriesOrder: 14
+draft: false
+---
+
+import Callout from '../../../components/mdx/Callout.astro';
+import Card from '../../../components/mdx/Card.astro';
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import Mermaid from '../../../components/mdx/Mermaid.astro';
+
+Every AI coding session bleeds tokens. `git log` dumps 800 tokens of output you'll never read again. A file you've seen three times gets re-sent in full. A web page fetch floods 56 KB into context before you've asked a single question about it. After 30 minutes, 40% of your budget is gone on noise.
+
+Three tools compete to solve this: **RTK** (Rust Token Killer), **lean-ctx**, and **context-mode**. They claim 60–99% savings. They use completely different architectures. And they're not interchangeable.
+
+This post breaks down exactly how each works, where the savings numbers are real versus marketing, and which combination you should actually run.
+
+<HeroGrid items={[
+  { label: "RTK", sublabel: "Shell hook compression\n60–90% savings\n36.2k stars · mature", color: "#2563eb" },
+  { label: "lean-ctx", sublabel: "MCP + cache + hook\n74–99% savings\n875 stars · ambitious", color: "#16a34a" },
+  { label: "context-mode", sublabel: "Sandbox execution\n90–99%+ savings\nyou control output", color: "#9333ea" },
+]} />
+
+---
+
+## <Label color="blue">1</Label> RTK — The Shell Hook
+
+RTK (Rust Token Killer) is the simplest of the three. Install it, run `rtk init -g`, and a shell hook transparently rewrites bash commands before execution:
+
+```bash
+git status        # LLM calls this
+# hook rewrites → rtk git status
+# Claude sees: ~200 tokens instead of ~800
+```
+
+The LLM never sees the rewrite. It just gets compressed output. Four strategies apply per command type:
+
+- **Smart Filtering** — removes noise, whitespace, boilerplate
+- **Grouping** — aggregates similar items (files by directory, errors by type)
+- **Truncation** — keeps relevant context, cuts redundancy
+- **Deduplication** — collapses repeated log lines with counts
+
+<img src="/diagrams/token-flow-architecture.svg" alt="How RTK, lean-ctx, and context-mode each intercept token flow differently" style="width:100%;border-radius:8px;margin:1.5rem 0;" />
+
+<Callout color="blue">
+  RTK's hook only intercepts Bash tool calls. Claude Code's native Read, Grep, and Glob tools bypass it entirely. For those, use shell equivalents (cat, rg, find) or explicit rtk commands.
+</Callout>
+
+**Real numbers from a 30-minute session:**
+
+<DataTable
+  accent="blue"
+  caption="RTK savings — self-reported, medium TypeScript/Rust project"
+  headers={["Operation", "Frequency", "Standard", "RTK", "Savings"]}
+  rows={[
+    { "Operation": "ls / tree", "Frequency": "10×", "Standard": "2,000", "RTK": "400", "Savings": "−80%" },
+    { "Operation": "cat / read", "Frequency": "20×", "Standard": "40,000", "RTK": "12,000", "Savings": "−70%" },
+    { "Operation": "grep / rg", "Frequency": "8×", "Standard": "16,000", "RTK": "3,200", "Savings": "−80%" },
+    { "Operation": "git status", "Frequency": "10×", "Standard": "3,000", "RTK": "600", "Savings": "−80%" },
+    { "Operation": "cargo test / npm test", "Frequency": "5×", "Standard": "25,000", "RTK": "2,500", "Savings": "−90%" },
+    { "Operation": "Total", "Frequency": "—", "Standard": "~118,000", "RTK": "~23,900", "Savings": "−80%" },
+  ]}
+/>
+
+The 90–92% on `git commit/push` is trivially real: "ok main" vs 15 lines of pack output. The 70% on file reads is the compression floor — RTK doesn't cache, so every read sends something.
+
+**Install:**
+```bash
+brew install rtk
+rtk init -g       # installs hook for Claude Code
+# restart Claude Code
+```
+
+---
+
+## <Label color="green">2</Label> lean-ctx — MCP Server + Caching
+
+lean-ctx is more ambitious. It's a full MCP server with 46 tools, 10 file-read modes, cross-session caching, BM25 semantic search, tree-sitter AST extraction, and multi-agent coordination. Also a single Rust binary.
+
+The key differentiator is **caching**. When you read `auth.ts` for the first time, lean-ctx stores a hash. The second time:
+
+```
+ctx_read auth.ts
+→ "File unchanged (hash: abc123). Serving cached."
+→ ~13 tokens
+```
+
+That's where the 99% claim comes from. It's real — for cached re-reads. And in agentic sessions where the same files get re-read 10–15 times, this compounds fast.
+
+**The 10 read modes** use tree-sitter AST to give you surgical access:
+
+<DataTable
+  accent="green"
+  caption="lean-ctx ctx_read modes"
+  headers={["Mode", "When to use", "Token cost"]}
+  rows={[
+    { "Mode": "full", "When to use": "Files you will edit", "Token cost": "100% first, ~0% cached" },
+    { "Mode": "map", "When to use": "Understanding exports + API surface", "Token cost": "~5–15%" },
+    { "Mode": "signatures", "When to use": "API surface with more detail", "Token cost": "~10–20%" },
+    { "Mode": "diff", "When to use": "Re-reading changed files", "Token cost": "changed lines only" },
+    { "Mode": "aggressive", "When to use": "Large files with boilerplate", "Token cost": "~30–50%" },
+    { "Mode": "task", "When to use": "Task-relevant content only", "Token cost": "~15–35%" },
+  ]}
+/>
+
+`map` mode on a 284-line file: 2,078 → 30 tokens. That's a real number — it's extracting only exports, deps, and function signatures via AST, not heuristic regex.
+
+<Callout color="green">
+  lean-ctx's caching only activates when the LLM uses ctx_read instead of the native Read tool. That requires consistent LLM behavior — either via rules injection or explicit agent instructions. Without that, the savings don't materialize.
+</Callout>
+
+**Install:**
+```bash
+curl -fsSL https://leanctx.com/install.sh | sh
+lean-ctx setup    # auto-detects Claude Code, Cursor, etc.
+lean-ctx doctor   # verify
+```
+
+---
+
+## <Label color="purple">3</Label> context-mode — Sandbox Execution
+
+context-mode is architecturally different from both. Instead of compressing output before it enters context, it prevents output from entering context at all.
+
+You write code that runs in a sandboxed subprocess. Only your `console.log()` enters context. The raw data stays in the subprocess and disappears.
+
+```javascript
+// ctx_execute — only the console.log enters context
+const out = execSync('npm test 2>&1').toString();
+const failures = out.match(/FAIL.+/gm) || [];
+console.log(failures.length === 0
+  ? 'All tests passed'
+  : `${failures.length} failures:\n${failures.join('\n')}`
+);
+// → context gets: "2 failures: FAIL src/auth.test.ts..."
+// → NOT: 200+ lines of jest output
+```
+
+<Callout color="purple">
+  This is the critical difference. RTK/lean-ctx: full_output → compress → smaller_output → context. context-mode: full_output → stays in subprocess → your console.log() → context. With context-mode, you decide exactly what enters context.
+</Callout>
+
+The savings are unbounded — bounded only by how precisely you write the extraction. And for web research, `ctx_fetch_and_index` fetches a URL, converts HTML to markdown, chunks it into a BM25 FTS5 database, and returns a ~3KB preview. Raw HTML never enters context.
+
+```
+ctx_fetch_and_index("https://github.com/rtk-ai/rtk", "rtk-readme")
+→ Preview: 3KB summary
+→ Full content: searchable in FTS5 database
+
+ctx_search(["token savings", "shell hook architecture"])
+→ Returns exact matching chunks
+→ NOT: entire README in context
+```
+
+**The `ctx_batch_execute` superpower:**
+
+```javascript
+// One call replaces 30+ individual tool calls
+ctx_batch_execute(
+  commands: ["git log --oneline -20", "npm test 2>&1", "cat package.json"],
+  queries: ["recent commits", "test failures", "dependencies"]
+)
+// → Auto-indexes all output, returns search results
+// → Only matches enter context
+```
+
+---
+
+## <Label color="teal">4</Label> The Architecture Picture
+
+<img src="/diagrams/token-tools-comparison.svg" alt="Comparison table: RTK vs lean-ctx vs context-mode across approach, integration, savings, caching, and best use cases" style="width:100%;border-radius:8px;margin:1.5rem 0;" />
+
+The key dimensions where they diverge:
+
+**Caching:** lean-ctx is the only tool with file read caching. RTK and context-mode don't cache. In long agentic sessions that re-read the same files repeatedly, lean-ctx's caching provides compounding savings that neither RTK nor context-mode can match.
+
+**LLM behavior change required:** RTK needs zero LLM behavior change — the hook is invisible. context-mode requires the LLM to call `ctx_execute` instead of running raw shell. lean-ctx requires `ctx_read` instead of native Read for the MCP savings to apply.
+
+**Compression ceiling:** RTK and lean-ctx are bounded by how good their compression patterns are. context-mode has no ceiling — you log exactly what you need.
+
+**Scope:** RTK covers 100+ commands but only shell output. context-mode covers shell, web, files, and anything you can write code to process.
+
+---
+
+## <Label color="amber">5</Label> Scrutinizing the Claims
+
+The 99% headline from lean-ctx is real but narrow. It applies to:
+1. Files read more than once (caching kicks in)
+2. Large files read in `map` mode (AST extraction)
+
+The **88% overall session estimate** (~89,800 → 10,620 tokens) is more honest. It assumes a specific mix of operations on a medium TypeScript/Rust project. Your numbers will vary based on:
+- How often the same files are re-read
+- Whether the LLM actually uses ctx_read vs native Read
+- What proportion of your session is shell ops vs file reads
+
+RTK's **80% overall estimate** (~118,000 → 23,900 tokens) is more conservative and more likely to be accurate in practice, precisely because it doesn't require LLM behavior change.
+
+context-mode doesn't publish overall numbers, which is more honest — the savings depend entirely on how you use `ctx_execute`. In practice, for well-written extraction code, 90–98% is achievable on individual operations.
+
+<Callout color="amber">
+  None of these tools help with output tokens — your responses. They only reduce input tokens (what you send to the LLM). If your sessions are dominated by large LLM responses, the savings from token tools will be smaller than advertised.
+</Callout>
+
+---
+
+## <Label color="teal">6</Label> What You Should Actually Run
+
+<img src="/diagrams/recommended-stack.svg" alt="Recommended three-layer token management stack: RTK for shell, context-mode for analysis, native Read for editing" style="width:100%;border-radius:8px;margin:1.5rem 0;" />
+
+**The short answer:** Install RTK. Keep context-mode for large output and web research. Use native Read when editing files.
+
+**Layer 1 — RTK:** Install it globally, forget about it. Every shell call is automatically compressed. 80% savings with zero workflow change. Start here.
+
+**Layer 2 — context-mode:** Use it deliberately for:
+- Commands that produce large output (test runners, build output, logs)
+- Web fetches (`ctx_fetch_and_index` → `ctx_search` beats webfetch for anything >10KB)
+- Analysis tasks where you know what you're looking for
+
+**Layer 3 — Native tools:** When you're editing a file, you need the full content in context. Don't optimize this. The cost is real but necessary.
+
+**What about lean-ctx?** It's additive if you want file read caching across long sessions. The caching genuinely compounds over time. But it requires LLM compliance with `ctx_read`, which is fragile without strong rule enforcement. RTK + context-mode covers 95% of the value with less complexity.
+
+**Decision rule:**
+```
+shell command → RTK (automatic)
+large output / web / analysis → context-mode ctx_execute
+repeated file reads across a long session → consider lean-ctx
+editing files → native Read (you need the content)
+```
+
+---
+
+## Quick install
+
+```bash
+# RTK — one time, global
+brew install rtk
+rtk init -g
+# restart Claude Code
+
+# lean-ctx (optional, for caching)
+curl -fsSL https://leanctx.com/install.sh | sh
+lean-ctx setup
+
+# context-mode — add to your MCP config
+# see: https://github.com/mksglu/context-mode
+```
+
+The three tools don't conflict. RTK compresses shell output. context-mode handles analysis and web. lean-ctx adds caching on top of everything. Run all three and let each do what it's best at.
+
+<Card>
+### The real question isn't which tool
+
+It's whether you're measuring. RTK ships `rtk gain` — actual token usage analytics. lean-ctx has `ctx_metrics` and `ctx_wrapped`. Before claiming 80% savings, run a session with and without the tools and compare. The tools are only valuable if the savings are real for your specific workflow.
+</Card>

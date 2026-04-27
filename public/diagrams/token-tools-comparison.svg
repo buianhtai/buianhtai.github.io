@@ -1,0 +1,137 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 620" width="960" height="620">
+  <defs>
+    <marker id="arrow-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#2563eb"/>
+    </marker>
+    <marker id="arrow-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#16a34a"/>
+    </marker>
+    <marker id="arrow-purple" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#9333ea"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="960" height="620" fill="#ffffff"/>
+
+  <!-- Title -->
+  <text x="480" y="38" text-anchor="middle" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="20" font-weight="600" fill="#111827">Token Reduction Tool Comparison</text>
+  <text x="480" y="60" text-anchor="middle" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13" fill="#6b7280">RTK · lean-ctx · context-mode — three different strategies, one goal</text>
+
+  <!-- Column headers -->
+  <!-- RTK column -->
+  <rect x="30" y="80" width="270" height="48" rx="8" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5"/>
+  <text x="165" y="100" text-anchor="middle" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#1d4ed8">RTK</text>
+  <text x="165" y="118" text-anchor="middle" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="11" fill="#3b82f6">Rust Token Killer · 36.2k ★</text>
+
+  <!-- lean-ctx column -->
+  <rect x="345" y="80" width="270" height="48" rx="8" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+  <text x="480" y="100" text-anchor="middle" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#15803d">lean-ctx</text>
+  <text x="480" y="118" text-anchor="middle" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="11" fill="#22c55e">MCP Server + Shell Hook · 875 ★</text>
+
+  <!-- context-mode column -->
+  <rect x="660" y="80" width="270" height="48" rx="8" fill="#faf5ff" stroke="#e9d5ff" stroke-width="1.5"/>
+  <text x="795" y="100" text-anchor="middle" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#7e22ce">context-mode</text>
+  <text x="795" y="118" text-anchor="middle" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="11" fill="#a855f7">Sandbox MCP · private</text>
+
+  <!-- Row: Approach -->
+  <rect x="0" y="142" width="960" height="32" fill="#f9fafb"/>
+  <text x="20" y="163" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#374151">Approach</text>
+  <text x="165" y="163" text-anchor="middle" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" fill="#1e40af">CLI output compression</text>
+  <text x="480" y="163" text-anchor="middle" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" fill="#166534">Compression + caching + MCP</text>
+  <text x="795" y="163" text-anchor="middle" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" fill="#6b21a8">Sandbox — only stdout in context</text>
+
+  <!-- Row: Integration -->
+  <rect x="0" y="174" width="960" height="32" fill="#ffffff"/>
+  <text x="20" y="195" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#374151">Integration</text>
+  <text x="165" y="195" text-anchor="middle" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" fill="#1e40af">Shell hook (transparent)</text>
+  <text x="480" y="195" text-anchor="middle" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" fill="#166534">Shell hook + MCP server</text>
+  <text x="795" y="195" text-anchor="middle" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" fill="#6b21a8">MCP server only</text>
+
+  <!-- Row: Claimed savings -->
+  <rect x="0" y="206" width="960" height="32" fill="#f9fafb"/>
+  <text x="20" y="227" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#374151">Claimed savings</text>
+  <text x="165" y="227" text-anchor="middle" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#1e40af">60–90%</text>
+  <text x="480" y="227" text-anchor="middle" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#166534">74–99%</text>
+  <text x="795" y="227" text-anchor="middle" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#6b21a8">Unbounded (you decide)</text>
+
+  <!-- Row: File reads -->
+  <rect x="0" y="238" width="960" height="32" fill="#ffffff"/>
+  <text x="20" y="259" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#374151">File reads</text>
+  <text x="165" y="259" text-anchor="middle" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" fill="#1e40af">rtk read (strip bodies)</text>
+  <text x="480" y="259" text-anchor="middle" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" fill="#166534">10 modes + cache (13 tok re-read)</text>
+  <text x="795" y="259" text-anchor="middle" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" fill="#6b21a8">ctx_execute_file (you extract)</text>
+
+  <!-- Row: Caching -->
+  <rect x="0" y="270" width="960" height="32" fill="#f9fafb"/>
+  <text x="20" y="291" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#374151">Caching</text>
+  <!-- RTK: No -->
+  <rect x="130" y="275" width="70" height="20" rx="4" fill="#fee2e2"/>
+  <text x="165" y="289" text-anchor="middle" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" fill="#dc2626">None</text>
+  <!-- lean-ctx: Yes -->
+  <rect x="445" y="275" width="70" height="20" rx="4" fill="#dcfce7"/>
+  <text x="480" y="289" text-anchor="middle" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" fill="#16a34a">Yes</text>
+  <!-- context-mode: No -->
+  <rect x="760" y="275" width="70" height="20" rx="4" fill="#fee2e2"/>
+  <text x="795" y="289" text-anchor="middle" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" fill="#dc2626">None</text>
+
+  <!-- Row: LLM behavior change -->
+  <rect x="0" y="302" width="960" height="32" fill="#ffffff"/>
+  <text x="20" y="323" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#374151">LLM change needed</text>
+  <!-- RTK: No -->
+  <rect x="130" y="307" width="70" height="20" rx="4" fill="#dcfce7"/>
+  <text x="165" y="321" text-anchor="middle" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" fill="#16a34a">None</text>
+  <!-- lean-ctx: Partial -->
+  <rect x="440" y="307" width="80" height="20" rx="4" fill="#fef9c3"/>
+  <text x="480" y="321" text-anchor="middle" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" fill="#a16207">For MCP tools</text>
+  <!-- context-mode: Required -->
+  <rect x="740" y="307" width="110" height="20" rx="4" fill="#fef9c3"/>
+  <text x="795" y="321" text-anchor="middle" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" fill="#a16207">Write extraction code</text>
+
+  <!-- Row: Best for -->
+  <rect x="0" y="334" width="960" height="32" fill="#f9fafb"/>
+  <text x="20" y="355" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#374151">Best for</text>
+  <text x="165" y="355" text-anchor="middle" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" fill="#1e40af">Shell/git ops, zero friction</text>
+  <text x="480" y="355" text-anchor="middle" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" fill="#166534">Repeated file reads, sessions</text>
+  <text x="795" y="355" text-anchor="middle" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" fill="#6b21a8">Logs, web research, analysis</text>
+
+  <!-- Dividers between columns -->
+  <line x1="305" y1="80" x2="305" y2="366" stroke="#e5e7eb" stroke-width="1"/>
+  <line x1="620" y1="80" x2="620" y2="366" stroke="#e5e7eb" stroke-width="1"/>
+
+  <!-- Savings bar chart section -->
+  <text x="480" y="400" text-anchor="middle" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#111827">Session Token Savings — Self-Reported Estimates</text>
+
+  <!-- RTK bar -->
+  <text x="165" y="428" text-anchor="middle" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" fill="#374151">RTK</text>
+  <rect x="30" y="434" width="216" height="28" rx="6" fill="#dbeafe"/>
+  <rect x="30" y="434" width="216" height="28" rx="6" fill="#2563eb"/>
+  <text x="253" y="453" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#1e40af">~80%  (118K→24K tok)</text>
+
+  <!-- lean-ctx bar -->
+  <text x="165" y="484" text-anchor="middle" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" fill="#374151">lean-ctx</text>
+  <rect x="30" y="490" width="237" height="28" rx="6" fill="#dcfce7"/>
+  <rect x="30" y="490" width="237" height="28" rx="6" fill="#16a34a"/>
+  <text x="274" y="509" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#166534">~88%  (90K→11K tok)</text>
+
+  <!-- context-mode bar - variable -->
+  <text x="165" y="540" text-anchor="middle" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" fill="#374151">context-mode</text>
+  <rect x="30" y="546" width="256" height="28" rx="6" fill="#ede9fe"/>
+  <!-- Gradient fill to show variable -->
+  <defs>
+    <linearGradient id="varGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#9333ea"/>
+      <stop offset="80%" stop-color="#9333ea"/>
+      <stop offset="100%" stop-color="#9333ea" stop-opacity="0.3"/>
+    </linearGradient>
+  </defs>
+  <rect x="30" y="546" width="256" height="28" rx="6" fill="url(#varGrad)"/>
+  <text x="293" y="565" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#6b21a8">90–99%+  (you control output)</text>
+
+  <!-- 100% marker -->
+  <line x1="286" y1="418" x2="286" y2="580" stroke="#d1d5db" stroke-width="1" stroke-dasharray="4,3"/>
+  <text x="286" y="414" text-anchor="middle" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="10" fill="#9ca3af">100%</text>
+
+  <!-- Legend note -->
+  <text x="480" y="600" text-anchor="middle" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="11" fill="#9ca3af">Numbers are vendor self-reported estimates based on medium TypeScript/Rust projects.</text>
+</svg>
