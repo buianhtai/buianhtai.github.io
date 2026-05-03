@@ -1,0 +1,280 @@
+---
+title: "Kestra: How a YAML-First Orchestration Engine Runs Millions of Workflows"
+description: "A deep dive into Kestra's event-driven architecture — executor/worker separation, dual queue backends, pluggable class loading, and how every component scales independently."
+pubDate: 2026-05-03
+tags: ["architecture", "orchestration", "java", "workflow", "devops"]
+lang: "en"
+category: "architecture"
+---
+
+import Card from '../../../components/mdx/Card.astro';
+import Label from '../../../components/mdx/Label.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import ArchLayer from '../../../components/mdx/ArchLayer.astro';
+import Pipeline from '../../../components/mdx/Pipeline.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import Mermaid from '../../../components/mdx/Mermaid.astro';
+import DagGrid from '../../../components/mdx/DagGrid.astro';
+
+Most workflow orchestrators make a hard trade-off: either they're simple to write but opaque to operate, or they're powerful but require you to write Python DAGs and manage a separate execution runtime. Kestra sidesteps that trade-off by making YAML the first-class unit of work while keeping every internal component independently scalable and swappable.
+
+[Kestra](https://github.com/kestra-io/kestra) is an open-source, event-driven orchestration platform, Apache 2.0 licensed, with 26,800+ stars. The core is written in Java (Micronaut, Quarkus-influenced) and ships as a single executable that can run in single-process mode or fan out to a fully distributed cluster.
+
+<HeroGrid items={[
+  { label: "26,800+", sublabel: "GitHub Stars\nApache 2.0", color: "#0891b2" },
+  { label: "YAML-First", sublabel: "Flows as Code\nGit-native", color: "#059669" },
+  { label: "Dual Queue", sublabel: "JDBC or Kafka\nSwap-in-place", color: "#d97706" },
+  { label: "Plugin JAR", sublabel: "Child-first Loader\nClass Isolation", color: "#e11d48" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> Why YAML Orchestration is Harder Than It Looks
+
+Defining a workflow in YAML is easy. Executing it reliably at scale is not.
+
+A scheduler that evaluates triggers must not block task execution. An executor that computes "what runs next" must not touch your data. Workers that call external APIs need class-level isolation so two plugins sharing the same library version don't corrupt each other's state.
+
+<Card>
+
+| Problem | Naive Implementation | Kestra's Approach |
+|---------|----------------------|-------------------|
+| **Trigger evaluation blocks workers** | Single-threaded poll loop | Scheduler and Worker are separate processes |
+| **Plugin dependency hell** | Flat classpath, version conflicts | Per-plugin `URLClassLoader` with child-first strategy |
+| **Executor becomes stateful** | Executor caches execution state | Executor is stateless; state lives in the Queue |
+| **Scale one component, not all** | All-in-one monolith | Webserver, Executor, Scheduler, Worker scale independently |
+| **Event vs schedule triggers mixed** | Single polling loop for both | `PollingTriggerInterface` vs `RealtimeTriggerInterface` |
+
+</Card>
+
+These are the problems Kestra's architecture explicitly solves — and the reason its component boundaries exist where they do.
+
+---
+
+## <Label color="green">2</Label> Architecture Layers
+
+Kestra is a Java application structured as a Gradle multi-module project. The key modules map to runtime responsibilities:
+
+<ArchLayer badge="API" badgeColor="teal" label="User-Facing Layer" items={["webserver — REST API + SPA UI", "cli — standalone server launcher", "platform — Micronaut wiring"]} />
+<ArchLayer badge="EXE" badgeColor="green" label="Orchestration Layer" items={["executor — DAG evaluation, flowable tasks", "scheduler — trigger polling + realtime watches", "worker — runnable task execution thread pool"]} />
+<ArchLayer badge="MSG" badgeColor="amber" label="Transport Layer" items={["queue-jdbc — polling via SELECT … SKIP LOCKED", "queue (Kafka EE) — log-based pub/sub", "QueueInterface<T> — emit / receive abstraction"]} />
+<ArchLayer badge="DB" badgeColor="rose" label="Persistence Layer" items={["jdbc-postgres / jdbc-mysql — flow + execution metadata", "storage-local / S3 / GCS / ABS — task output artifacts", "repository-memory — in-process for testing"]} />
+
+Every layer communicates through interfaces. The JDBC queue and the Kafka queue are drop-in replacements for `QueueInterface<T>` — you change one configuration flag, not one line of application code.
+
+---
+
+## <Label color="amber">3</Label> The Executor/Worker Split
+
+This is the most important architectural decision in Kestra. Most orchestrators conflate "deciding what to run next" with "running it." Kestra strictly separates them.
+
+**Executor** reads execution events from the Queue, computes the next `TaskRun` based on the DAG state, and emits new work items. It handles only `FlowableTask` implementations (Parallel, EachSequential, If, Switch, Subflow) — control-flow tasks that produce more `NextTaskRun` events, never data.
+
+```java
+// FlowableTask.java — contract for the Executor
+public interface FlowableTask<T extends Output> {
+    List<ResolvedTask> childTasks(RunContext runContext, TaskRun parentTaskRun)
+        throws IllegalVariableEvaluationException;
+
+    List<NextTaskRun> resolveNexts(RunContext runContext, Execution execution, TaskRun parentTaskRun)
+        throws IllegalVariableEvaluationException;
+}
+```
+
+**Worker** receives `WorkerTask` messages from the Queue, executes them inside a thread pool, and emits `WorkerTaskResult` messages. It handles only `RunnableTask` implementations — anything that does real I/O.
+
+```java
+// RunnableTask.java — contract for the Worker
+public interface RunnableTask<T extends Output> extends Plugin, WorkerJobLifecycle {
+    T run(RunContext runContext) throws Exception;
+}
+```
+
+<Callout color="teal">
+The Executor never touches your data. Workers are the **only** components that access external systems — APIs, databases, object storage, message brokers. This is a deliberate privacy boundary: you can run Workers in your private VPC and Executor/Scheduler in a shared cluster.
+</Callout>
+
+The split has a concrete scaling implication: the Executor rarely needs horizontal scaling because it does no I/O. Workers can be scaled aggressively because they do all the I/O. In high-throughput deployments, you run one or two Executor replicas and dozens of Worker threads/instances.
+
+---
+
+## <Label color="rose">4</Label> The Queue: JDBC and Kafka Backends
+
+Every inter-component message in Kestra flows through `QueueInterface<T>`. The interface is minimal:
+
+```java
+public interface QueueInterface<T> extends Closeable {
+    void emit(String consumerGroup, T message) throws QueueException;
+    Runnable receive(String consumerGroup, Class<?> queueType,
+                     Consumer<Either<T, DeserializationException>> consumer);
+}
+```
+
+The JDBC backend implements this with a polling pattern on a `queues` table, using `SELECT … FOR UPDATE SKIP LOCKED` to achieve competing-consumer semantics without a message broker. The table rows have a `type` column (CRC32 of the Java class name), a `routing_key`, and a `value` column containing the serialized JSON payload.
+
+The Kafka backend (Enterprise Edition) replaces this with log-based pub/sub — the same interface, but messages are now durable, replayable Kafka topics with consumer group offsets. This is the path to Elasticsearch-backed high-availability deployments.
+
+<DataTable
+  caption="Queue backend comparison"
+  accent="amber"
+  headers={["Backend", "Dependency", "HA", "Replay", "Throughput"]}
+  rows={[
+    { "Backend": "JDBC (H2)", "Dependency": "embedded", "HA": "no", "Replay": "no", "Throughput": "dev/test" },
+    { "Backend": "JDBC (Postgres/MySQL)", "Dependency": "relational DB", "HA": "partial", "Replay": "no", "Throughput": "medium" },
+    { "Backend": "Kafka (EE)", "Dependency": "Kafka + Elasticsearch", "HA": "full", "Replay": "yes", "Throughput": "high" },
+  ]}
+/>
+
+You start with JDBC. When you outgrow it, you switch to Kafka. The application layer changes nothing — only the injected `QueueInterface` implementation changes.
+
+---
+
+## <Label color="teal">5</Label> Trigger Taxonomy
+
+Kestra distinguishes two trigger execution models at the interface level:
+
+**`PollingTriggerInterface`** fires on a configurable interval. The Scheduler checks it every second, compares `nextEvaluationDate()` to the clock, and dispatches the trigger to a Worker for evaluation if it's due. A polling trigger cannot be evaluated concurrently — while one evaluation is running, the next is blocked.
+
+```java
+public interface PollingTriggerInterface extends WorkerTriggerInterface {
+    Duration getInterval();
+    Optional<TriggerEvaluationResult> eval(ConditionContext ctx, TriggerContext context) throws Exception;
+    ZonedDateTime nextEvaluationDate(ConditionContext ctx, Optional<? extends TriggerContext> last)
+        throws InvalidTriggerConfigurationException;
+}
+```
+
+**`RealtimeTriggerInterface`** exposes a reactive `Publisher<TriggerEvaluationResult>` instead of an `Optional`. This is the contract for triggers backed by Kafka consumers, file-watch listeners, SQS queues, or any push-based event source. The Worker holds a long-running subscription rather than polling.
+
+```java
+public interface RealtimeTriggerInterface extends WorkerTriggerInterface {
+    Publisher<TriggerEvaluationResult> eval(ConditionContext ctx, TriggerContext context) throws Exception;
+}
+```
+
+This interface split means you can attach a Kafka `RealtimeTrigger` and a scheduled `CronTrigger` to the same flow — Kestra routes each to the correct execution path without the flow author knowing the difference.
+
+---
+
+## <Label color="green">6</Label> The Plugin System
+
+Plugins are JAR files discovered at startup. Each JAR ships with a manifest that declares the `io.kestra.core.models.Plugin` implementations it contains. Kestra scans JARs in the configured plugin path and registers every annotated class into `PluginRegistry`.
+
+The critical isolation mechanism is `PluginClassLoader` — a `URLClassLoader` using a **child-first** loading strategy. Every plugin JAR gets its own loader. When a plugin class is requested, the loader first searches its own JAR before delegating to the parent. This means two plugins can each ship conflicting library versions without runtime errors.
+
+```java
+// PluginClassLoader.java — exclusion list enforces kernel boundary
+private static final Pattern EXCLUDES = Pattern.compile(
+    "^(?:java|javax|jakarta|io.kestra.core|io.kestra.plugin.core"
+    + "|org.slf4j|ch.qos.logback|com.fasterxml.jackson.*"
+    + "|reactor|io.opentelemetry|io.netty)\\..*$"
+);
+```
+
+Classes matching `EXCLUDES` are always loaded from the parent — this prevents plugins from shadowing core Kestra types, Jackson, SLF4J, or Reactor. Everything else is plugin-local.
+
+<DataTable
+  caption="Plugin extension points"
+  accent="teal"
+  headers={["Extension Point", "Interface", "Executed By"]}
+  rows={[
+    { "Extension Point": "Runnable task", "Interface": "RunnableTask<T>", "Executed By": "Worker" },
+    { "Extension Point": "Flowable task", "Interface": "FlowableTask<T>", "Executed By": "Executor" },
+    { "Extension Point": "Polling trigger", "Interface": "PollingTriggerInterface", "Executed By": "Worker (via Scheduler)" },
+    { "Extension Point": "Realtime trigger", "Interface": "RealtimeTriggerInterface", "Executed By": "Worker (long-running)" },
+    { "Extension Point": "Task Runner", "Interface": "TaskRunnerInterface", "Executed By": "Worker subprocess" },
+  ]}
+/>
+
+---
+
+## <Label color="amber">7</Label> Task Runners: Compute Offload Layer
+
+Task Runners are a pluggable layer on top of Workers that let you redirect compute to remote environments without changing flow YAML. You add a `taskRunner` block to any script task:
+
+```yaml
+id: heavy_ml
+namespace: production
+
+tasks:
+  - id: train
+    type: io.kestra.plugin.scripts.python.Script
+    taskRunner:
+      type: io.kestra.plugin.ee.aws.runner.Batch
+      region: us-east-1
+      computeEnvironmentArn: "arn:aws:batch:..."
+    script: |
+      import torch
+      # ... training code
+```
+
+Without the `taskRunner` block, the Worker executes the script locally in a subprocess. With it, the Worker spins up an AWS Batch job, streams logs back through the Queue, and captures outputs into Internal Storage when the job completes. The Executor never knows the difference — it still receives a `WorkerTaskResult`.
+
+<Pipeline
+  nodes={[
+    { title: "YAML Flow", subtitle: "taskRunner declared" },
+    { title: "Worker", subtitle: "Dispatches to runner" },
+    { title: "Remote Compute", subtitle: "ECS/Batch/K8s Job" },
+    { title: "Internal Storage", subtitle: "Output artifacts" },
+    { title: "Executor", subtitle: "Receives result" },
+  ]}
+  arrows={[
+    { label: "WorkerTask", direction: "right" },
+    { label: "submit job", direction: "right" },
+    { label: "write outputs", direction: "right" },
+    { label: "WorkerTaskResult", direction: "left" },
+  ]}
+  footer="Worker is the only component that changes behavior — Executor is unaffected."
+/>
+
+---
+
+## <Label color="rose">8</Label> End-to-End Execution Flow
+
+Here is how a scheduled flow executes from trigger evaluation to completion:
+
+<FlowStep step="1" color="teal" title="Scheduler evaluates triggers">
+  Every second, the Scheduler scans all registered triggers. For `PollingTriggerInterface` triggers, it checks `nextEvaluationDate()`. When a trigger is due, it emits a `WorkerTrigger` message to the Queue and dispatches it to an available Worker.
+</FlowStep>
+
+<FlowStep step="2" color="teal" title="Worker executes trigger evaluation">
+  The Worker calls `trigger.eval(conditionContext, triggerContext)`. For a schedule trigger, this always returns a result. For a file-detection trigger, it polls the remote filesystem. The Worker emits a `TriggerContext` back to the Queue with the evaluation result.
+</FlowStep>
+
+<FlowStep step="3" color="green" title="Executor creates execution">
+  The Executor reads the trigger result from the Queue, creates an `Execution` object with state `CREATED`, resolves the flow definition from the Repository, and emits the first `WorkerTask` messages for the flow's initial runnable tasks.
+</FlowStep>
+
+<FlowStep step="4" color="green" title="Workers run tasks">
+  Workers pick up `WorkerTask` messages, instantiate the plugin class via `PluginRegistry`, call `runnableTask.run(runContext)`, and emit `WorkerTaskResult` back to the Queue. `RunContext` provides variable rendering (Pebble template engine), secret access, storage I/O, and metrics.
+</FlowStep>
+
+<FlowStep step="5" color="amber" title="Executor advances the DAG">
+  After each `WorkerTaskResult`, the Executor re-evaluates the `FlowableTask` tree. It resolves `nextTasks` from completed task runs, emits new `WorkerTask` messages for unblocked tasks, and handles branches, parallel groups, and error paths.
+</FlowStep>
+
+<FlowStep step="6" color="amber" title="Execution reaches terminal state">
+  When all task runs are in a terminal state (SUCCESS, FAILED, KILLED), the Executor marks the `Execution` as terminal and emits `ExecutionEvent` messages. These trigger flow-completion callbacks, SLA evaluation, and downstream `FlowTrigger` checking.
+</FlowStep>
+
+---
+
+## <Label color="green">9</Label> What Makes Kestra Different
+
+- **Executor is stateless by design.** All execution state lives in the Queue and Repository — not in the Executor's JVM heap. This means Executor restarts mid-execution without losing workflow progress.
+
+- **YAML is the canonical format, not a rendering target.** Changes made through the UI, API, or Terraform provider all mutate the stored YAML. The UI DAG view is generated from the YAML at render time, not stored separately.
+
+- **Two backend tiers with the same API.** JDBC (Postgres/MySQL) for small-to-medium deployments, Kafka + Elasticsearch for high-availability at scale. You choose your tier, and the application layer is identical.
+
+- **Plugin isolation without OSGi complexity.** Child-first `URLClassLoader` per plugin JAR gives per-plugin dependency isolation with zero framework overhead. No OSGi, no module system configuration.
+
+- **Task Runners decouple execution environment from orchestration.** The flow YAML declares *what* to run. The `taskRunner` block declares *where* to run it. These change independently.
+
+- **Trigger model splits push and pull.** `PollingTriggerInterface` for interval-based checks; `RealtimeTriggerInterface` (returns a `Publisher`) for event streams. The Scheduler and Worker handle each correctly without the flow author reasoning about the difference.
+
+- **Concurrency is a flow-level concern, not an infrastructure concern.** The `concurrency` block in a Flow YAML sets a maximum number of simultaneous executions. The Executor enforces this via `ConcurrencyLimitStateStore` — no external coordination needed.
+
+The repo: [github.com/kestra-io/kestra](https://github.com/kestra-io/kestra) — 26,800+ stars, 2,500+ forks, Apache 2.0, Gradle multi-module Java, active development on the `develop` branch.
