@@ -9,7 +9,7 @@ const { chart, caption } = Astro.props;
 <div class="mermaid-container">
   <div class="mermaid-viewport" data-zoom="1" data-pan-x="0" data-pan-y="0">
     <div class="mermaid-canvas">
-      <pre class="mermaid">{chart}</pre>
+      <pre class="mermaid" set:html={chart}></pre>
     </div>
   </div>
   <div class="mermaid-controls">
