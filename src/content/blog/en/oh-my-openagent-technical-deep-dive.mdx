@@ -1,0 +1,287 @@
+---
+title: "oh-my-openagent: Inside the Multi-Agent System That Never Stops"
+description: "A technical deep dive into oh-my-openagent's architecture — the Sisyphus agent roster, Ralph Loop continuation engine, hash-anchored edit tool, parallel background agents, and the model-fallback layer that keeps long sessions alive."
+pubDate: 2026-05-03
+tags: ["ai", "agents", "architecture", "typescript", "opencode", "multi-agent"]
+lang: "en"
+category: "architecture"
+series: "ai-agent-tools"
+seriesOrder: 2
+---
+
+import Card from '../../../components/mdx/Card.astro';
+import Label from '../../../components/mdx/Label.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import Mermaid from '../../../components/mdx/Mermaid.astro';
+import Pipeline from '../../../components/mdx/Pipeline.astro';
+import ArchLayer from '../../../components/mdx/ArchLayer.astro';
+import HashDemo from '../../../components/mdx/HashDemo.astro';
+import MetricBar from '../../../components/mdx/MetricBar.astro';
+import EnforceRule from '../../../components/mdx/EnforceRule.astro';
+
+A single coding agent that stalls on a rate-limit error, corrupts a file because it referenced a stale line number, or stops the moment you close the terminal is not a production tool. [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) (MIT, TypeScript, ~1k stars) is an OpenCode plugin that replaces that single agent with a named specialist roster, a continuation loop that doesn't stop on failure, and a file-edit mechanism that verifies every line before touching it.
+
+<HeroGrid items={[
+  { label: "9 Agents", sublabel: "Named specialists\nSisyphus · Oracle · Prometheus\nLibrarian · Explore · Atlas · Metis · Momus · Hephaestus", color: "#0891b2" },
+  { label: "Ralph Loop", sublabel: "Persistent continuation engine\nReset or continue strategy\nSurvives errors & compaction", color: "#7c3aed" },
+  { label: "Hash Edits", sublabel: "LINE#ID validation\nPer-line SHA hash\nStale-reference prevention", color: "#059669" },
+  { label: "Parallel BG", sublabel: "Background agent manager\nConcurrency limits & circuit breakers\nModel fallback on rate-limit", color: "#d97706" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> Plugin Architecture
+
+oh-my-openagent is not a fork of OpenCode — it's an [OpenCode plugin](https://opencode.ai/docs/plugins). A single `serverPlugin` function mounts at startup, wires all subsystems, and returns a `Hooks` record that OpenCode calls at lifecycle points.
+
+```
+AGENTS.md (project)
+  └─ opencode.json → "plugins": ["@code-yeongyu/oh-my-openagent"]
+```
+
+<ArchLayer
+  badge="Plugin"
+  badgeColor="teal"
+  label="oh-my-openagent Plugin Entry (index.ts → serverPlugin)"
+  items={["loadPluginConfig → OhMyOpenCodeConfig", "createManagers → BackgroundManager + TmuxSessionManager + SkillMcpManager", "createTools → ToolRegistry (filtered, category-aware)", "createHooks → 40+ registered hooks"]}
+/>
+<ArchLayer
+  badge="Agents"
+  badgeColor="purple"
+  label="Built-in Agent Roster"
+  items={["Sisyphus (primary orchestrator)", "Oracle (architecture advisor)", "Prometheus (planner)", "Librarian (docs/OSS search)", "Explore (fast grep)", "Atlas (orchestrator-visibility)", "Metis · Momus · Hephaestus (specialist domains)"]}
+/>
+<ArchLayer
+  badge="Hooks"
+  badgeColor="amber"
+  label="Hook Layer (40+ registered hooks)"
+  items={["hashline-read-enhancer · hashline-edit-diff-enhancer", "ralph-loop (continuation engine)", "preemptive-compaction (context management)", "model-fallback · runtime-fallback", "directory-agents-injector · rules-injector · directory-readme-injector"]}
+/>
+<ArchLayer
+  badge="Infra"
+  badgeColor="rose"
+  label="Background Agent Infrastructure"
+  items={["BackgroundManager (concurrency, circuit-breaker, polling)", "TmuxSessionManager (pane allocation, session tracking)", "SkillMcpManager (dynamic MCP servers per skill)", "SessionCategoryRegistry (category→model routing)"]}
+/>
+
+The plugin exports a `PluginModule` with a single entry: `serverPlugin`. OpenCode invokes it with `PluginInput` (directory, client, hooks config), receives `Hooks`, and calls them at each lifecycle event. No spawned process, no side-car — it's all in-process.
+
+---
+
+## <Label color="purple">2</Label> Agent Roster
+
+Every agent is created as an `AgentConfig` object (`@opencode-ai/sdk`) with three mandatory properties: `mode` (`primary` or `subagent`), `model`, and `prompt`. The prompt is dynamically assembled at startup from the available agents, tools, and skills in the current session.
+
+<DataTable
+  headers={["Agent", "Mode", "Cost Tier", "Category", "Key Restriction"]}
+  rows={[
+    { "Agent": "Sisyphus", "Mode": "primary", "Cost Tier": "EXPENSIVE", "Category": "utility", "Key Restriction": "None — full tool access" },
+    { "Agent": "Oracle", "Mode": "subagent", "Cost Tier": "EXPENSIVE", "Category": "advisor", "Key Restriction": "No write/edit tools" },
+    { "Agent": "Prometheus", "Mode": "subagent", "Cost Tier": "EXPENSIVE", "Category": "planning", "Key Restriction": "MD-only output enforced" },
+    { "Agent": "Librarian", "Mode": "subagent", "Cost Tier": "CHEAP", "Category": "exploration", "Key Restriction": "No write/edit/task tools" },
+    { "Agent": "Explore", "Mode": "subagent", "Cost Tier": "CHEAP", "Category": "exploration", "Key Restriction": "Read + search only" },
+    { "Agent": "Multimodal Looker", "Mode": "subagent", "Cost Tier": "CHEAP", "Category": "visual", "Key Restriction": "Read + image tools only" },
+    { "Agent": "Atlas", "Mode": "subagent", "Cost Tier": "EXPENSIVE", "Category": "orchestration", "Key Restriction": "Orchestrator-visible only" },
+    { "Agent": "Metis", "Mode": "subagent", "Cost Tier": "EXPENSIVE", "Category": "analysis", "Key Restriction": "No write tools" },
+    { "Agent": "Momus", "Mode": "subagent", "Cost Tier": "EXPENSIVE", "Category": "review", "Key Restriction": "No write tools" },
+    { "Agent": "Hephaestus", "Mode": "subagent", "Cost Tier": "EXPENSIVE", "Category": "engineering", "Key Restriction": "GPT-family exclusive" },
+  ]}
+/>
+
+**Sisyphus** has a notable twist: its system prompt is model-aware. When the model is `claude-opus-4-7`, it loads `buildClaudeOpus47SisyphusPrompt()`; for `gpt-5-5` it loads `buildGpt55SisyphusPrompt()`; for Gemini it builds a Gemini-specific tool mandate. Each model gets a prompt tuned to its strengths — different delegation strategies, different tool-call examples, different verification prompts.
+
+**Oracle** is invoked when Sisyphus hits a hard wall: 2+ failed fix attempts, complex architecture decisions, security concerns, or multi-system tradeoffs. Its prompt explicitly forbids being invoked on the first attempt at any fix. This enforced escalation prevents expensive re-reads on trivial problems.
+
+**Prometheus** is constrained to Markdown-only output via the `prometheus-md-only` hook. Every response it produces is a structured plan document — no code generation, no tool calls — which Sisyphus then executes.
+
+---
+
+## <Label color="green">3</Label> Hash-Anchored Edit Tool
+
+The most mechanically interesting feature. Standard line-number references in LLM edit tools are fragile: if three prior edits shifted lines, the agent references line 47 which is now line 50, and the wrong content gets overwritten.
+
+oh-my-openagent solves this with `hashline_edit`. When the `Read` tool returns file content, the `hashline-read-enhancer` hook intercepts the output and transforms each line from:
+
+```
+47: function validate(input) {
+```
+
+into:
+
+```
+47#a3f8c2|function validate(input) {
+```
+
+The `#a3f8c2` is a 6-character SHA-256 hash of `lineNumber + content`, computed by `computeLineHash(lineNumber, content)`. When the agent issues an edit referencing `47#a3f8c2`, the edit tool re-hashes that line at write time. If the hash doesn't match, the edit is rejected.
+
+<HashDemo agents={[
+  { name: "File Read", input: "47: function validate(input) {", output: "47#a3f8c2|function validate(input) {", same: true },
+  { name: "Edit Attempt (valid)", input: "Ref: 47#a3f8c2", output: "Hash match → edit applied", same: true },
+  { name: "Edit Attempt (stale)", input: "Ref: 47#a3f8c2 (line shifted)", output: "Hash mismatch → edit rejected", same: false },
+]} />
+
+The complementary `hashline-edit-diff-enhancer` hook captures file state before any `Write` call and generates a unified diff after completion, surfacing the exact line-by-line change in the tool output for the agent to review.
+
+<Callout type="note" title="Trade-off">
+Hash IDs are valid only within a single session. After compaction or a new `Read`, fresh hashes are computed. The agent cannot cache `LINE#ID` values across turns without risk of stale references.
+</Callout>
+
+---
+
+## <Label color="amber">4</Label> Ralph Loop — Continuation Engine
+
+The Ralph Loop answers the question: what happens when a long task hits a session boundary, a compaction event, or a transient API error?
+
+Without Ralph Loop, the agent stops. With it, the session automatically restarts from the last known state, re-injects the original goal, and continues.
+
+The loop is controlled by the `RalphLoopConfig` schema:
+
+```typescript
+const RalphLoopConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  default_max_iterations: z.number().min(1).max(1000).default(100),
+  state_dir: z.string().optional(),   // .opencode/ by default
+  default_strategy: z.enum(["reset", "continue"]).default("continue"),
+})
+```
+
+Two strategies are supported:
+
+- **`continue`** — appends a continuation prompt to the existing session. Preserves full context.
+- **`reset`** — starts a fresh session with the original task injected as the first message. Escapes runaway loops, clears corrupted context.
+
+<FlowStep steps={[
+  { label: "Session ends or errors", description: "Natural stop, rate limit, or context overflow" },
+  { label: "Loop state check", description: "loop-state-controller reads .opencode/ralph-loop.json — iteration count, strategy, completion promise" },
+  { label: "Completion detection", description: "oracle-verification-detector scans the transcript for verified task completion; completion-promise-detector matches the user-supplied goal string" },
+  { label: "Not complete? Inject continuation", description: "continuation-prompt-builder builds a re-statement of the goal with current loop metadata; injected into next session start" },
+  { label: "Complete? Exit loop", description: "Loop state cleared; session terminates normally" },
+]} />
+
+The `ulw` (`ultrawork`) command activates the loop at maximum depth — `ultrawork: true` flag in `startLoop()` options. This is the mode used for overnight, hands-off execution where the agent is expected to run until done.
+
+<Callout type="warning" title="Oracle verification">
+When Ralph Loop is in reset mode, it routes through the `oracle-verification-detector` before deciding to continue. Oracle is called as a background subagent to evaluate whether the transcript shows the goal was genuinely achieved. If Oracle says the work is incomplete, the loop resets with a counter-incremented continuation prompt.
+</Callout>
+
+---
+
+## <Label color="rose">5</Label> Background Agent Manager
+
+The `BackgroundManager` handles parallel sub-task execution — Sisyphus delegates to Oracle, Librarian, or Explore in the background while it continues main-thread work.
+
+The relevant lifecycle:
+
+1. `launch(input: LaunchInput)` — spawns a new background session via `spawner.ts`, which calls the OpenCode API to create a child session with constrained tools.
+2. `ConcurrencyManager` — enforces a per-config `max_concurrent_tasks` ceiling. Queued items wait in a `QueueItem[]` list.
+3. `task-poller.ts` — polling loop runs every `POLLING_INTERVAL_MS` ms. Checks session liveness, pruning tasks that exceed `TASK_TTL_MS`.
+4. `loop-detector.ts` — `detectRepetitiveToolUse()` monitors each subagent's tool call sequence. Three identical consecutive tool calls trigger a circuit-breaker abort.
+5. `attempt-lifecycle.ts` — each background task tracks attempts as `BackgroundTaskAttempt[]`. On failure: `shouldRetryError()` classifies the error, `hasMoreFallbacks()` checks the fallback chain, and `tryFallbackRetry()` respawns on the next model.
+
+<MetricBar
+  title="Background Manager Safety Limits"
+  metrics={[
+    { label: "TTL per task", value: 30, maxValue: 60, displayValue: "30 min", color: "teal" },
+    { label: "Stale timeout", value: 5, maxValue: 60, displayValue: "5 min", color: "green" },
+    { label: "Circuit breaker", value: 3, maxValue: 10, displayValue: "3 repeats", color: "amber" },
+    { label: "Max depth", value: 5, maxValue: 10, displayValue: "5 levels", color: "rose" },
+  ]}
+/>
+
+Tmux integration is optional. When enabled, each background agent gets a dedicated tmux pane for real-time streaming output. The `TmuxSessionManager` tracks pane IDs by session ID and cleans them up on task completion.
+
+---
+
+## <Label color="teal">6</Label> Model Fallback Layer
+
+Long sessions hit rate limits. The fallback layer handles this without requiring user intervention.
+
+`FallbackModels` is a union schema accepting strings, objects, or mixed arrays:
+
+```typescript
+// Simple string list
+fallback_models: ["claude-sonnet-4-5", "gpt-4.1"]
+
+// Rich objects with per-model inference settings
+fallback_models: [
+  { model: "claude-sonnet-4-5", reasoningEffort: "high" },
+  { model: "gpt-4.1", temperature: 0.2, maxTokens: 8192 },
+]
+```
+
+`model-error-classifier.ts` sorts errors into three buckets:
+
+<EnforceRule rules={[
+  { method: "RETRY", action: "providerModelNotFoundError / rateLimitError / modelUnavailableError / providerConnectionError / authenticationError", allowed: true },
+  { method: "STOP", action: "quotaExceededError / insufficientCreditsError / freeUsageLimitError", allowed: false },
+  { method: "SKIP", action: "messageAbortedError / permissionDeniedError / contextLengthError / timeoutError", allowed: false },
+  { method: "RETRY", action: "Message contains: rate_limit / overloaded / cooling down / bad gateway / model not supported", allowed: true },
+]} />
+
+On a retryable error, `tryFallbackRetry()` advances the model pointer in the `FallbackEntry[]` chain and respawns the session. The session resumption reconstructs the last known message position using `findNearestMessageEvent()` and reissues the prompt from that point — not from the beginning.
+
+Categories (`visual-engineering`, `ultrabrain`, `deep`, `artistry`, `quick`) have their own `fallback_models` lists, allowing different fallback behavior for cheap exploration agents vs. expensive reasoning agents.
+
+---
+
+## <Label color="green">7</Label> Context Management Hooks
+
+Three hooks cooperate to prevent context overflow from silently degrading output quality.
+
+**`context-window-monitor`** — after every tool call, computes `totalInputTokens / actualContextLimit`. If the ratio exceeds 0.70, it injects a system directive into the session: *"You still have context remaining — do NOT rush or skip tasks."* This counters the observed behavior where models start abbreviating work as the window fills.
+
+**`preemptive-compaction`** — monitors the degradation curve. Rather than waiting for OpenCode's native compaction trigger, it fires earlier based on a degradation monitor that tracks output quality regression. The `preemptive-compaction-degradation-monitor.ts` records rolling metrics and triggers early compaction before quality collapse.
+
+**`compaction-context-injector` + `compaction-todo-preserver`** — when compaction does fire, these hooks re-inject the project's `AGENTS.md` and current `todo_write` state into the post-compaction context. Work items survive the context boundary.
+
+---
+
+## <Label color="amber">8</Label> End-to-End: `ultrawork` Flow
+
+<Mermaid chart={`
+sequenceDiagram
+    participant User
+    participant CLI as OpenCode CLI
+    participant Sisyphus as Sisyphus (primary)
+    participant BG as BackgroundManager
+    participant Oracle
+    participant Ralph as Ralph Loop
+    participant FS as File System
+
+    User->>CLI: /ultrawork "refactor auth module"
+    CLI->>Sisyphus: session start + task injection
+    Sisyphus->>FS: Read files (hashline-read-enhancer adds LINE#IDs)
+    Sisyphus->>BG: launch(Explore, "find all auth usages")
+    BG-->>Sisyphus: stream results
+    Sisyphus->>FS: Write edits (hash validated before apply)
+    Sisyphus->>BG: launch(Oracle, "review security tradeoffs")
+    BG-->>Sisyphus: Oracle response
+    Sisyphus-->>CLI: session ends (context limit)
+    CLI->>Ralph: check loop state
+    Ralph->>Ralph: oracle-verification-detector: task complete?
+    alt Incomplete
+        Ralph->>CLI: inject continuation prompt
+        CLI->>Sisyphus: new session, same goal
+    else Complete
+        Ralph->>CLI: exit loop
+        CLI-->>User: done
+    end
+`} />
+
+The hash validation, fallback retry, and context injection all happen transparently in hooks — Sisyphus issues standard OpenCode tool calls and receives standard results. The complexity is in the hook layer, not in the agent prompt.
+
+---
+
+## What Makes It Different
+
+- **Named agent escalation, not raw function-calling.** Each specialist has a defined `triggers` list that Sisyphus's dynamic prompt renders as a delegation table. The agent learns from the prompt when to escalate, not from a hardcoded if-else.
+- **Hash-anchored edits are deterministic.** Line references include content hashes; stale-line bugs are caught before file write, not after. The edit tool rejects invalid references rather than silently applying a wrong patch.
+- **The loop does not stop on error.** Ralph Loop classifies session endings into completions vs. interruptions. Only a verified completion (checked by Oracle when in reset mode) exits the loop. Rate limits, context overflow, and API failures all trigger continuation.
+- **Model awareness per-prompt, not per-config.** Sisyphus loads a different system prompt branch depending on the active model family. Gemini gets explicit tool mandates; Claude Opus 4.7 gets extended-thinking guidance; GPT-5.5 gets a patch-based edit strategy.
+- **Background agents are circuit-broken, TTL-bounded, and depth-limited.** `loop-detector.ts` aborts runaway subagents on 3 repetitive tool calls. `subagent-spawn-limits.ts` enforces a max depth of 5 levels. Tasks expire after 30 minutes. None of this requires user configuration.
+- **Context injection survives compaction.** `compaction-context-injector` and `compaction-todo-preserver` re-inject `AGENTS.md` and active todos immediately after every compaction event, keeping the agent oriented in long multi-hour sessions.
+
+The plugin installs as a standard npm package (`npm install @code-yeongyu/oh-my-openagent`) and activates via a single entry in `opencode.json`. Source at [github.com/code-yeongyu/oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent).
