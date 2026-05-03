@@ -1,99 +1,74 @@
 ---
 ---
 
-<div id="theme-picker" style="position: relative; display: inline-block; margin-left: 0.4rem;">
-  <button
-    id="theme-toggle"
-    aria-label="Switch theme"
-    aria-expanded="false"
-    aria-haspopup="true"
-    style="padding: 0.3rem 0.55rem; font-family: var(--font-mono); font-size: 0.7rem; color: var(--color-text-muted); border: 1px solid var(--color-border); background: transparent; cursor: pointer; transition: color 0.15s, border-color 0.15s; white-space: nowrap;"
-    onmouseover="this.style.color='var(--color-accent)'; this.style.borderColor='var(--color-accent)';"
-    onmouseout="this.style.color='var(--color-text-muted)'; this.style.borderColor='var(--color-border)';"
-  >
-    [<span id="theme-label">terminal</span>]
-  </button>
+<button
+  id="theme-toggle"
+  aria-label="Switch theme"
+  aria-expanded="false"
+  aria-haspopup="true"
+  style="margin-left: 0.4rem; padding: 0.3rem 0.55rem; font-family: var(--font-mono); font-size: 0.7rem; color: var(--color-text-muted); border: 1px solid var(--color-border); background: transparent; cursor: pointer; transition: color 0.15s, border-color 0.15s; white-space: nowrap;"
+  onmouseover="this.style.color='var(--color-accent)'; this.style.borderColor='var(--color-accent)';"
+  onmouseout="this.style.color='var(--color-text-muted)'; this.style.borderColor='var(--color-border)';"
+>
+  [<span id="theme-label">terminal</span>]
+</button>
 
-  <div
-    id="theme-menu"
-    role="menu"
-    style="
-      display: none;
-      position: absolute;
-      right: 0;
-      top: calc(100% + 4px);
-      min-width: 11rem;
-      background: var(--color-surface);
-      border: 1px solid var(--color-border-bright);
-      font-family: var(--font-mono);
-      font-size: 0.7rem;
-      z-index: 9999;
-      overflow: hidden;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
-    "
-  >
-    <div style="padding: 0.3rem 0.6rem; font-size: 0.62rem; color: var(--color-text-muted); border-bottom: 1px solid var(--color-border); letter-spacing: 0.08em; text-transform: uppercase;">$ select theme</div>
-    <ul style="list-style: none; margin: 0; padding: 0.25rem 0;">
-      <li data-theme="terminal" class="theme-option">
-        <span class="theme-dot" style="background: #00d9ff;"></span>terminal-dark
-      </li>
-      <li data-theme="light" class="theme-option">
-        <span class="theme-dot" style="background: #0070a8;"></span>light
-      </li>
-      <li data-theme="dracula" class="theme-option">
-        <span class="theme-dot" style="background: #bd93f9;"></span>dracula
-      </li>
-      <li data-theme="nord" class="theme-option">
-        <span class="theme-dot" style="background: #88c0d0;"></span>nord
-      </li>
-      <li data-theme="gruvbox" class="theme-option">
-        <span class="theme-dot" style="background: #fabd2f;"></span>gruvbox
-      </li>
-      <li data-theme="solarized" class="theme-option">
-        <span class="theme-dot" style="background: #268bd2;"></span>solarized-dark
-      </li>
-    </ul>
-  </div>
-</div>
-
-<style>
-  .theme-option {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.35rem 0.75rem;
-    cursor: pointer;
-    color: var(--color-text-dim);
-    transition: color 0.1s, background 0.1s;
-    user-select: none;
-  }
-  .theme-option:hover {
-    color: var(--color-accent);
-    background: var(--color-accent-glow);
-  }
-  .theme-option.is-active {
-    color: var(--color-accent);
-  }
-  .theme-option.is-active::before {
-    content: '▶';
-    margin-right: 0.3rem;
-    font-size: 0.6rem;
-    color: var(--color-accent);
-  }
-  .theme-dot {
-    display: inline-block;
-    width: 7px;
-    height: 7px;
-    border-radius: 0;
-    flex-shrink: 0;
-  }
-</style>
 
 <script>
-  // Use a proper module script (not is:inline) — runs after DOM is ready,
-  // deduplicated by Astro's bundler, works with View Transitions.
-
   const ALL_THEMES = ['terminal', 'light', 'dracula', 'nord', 'gruvbox', 'solarized'];
+
+  const THEMES = [
+    { id: 'terminal',  label: 'terminal-dark', dot: '#00d9ff' },
+    { id: 'light',     label: 'light',         dot: '#0070a8' },
+    { id: 'dracula',   label: 'dracula',        dot: '#bd93f9' },
+    { id: 'nord',      label: 'nord',           dot: '#88c0d0' },
+    { id: 'gruvbox',   label: 'gruvbox',        dot: '#fabd2f' },
+    { id: 'solarized', label: 'solarized-dark', dot: '#268bd2' },
+  ];
+
+  // Build the dropdown once and append to body (escapes any overflow:hidden ancestor)
+  function buildDropdown() {
+    const existing = document.getElementById('theme-dropdown');
+    if (existing) return existing;
+
+    const div = document.createElement('div');
+    div.id = 'theme-dropdown';
+    div.setAttribute('role', 'menu');
+    div.style.display = 'none';
+
+    const header = document.createElement('div');
+    header.style.cssText = 'padding:0.3rem 0.6rem;font-size:0.62rem;color:var(--color-text-muted);border-bottom:1px solid var(--color-border);letter-spacing:0.08em;text-transform:uppercase;';
+    header.textContent = '$ select theme';
+    div.appendChild(header);
+
+    const ul = document.createElement('ul');
+    ul.style.cssText = 'list-style:none;margin:0;padding:0.25rem 0;';
+
+    THEMES.forEach(t => {
+      const li = document.createElement('li');
+      li.className = 'theme-option';
+      li.dataset.theme = t.id;
+      li.setAttribute('role', 'menuitem');
+
+      const dot = document.createElement('span');
+      dot.className = 'theme-dot';
+      dot.style.background = t.dot;
+      li.appendChild(dot);
+      li.appendChild(document.createTextNode(t.label));
+
+      li.addEventListener('click', (e) => {
+        e.stopPropagation();
+        applyTheme(t.id);
+        closeDropdown();
+      });
+
+      ul.appendChild(li);
+    });
+
+    div.appendChild(ul);
+    document.body.appendChild(div);
+    return div;
+  }
 
   function applyTheme(theme: string) {
     const html = document.documentElement;
@@ -102,7 +77,7 @@
     localStorage.setItem('theme', theme);
 
     const label = document.getElementById('theme-label');
-    if (label) label.textContent = theme;
+    if (label) label.textContent = theme === 'terminal' ? 'terminal' : theme;
 
     document.querySelectorAll<HTMLElement>('.theme-option').forEach(el => {
       el.classList.toggle('is-active', el.dataset.theme === theme);
@@ -111,56 +86,69 @@
     document.dispatchEvent(new CustomEvent('theme-change', { detail: { theme } }));
   }
 
-  function initThemePicker() {
-    const btn = document.getElementById('theme-toggle') as HTMLButtonElement | null;
-    const menu = document.getElementById('theme-menu') as HTMLElement | null;
-    const picker = document.getElementById('theme-picker') as HTMLElement | null;
-    if (!btn || !menu || !picker) return;
+  function openDropdown() {
+    const btn = document.getElementById('theme-toggle');
+    const dropdown = buildDropdown();
+    if (!btn) return;
 
-    // Sync label + active state to current theme
-    const current = localStorage.getItem('theme') || 'terminal';
-    applyTheme(current);
+    // Position below the button using fixed coords
+    const rect = btn.getBoundingClientRect();
+    dropdown.style.top = (rect.bottom + 4) + 'px';
+    dropdown.style.right = (window.innerWidth - rect.right) + 'px';
+    dropdown.style.display = 'block';
+    btn.setAttribute('aria-expanded', 'true');
+  }
 
-    function openMenu() {
-      menu.style.display = 'block';
-      btn.setAttribute('aria-expanded', 'true');
-    }
-    function closeMenu() {
-      menu.style.display = 'none';
-      btn.setAttribute('aria-expanded', 'false');
-    }
-    function isOpen() {
-      return menu.style.display !== 'none';
-    }
+  function closeDropdown() {
+    const dropdown = document.getElementById('theme-dropdown');
+    const btn = document.getElementById('theme-toggle');
+    if (dropdown) dropdown.style.display = 'none';
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+  }
+
+  function isOpen() {
+    const d = document.getElementById('theme-dropdown');
+    return d ? d.style.display !== 'none' : false;
+  }
+
+  function init() {
+    // Apply saved theme
+    const saved = localStorage.getItem('theme') || 'terminal';
+    applyTheme(saved);
+
+    const btn = document.getElementById('theme-toggle');
+    if (!btn) return;
 
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      isOpen() ? closeMenu() : openMenu();
-    });
-
-    picker.querySelectorAll<HTMLElement>('.theme-option').forEach(el => {
-      el.addEventListener('click', (e) => {
-        e.stopPropagation();
-        applyTheme(el.dataset.theme!);
-        closeMenu();
-      });
-    });
-
-    document.addEventListener('click', (e) => {
-      if (!picker.contains(e.target as Node)) closeMenu();
-    });
-
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') closeMenu();
+      isOpen() ? closeDropdown() : openDropdown();
     });
   }
 
-  // Run on initial load and after each Astro View Transition navigation
-  document.addEventListener('astro:page-load', initThemePicker);
-  // Fallback for pages without View Transitions
+  // Close on outside click
+  document.addEventListener('click', (e) => {
+    const dropdown = document.getElementById('theme-dropdown');
+    const btn = document.getElementById('theme-toggle');
+    if (!dropdown || dropdown.style.display === 'none') return;
+    if (btn && btn.contains(e.target as Node)) return;
+    if (dropdown.contains(e.target as Node)) return;
+    closeDropdown();
+  });
+
+  // Close on Escape
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeDropdown();
+  });
+
+  // Reposition on scroll/resize while open
+  window.addEventListener('scroll', () => {
+    if (isOpen()) openDropdown();
+  }, { passive: true });
+
+  document.addEventListener('astro:page-load', init);
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initThemePicker);
+    document.addEventListener('DOMContentLoaded', init);
   } else {
-    initThemePicker();
+    init();
   }
 </script>
