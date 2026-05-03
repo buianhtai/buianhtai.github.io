@@ -1,38 +1,89 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
+/* ─── Terminal/Hacker design tokens ─── */
 @theme {
-  --color-bg: #0f172a;
-  --color-surface: #1e293b;
-  --color-border: #334155;
-  --color-text: #e2e8f0;
-  --color-text-dim: #94a3b8;
-  --color-accent: #38bdf8;
-  --color-accent-dim: #0ea5e9;
+  /* Dark (default) */
+  --color-bg: #0a0e14;
+  --color-surface: #111720;
+  --color-surface-2: #1a2233;
+  --color-border: #1e2d40;
+  --color-border-bright: #2d4460;
+  --color-text: #cdd9e5;
+  --color-text-dim: #5c7a96;
+  --color-text-muted: #3d5470;
+  --color-accent: #00d9ff;
+  --color-accent-dim: #0099b8;
+  --color-accent-glow: rgba(0, 217, 255, 0.15);
+  --color-green: #57f287;
+  --color-green-dim: #3aab64;
+  --color-amber: #faa61a;
+  --color-rose: #ff4655;
+
+  /* Fonts */
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'IBM Plex Mono', monospace;
+  --font-sans: 'Inter', 'IBM Plex Sans', system-ui, sans-serif;
 }
 
+/* ─── Light theme overrides ─── */
+html.light {
+  --color-bg: #f0f4f8;
+  --color-surface: #ffffff;
+  --color-surface-2: #e8f0f8;
+  --color-border: #c8d8e8;
+  --color-border-bright: #94b4cc;
+  --color-text: #1a2a3a;
+  --color-text-dim: #4a6a8a;
+  --color-text-muted: #7a9ab8;
+  --color-accent: #0070a8;
+  --color-accent-dim: #005580;
+  --color-accent-glow: rgba(0, 112, 168, 0.12);
+  --color-green: #1a8a3a;
+  --color-green-dim: #126a2a;
+  --color-amber: #c47a00;
+  --color-rose: #cc1a28;
+}
+
+/* ─── Base ─── */
 html {
   scroll-behavior: smooth;
-}
-
-html.light {
-  --color-bg: #f8fafc;
-  --color-surface: #ffffff;
-  --color-border: #e2e8f0;
-  --color-text: #1e293b;
-  --color-text-dim: #64748b;
-  --color-accent: #0284c7;
-  --color-accent-dim: #0369a1;
 }
 
 body {
   background-color: var(--color-bg);
   color: var(--color-text);
-  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  font-family: var(--font-sans);
   transition: background-color 0.2s, color 0.2s;
+  /* Subtle dot-grid background */
+  background-image: radial-gradient(
+    circle,
+    var(--color-border) 1px,
+    transparent 1px
+  );
+  background-size: 28px 28px;
 }
 
-/* Shiki dual theme — class-based, not media query */
+/* Grid overlay for dark mode only */
+html:not(.light) body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    var(--color-bg) 100%
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Content sits above the overlay */
+body > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ─── Code blocks (Shiki dual theme) ─── */
 html:not(.light) .astro-code,
 html:not(.light) .astro-code span {
   color: var(--shiki-dark) !important;
@@ -45,50 +96,109 @@ html.light .astro-code span {
   background-color: var(--shiki-light-bg) !important;
 }
 
-/* Professional code blocks */
 .astro-code {
-  border-radius: 0.5rem;
-  padding: 1.25rem;
-  font-size: 0.85rem;
-  line-height: 1.7;
+  position: relative;
+  border-radius: 0;
+  padding: 1.25rem 1.5rem;
+  font-size: 0.82rem;
+  line-height: 1.75;
   border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-accent);
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  background-color: var(--color-surface) !important;
+  font-family: var(--font-mono);
+}
+
+/* Terminal prompt ">" before code blocks */
+.astro-code::before {
+  content: '$ ';
+  position: absolute;
+  top: 1.1rem;
+  left: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--color-accent);
+  font-family: var(--font-mono);
+  opacity: 0.5;
+  pointer-events: none;
 }
 
 /* Inline code */
 :not(pre) > code {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  padding: 0.15em 0.4em;
-  border-radius: 0.25rem;
-  font-size: 0.85em;
-  font-family: 'IBM Plex Mono', 'Fira Code', monospace;
+  padding: 0.15em 0.45em;
+  border-radius: 0;
+  font-size: 0.83em;
+  font-family: var(--font-mono);
+  color: var(--color-accent);
 }
 
-/* Prose overrides for dark mode */
+/* ─── Prose ─── */
 .prose {
   --tw-prose-body: var(--color-text);
   --tw-prose-headings: var(--color-text);
   --tw-prose-links: var(--color-accent);
   --tw-prose-bold: var(--color-text);
-  --tw-prose-code: var(--color-text);
+  --tw-prose-code: var(--color-accent);
   --tw-prose-pre-bg: var(--color-surface);
   --tw-prose-td-borders: var(--color-border);
-  --tw-prose-th-borders: var(--color-border);
+  --tw-prose-th-borders: var(--color-border-bright);
   --tw-prose-hr: var(--color-border);
   --tw-prose-quotes: var(--color-text-dim);
   --tw-prose-counters: var(--color-text-dim);
-  --tw-prose-bullets: var(--color-text-dim);
+  --tw-prose-bullets: var(--color-accent);
 }
 
-/* Responsive tables */
+/* Heading style: uppercase monospace with left accent bar */
+.prose h2,
+.prose h3 {
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
+  border-left: 3px solid var(--color-accent);
+  padding-left: 0.75rem;
+  margin-left: -0.85rem;
+}
+
+.prose h2 {
+  text-transform: uppercase;
+  font-size: 0.9rem;
+  letter-spacing: 0.1em;
+  color: var(--color-text-dim);
+}
+
+/* Links */
+.prose a {
+  color: var(--color-accent);
+  text-decoration: none;
+  border-bottom: 1px solid var(--color-accent-dim);
+  transition: border-color 0.15s, color 0.15s;
+}
+.prose a:hover {
+  color: #fff;
+  border-color: var(--color-accent);
+}
+
+/* Blockquotes */
+.prose blockquote {
+  border-left: 3px solid var(--color-accent);
+  background: var(--color-surface);
+  padding: 0.75rem 1rem;
+  font-style: normal;
+  color: var(--color-text-dim);
+  font-family: var(--font-mono);
+  font-size: 0.88rem;
+}
+
+/* ─── Tables ─── */
 .prose table {
   display: block;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   white-space: nowrap;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
+  font-family: var(--font-mono);
+  border-collapse: collapse;
 }
 
 @media (min-width: 640px) {
@@ -99,17 +209,23 @@ html.light .astro-code span {
 }
 
 .prose th {
-  background: var(--color-surface);
+  background: var(--color-surface-2);
   font-weight: 600;
   text-transform: uppercase;
-  font-size: 0.75rem;
-  letter-spacing: 0.05em;
-  color: var(--color-text-dim);
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  color: var(--color-accent);
+  font-family: var(--font-mono);
 }
 
-.prose td, .prose th {
-  padding: 0.5rem 0.75rem;
+.prose td,
+.prose th {
+  padding: 0.5rem 0.875rem;
   border-color: var(--color-border);
+}
+
+.prose tr:nth-child(even) td {
+  background: var(--color-surface);
 }
 
 .prose td code {
@@ -117,13 +233,55 @@ html.light .astro-code span {
   white-space: nowrap;
 }
 
-/* Strong in prose */
 .prose strong {
   color: var(--color-text);
+  font-weight: 600;
 }
 
-/* Horizontal rules */
 .prose hr {
   border-color: var(--color-border);
   margin: 2.5rem 0;
+  position: relative;
+}
+
+/* Deco line after hr */
+.prose hr::after {
+  content: '──── ◆ ────';
+  position: absolute;
+  top: -0.6rem;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+  background: var(--color-bg);
+  padding: 0 0.5rem;
+}
+
+/* ─── Scrollbar ─── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-bg);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-bright);
+  border-radius: 0;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-accent-dim);
+}
+
+/* ─── Selection ─── */
+::selection {
+  background: var(--color-accent-glow);
+  color: var(--color-accent);
+}
+
+/* ─── Focus ring ─── */
+:focus-visible {
+  outline: 1px solid var(--color-accent);
+  outline-offset: 2px;
 }

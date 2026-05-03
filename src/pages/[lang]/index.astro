@@ -15,37 +15,119 @@ const posts = (await getCollection('blog', (p) => p.data.lang === lang && !p.dat
 ---
 
 <BaseLayout title={t(lang, 'home')} lang={lang}>
-  <div class="max-w-3xl mx-auto px-4 py-16">
-    <section class="mb-16">
-      <h1 class="text-4xl font-bold mb-4">
-        {t(lang, 'greeting')} <span class="inline-block">👋</span>
-      </h1>
-      <p class="text-lg text-[var(--color-text-dim)] leading-relaxed">
-        {t(lang, 'bio')}
-      </p>
+  <div class="max-w-3xl mx-auto px-4 py-12">
+
+    <!-- ASCII hero -->
+    <section class="hero">
+      <pre class="hero-ascii" aria-hidden="true">
+╔══════════════════════════════════╗
+║  tai.bui · learn in public       ║
+║  full-stack · distributed sys    ║
+╚══════════════════════════════════╝</pre>
+      <p class="hero-bio">{t(lang, 'bio')}</p>
     </section>
 
-    <section>
-      <h2 class="text-xl font-bold mb-6 flex items-center gap-2">
-        <span class="font-mono text-[var(--color-accent)]">#</span>
-        {t(lang, 'recentPosts')}
-      </h2>
-      <ul class="space-y-4">
+    <!-- Recent posts -->
+    <section class="posts-section">
+      <div class="section-header">
+        <span class="section-prompt">$</span>
+        <span>ls -lt ~/blog | head -5</span>
+      </div>
+      <ul class="post-list">
         {posts.map(post => (
-          <li>
-            <a href={`/${lang}/blog/${getPostSlug(post)}`} class="group block p-4 -mx-4 rounded-lg hover:bg-[var(--color-surface)] transition-colors">
-              <h3 class="font-semibold group-hover:text-[var(--color-accent)] transition-colors">{post.data.title}</h3>
-              <p class="text-sm text-[var(--color-text-dim)] mt-1">{post.data.description}</p>
-              <time class="text-xs text-[var(--color-text-dim)] mt-2 block font-mono">
-                {post.data.pubDate.toISOString().slice(0, 10)}
-              </time>
+          <li class="post-item">
+            <a href={`/${lang}/blog/${getPostSlug(post)}`} class="post-row">
+              <time class="post-date">{post.data.pubDate.toISOString().slice(0, 10)}</time>
+              <span class="post-title-text">{post.data.title}</span>
             </a>
           </li>
         ))}
       </ul>
-      <a href={`/${lang}/blog`} class="inline-block mt-6 text-sm text-[var(--color-accent)] hover:underline">
-        {t(lang, 'viewAll')}
-      </a>
+      <div class="section-footer">
+        <a href={`/${lang}/blog`} class="view-all">
+          <span style="color: var(--color-accent);">→</span> {t(lang, 'viewAll')}
+        </a>
+      </div>
     </section>
   </div>
 </BaseLayout>
+
+<style>
+  /* Hero */
+  .hero { margin-bottom: 3rem; }
+  .hero-ascii {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    line-height: 1.5;
+    color: var(--color-accent);
+    margin: 0 0 1.25rem;
+    white-space: pre;
+    overflow-x: auto;
+  }
+  .hero-bio {
+    font-size: 0.95rem;
+    color: var(--color-text-dim);
+    line-height: 1.7;
+    max-width: 38rem;
+  }
+
+  /* Section header */
+  .posts-section {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+  }
+  .section-header {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    padding: 0.45rem 0.875rem;
+    border-bottom: 1px solid var(--color-border);
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    color: var(--color-text-muted);
+    background: var(--color-surface-2);
+  }
+  .section-prompt { color: var(--color-accent); font-weight: 700; }
+
+  /* Post list */
+  .post-list { list-style: none; margin: 0; padding: 0; }
+  .post-item { border-bottom: 1px solid var(--color-border); }
+  .post-item:last-child { border-bottom: none; }
+  .post-row {
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+    padding: 0.7rem 0.875rem;
+    text-decoration: none;
+    transition: background 0.12s;
+  }
+  .post-row:hover { background: var(--color-accent-glow); }
+  .post-date {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--color-text-muted);
+    flex-shrink: 0;
+    min-width: 6.2rem;
+  }
+  .post-title-text {
+    font-size: 0.88rem;
+    color: var(--color-text);
+    transition: color 0.12s;
+  }
+  .post-row:hover .post-title-text { color: var(--color-accent); }
+
+  /* Footer */
+  .section-footer {
+    padding: 0.55rem 0.875rem;
+    border-top: 1px solid var(--color-border);
+    background: var(--color-surface-2);
+  }
+  .view-all {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--color-text-dim);
+    text-decoration: none;
+    transition: color 0.15s;
+  }
+  .view-all:hover { color: var(--color-accent); }
+</style>

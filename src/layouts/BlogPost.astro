@@ -18,31 +18,39 @@ const { post, headings, rawContent, seriesPosts = [] } = Astro.props;
 const { title, description, pubDate, updatedDate, tags, lang, heroImage, series } = post.data;
 
 const dateFmt = (d: Date) =>
-  d.toLocaleDateString(lang === 'vi' ? 'vi-VN' : 'en-US', {
-    year: 'numeric', month: 'long', day: 'numeric',
-  });
+  d.toISOString().slice(0, 10);
 ---
 
 <BaseLayout title={title} description={description} lang={lang} ogImage={heroImage}>
-  <article class="max-w-3xl mx-auto px-4 py-12">
-    <header class="mb-10">
-      <div class="flex items-center gap-3 text-sm text-[var(--color-text-dim)] mb-4">
+  <article class="max-w-3xl mx-auto px-4 py-10">
+
+    <!-- Terminal window chrome header -->
+    <div class="post-chrome">
+      <div class="post-chrome-dots">
+        <span></span><span></span><span></span>
+      </div>
+      <span class="post-chrome-path">~/blog/{getPostSlug(post)}.mdx</span>
+    </div>
+
+    <!-- Post header -->
+    <header class="post-header">
+      <!-- Metadata line -->
+      <div class="post-meta">
+        <span class="post-meta-prompt">$</span>
         <time datetime={pubDate.toISOString()}>{dateFmt(pubDate)}</time>
-        {updatedDate && <span>· Updated {dateFmt(updatedDate)}</span>}
-        <span>·</span>
+        {updatedDate && <span class="post-meta-sep">·</span>}
+        {updatedDate && <span>upd {dateFmt(updatedDate)}</span>}
+        <span class="post-meta-sep">·</span>
         <ReadingTime content={rawContent} lang={lang} />
       </div>
 
-      <h1 class="text-3xl md:text-4xl font-bold mb-4">{title}</h1>
-      <p class="text-lg text-[var(--color-text-dim)]">{description}</p>
+      <h1 class="post-title">{title}</h1>
+      <p class="post-desc">{description}</p>
 
       {tags.length > 0 && (
-        <div class="flex flex-wrap gap-2 mt-4">
-          {tags.map(tag => (
-            <a href={`/${lang}/tags/${tag}`}
-               class="text-xs font-mono px-2 py-1 rounded bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-dim)] hover:text-[var(--color-accent)] transition-colors">
-              #{tag}
-            </a>
+        <div class="post-tags">
+          {tags.map((tag: string) => (
+            <a href={`/${lang}/tags/${tag}`} class="post-tag">#{tag}</a>
           ))}
         </div>
       )}
@@ -58,7 +66,7 @@ const dateFmt = (d: Date) =>
     )}
 
     {heroImage && (
-      <img src={heroImage} alt={title} class="w-full rounded-lg mb-10" loading="eager" />
+      <img src={heroImage} alt={title} class="w-full mb-10" loading="eager" style="border: 1px solid var(--color-border);" />
     )}
 
     <TableOfContents headings={headings} />
@@ -67,23 +75,142 @@ const dateFmt = (d: Date) =>
       <slot />
     </div>
 
-    <footer class="mt-12 pt-6 border-t border-[var(--color-border)] flex items-center justify-between">
-      <div class="flex flex-wrap gap-2">
-        {tags.map(tag => (
-          <a href={`/${lang}/tags/${tag}`}
-             class="text-xs font-mono px-2 py-1 rounded bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-dim)] hover:text-[var(--color-accent)]">
-            #{tag}
-          </a>
+    <!-- Post footer -->
+    <footer class="post-footer">
+      <div class="post-footer-tags">
+        {tags.map((tag: string) => (
+          <a href={`/${lang}/tags/${tag}`} class="post-tag">#{tag}</a>
         ))}
       </div>
-      <a href={`/${lang}/blog`} class="text-sm text-[var(--color-accent)] hover:underline">
-        {lang === 'vi' ? '← Về blog' : '← Back to blog'}
+      <a href={`/${lang}/blog`} class="post-back">
+        <span style="color: var(--color-accent);">←</span> {lang === 'vi' ? 'về blog' : 'back'}
       </a>
     </footer>
 
     <Giscus />
   </article>
 </BaseLayout>
+
+<style>
+  /* Terminal chrome bar */
+  .post-chrome {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0.875rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-bottom: none;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--color-text-muted);
+  }
+  .post-chrome-dots {
+    display: flex;
+    gap: 0.35rem;
+  }
+  .post-chrome-dots span {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--color-border-bright);
+    display: block;
+  }
+  .post-chrome-dots span:nth-child(1) { background: var(--color-rose); opacity: 0.6; }
+  .post-chrome-dots span:nth-child(2) { background: var(--color-amber); opacity: 0.6; }
+  .post-chrome-dots span:nth-child(3) { background: var(--color-green); opacity: 0.6; }
+  .post-chrome-path {
+    color: var(--color-text-muted);
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Post header area */
+  .post-header {
+    border: 1px solid var(--color-border);
+    border-top: none;
+    padding: 1.5rem 1.25rem 1.25rem;
+    background: var(--color-surface);
+    margin-bottom: 2rem;
+  }
+
+  /* Metadata line */
+  .post-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--color-text-muted);
+    margin-bottom: 0.875rem;
+    flex-wrap: wrap;
+  }
+  .post-meta-prompt {
+    color: var(--color-accent);
+    font-weight: 700;
+    margin-right: 0.1rem;
+  }
+  .post-meta-sep { color: var(--color-border-bright); }
+
+  /* Title */
+  .post-title {
+    font-size: clamp(1.4rem, 4vw, 2.1rem);
+    font-weight: 700;
+    line-height: 1.25;
+    color: var(--color-text);
+    margin: 0 0 0.75rem;
+    font-family: var(--font-mono);
+    letter-spacing: -0.01em;
+  }
+
+  /* Description */
+  .post-desc {
+    color: var(--color-text-dim);
+    font-size: 0.95rem;
+    line-height: 1.65;
+    margin: 0;
+  }
+
+  /* Tags */
+  .post-tags { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.875rem; }
+  .post-tag {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--color-text-muted);
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    padding: 0.15rem 0.5rem;
+    text-decoration: none;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .post-tag:hover {
+    color: var(--color-accent);
+    border-color: var(--color-accent-dim);
+  }
+
+  /* Footer */
+  .post-footer {
+    margin-top: 2.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--color-border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+  .post-footer-tags { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+  .post-back {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    color: var(--color-text-dim);
+    text-decoration: none;
+    transition: color 0.15s;
+  }
+  .post-back:hover { color: var(--color-accent); }
+</style>
 
 <script type="module">
   if (document.querySelector('.mermaid')) {
@@ -95,41 +222,41 @@ const dateFmt = (d: Date) =>
       startOnLoad: false,
       theme: 'base',
       themeVariables: isDark ? {
-        primaryColor: '#1e293b',
-        primaryTextColor: '#e2e8f0',
-        primaryBorderColor: '#334155',
-        lineColor: '#38bdf8',
-        secondaryColor: '#0f172a',
-        tertiaryColor: '#1e293b',
-        noteBkgColor: '#1e293b',
-        noteTextColor: '#94a3b8',
-        noteBorderColor: '#334155',
-        actorBkg: '#1e293b',
-        actorTextColor: '#e2e8f0',
-        actorBorder: '#334155',
-        actorLineColor: '#38bdf8',
-        signalColor: '#e2e8f0',
-        signalTextColor: '#e2e8f0',
-        fontFamily: 'IBM Plex Mono, monospace',
-        fontSize: '14px',
+        primaryColor: '#111720',
+        primaryTextColor: '#cdd9e5',
+        primaryBorderColor: '#1e2d40',
+        lineColor: '#00d9ff',
+        secondaryColor: '#0a0e14',
+        tertiaryColor: '#111720',
+        noteBkgColor: '#111720',
+        noteTextColor: '#5c7a96',
+        noteBorderColor: '#1e2d40',
+        actorBkg: '#111720',
+        actorTextColor: '#cdd9e5',
+        actorBorder: '#1e2d40',
+        actorLineColor: '#00d9ff',
+        signalColor: '#cdd9e5',
+        signalTextColor: '#cdd9e5',
+        fontFamily: 'JetBrains Mono, IBM Plex Mono, monospace',
+        fontSize: '13px',
       } : {
-        primaryColor: '#f0f4fa',
-        primaryTextColor: '#1e293b',
-        primaryBorderColor: '#e2e8f0',
-        lineColor: '#0284c7',
-        secondaryColor: '#f8fafc',
+        primaryColor: '#e8f0f8',
+        primaryTextColor: '#1a2a3a',
+        primaryBorderColor: '#c8d8e8',
+        lineColor: '#0070a8',
+        secondaryColor: '#f0f4f8',
         tertiaryColor: '#ffffff',
-        noteBkgColor: '#f8fafc',
-        noteTextColor: '#64748b',
-        noteBorderColor: '#e2e8f0',
+        noteBkgColor: '#f0f4f8',
+        noteTextColor: '#4a6a8a',
+        noteBorderColor: '#c8d8e8',
         actorBkg: '#ffffff',
-        actorTextColor: '#1e293b',
-        actorBorder: '#e2e8f0',
-        actorLineColor: '#0284c7',
-        signalColor: '#1e293b',
-        signalTextColor: '#1e293b',
-        fontFamily: 'IBM Plex Mono, monospace',
-        fontSize: '14px',
+        actorTextColor: '#1a2a3a',
+        actorBorder: '#c8d8e8',
+        actorLineColor: '#0070a8',
+        signalColor: '#1a2a3a',
+        signalTextColor: '#1a2a3a',
+        fontFamily: 'JetBrains Mono, IBM Plex Mono, monospace',
+        fontSize: '13px',
       },
       flowchart: { curve: 'basis', padding: 20, nodeSpacing: 30, rankSpacing: 50 },
       sequence: { actorMargin: 50, messageMargin: 40, width: 160, fontSize: 13, useMaxWidth: true },
@@ -137,9 +264,7 @@ const dateFmt = (d: Date) =>
 
     await mermaid.run();
 
-    // After render, ensure each SVG fills its container width responsively
     document.querySelectorAll('.mermaid svg').forEach(svg => {
-      // Remove fixed pixel width/height so CSS max-width: 100% applies
       const vb = svg.getAttribute('viewBox');
       if (vb) {
         svg.removeAttribute('width');

@@ -2,13 +2,23 @@
 const year = new Date().getFullYear();
 ---
 
-<footer class="border-t border-[var(--color-border)] py-8 mt-16">
-  <div class="max-w-4xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-[var(--color-text-dim)]">
-    <p>&copy; {year} Tai Bui. Built with Astro.</p>
-    <div class="flex gap-4">
-      <a href="https://github.com/buianhtai" class="hover:text-[var(--color-text)] transition-colors">GitHub</a>
-      <a href="https://twitter.com/buianhtai90" class="hover:text-[var(--color-text)] transition-colors">X</a>
-      <a href="/rss.xml" class="hover:text-[var(--color-text)] transition-colors">RSS</a>
-    </div>
+<footer style="border-top: 1px solid var(--color-border); margin-top: 4rem; background: var(--color-surface);">
+  <!-- Status bar row -->
+  <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.4rem 1.25rem; border-bottom: 1px solid var(--color-border); font-family: var(--font-mono); font-size: 0.63rem; color: var(--color-text-muted);">
+    <span>
+      <span style="color: var(--color-green);">●</span>
+      &nbsp;tai.bui &mdash; learn in public
+    </span>
+    <span style="display: flex; gap: 1.25rem;">
+      <a href="https://github.com/buianhtai" target="_blank" rel="noopener" style="color: var(--color-text-muted); text-decoration: none; transition: color 0.15s;" onmouseover="this.style.color='var(--color-accent)'" onmouseout="this.style.color='var(--color-text-muted)'">github</a>
+      <a href="https://twitter.com/buianhtai90" target="_blank" rel="noopener" style="color: var(--color-text-muted); text-decoration: none; transition: color 0.15s;" onmouseover="this.style.color='var(--color-accent)'" onmouseout="this.style.color='var(--color-text-muted)'">x/twitter</a>
+      <a href="/rss.xml" style="color: var(--color-text-muted); text-decoration: none; transition: color 0.15s;" onmouseover="this.style.color='var(--color-accent)'" onmouseout="this.style.color='var(--color-text-muted)'">rss</a>
+    </span>
+  </div>
+
+  <!-- Bottom row -->
+  <div style="display: flex; align-items: center; justify-content: space-between; max-width: 64rem; margin: 0 auto; padding: 0.6rem 1.25rem; font-family: var(--font-mono); font-size: 0.65rem; color: var(--color-text-muted);">
+    <span>© {year} Tai Bui</span>
+    <span style="opacity: 0.5;">built with astro</span>
   </div>
 </footer>

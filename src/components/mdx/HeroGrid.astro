@@ -5,11 +5,50 @@ interface Props {
 const { items } = Astro.props;
 ---
 
-<div class="grid grid-cols-1 sm:grid-cols-3 gap-4 my-6">
+<div class="hero-grid">
   {items.map((item) => (
-    <div class="text-center rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] p-5">
-      <div class="text-2xl font-bold" style={`color: ${item.color};`}>{item.label}</div>
-      <div class="text-xs text-[var(--color-text-dim)] mt-2 leading-relaxed">{item.sublabel}</div>
+    <div class="hero-cell" style={`--cell-color: ${item.color};`}>
+      <div class="hero-cell-top">
+        <span class="hero-cell-prompt" style="color: var(--cell-color);">&gt;</span>
+      </div>
+      <div class="hero-cell-label" style="color: var(--cell-color);">{item.label}</div>
+      <div class="hero-cell-sub">{item.sublabel}</div>
     </div>
   ))}
 </div>
+
+<style>
+  .hero-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+    gap: 0;
+    border: 1px solid var(--color-border);
+    margin: 1.25rem 0;
+  }
+  .hero-cell {
+    padding: 1.125rem 1rem;
+    background: var(--color-surface);
+    border-right: 1px solid var(--color-border);
+    position: relative;
+    overflow: hidden;
+  }
+  .hero-cell:last-child { border-right: none; }
+  .hero-cell-top {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    margin-bottom: 0.375rem;
+    opacity: 0.5;
+  }
+  .hero-cell-label {
+    font-family: var(--font-mono);
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1;
+    margin-bottom: 0.5rem;
+  }
+  .hero-cell-sub {
+    font-size: 0.72rem;
+    color: var(--color-text-dim);
+    line-height: 1.5;
+  }
+</style>

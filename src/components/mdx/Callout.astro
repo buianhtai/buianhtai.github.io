@@ -4,17 +4,47 @@ interface Props {
 }
 const { color = 'teal' } = Astro.props;
 
-const styles = {
-  teal:  'background: rgba(8,145,178,0.08); border-left: 3px solid #0891b2;',
-  green: 'background: rgba(5,150,105,0.08); border-left: 3px solid #059669;',
-  amber: 'background: rgba(217,119,6,0.08); border-left: 3px solid #d97706;',
-  rose:  'background: rgba(190,18,60,0.08); border-left: 3px solid #be123c;',
+const icons = { teal: '▶', green: '✔', amber: '⚠', rose: '✖' };
+const cssVars = {
+  teal:  '--color-accent',
+  green: '--color-green',
+  amber: '--color-amber',
+  rose:  '--color-rose',
 };
+const icon = icons[color];
+const cssVar = cssVars[color];
 ---
 
-<div
-  class="rounded-md p-4 text-sm my-4 leading-relaxed"
-  style={styles[color]}
->
-  <slot />
+<div class="callout" style={`--callout-color: var(${cssVar});`}>
+  <span class="callout-icon">{icon}</span>
+  <div class="callout-body"><slot /></div>
 </div>
+
+<style>
+  .callout {
+    display: flex;
+    gap: 0.625rem;
+    align-items: flex-start;
+    padding: 0.75rem 1rem;
+    border-left: 3px solid var(--callout-color);
+    background: color-mix(in srgb, var(--callout-color) 8%, var(--color-surface));
+    margin: 1rem 0;
+    font-size: 0.88rem;
+    line-height: 1.6;
+    font-family: var(--font-mono);
+  }
+  .callout-icon {
+    color: var(--callout-color);
+    font-size: 0.7rem;
+    flex-shrink: 0;
+    padding-top: 0.25rem;
+  }
+  .callout-body {
+    color: var(--color-text-dim);
+    flex: 1;
+    min-width: 0;
+  }
+  /* Remove margin from nested prose elements */
+  .callout-body :global(p) { margin: 0; }
+  .callout-body :global(p + p) { margin-top: 0.4rem; }
+</style>
