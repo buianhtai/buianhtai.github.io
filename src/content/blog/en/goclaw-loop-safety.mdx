@@ -188,16 +188,16 @@ When level is `"critical"`, the loop breaks immediately. The current run termina
     B --> C{detect: exact repeat?}
     C -->|critical| STOP1[Force Stop Loop]
     C -->|warning| W1[Inject Warning into Context]
-    C -->|""| D[Execute Tool]
+    C -->|ok| D[Execute Tool]
     D --> E[recordResult: resultHash]
     E --> F[recordMutation: streak update]
     F --> G{detectReadOnlyStreak?}
     G -->|critical| STOP2[Force Stop Loop]
     G -->|warning| W2[Inject Warning into Context]
-    G -->|""| H{detectSameResult?}
+    G -->|ok| H{detectSameResult?}
     H -->|critical| STOP3[Force Stop Loop]
     H -->|warning| W3[Inject Warning into Context]
-    H -->|""| I[Continue Loop]`}
+    H -->|ok| I[Continue Loop]`}
   caption="Loop detector integration in the tool execution path"
 />
 
