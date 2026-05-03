@@ -144,14 +144,20 @@
 
     // Menu item click
     document.querySelectorAll('.theme-option').forEach(function (el) {
-      el.addEventListener('click', function () {
+      el.addEventListener('click', function (e) {
+        e.stopPropagation();
         applyTheme(el.dataset.theme);
         closeMenu();
       });
     });
 
-    // Close on outside click
-    document.addEventListener('click', closeMenu);
+    // Close on outside click — only when click is outside the picker wrapper
+    document.addEventListener('click', function (e) {
+      const picker = document.getElementById('theme-picker');
+      if (picker && !picker.contains(e.target)) {
+        closeMenu();
+      }
+    });
 
     // Keyboard: Escape closes
     document.addEventListener('keydown', function (e) {
