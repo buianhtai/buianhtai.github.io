@@ -1,0 +1,444 @@
+---
+title: "OpenCode Deep Dive: Building and Customizing Your Own Dev Agent"
+description: "A thorough technical breakdown of OpenCode's architecture — the agent loop, session processor, tool system, permissions, skills, and MCP integration — with concrete patterns for building a customized coding agent."
+pubDate: 2026-05-03
+tags: ["ai", "agents", "architecture", "typescript", "opencode", "mcp"]
+lang: "en"
+category: "architecture"
+---
+
+import Card from '../../../components/mdx/Card.astro';
+import Label from '../../../components/mdx/Label.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import Mermaid from '../../../components/mdx/Mermaid.astro';
+import Pipeline from '../../../components/mdx/Pipeline.astro';
+import ArchLayer from '../../../components/mdx/ArchLayer.astro';
+
+Every AI coding agent eventually hits the same ceiling: it's tightly coupled to one provider, its permission model is opaque, and you can't extend it without forking the codebase. [OpenCode](https://github.com/sst/opencode) (v1.14.33, MIT) is built to remove that ceiling — an open-source, client/server coding agent with a layered extension system spanning custom tools, agents, skills, commands, and MCP servers.
+
+<HeroGrid items={[
+  { label: "Client/Server", sublabel: "HTTP + WebSocket API\nTUI / Desktop / IDE clients", color: "#0891b2" },
+  { label: "Effect TS", sublabel: "Functional core\nDependency injection layers", color: "#059669" },
+  { label: "20+ Providers", sublabel: "Vercel AI SDK routing\nClaude, GPT, Gemini, local", color: "#d97706" },
+  { label: "4 Extension Points", sublabel: "Tools · Agents · Skills · Commands\nAll project-local or global", color: "#e11d48" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> Architecture Overview
+
+OpenCode is a Bun monorepo. The central package — `packages/opencode` — contains everything from the HTTP server to the agent loop. The TUI, desktop app, and IDE extensions are separate clients that speak to the same HTTP API.
+
+<ArchLayer
+  badge="Client"
+  badgeColor="teal"
+  label="User Interfaces"
+  items={["TUI (opentui/solid)", "Desktop App (Electron)", "IDE Extension", "Mobile App (remote)"]}
+/>
+<ArchLayer
+  badge="API"
+  badgeColor="green"
+  label="HTTP / WebSocket Server (Hono)"
+  items={["REST routes", "WebSocket events", "Session management", "File serving"]}
+/>
+<ArchLayer
+  badge="Core"
+  badgeColor="amber"
+  label="Agent Execution Engine"
+  items={["SessionProcessor", "LLM Service", "ToolRegistry", "Permission Engine"]}
+/>
+<ArchLayer
+  badge="Infra"
+  badgeColor="rose"
+  label="Storage & Integration Layer"
+  items={["SQLite via Drizzle ORM", "MCP servers", "LSP clients", "Provider SDK adapters"]}
+/>
+
+The functional spine is the [Effect](https://effect.website/) library. Every service (`Agent.Service`, `Session.Service`, `LLM.Service`, etc.) is a typed Effect `Layer` that declares its dependencies explicitly. The container wires them at startup — no globals, no side-effect surprises.
+
+```typescript
+// Dependency graph is explicit and type-checked at compile time
+export const layer: Layer.Layer<
+  Service,
+  never,
+  | Session.Service
+  | Config.Service
+  | Bus.Service
+  | Snapshot.Service
+  | Agent.Service
+  | LLM.Service
+  | Permission.Service
+  | Plugin.Service
+> = Layer.effect(Service, Effect.gen(function* () { ... }))
+```
+
+---
+
+## <Label color="green">2</Label> The Session Processor — the Real Agent Loop
+
+Unlike frameworks that expose a visible loop, OpenCode's agentic execution is driven by the `SessionProcessor`. It orchestrates the LLM stream, handles tool calls in flight, tracks partial results, and decides whether to compact, continue, or stop.
+
+<Card>
+
+### How a single turn works
+
+The processor wraps the `LLM.stream()` output. As events arrive from the AI SDK's `fullStream`, the processor:
+
+1. **Buffers text parts** — accumulates `TextDelta` events into a `TextPart` that gets written back to the session DB in real time.
+2. **Opens tool calls** — on `tool-call-streaming-start`, creates a `ToolPart` in the DB and records the `Deferred` for that call ID.
+3. **Executes tools** — when a full `tool-call` event arrives, looks up the tool in `ToolRegistry`, checks `Permission`, and runs it. The result is committed back to the session.
+4. **Settles deferrals** — the tool call's `Deferred` is resolved so the stream can continue.
+5. **Decides next action** — after all tool calls in a step are settled, returns `"continue"`, `"compact"`, or `"stop"`.
+
+```typescript
+// Simplified processor decision loop
+const process = Effect.fn("SessionProcessor.process")(function* (streamInput) {
+  for await (const event of llm.stream(streamInput)) {
+    switch (event.type) {
+      case "text-delta":     yield* appendTextPart(event.textDelta); break;
+      case "tool-call":      yield* executeToolCall(event); break;
+      case "finish":         return decideNext(ctx); break;
+    }
+  }
+})
+```
+
+</Card>
+
+<Callout color="teal">
+The processor never blocks on tool output — tool calls run concurrently via Effect fibers, and each result is committed to the DB as soon as it resolves. The TUI receives live streaming updates through the Bus event system.
+</Callout>
+
+---
+
+## <Label color="amber">3</Label> The LLM Service — Provider Abstraction
+
+`LLM.Service` is a thin stream adapter on top of the [Vercel AI SDK](https://sdk.vercel.ai/). It receives a `StreamInput` struct (model, agent, messages, tools, permissions) and returns a typed `Stream<Event>`.
+
+**What it adds over raw AI SDK calls:**
+
+- **System prompt composition** — merges the agent prompt, the provider's default system prompt, any per-user session system override, and plugin-injected transforms in the correct priority order.
+- **Context caching hints** — splits the system prompt into a header + body pair specifically to preserve Anthropic/Google prompt cache hits.
+- **Variant routing** — per-model variant configs (e.g., `extended-thinking`) are merged from the provider schema at call time.
+- **Retry and abort** — wraps the stream in `SessionRetry` with exponential backoff; respects an `AbortSignal` thread through every layer.
+
+<Card>
+
+```typescript
+// System prompt is constructed in layers — order matters for caching
+system.push([
+  ...(input.agent.prompt
+    ? [input.agent.prompt]            // 1. custom agent prompt (if any)
+    : SystemPrompt.provider(model)),  // 2. provider default
+  ...input.system,                    // 3. session-level overrides
+  ...(user.system ? [user.system] : []), // 4. per-message system
+].filter(Boolean).join("\n"))
+```
+
+</Card>
+
+The AI SDK handles provider routing: `@ai-sdk/anthropic`, `@ai-sdk/openai`, `@ai-sdk/google`, `@ai-sdk/amazon-bedrock`, OpenRouter, and 15+ others are all swapped at call time via `Provider.Service.forModel()`.
+
+---
+
+## <Label color="rose">4</Label> The Permission Engine
+
+Every tool invocation passes through `Permission.Service` before it runs. The engine evaluates a `Ruleset` — an ordered list of `{ permission, pattern, action }` rules — against the tool's requested permission identifier and argument patterns.
+
+Actions are one of three values: **`allow`**, **`deny`**, or **`ask`**.
+
+<DataTable
+  headers={["Action", "Behavior", "Persisted?"]}
+  rows={[
+    ["allow", "Tool runs immediately, no prompt", "Yes — per-project"],
+    ["deny", "Tool is blocked; error returned to LLM", "No"],
+    ["ask", "TUI prompt shown to user; can reply once or always", "Reply: always → yes"],
+  ]}
+/>
+
+Rulesets support wildcard patterns via `Wildcard.match()`. This means you can write rules like `"mcp_jira_*": "ask"` to gate all tools from a specific MCP server, or `"bash": "allow"` for a trusted project.
+
+```jsonc
+// opencode.jsonc — grant bash, require approval for writes, block all MCP except read
+{
+  "$schema": "https://opencode.ai/config.json",
+  "permission": {
+    "bash": "allow",
+    "edit": "ask",
+    "write": "ask",
+    "mcp_*": "deny",
+    "mcp_myserver_read_*": "allow"
+  }
+}
+```
+
+Agents ship with their own rulesets. The **build** agent unlocks `question` and `plan_enter`. The **plan** agent grants `plan_exit` and restricts `edit`/`write` to `ask`. When you create a custom agent, you declare its permission layer in config and it merges on top of the defaults.
+
+---
+
+## <Label color="teal">5</Label> Context Compaction
+
+Long sessions overflow the model's context window. OpenCode handles this automatically with `SessionCompaction`, a service that kicks in when the session processor returns `"compact"`.
+
+<Pipeline
+  nodes={[
+    { title: "Overflow Check", subtitle: "PRUNE_MINIMUM: 20k tokens" },
+    { title: "Prune Tools", subtitle: "Tool outputs → 2k chars max" },
+    { title: "Tail Preserve", subtitle: "Last 2 turns always kept" },
+    { title: "LLM Summary", subtitle: "Structured Markdown template" },
+    { title: "Resume", subtitle: "Summary injected as context" },
+  ]}
+  arrows={[
+    { label: "triggers", direction: "right" },
+    { label: "then", direction: "right" },
+    { label: "then", direction: "right" },
+    { label: "→", direction: "right" },
+  ]}
+  footer="PRUNE_PROTECT: 40k tokens — sessions below this threshold are never compacted"
+/>
+
+The summary template is a fixed Markdown structure the model must follow exactly: goal, constraints, progress, key decisions, next steps, critical context, and relevant files. This structure means the next session can search the summary predictably.
+
+---
+
+## <Label color="green">6</Label> Built-in Tools — the Agent's Hands
+
+`ToolRegistry` registers 16 built-in tools plus any custom or MCP tools at startup. Each tool is typed with a Zod schema for args, an output schema, and a permission identifier.
+
+<DataTable
+  headers={["Tool", "Permission ID", "What It Does"]}
+  rows={[
+    ["read", "read", "Read file contents, supports line ranges"],
+    ["edit", "edit", "Exact string replacement — primary edit mechanism"],
+    ["write", "edit", "Create or overwrite files"],
+    ["apply_patch", "edit", "Unified diff patch application"],
+    ["bash/shell", "bash", "Execute shell commands in project env"],
+    ["glob", "glob", "Find files by glob pattern"],
+    ["grep", "grep", "ripgrep-backed content search with regex"],
+    ["webfetch", "webfetch", "Fetch and convert web pages to Markdown"],
+    ["websearch", "websearch", "Web search (provider-dependent)"],
+    ["lsp", "lsp", "Hover, definitions, diagnostics via Language Server"],
+    ["task", "task", "Spawn a subagent for parallel work"],
+    ["skill", "skill", "Load a SKILL.md skill on demand"],
+    ["plan / plan_exit", "plan_enter / plan_exit", "Enter/exit planning mode"],
+    ["question", "question", "Ask user a clarifying question"],
+  ]}
+/>
+
+<Callout color="amber">
+The `lsp` tool is experimental but powerful — it exposes hover documentation, go-to-definition, and real-time diagnostics to the LLM. Enable it with `"lsp": { "disable": false }` in your config and the agent gains type-aware context without reading entire files.
+</Callout>
+
+---
+
+## <Label color="amber">7</Label> Customization: Four Extension Points
+
+This is where you build your development agent. OpenCode has four orthogonal extension surfaces, each operating at a different granularity.
+
+### 7a. Custom Tools — new capabilities
+
+Create a TypeScript file in `.opencode/tools/`. The filename becomes the tool name.
+
+```typescript
+// .opencode/tools/run-tests.ts
+import { tool } from "@opencode-ai/plugin"
+import { execSync } from "child_process"
+
+export default tool({
+  description: "Run the project test suite with optional file filter",
+  args: {
+    filter: tool.schema.string().optional()
+      .describe("Optional test file glob, e.g. 'src/**/*.test.ts'"),
+    coverage: tool.schema.boolean().optional()
+      .describe("Whether to collect coverage report"),
+  },
+  async execute({ filter, coverage }) {
+    const cmd = [
+      "npm test",
+      filter ? `-- --testPathPattern="${filter}"` : "",
+      coverage ? "--coverage" : "",
+    ].filter(Boolean).join(" ")
+
+    try {
+      return execSync(cmd, { cwd: process.cwd(), encoding: "utf8" })
+    } catch (e: any) {
+      return e.stdout ?? e.message
+    }
+  },
+})
+```
+
+The LLM can now call `run-tests` with a filter and coverage flag. Pair it with `"run-tests": "allow"` in your permission config and it runs without interruption.
+
+### 7b. Custom Agents — specialized personas
+
+Define agents in `opencode.jsonc` with custom prompts, model selection, and permission layers. The `@agentname` mention syntax invokes them directly.
+
+```jsonc
+// opencode.jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "agent": {
+    "reviewer": {
+      "description": "Expert code reviewer — security, performance, correctness",
+      "model": { "providerID": "anthropic", "modelID": "claude-sonnet-4-5" },
+      "prompt": "{file:./.opencode/prompts/reviewer.md}",
+      "permission": {
+        "bash": "deny",
+        "edit": "deny",
+        "write": "deny",
+        "read": "allow",
+        "grep": "allow",
+        "glob": "allow"
+      }
+    },
+    "architect": {
+      "description": "System design and refactoring strategy — read-only, high-context",
+      "model": { "providerID": "anthropic", "modelID": "claude-opus-4-5" },
+      "prompt": "{file:./.opencode/prompts/architect.md}"
+    }
+  }
+}
+```
+
+`{file:...}` paths are resolved relative to the config file, so project-specific prompts stay in the repo and are versioned alongside the code.
+
+### 7c. Skills — reusable instruction packs
+
+Skills are loaded lazily by the agent when the task matches. Create `.opencode/skills/<name>/SKILL.md`:
+
+```markdown
+---
+name: pr-review
+description: Review a pull request diff for bugs, security issues, and style violations
+license: MIT
+compatibility: opencode
+---
+
+## What I do
+- Load the PR diff via bash
+- Check for: SQL injection, hardcoded secrets, missing null checks, N+1 queries
+- Report findings with line numbers and severity (critical / high / medium)
+
+## When to use me
+Use when asked to review a PR or before merging a feature branch.
+```
+
+The `skill` tool description lists available skills; the LLM decides when to invoke them. This is a clean separation — you write a skill once, and every agent session can discover and use it without hardcoding behavior into prompts.
+
+### 7d. Commands — slash-command shortcuts
+
+Commands are templates invoked with `/commandname [args]` in the TUI. Define them in `opencode.jsonc` or as Markdown files in `.opencode/commands/`:
+
+```jsonc
+{
+  "command": {
+    "review-pr": {
+      "description": "Review the current branch diff for issues",
+      "template": "Review the staged git diff for the current branch.\nFocus on: security issues, logic errors, missing tests.\nBe concise. List findings by severity.",
+      "agent": "reviewer"
+    },
+    "fix-types": {
+      "description": "Fix all TypeScript errors in the project",
+      "template": "Run `npx tsc --noEmit` and fix all type errors you find.\nDo not change any runtime behavior, only fix types.",
+      "agent": "build",
+      "model": "anthropic/claude-haiku-4-5"
+    }
+  }
+}
+```
+
+Use cheaper/faster models for routine commands (`haiku-4-5` for type fixes) and reserve expensive models for the agents that need deeper context.
+
+---
+
+## <Label color="rose">8</Label> MCP Integration
+
+MCP servers attach to OpenCode as additional tool providers. Every tool from a connected server becomes available in `ToolRegistry` with the name `<server>_<toolname>`.
+
+<Card>
+
+```jsonc
+// opencode.jsonc — attaching MCP servers
+{
+  "mcp": {
+    "github": {
+      "type": "local",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}" }
+    },
+    "jira": {
+      "type": "remote",
+      "url": "https://jira.mycompany.com/mcp",
+      "enabled": true
+    },
+    "postgres": {
+      "type": "local",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-postgres", "${DATABASE_URL}"]
+    }
+  },
+  "permission": {
+    "github_*": "allow",
+    "jira_*": "ask",
+    "postgres_*": "deny"
+  }
+}
+```
+
+</Card>
+
+The permission wildcards let you control MCP server exposure precisely. A `postgres_*: deny` rule protects production data even if the server is configured; a `jira_*: ask` rule lets the agent read Jira issues only after you approve.
+
+---
+
+## <Label color="teal">9</Label> End-to-End: A Request Through the Stack
+
+<Mermaid
+  chart={`sequenceDiagram
+    participant U as User (TUI)
+    participant S as HTTP Server
+    participant SP as SessionProcessor
+    participant LLM as LLM Service
+    participant TR as ToolRegistry
+    participant P as Permission Engine
+    participant DB as SQLite (Drizzle)
+
+    U->>S: POST /session/:id/chat {message}
+    S->>SP: processor.create(session, model)
+    SP->>DB: append UserMessage
+    SP->>LLM: stream(messages, tools, agent)
+    LLM-->>SP: TextDelta events
+    SP->>DB: write TextPart (streaming)
+    LLM-->>SP: ToolCall event (e.g. edit)
+    SP->>P: check permission("edit", [path])
+    alt permission = ask
+      P->>U: Bus event → TUI prompt
+      U->>P: reply once/always/reject
+    end
+    SP->>TR: execute tool(edit, args)
+    TR->>DB: commit ToolPart result
+    SP->>LLM: next step with tool results
+    LLM-->>SP: finish event
+    SP->>SP: decide: continue / compact / stop
+    SP-->>U: Bus events → TUI update`}
+  caption="Full request lifecycle from user message to final response"
+/>
+
+---
+
+## What Makes OpenCode Different
+
+- **Client/server split is real.** The TUI is just one frontend. The same API can serve a web console, a mobile app, or a CI pipeline. This is not an abstraction — it's enforced at the transport layer.
+- **Effect TS for correctness.** Every service declares its dependencies, failures, and concurrency model in the type system. Tool calls run as fibers; the processor never deadlocks waiting for a slow tool.
+- **Permissions are data, not code.** The permission ruleset is a JSON array that merges from remote, global, project, and inline configs. Agents inherit and override permissions declaratively without touching source code.
+- **Compaction is deterministic.** The structured summary template means the next session can parse what was done without re-reading thousands of lines of tool output.
+- **Skills decouple behavior from prompts.** You write a skill once; every agent session discovers it via the `skill` tool. No copy-paste into agent system prompts.
+- **MCP is a first-class citizen.** MCP tools are namespaced, permission-controlled, and handled identically to built-in tools. There is no second-class external-tool API.
+- **Bun runtime.** The entire backend runs on Bun — fast startup, native TypeScript, no build step for local development.
+
+The source is at [github.com/sst/opencode](https://github.com/sst/opencode) (18k+ stars, MIT). The customization layer described here — tools, agents, skills, commands, MCP — requires no patches to the core; everything is configuration and `.opencode/` directory conventions.
