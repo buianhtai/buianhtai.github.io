@@ -413,6 +413,52 @@ That tight loop is what makes the platform operable at scale.
 
 ---
 
+## <Label color="violet">7</Label> Delegation History and Audit Trail
+
+Every time an agent spawns a subagent, the event is recorded in the audit log. This creates a traceable delegation tree across complex multi-agent workflows.
+
+<Card>
+
+The audit system uses `emitAudit()` in `internal/http/methods/audit.go`, which broadcasts a `protocol.EventAuditLog` event onto the event bus. Consumers (dashboard, external webhooks) receive structured audit records with:
+
+- **Actor** — the agent or user that initiated the action
+- **Action** — what happened (`subagent.spawn`, `tool.call`, `session.start`, etc.)
+- **Target** — the entity acted upon (subagent ID, tool name, session ID)
+- **Timestamp** — server-side event time
+
+For subagent spawns specifically, `internal/tools/subagent_spawn_tool.go` writes a delegation record into `bus/types.go`'s event payload, capturing the parent agent, child agent, and the trigger prompt. This makes it possible to reconstruct the full delegation graph for a run from the event stream.
+
+</Card>
+
+<Callout color="violet">
+Audit events are broadcast on the event bus, not written synchronously to a separate audit table. Consumers that need persistence (dashboard history, SIEM export) subscribe to the bus and store what they need. This keeps the hot path fast and lets you add audit consumers without touching the agent loop.
+</Callout>
+
+---
+
+## <Label color="sky">8</Label> Version Checker
+
+GoClaw ships a non-intrusive version checker (`internal/upgrade/checker.go`) that runs at startup and after deployments.
+
+<Card>
+
+The checker compares the running binary's version against the latest published release. If a newer version is available, it emits a single info-level log line and an optional dashboard notification — it never blocks startup or interrupts running agents.
+
+Key behaviors:
+
+- **Async check** — runs in a goroutine, result arrives after startup completes. Zero impact on cold-start time.
+- **Rate-limited** — check frequency is capped to avoid hammering the release endpoint on every agent spawn or cron trigger.
+- **Graceful failure** — network errors, timeouts, or unparseable version responses are logged at `debug` level and silently ignored. The agent runs regardless.
+- **Schema version tracking** — separate from the binary version, `internal/upgrade/version.go` tracks `RequiredSchemaVersion`. On startup, the gateway refuses to run if the database schema is older than the required version, preventing silent data corruption from schema mismatches.
+
+</Card>
+
+<Callout color="sky">
+The schema version gate is the stricter of the two checks — a version mismatch on the binary is advisory, a schema mismatch is fatal. This reflects the production reality that running new code against an old schema is far more dangerous than running slightly old code against a current schema.
+</Callout>
+
+---
+
 ## Production is a Different Game
 
 Production agents are judged by consistency under concurrency, not by one excellent demo run.

@@ -1,0 +1,258 @@
+---
+title: "Agent Loop Safety in GoClaw: Detecting Infinite Loops Before They Cost You"
+description: "How GoClaw's tool loop detection system catches three distinct runaway patterns — exact repetition, read-only streaks, and same-result cycling — using SHA-256 hashing and conversation-injected warnings."
+pubDate: 2026-05-03
+tags: ["ai", "golang", "architecture", "agents", "reliability"]
+lang: "en"
+category: "architecture"
+series: "goclaw"
+seriesOrder: 12
+---
+
+import Card from '../../../components/mdx/Card.astro';
+import Label from '../../../components/mdx/Label.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import Mermaid from '../../../components/mdx/Mermaid.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+
+Agent loops fail in a specific way: the model keeps calling tools, each call looks plausible in isolation, but the system makes no progress. Left unchecked, a stuck agent burns tokens indefinitely. [GoClaw](https://github.com/nextlevelbuilder/goclaw) addresses this with a per-run loop detection layer — three distinct heuristics with two severity levels each — wired directly into the tool execution path.
+
+<HeroGrid items={[
+  { label: "3 Detectors", sublabel: "Exact repeat, read-only streak,\nsame-result cycling", color: "#0891b2" },
+  { label: "SHA-256 Hashing", sublabel: "Deterministic args + result\nhashing for dedup", color: "#059669" },
+  { label: "2 Levels", sublabel: "Warning injects message;\ncritical stops the loop", color: "#d97706" },
+  { label: "Per-Run", sublabel: "State resets each run —\nno cross-session pollution", color: "#e11d48" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> Why Loop Detection is an Engineering Problem
+
+<Card>
+
+Most agent frameworks rely on the model to self-terminate. That assumption breaks under several real conditions.
+
+A model exploring a large file tree will call `list_files` and `read_file` repeatedly — each call individually sensible, but collectively spinning without ever writing anything. A model hitting a transient file lock will retry the same `edit_file` call and get the same error each time. A model that has already gathered enough information may keep re-reading the same files because nothing in its context tells it to stop.
+
+These are not hallucination problems. They are control flow problems. The agent is not broken — it is stuck. And a stuck agent in a production gateway consumes LLM quota, holds scheduler lanes, and potentially triggers downstream side effects on each iteration.
+
+Loop detection must be external to the model. The model is both the actor and the symptom.
+
+</Card>
+
+<Callout color="amber">
+Loop detection in GoClaw is enforced at the tool execution layer — not prompt-engineering hoping the model will stop itself.
+</Callout>
+
+---
+
+## <Label color="green">2</Label> Three Detection Heuristics
+
+<Card>
+
+`internal/agent/toolloop.go` defines three independent detectors that operate on the same rolling `toolLoopState` struct. The state holds a 30-entry circular history and a separate read-only streak counter.
+
+```go
+type toolLoopState struct {
+    history        []toolCallRecord
+    readOnlyStreak int // consecutive non-mutating, non-exec tool calls
+}
+
+type toolCallRecord struct {
+    toolName   string
+    argsHash   string
+    resultHash string // empty until result is recorded
+}
+```
+
+Each detector returns a `(level, message)` pair — either `""` (no issue), `"warning"`, or `"critical"`. Warning messages are injected as a system note into the running conversation. Critical events force-stop the iteration loop.
+
+</Card>
+
+<DataTable
+  caption="Loop Detection Heuristics and Thresholds"
+  accent="teal"
+  headers={["Detector", "What it Catches", "Warning Threshold", "Critical Threshold"]}
+  rows={[
+    {
+      Detector: "Exact Repeat",
+      "What it Catches": "Same tool + same args + same result",
+      "Warning Threshold": "3 occurrences",
+      "Critical Threshold": "5 occurrences",
+    },
+    {
+      Detector: "Read-Only Streak",
+      "What it Catches": "Consecutive non-mutating calls without any write/edit",
+      "Warning Threshold": "8 consecutive reads",
+      "Critical Threshold": "12 consecutive reads",
+    },
+    {
+      Detector: "Same-Result Cycling",
+      "What it Catches": "Same tool + different args but identical result",
+      "Warning Threshold": "4 occurrences",
+      "Critical Threshold": "6 occurrences",
+    },
+  ]}
+/>
+
+---
+
+## <Label color="amber">3</Label> How Hashing Works
+
+<Card>
+
+Before any detector can run, tool calls need a deterministic identity. GoClaw hashes both the call arguments and the result.
+
+```go
+func hashToolCall(toolName string, args map[string]any) string {
+    s := toolName + ":" + stableJSON(args)
+    h := sha256.Sum256([]byte(s))
+    return fmt.Sprintf("%x", h[:16]) // 32-char hex, enough for dedup
+}
+```
+
+`stableJSON` sorts map keys before serialization. This prevents spurious non-matches when the same logical call is serialized with different key ordering by the LLM.
+
+Result hashing uses the same SHA-256 truncation:
+
+```go
+func hashResult(content string) string {
+    h := sha256.Sum256([]byte(content))
+    return fmt.Sprintf("%x", h[:16])
+}
+```
+
+The `record` method stores the args hash immediately on call entry. `recordResult` patches in the result hash once the tool returns. This two-phase recording allows the detector to distinguish an in-flight call (no result yet) from a completed one, preventing false positives during parallel tool execution.
+
+</Card>
+
+<Callout color="teal">
+Stable key-sorted JSON serialization ensures that `{"path": "a", "mode": "r"}` and `{"mode": "r", "path": "a"}` hash identically — the same call, regardless of argument key order.
+</Callout>
+
+---
+
+## <Label color="rose">4</Label> The Read-Only Streak
+
+<Card>
+
+The read-only streak detector solves a subtler problem: a model that is reading continuously but never taking action. Pure read tools do not produce result-hash collisions — each file read returns different content — so the exact-repeat detector cannot catch this pattern.
+
+Instead, GoClaw tracks whether each tool call is "mutating" or not:
+
+```go
+var mutatingTools = map[string]bool{
+    "write_file": true, "edit": true, "edit_file": true,
+    "spawn": true, "team_tasks": true, "message": true,
+    "create_image": true, "create_video": true, "create_audio": true,
+    "tts": true, "cron": true, "publish_skill": true,
+    "sessions_send": true,
+}
+```
+
+`exec` and `bash` are deliberately excluded from both lists — they are ambiguous. A shell command could be `ls` (read-only) or `rm -rf` (destructive). Treating exec as neutral means it neither resets the streak nor increments it.
+
+Every non-mutating, non-exec tool call increments `readOnlyStreak`. A mutating call resets it to zero.
+
+At warning threshold (8 consecutive reads), the detector injects a system note into the conversation: the agent already has the information it needs and should stop re-reading. At critical threshold (12 consecutive reads), the loop is force-stopped.
+
+</Card>
+
+---
+
+## <Label color="green">5</Label> Integration in the Agent Loop
+
+The detectors run at two points in the tool execution pipeline:
+
+<FlowStep step="1" color="teal" title="Pre-result check (exact repeat detection)">
+After the tool is invoked but before the result is appended, the detector checks whether this call has been seen before with the same result. This avoids injecting warnings for the first few calls while the model explores legitimately.
+</FlowStep>
+
+<FlowStep step="2" color="green" title="Post-result check (read-only streak + same-result cycling)">
+After the result is available and hashed, both the streak detector and same-result detector run. The result hash is required for same-result detection, so this check must happen after the tool completes.
+</FlowStep>
+
+<FlowStep step="3" color="amber" title="Warning injection">
+When level is `"warning"`, the message is appended as a system note into the conversation context — the model receives it on the next Think iteration. This gives the model a chance to change behavior before the loop is stopped.
+</FlowStep>
+
+<FlowStep step="4" color="rose" title="Critical stop">
+When level is `"critical"`, the loop breaks immediately. The current run terminates with an error describing the detected pattern. No partial results are committed.
+</FlowStep>
+
+<Mermaid
+  chart={`flowchart TD
+    A[Tool Call] --> B[record argsHash]
+    B --> C{detect: exact repeat?}
+    C -->|critical| STOP1[Force Stop Loop]
+    C -->|warning| W1[Inject Warning into Context]
+    C -->|""| D[Execute Tool]
+    D --> E[recordResult: resultHash]
+    E --> F[recordMutation: streak update]
+    F --> G{detectReadOnlyStreak?}
+    G -->|critical| STOP2[Force Stop Loop]
+    G -->|warning| W2[Inject Warning into Context]
+    G -->|""| H{detectSameResult?}
+    H -->|critical| STOP3[Force Stop Loop]
+    H -->|warning| W3[Inject Warning into Context]
+    H -->|""| I[Continue Loop]`}
+  caption="Loop detector integration in the tool execution path"
+/>
+
+---
+
+## <Label color="teal">6</Label> Warning Messages That Actually Help
+
+<Card>
+
+Warning messages are not generic error strings. Each detector injects actionable language tailored to the specific failure mode.
+
+For the read-only streak:
+
+```
+[System: WARNING — You have made 8 consecutive read-only tool calls
+(list_files, read_file, find, etc.) without writing or editing any file.
+If you already have the information you need, use the edit or write_file
+tool to take action. If you cannot proceed, respond directly to the user
+explaining what is blocking you.]
+```
+
+For same-result cycling:
+
+```
+[System: WARNING — read_file has returned the same result 4 times with
+different arguments. The information is already in your context. Stop
+re-reading and take action — use edit/write_file to modify files, or
+respond to the user if you are stuck.]
+```
+
+For exact repetition:
+
+```
+[System: WARNING — list_files has been called 3 times with the same arguments
+and identical results. This is not making progress. Try a completely different
+approach, use different tools, or respond directly to the user with what you know.]
+```
+
+These messages are designed to redirect the model toward either taking action or surfacing a blocker — the two constructive exits from a stuck state.
+
+</Card>
+
+<Callout color="green">
+Warning messages give the model one more Think cycle to self-correct. Critical stops are reserved for cases where the model has already ignored warnings — or where the loop structure makes warning injection insufficient.
+</Callout>
+
+---
+
+## What Makes This Different
+
+- **Three orthogonal detectors** — Exact-args repetition, read-only streaks, and same-result cycling catch different failure modes that a single detector would miss.
+- **Hash-based identity** — SHA-256 with stable JSON serialization handles argument key ordering variation from different LLM serializers without false positives.
+- **Neutral exec handling** — Shell commands are deliberately excluded from the mutation tracking because their read/write intent cannot be determined statically.
+- **Two-severity design** — Warning messages give the model a chance to self-correct; critical stops are last-resort. Most real loops terminate at the warning stage.
+- **Per-run isolation** — The state resets on every `RunRequest`. Detection history does not accumulate across sessions, preventing long-running agents from triggering false positives.
+- **Conversation injection, not external signaling** — Warnings enter the model's context as system notes, not external stop signals. The model receives them as part of its next Think iteration and can reason about them.
+
+The full implementation is in [`internal/agent/toolloop.go`](https://github.com/nextlevelbuilder/goclaw) and [`internal/agent/loop.go`](https://github.com/nextlevelbuilder/goclaw) in the GoClaw repository.

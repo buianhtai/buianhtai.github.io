@@ -348,6 +348,38 @@ Schema cleaning is invisible to the agent — it writes one tool definition, and
 
 ---
 
+## <Label color="amber">8</Label> Azure OpenAI and Foundry
+
+<Card>
+
+The OpenAI-compatible provider handles Azure OpenAI and Azure AI Foundry deployments with a single header swap.
+
+Standard OpenAI authentication uses `Authorization: Bearer <key>`. Azure uses `api-key: <key>`. GoClaw detects which auth scheme to apply based on the `apiBase` URL:
+
+```go
+// Azure OpenAI/Foundry support
+if strings.Contains(strings.ToLower(p.apiBase), "azure.com") {
+    httpReq.Header.Set("api-key", p.apiKey)
+} else {
+    httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+}
+```
+
+No separate provider type is required. Set `driver: openai` (or `driver: openai_compat`) with `base_url` pointing to your Azure or Foundry endpoint. The provider auto-detects the authentication style from the URL.
+
+For Azure OpenAI deployments, the `base_url` typically looks like:
+`https://<resource>.openai.azure.com/openai/deployments/<deployment>`
+
+For Azure AI Foundry (Inference API), it follows the same `azure.com` pattern and receives the same `api-key` header treatment.
+
+</Card>
+
+<Callout color="amber">
+Azure and Foundry endpoint detection is URL-based — any base URL containing `azure.com` triggers `api-key` auth. No config flag, no separate driver. This avoids provider proliferation for what is effectively a one-header difference.
+</Callout>
+
+---
+
 ## Why Strategy Pattern Works Here
 
 <HeroGrid items={[

@@ -259,6 +259,68 @@ The core 7-phase loop is unchanged in v2.0.0, but new systems plug into it:
 
 ---
 
+## <Label color="violet">8</Label> Loop Safety: Detecting Infinite Loops
+
+Real production agents get stuck. The loop safety system in `internal/agent/toolloop.go` runs three independent detectors on every tool call to catch this before it burns context or runs indefinitely.
+
+<Card>
+
+**Detector 1 — Exact Repeat** (`detect`)
+
+Same tool, same arguments, same result. Warning at 3 repeats, critical (force-stop) at 5.
+
+**Detector 2 — Read-Only Streak** (`detectReadOnlyStreak`)
+
+Consecutive non-mutating tool calls. The `mutatingTools` set covers `write_file`, `edit`, `spawn`, `team_tasks`, `message`, `create_image`, and others. `exec`/`bash` are neutral — too ambiguous to classify. Warning at 8 consecutive read-only calls, critical at 12.
+
+**Detector 3 — Same Result, Different Args** (`detectSameResult`)
+
+Hashes the tool result. If different argument sets keep producing the same output, the agent is circling — warning at 4, critical at 6.
+
+</Card>
+
+<Card>
+
+**Integration in the loop (`loop.go`)**
+
+```
+loopDetector.record(toolName, args)      // before execution
+loopDetector.recordResult(toolName, result) // after execution
+```
+
+Warning threshold → injects `[System: WARNING — possible loop detected ...]` into the conversation as a system message. The agent can self-correct.
+
+Critical threshold → the current iteration is force-stopped. No more tool calls are issued. The run completes with whatever output has been produced.
+
+</Card>
+
+<Callout color="violet">
+The three detectors are complementary. Exact-repeat catches simple hammering. Read-only streak catches browsing or search loops where results vary but nothing is written. Same-result catches agents that keep trying different approaches that all reach the same dead end.
+</Callout>
+
+---
+
+## <Label color="sky">9</Label> Persistent Pending Messages
+
+When a channel delivers a message while an agent run is in flight, the message can't be processed until the current run finishes. GoClaw stores these in a `pending_messages` table and drains them after each run completes.
+
+<Card>
+
+The `PendingMessageStore` (`internal/store/pg/pending_message_store.go`) provides:
+
+- `Add(ctx, agentID, channelType, payload)` — store an arriving message with its channel type and raw payload
+- `Drain(ctx, agentID)` — atomically fetch-and-delete all pending messages for an agent, returning them ordered by arrival
+
+After a run completes, the loop calls `Drain`, re-queues the pending messages as new inputs, and triggers the next run. Messages are never dropped, and arrival order is preserved.
+
+</Card>
+
+<Callout color="sky">
+This is a simpler model than a full message queue: pending messages live in the same PostgreSQL database as everything else, participate in the same backup/restore lifecycle, and are visible in the same admin dashboard. No separate broker to operate.
+</Callout>
+
+---
+
 ## Why This Architecture Works
 
 <HeroGrid items={[
