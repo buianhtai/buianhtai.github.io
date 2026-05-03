@@ -1,0 +1,387 @@
+---
+title: "The Failure Classifier: Turning Agent Crashes Into Structured Lessons"
+description: "evolvr's two-stage classification pipeline — deterministic rule-based detection for loop patterns, LLM-based semantic analysis for everything else — with confidence gating and a lesson extraction schema designed for actionability."
+pubDate: 2026-05-03
+tags: ["ai", "agents", "architecture", "typescript", "reliability"]
+lang: "en"
+category: "architecture"
+series: "evolvr"
+seriesOrder: 3
+---
+
+import Card from '../../../components/mdx/Card.astro';
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import Mermaid from '../../../components/mdx/Mermaid.astro';
+
+A failed agent run contains the information needed to prevent its recurrence. The question is whether that information gets extracted in a form that is actually usable. A log entry that says "run terminated after 47 tool calls" is forensic evidence. A lesson that says "when searching `src/generated/`, stop after reading the same directory once — content is static during a session" is operational guidance. The Failure Classifier is what converts the former into the latter.
+
+<HeroGrid items={[
+  { label: "2-Stage Pipeline", sublabel: "Rule-based fast path,\nthen LLM semantic classifier", color: "#0891b2" },
+  { label: "No LLM for v0.1", sublabel: "Deterministic classifiers cover\nthe most common loop patterns", color: "#059669" },
+  { label: "Confidence Gating", sublabel: "Lessons below 0.6 confidence\ngo to human review queue", color: "#d97706" },
+  { label: "Actionable Output", sublabel: "Trigger pattern + recommendation,\nnot vague warnings", color: "#e11d48" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> Why Two Stages?
+
+<Card>
+
+The classification problem splits cleanly into two categories with very different complexity profiles.
+
+**Structural failures** — loop patterns — are fully deterministic. Given the sequence of tool calls and their hashes, you can classify exact-repeat loops, read-only streaks, and same-result cycling with a handful of rules. No model needed. These are also the most common failures in practice: agents looping on file reads, retrying identical operations, or cycling through search results that all return the same content.
+
+**Semantic failures** — wrong tool sequence, missing context, ambiguous intent — require understanding *why* the tool sequence was wrong or *what* context was missing. This is inherently a language understanding problem. A rule cannot tell you that the agent read 12 files in the wrong order because it misunderstood the task structure. An LLM can.
+
+Separating these means the v0.1 MVP runs entirely without LLM calls during classification — the deterministic classifiers cover most production failures — and adds the semantic layer in v0.2 as an optional enhancement.
+
+</Card>
+
+---
+
+## <Label color="green">2</Label> Stage 1 — Rule-Based Classifiers
+
+<Card>
+
+The three rule-based classifiers are direct ports of GoClaw's `toolloop.go` detection logic, adapted to operate on completed Task records rather than in-flight loops.
+
+**Exact-Repeat Detector**
+
+```typescript
+function detectExactRepeat(calls: ToolCall[]): ClassifierResult | null {
+  const seen = new Map<string, number>(); // "tool:argsHash:resultHash" -> count
+
+  for (const call of calls) {
+    if (!call.result_hash) continue; // skip in-flight / no result
+    const key = `${call.tool}:${call.args_hash}:${call.result_hash}`;
+    const count = (seen.get(key) ?? 0) + 1;
+    seen.set(key, count);
+
+    if (count >= 5) return {
+      failure_class: 'exact_repeat_loop',
+      confidence: 1.0,
+      trigger_count: count,
+      trigger_tool: call.tool,
+    };
+  }
+
+  // Check for warning-level (3+) but not critical
+  for (const [key, count] of seen) {
+    if (count >= 3) {
+      const tool = key.split(':')[0];
+      return { failure_class: 'exact_repeat_loop', confidence: 0.85,
+               trigger_count: count, trigger_tool: tool };
+    }
+  }
+  return null;
+}
+```
+
+**Read-Only Streak Detector**
+
+```typescript
+const MUTATING_TOOLS = new Set([
+  'write_file', 'edit', 'edit_file', 'spawn', 'team_tasks',
+  'message', 'create_image', 'create_video', 'create_audio',
+  'tts', 'cron', 'publish_skill', 'sessions_send',
+]);
+// exec/bash are neutral — intent cannot be determined statically
+
+function detectReadOnlyStreak(calls: ToolCall[]): ClassifierResult | null {
+  let streak = 0;
+  let maxStreak = 0;
+
+  for (const call of calls) {
+    if (MUTATING_TOOLS.has(call.tool)) {
+      streak = 0;
+    } else if (call.tool !== 'exec' && call.tool !== 'bash') {
+      streak++;
+      maxStreak = Math.max(maxStreak, streak);
+    }
+    // exec/bash: streak unchanged
+  }
+
+  if (maxStreak >= 12) return { failure_class: 'read_only_streak',
+    confidence: 1.0, trigger_count: maxStreak, trigger_tool: 'multiple' };
+  if (maxStreak >= 8)  return { failure_class: 'read_only_streak',
+    confidence: 0.8, trigger_count: maxStreak, trigger_tool: 'multiple' };
+  return null;
+}
+```
+
+**Same-Result Cycling Detector**
+
+```typescript
+function detectSameResultCycling(calls: ToolCall[]): ClassifierResult | null {
+  // Group by tool name, then count result_hash collisions across different args_hashes
+  const byTool = new Map<string, Map<string, Set<string>>>();
+  // tool -> result_hash -> Set<args_hash>
+
+  for (const call of calls) {
+    if (!call.result_hash || !call.args_hash) continue;
+    if (!byTool.has(call.tool)) byTool.set(call.tool, new Map());
+    const resultMap = byTool.get(call.tool)!;
+    if (!resultMap.has(call.result_hash)) resultMap.set(call.result_hash, new Set());
+    resultMap.get(call.result_hash)!.add(call.args_hash);
+  }
+
+  for (const [tool, resultMap] of byTool) {
+    for (const [, argSet] of resultMap) {
+      if (argSet.size >= 6) return { failure_class: 'same_result_cycling',
+        confidence: 1.0, trigger_count: argSet.size, trigger_tool: tool };
+      if (argSet.size >= 4) return { failure_class: 'same_result_cycling',
+        confidence: 0.8, trigger_count: argSet.size, trigger_tool: tool };
+    }
+  }
+  return null;
+}
+```
+
+</Card>
+
+<Callout color="teal">
+These thresholds exactly mirror GoClaw's `toolloop.go`: exact-repeat warning=3/critical=5, read-only streak warning=8/critical=12, same-result cycling warning=4/critical=6. The classifier re-detects post-hoc what the runtime detector may have already caught — but now with a structured record to learn from.
+</Callout>
+
+---
+
+## <Label color="amber">3</Label> Stage 2 — Semantic Classifier
+
+<Card>
+
+For failed runs that the rule-based classifiers don't catch, the semantic classifier runs. It builds a compact summary of the Task record and sends it to a fast, cheap model (Claude Haiku by default) with a structured extraction prompt.
+
+**Input construction:**
+
+```typescript
+function buildClassifierPrompt(task: Task): string {
+  const toolSummary = task.tool_calls.map(c =>
+    `${c.seq}. ${c.tool}(${c.args_hash.slice(0, 8)}) → ` +
+    `${c.result_summary.slice(0, 80)} [${c.latency_ms}ms]` +
+    (c.repeated ? ' [REPEATED]' : '') +
+    (c.was_loop_trigger ? ' [LOOP_TRIGGER]' : '')
+  ).join('\n');
+
+  return `You are an AI agent failure analyst. Analyze this failed agent run and classify the failure.
+
+TASK INTENT: ${task.intent}
+
+TOOL CALL SEQUENCE (${task.tool_calls.length} calls):
+${toolSummary}
+
+OUTCOME: ${task.outcome}
+DURATION: ${task.duration_ms}ms
+TOKENS: ${task.token_cost}
+
+Classify this failure. Return JSON only:
+{
+  "failure_class": one of [wrong_tool_sequence, missing_context, ambiguous_intent, unknown],
+  "confidence": 0.0-1.0,
+  "trigger_pattern": "concise description of what situation causes this failure",
+  "recommendation": "specific, actionable instruction for the agent to avoid this failure"
+}
+
+Rules for recommendation quality:
+- Must be specific to the task type and tools involved
+- Must be actionable (agent can follow it in the next run)
+- Must NOT be vague (no "be more careful" or "think before acting")
+- Should reference specific tools or file patterns when relevant`;
+}
+```
+
+**Parsing and validation:**
+
+```typescript
+interface SemanticResult {
+  failure_class: SemanticFailure;
+  confidence: number;
+  trigger_pattern: string;
+  recommendation: string;
+}
+
+function parseSemanticResult(raw: string): SemanticResult | null {
+  try {
+    const parsed = JSON.parse(raw);
+    if (!SEMANTIC_FAILURE_CLASSES.includes(parsed.failure_class)) return null;
+    if (typeof parsed.confidence !== 'number') return null;
+    if (!parsed.trigger_pattern || !parsed.recommendation) return null;
+    // Reject vague recommendations
+    const vague = ['be careful', 'be more careful', 'think before', 'pay attention'];
+    if (vague.some(v => parsed.recommendation.toLowerCase().includes(v))) {
+      parsed.confidence *= 0.5; // penalize but don't discard
+    }
+    return parsed as SemanticResult;
+  } catch {
+    return null;
+  }
+}
+```
+
+</Card>
+
+---
+
+## <Label color="rose">4</Label> Confidence Gating and the Review Queue
+
+<Card>
+
+Not every classified failure should become a lesson. The confidence gate prevents low-quality or one-off failures from polluting AGENTS.md.
+
+```typescript
+const CONFIDENCE_THRESHOLD = 0.6;
+const PENDING_THRESHOLD = 0.35;
+
+async function processClassification(
+  task: Task,
+  result: ClassifierResult
+): Promise<void> {
+  if (result.confidence >= CONFIDENCE_THRESHOLD) {
+    // Store as active lesson, update evidence count
+    await lessons.upsert({
+      failure_class: result.failure_class,
+      trigger_pattern: result.trigger_pattern,
+      recommendation: result.recommendation,
+      confidence: result.confidence,
+      agent_scope: [task.agent],
+      evidence_task_id: task.id,
+    });
+  } else if (result.confidence >= PENDING_THRESHOLD) {
+    // Store in review queue for operator decision
+    await pendingLessons.add({
+      task_id: task.id,
+      classification: result,
+      reason: `confidence ${result.confidence} below threshold ${CONFIDENCE_THRESHOLD}`,
+    });
+  }
+  // Below PENDING_THRESHOLD: discard silently
+}
+```
+
+The `pending_lessons` queue is surfaced via:
+
+```bash
+evolvr lessons --pending       # show lessons awaiting review
+evolvr lessons approve <id>    # approve and store
+evolvr lessons reject <id>     # reject and add to ignore list
+```
+
+</Card>
+
+---
+
+## <Label color="violet">5</Label> Lesson Quality — The Difference Between Useful and Useless
+
+<Card>
+
+The most important output of the classifier is not the failure class — it is the lesson text. The trigger pattern and recommendation are what get written to AGENTS.md and read by the agent on the next run.
+
+**Examples of lessons across failure classes:**
+
+```
+failure_class: read_only_streak
+trigger_pattern: Reading files in src/generated/ directories during refactoring tasks
+recommendation: Files in src/generated/ are auto-generated at build time and do not
+  change during a session. Read each generated file at most once. If you have already
+  read a file and need its content again, it is still in your context — do not re-read.
+
+failure_class: same_result_cycling
+trigger_pattern: Using search_codebase with pattern variations to find a symbol that
+  does not exist in the codebase
+recommendation: After 3 searches with different patterns return the same empty result,
+  stop searching and ask the user to confirm the symbol name. The symbol is likely
+  named differently than expected or does not exist yet.
+
+failure_class: wrong_tool_sequence
+trigger_pattern: Attempting to edit a file before reading it in tasks that require
+  understanding existing content
+recommendation: For edit tasks on unfamiliar files, always read the file first to
+  understand its current structure. Blind edits to files you haven't read in the
+  current session cause more reversals than they save time.
+
+failure_class: missing_context
+trigger_pattern: Starting database migration tasks without checking the current schema
+recommendation: Before writing any migration file, run the existing migration listing
+  command to understand the current schema version and existing tables. Writing
+  migrations without this context causes version conflicts.
+```
+
+These are specific, tool-referenced, task-type-specific. An agent receiving any of these before starting a similar task has a meaningful advantage over one starting from zero.
+
+</Card>
+
+<Callout color="violet">
+The vague-recommendation penalty in the semantic classifier serves a purpose beyond quality: it pushes the model to be specific or admit uncertainty. A penalized recommendation that survives confidence gating is better than a high-confidence generic warning.
+</Callout>
+
+---
+
+## <Label color="sky">6</Label> The Full Classification Pipeline
+
+<Mermaid
+  chart={`flowchart TD
+    A[Task Record: outcome != success] --> B[Stage 1: Rule-Based Classifiers]
+    B --> C{Exact repeat loop?}
+    C -->|yes| STORE[Store Lesson]
+    C -->|no| D{Read-only streak?}
+    D -->|yes| STORE
+    D -->|no| E{Same-result cycling?}
+    E -->|yes| STORE
+    E -->|no| F{Resource failure?}
+    F -->|yes, context_overflow etc| STORE
+    F -->|no| G[Stage 2: Semantic Classifier]
+    G --> H[Build compact prompt]
+    H --> I[LLM call: Claude Haiku]
+    I --> J[Parse + validate JSON]
+    J --> K{Confidence >= 0.6?}
+    K -->|yes| STORE
+    K -->|no, >= 0.35| PENDING[Pending review queue]
+    K -->|no, < 0.35| DISCARD[Discard]
+    STORE --> L[Upsert Lesson record]
+    L --> M[evidence_count++]
+    M --> N{evidence_count >= 3?}
+    N -->|yes| EVOLVER[Trigger Skill Evolver]
+    N -->|no| WAIT[Await more evidence]`}
+  caption="Two-stage classification pipeline: deterministic first, semantic second, confidence-gated storage"
+/>
+
+---
+
+## <Label color="teal">7</Label> Classifier Configuration
+
+<Card>
+
+```json
+{
+  "classifier": {
+    "stage1_enabled": true,
+    "stage2_enabled": false,
+    "stage2_model": "claude-3-5-haiku-20241022",
+    "stage2_max_tokens": 300,
+    "confidence_threshold": 0.6,
+    "pending_threshold": 0.35,
+    "thresholds": {
+      "exact_repeat_warning": 3,
+      "exact_repeat_critical": 5,
+      "read_only_streak_warning": 8,
+      "read_only_streak_critical": 12,
+      "same_result_warning": 4,
+      "same_result_critical": 6
+    }
+  }
+}
+```
+
+`stage2_enabled: false` by default — v0.1 runs without LLM calls. Enabling stage 2 adds approximately 1–3 seconds per failed run (Haiku is fast) and costs roughly $0.0001 per classification at current pricing.
+
+The thresholds are configurable because different codebases have different patterns. A codebase with large generated directories might legitimately have 10 consecutive reads of generated files without looping. Tuning the thresholds for your project prevents false positives.
+
+</Card>
+
+<Callout color="sky">
+The next post covers the Skill Evolver — what happens after evidence_count reaches 3 and a lesson is ready to become a change in agent behavior.
+</Callout>

@@ -12,5 +12,12 @@
     "description": "Architecture studies of open-source tools that make AI coding agents practical.",
     "lang": "TypeScript",
     "link": null
+  },
+  {
+    "id": "evolvr",
+    "title": "evolvr — Self-Evolving Agent Infrastructure",
+    "description": "Building a learning layer for AI coding agents: task journals, failure classification, skill evolution, and cross-agent lesson injection.",
+    "lang": "TypeScript",
+    "link": null
   }
 ]

@@ -1,0 +1,232 @@
+---
+title: "Why AI Agents Don't Learn From Their Mistakes — And How to Fix It"
+description: "OpenCode, Claude, Codex, and Pi are powerful execution engines. But every session starts from zero. This is the engineering problem evolvr was designed to solve."
+pubDate: 2026-05-03
+tags: ["ai", "agents", "architecture", "reliability", "opencode"]
+lang: "en"
+category: "architecture"
+series: "evolvr"
+seriesOrder: 1
+---
+
+import Card from '../../../components/mdx/Card.astro';
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+
+You are running OpenCode, Claude CLI, Codex, and Pi. Each one is good at executing tasks. None of them remember yesterday. A loop that burned 40,000 tokens on Tuesday will burn 40,000 tokens again on Wednesday. A tool sequence that always fails for a specific file type will be tried again next session. The agent that got stuck on a permissions error yesterday has no record of it.
+
+This is not a model capability problem. It is an infrastructure problem.
+
+<HeroGrid items={[
+  { label: "Zero memory", sublabel: "Every session resets to\nzero — no failure history", color: "#e11d48" },
+  { label: "No learning loop", sublabel: "Mistakes aren't classified,\nstored, or acted on", color: "#d97706" },
+  { label: "Static instructions", sublabel: "AGENTS.md is written once,\nnever updated from evidence", color: "#0891b2" },
+  { label: "4 agents, 0 shared state", sublabel: "OpenCode, Claude, Codex, Pi\nhave no common memory substrate", color: "#059669" },
+]} />
+
+---
+
+## <Label color="rose">1</Label> The Stateless Agent Problem
+
+<Card>
+
+Modern coding agents are stateless across sessions by design. Each run loads its instructions, receives your message, and executes. When the session ends, the execution state is gone. The next run starts fresh.
+
+This is a reasonable default for simple tasks. It becomes a compounding liability for complex, repeated, or multi-day work.
+
+Consider what actually happens over a week of heavy agent use:
+
+- Monday: agent loops on `read_file` for 12 consecutive calls. GoClaw's loop detector force-stops it. You note the pattern, move on.
+- Tuesday: same agent, same codebase, similar task. Loop happens again. Same force-stop. Same wasted tokens.
+- Wednesday: you add a note to AGENTS.md manually. The loop doesn't happen Thursday.
+
+The fix worked — but it required a human to observe the pattern, diagnose it, and write the fix. The agent had all the evidence it needed to do this itself. It just had nowhere to put it.
+
+</Card>
+
+<Callout color="amber">
+The agents are not broken. They are doing exactly what they were designed to do. The missing piece is the persistent learning layer that sits between sessions.
+</Callout>
+
+---
+
+## <Label color="teal">2</Label> What "Learning" Actually Means Here
+
+<Card>
+
+Learning in this context is not model fine-tuning. It is not RAG over conversation history. It is something simpler and more actionable:
+
+**After a run fails, extract a structured lesson. Before the next run starts, inject that lesson into context.**
+
+That is the entire loop. The mechanism is boring on purpose — write to AGENTS.md, read from AGENTS.md. No vector databases. No model updates. No infrastructure beyond SQLite.
+
+The intelligence is in what gets extracted and how it gets written. A lesson that says "be careful" is useless. A lesson that says "when reading from `src/generated/`, stop after 3 consecutive reads of the same directory — the content does not change between calls" is actionable.
+
+The difference is failure classification. Without knowing *why* a run failed, you cannot write a useful lesson. With classification, the lesson writes itself.
+
+</Card>
+
+---
+
+## <Label color="green">3</Label> The Four Agents We're Targeting
+
+<DataTable
+  caption="Agent integration surfaces for evolvr"
+  accent="green"
+  headers={["Agent", "Hook Point", "Lesson Injection", "Via GoClaw?"]}
+  rows={[
+    {
+      Agent: "OpenCode",
+      "Hook Point": "Event bus subscriber",
+      "Lesson Injection": "AGENTS.md at session start",
+      "Via GoClaw?": "Yes — audit bus",
+    },
+    {
+      Agent: "Claude CLI",
+      "Hook Point": "PreToolUse hooks (claude_cli_hooks.go)",
+      "Lesson Injection": "Context file + PendingMessageStore",
+      "Via GoClaw?": "Yes — audit bus",
+    },
+    {
+      Agent: "Codex",
+      "Hook Point": "Provider client wrapper (TokenSource)",
+      "Lesson Injection": "Context file injection at run start",
+      "Via GoClaw?": "Yes — audit bus",
+    },
+    {
+      Agent: "Pi",
+      "Hook Point": "Pi extension (TypeScript, RPC events)",
+      "Lesson Injection": "AGENTS.md + context injection",
+      "Via GoClaw?": "Optional (via OpenClaw SDK)",
+    },
+  ]}
+/>
+
+<Card>
+
+Three of the four agents — OpenCode, Claude CLI, Codex — already run through GoClaw as a gateway. GoClaw emits `protocol.EventAuditLog` events for every tool call via its event bus. evolvr subscribes to that bus and gets full coverage without touching the agents themselves.
+
+Pi is the interesting case. [Pi](https://pi.dev) is a minimal terminal coding harness by Mario Zechner (Earendil Inc.) with a TypeScript extension system and RPC mode that exposes every tool call and result as structured JSON events. evolvr ships as a Pi extension — `pi install git:.../evolvr-pi` — and instruments Pi natively. When Pi runs through OpenClaw, the GoClaw audit bus covers it too.
+
+</Card>
+
+---
+
+## <Label color="amber">4</Label> Why Existing Tools Don't Solve This
+
+<Card>
+
+The obvious objection: isn't this just memory? Don't mem0, MemGPT, and LangSmith already do this?
+
+No. Here's the distinction:
+
+**Memory systems** store conversation content — what was said, what was written. They let the agent recall past context. They do not classify failures. They do not extract lessons. They do not modify AGENTS.md.
+
+**Observability tools** (LangSmith, Phoenix, Langfuse) record traces and spans. They surface what happened to a human operator. They do not act on what they see. The human is still the learning loop.
+
+**evolvr** is a learning system. The output is not stored conversations and not dashboards — it is modified agent instructions. The agent behaves differently next run because its AGENTS.md changed. Autonomously, with evidence, with a review gate.
+
+</Card>
+
+<DataTable
+  caption="How evolvr differs from existing tools"
+  accent="amber"
+  headers={["Tool", "What It Does", "Gap"]}
+  rows={[
+    {
+      Tool: "mem0 / MemGPT",
+      "What It Does": "Long-term memory for conversations",
+      "Gap": "Stores content, not failure patterns. No lesson extraction.",
+    },
+    {
+      Tool: "LangSmith / Phoenix",
+      "What It Does": "Tracing and observability",
+      "Gap": "Human reads traces. No autonomous improvement.",
+    },
+    {
+      Tool: "AgentBench",
+      "What It Does": "Offline evaluation benchmarks",
+      "Gap": "Eval harness, not production runtime.",
+    },
+    {
+      Tool: "Static AGENTS.md",
+      "What It Does": "Instructions loaded at session start",
+      "Gap": "Written once. Never updated from evidence.",
+    },
+    {
+      Tool: "GoClaw toolloop.go",
+      "What It Does": "Detects loops at runtime, force-stops",
+      "Gap": "Stops the loop. Doesn't learn from it.",
+    },
+  ]}
+/>
+
+---
+
+## <Label color="violet">5</Label> The Three Systems
+
+<Card>
+
+evolvr is three systems that compose into the learning loop:
+
+**Task Journal** — Every agent run produces a structured record: intent, tool call sequence (hashed for privacy), outcome, failure class, reflection, and extracted lessons. Stored in SQLite (single machine) or PostgreSQL (teams). Queryable by failure class, agent, tool, time range.
+
+**Failure Classifier** — Runs after each task completes. Deterministic classifiers handle loop patterns (same algorithm as GoClaw's `toolloop.go`). A semantic classifier handles ambiguous failures — wrong tool sequence, missing context, permission issues — using a compact LLM call with structured output. Lessons below confidence 0.6 go to a review queue.
+
+**Skill Evolver** — When a lesson accumulates three or more instances of evidence, the Skill Evolver drafts a patch to the relevant AGENTS.md or SKILL.md. It gates on human review (or auto-applies if configured), A/B shadow-tests the new version against the old for ten similar tasks, and promotes or reverts based on outcome delta.
+
+</Card>
+
+<Callout color="violet">
+The learning loop: run fails → failure classified → lesson extracted → AGENTS.md patched → next run starts with the lesson → mistake doesn't recur. The entire loop is evidence-gated and operator-reviewable at every step.
+</Callout>
+
+---
+
+## <Label color="teal">6</Label> What the Loop Looks Like End-to-End
+
+<FlowStep step="1" color="teal" title="Agent run completes (any outcome)">
+evolvr receives the completed session via GoClaw audit bus or Pi extension. Tool calls, results, and outcome are normalized into a standard event format.
+</FlowStep>
+
+<FlowStep step="2" color="green" title="Failure classifier runs">
+Rule-based classifiers check for loop patterns first (deterministic, no LLM). If no match, the semantic classifier runs — a compact prompt to Claude Haiku with the tool call summary. Returns failure class + confidence.
+</FlowStep>
+
+<FlowStep step="3" color="amber" title="Lesson extracted and stored">
+If confidence ≥ 0.6, the lesson is written to the Task Journal with trigger pattern, recommendation text, and agent scope. Evidence count increments.
+</FlowStep>
+
+<FlowStep step="4" color="violet" title="AGENTS.md patched (after 3+ evidence)">
+Skill Evolver drafts a diff. Operator reviews (or auto-applies). New version shadow-tests against old for 10 similar tasks. Promoted if outcome improves.
+</FlowStep>
+
+<FlowStep step="5" color="rose" title="Next session starts smarter">
+Relevant lessons are queried at session start and injected into context. The agent reads them as part of AGENTS.md. The mistake that caused the lesson does not recur.
+</FlowStep>
+
+---
+
+## <Label color="sky">7</Label> MVP Scope
+
+<Card>
+
+Version 0.1 is deliberately minimal — no LLM required, no community sync, no patch generation:
+
+1. **Task Journal** — SQLite, records tool calls + outcome for Pi and GoClaw-routed agents
+2. **Rule-based classifier** — deterministic loop classes (exact-repeat, read-only streak, same-result cycling) using the same heuristics as GoClaw's `toolloop.go`
+3. **Lesson store** — stores lessons, injects into AGENTS.md at session start
+4. **Pi extension** — installable via `pi install git:.../evolvr-pi`
+5. **GoClaw adapter** — subscribes to audit bus, writes Task records
+6. **CLI** — `evolvr status`, `evolvr lessons`, `evolvr tasks --failed`
+
+Everything else — semantic classifier, Skill Evolver, A/B testing, community sync — ships in v0.2 and beyond. The MVP proves the loop before adding intelligence to it.
+
+</Card>
+
+<Callout color="teal">
+The next four posts in this series cover each component in depth: Task Journal data model, Failure Classifier pipeline, Skill Evolver mechanics, and the Pi + GoClaw adapter implementation.
+</Callout>

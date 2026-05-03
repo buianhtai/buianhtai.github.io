@@ -1,0 +1,356 @@
+---
+title: "The Skill Evolver: Evidence-Gated Self-Modification for AI Agents"
+description: "How evolvr turns accumulated failure lessons into AGENTS.md patches — with evidence thresholds, human review gates, A/B shadow testing, and git-committed promotion. Self-modification with a safety harness."
+pubDate: 2026-05-03
+tags: ["ai", "agents", "architecture", "typescript", "reliability"]
+lang: "en"
+category: "architecture"
+series: "evolvr"
+seriesOrder: 4
+---
+
+import Card from '../../../components/mdx/Card.astro';
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import Mermaid from '../../../components/mdx/Mermaid.astro';
+
+An agent that learns from failure is not useful if the learning only lives in a database. The Skill Evolver closes the loop: it takes lessons with sufficient evidence and writes them back into the agent's instruction files — the AGENTS.md and SKILL.md files the agent reads at session start. Autonomously, conservatively, with a review gate, and with A/B verification before permanent promotion.
+
+<HeroGrid items={[
+  { label: "Evidence-Gated", sublabel: "3+ instances before any\npatch is drafted", color: "#0891b2" },
+  { label: "Review Gate", sublabel: "Operator approves or rejects\nevery patch before apply", color: "#059669" },
+  { label: "A/B Shadow Test", sublabel: "10 similar tasks: new skill\nvs old, outcome delta decides", color: "#d97706" },
+  { label: "Git-Committed", sublabel: "Promotions are commits.\nFull audit trail.", color: "#e11d48" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> The Problem With Self-Modification
+
+<Card>
+
+Self-modifying agents are dangerous in a specific way: a bad lesson applied confidently makes the agent systematically worse, not just occasionally worse. A single wrong AGENTS.md entry affects every future run, not just the next one.
+
+This is why the Skill Evolver is conservative by default and requires evidence accumulation before doing anything. The design principle is: **the agent earns the right to modify its own instructions through repeated, consistent evidence.**
+
+Three safeguards operate in sequence:
+
+1. **Evidence threshold** — A lesson must appear in 3 or more separate Task records before a patch is drafted. One bad run does not trigger anything.
+2. **Review gate** — A human operator sees the diff before it is applied (unless `auto_evolve: true` is set).
+3. **A/B shadow test** — The patched version runs alongside the un-patched version for 10 similar tasks. The outcome delta determines whether the patch is promoted or reverted.
+
+Any of these can kill a patch. All three must pass for permanent promotion.
+
+</Card>
+
+<Callout color="amber">
+`auto_evolve: true` bypasses the review gate but not the evidence threshold or the A/B test. Full automation is possible but opt-in. The default requires a human to approve every AGENTS.md change.
+</Callout>
+
+---
+
+## <Label color="green">2</Label> Patch Generation
+
+<Card>
+
+When a lesson's `evidence_count` reaches 3 and its confidence is ≥ 0.6, the Skill Evolver drafts a patch.
+
+The patch is a diff against the current AGENTS.md (or relevant SKILL.md). The content comes directly from the lesson's `trigger_pattern` and `recommendation` fields, formatted as a structured AGENTS.md entry:
+
+```typescript
+function generatePatch(lesson: Lesson, agentsMdPath: string): Patch {
+  const current = fs.readFileSync(agentsMdPath, 'utf-8');
+
+  // Find or create the evolvr-managed section
+  const sectionMarker = '## evolvr — learned behaviors';
+  const entry = formatLessonEntry(lesson);
+
+  let patched: string;
+  if (current.includes(sectionMarker)) {
+    // Append to existing section
+    patched = current.replace(
+      sectionMarker,
+      `${sectionMarker}\n\n${entry}`
+    );
+  } else {
+    // Create section at end of file
+    patched = `${current}\n\n${sectionMarker}\n\n${entry}\n`;
+  }
+
+  return {
+    lesson_id: lesson.id,
+    target_file: agentsMdPath,
+    original: current,
+    patched,
+    diff: unified_diff(current, patched),
+    created_at: new Date().toISOString(),
+  };
+}
+
+function formatLessonEntry(lesson: Lesson): string {
+  const agents = lesson.agent_scope.join(', ');
+  const date = lesson.last_seen_at.slice(0, 10);
+  return `### [${lesson.failure_class}] ${lesson.trigger_pattern}
+
+> Applies to: ${agents}  
+> Evidence: ${lesson.evidence_count} instances  
+> Last seen: ${date}
+
+${lesson.recommendation}`;
+}
+```
+
+The `## evolvr — learned behaviors` section is evolvr-managed and clearly marked. Human-written AGENTS.md content above this marker is never touched.
+
+</Card>
+
+---
+
+## <Label color="amber">3</Label> The Review Gate
+
+<Card>
+
+After patch generation, the CLI surfaces the diff for operator review:
+
+```
+evolvr patches --ready
+
+  Patch #3 ready for review
+  ─────────────────────────────────────────
+  File:         AGENTS.md
+  Lesson:       same_result_cycling (id: 01HWXY...)
+  Evidence:     4 instances across 3 sessions
+  Confidence:   0.82
+  Agents:       pi, opencode
+
+  Diff:
+  + ### [same_result_cycling] Searching for symbols that don't exist
+  +
+  + > Applies to: pi, opencode
+  + > Evidence: 4 instances
+  + > Last seen: 2026-05-02
+  +
+  + After 3 search_codebase calls with different patterns return empty results,
+  + stop searching and ask the user to confirm the symbol name. The symbol is
+  + likely named differently than expected or does not exist yet.
+
+  Actions: [a]pprove  [r]eject  [e]dit  [s]kip
+```
+
+Three non-skip options:
+
+- **Approve** — Applies the patch to AGENTS.md and marks the patch for A/B testing. Does not commit yet.
+- **Reject** — Marks the lesson as rejected. It will not trigger future patches unless manually un-rejected.
+- **Edit** — Opens the recommendation text in `$EDITOR`. Operator can refine the wording before approving.
+
+</Card>
+
+---
+
+## <Label color="rose">4</Label> A/B Shadow Testing
+
+<Card>
+
+Approved patches do not go to production immediately. They enter a shadow test against the un-patched baseline.
+
+Shadow testing works by tracking runs that match the lesson's `trigger_pattern` after the patch is applied:
+
+```typescript
+interface ShadowTest {
+  patch_id: string;
+  lesson_id: string;
+  started_at: string;
+  target_runs: number;          // default: 10
+  completed_runs: number;
+  patched_outcomes: Outcome[];  // runs where patch was active
+  baseline_outcomes: Outcome[]; // recent historical runs before patch
+  status: 'running' | 'promoted' | 'reverted';
+}
+```
+
+The test compares outcome distributions:
+- `patched_outcomes`: outcomes from the 10 runs after patch application
+- `baseline_outcomes`: outcomes from the 10 most recent matching runs before the patch
+
+**Promotion criteria** (all must pass):
+- Patched failure rate ≤ baseline failure rate × 0.7 (30% improvement required)
+- No new failure class introduced by the patch
+- At least 7 of 10 patched runs completed (sufficient sample)
+
+**Revert criteria** (any triggers revert):
+- Patched failure rate > baseline failure rate (patch made things worse)
+- New failure class appears in ≥ 3 patched runs
+
+If neither threshold is reached after 10 runs (inconclusive), the patch is flagged for manual review.
+
+</Card>
+
+<Mermaid
+  chart={`flowchart TD
+    A[Lesson: evidence_count >= 3] --> B[Draft Patch]
+    B --> C{auto_evolve?}
+    C -->|no| D[Review gate: show diff]
+    D --> E{Operator decision}
+    E -->|reject| REJECT[Mark rejected, no patch]
+    E -->|edit| F[Edit recommendation]
+    F --> D
+    E -->|approve| G[Apply patch to AGENTS.md]
+    C -->|yes| G
+    G --> H[Start A/B shadow test]
+    H --> I[Run 10 matching tasks]
+    I --> J{Outcome delta?}
+    J -->|patched < baseline x0.7| PROMOTE[Promote: git commit]
+    J -->|patched > baseline| REVERT[Revert patch]
+    J -->|inconclusive| MANUAL[Flag for manual review]
+    PROMOTE --> K[evolvr commit to AGENTS.md]`}
+  caption="Skill Evolver pipeline: evidence threshold → review gate → A/B test → promotion or revert"
+/>
+
+---
+
+## <Label color="violet">5</Label> Promotion — The Git Commit
+
+<Card>
+
+When a patch passes the A/B test, it is committed to the repository with a structured commit message that makes the change fully auditable:
+
+```
+evolvr: apply lesson patch [same_result_cycling/symbol_search]
+
+Failure class:   same_result_cycling
+Evidence:        4 instances over 3 sessions (2026-04-28 to 2026-05-02)
+Confidence:      0.82
+Agents:          pi, opencode
+A/B test:        10 runs — patched 1 failure, baseline 4 failures (75% reduction)
+
+Lesson ID: 01HWXY...
+Task IDs:  01HPQR..., 01HSTU..., 01HVWX..., 01HYZAB...
+
+Generated by evolvr v0.1.0
+```
+
+The commit:
+1. Is tagged with `evolvr:` prefix for easy filtering in git log
+2. References the specific lesson and task IDs that generated it
+3. Includes the A/B test outcome as evidence of effectiveness
+4. Is made to AGENTS.md only — no source code is ever modified by evolvr
+
+```typescript
+async function promotePatches(patch: Patch, test: ShadowTest): Promise<void> {
+  // Write the patched content
+  fs.writeFileSync(patch.target_file, patch.patched, 'utf-8');
+
+  const message = buildCommitMessage(patch, test);
+  await exec(`git add ${patch.target_file}`);
+  await exec(`git commit -m ${JSON.stringify(message)}`);
+
+  // Update lesson and patch records
+  await db.run(
+    `UPDATE lessons SET promoted_to_agents_md = 1 WHERE id = ?`,
+    [patch.lesson_id]
+  );
+  await db.run(
+    `UPDATE shadow_tests SET status = 'promoted' WHERE id = ?`,
+    [test.id]
+  );
+}
+```
+
+</Card>
+
+<Callout color="violet">
+evolvr never modifies source code. It only modifies agent instruction files (AGENTS.md, SKILL.md). This is a hard boundary — the Skill Evolver's scope is agent behavior, not the project it is working on.
+</Callout>
+
+---
+
+## <Label color="sky">6</Label> Lesson Injection at Session Start
+
+<Card>
+
+Lessons don't wait for promotion to AGENTS.md to be useful. Any lesson with `evidence_count ≥ 1` and `confidence ≥ 0.6` is injected into the agent's context at session start — even before it has enough evidence to trigger the full evolution pipeline.
+
+For Pi, this happens via the extension's `session:start` hook:
+
+```typescript
+pi.on('session:start', async (session) => {
+  const relevantLessons = await lessons.query({
+    agent: 'pi',
+    context_embedding: await embed(session.firstMessage),
+    min_confidence: 0.6,
+    limit: 5,
+  });
+
+  if (relevantLessons.length > 0) {
+    const injected = formatLessonsForContext(relevantLessons);
+    pi.injectSystemMessage(injected);
+  }
+});
+```
+
+For GoClaw-routed agents (OpenCode, Claude, Codex), lessons are delivered via `PendingMessageStore.Add()` before the run starts — the same mechanism GoClaw uses for mid-run message injection.
+
+The injected format is concise — one lesson per line in the system message, not a wall of text:
+
+```
+[evolvr] Learned behaviors for this session:
+- same_result_cycling: After 3 searches with different patterns return empty results,
+  stop and ask the user to confirm the symbol name.
+- read_only_streak: Files in src/generated/ are auto-generated. Read each once only.
+```
+
+</Card>
+
+---
+
+## <Label color="teal">7</Label> Skill Evolver Configuration
+
+<DataTable
+  caption="Skill Evolver configuration options"
+  accent="teal"
+  headers={["Option", "Default", "Description"]}
+  rows={[
+    {
+      Option: "auto_evolve",
+      Default: "false",
+      Description: "Skip review gate. Patch applies automatically if confidence >= threshold.",
+    },
+    {
+      Option: "min_evidence",
+      Default: "3",
+      Description: "Minimum Task record evidence before patch is drafted.",
+    },
+    {
+      Option: "ab_test_runs",
+      Default: "10",
+      Description: "Number of matching runs to collect before evaluating A/B result.",
+    },
+    {
+      Option: "ab_improvement_threshold",
+      Default: "0.7",
+      Description: "Patched failure rate must be <= baseline * this value to promote.",
+    },
+    {
+      Option: "max_lessons_per_session",
+      Default: "5",
+      Description: "Maximum lessons injected into a single session context.",
+    },
+    {
+      Option: "inject_unpromoted",
+      Default: "true",
+      Description: "Inject lessons before promotion to AGENTS.md (evidence >= 1).",
+    },
+    {
+      Option: "commit_on_promote",
+      Default: "true",
+      Description: "Auto-commit promoted patches to git.",
+    },
+  ]}
+/>
+
+<Callout color="sky">
+The final post in this series covers the adapter implementations in detail: the Pi extension TypeScript module and the GoClaw Go adapter that wires evolvr into the existing audit event bus.
+</Callout>

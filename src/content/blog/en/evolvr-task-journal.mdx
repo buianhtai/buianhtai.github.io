@@ -1,0 +1,387 @@
+---
+title: "The Task Journal: Recording What Agents Actually Do"
+description: "evolvr's Task Journal captures the full causal chain of every agent run — intent, tool calls, outcome, and extracted lessons — in a schema designed for failure analysis, not conversation replay."
+pubDate: 2026-05-03
+tags: ["ai", "agents", "architecture", "sqlite", "typescript"]
+lang: "en"
+category: "architecture"
+series: "evolvr"
+seriesOrder: 2
+---
+
+import Card from '../../../components/mdx/Card.astro';
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import Mermaid from '../../../components/mdx/Mermaid.astro';
+
+Most observability tools record what an agent *said*. The Task Journal records what an agent *did* — the ordered sequence of tool calls, their outcomes, the failure pattern that emerged, and the lesson extracted. This is a fundamentally different schema, optimized for failure analysis rather than conversation replay.
+
+<HeroGrid items={[
+  { label: "Causal Chain", sublabel: "Intent → plan → tool calls\n→ outcome → lesson", color: "#0891b2" },
+  { label: "Hash-Based Privacy", sublabel: "Args hashed, not stored raw.\nResult summaries only.", color: "#059669" },
+  { label: "SQLite First", sublabel: "Zero infra. Single file.\nPostgres for teams.", color: "#d97706" },
+  { label: "Queryable", sublabel: "Failure class, agent, tool,\ntime range — all indexed.", color: "#e11d48" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> Why Not Just Log Conversations?
+
+<Card>
+
+The natural instinct is to store the conversation transcript — every message, every tool call, every response. This is what LangSmith, Phoenix, and Langfuse do. It works well for debugging a specific run.
+
+It fails for learning across runs.
+
+A conversation log answers: *"what happened in session X?"*
+
+The Task Journal answers: *"which tool sequences reliably precede failures? Which agents loop most on which task types? What lesson should fire before this type of task starts?"*
+
+These are pattern queries across hundreds of runs, not content queries within one run. The schema has to match the query.
+
+The Task Journal also has a privacy constraint that conversation logs do not. Tool arguments can contain file paths, code snippets, API keys, user data. The Journal stores argument *hashes*, not argument values. The loss is forensic detail. The gain is that the Journal can be safely synced to a community index without leaking project content.
+
+</Card>
+
+<Callout color="amber">
+The Task Journal is not an audit log. It is a failure database. Every design decision — schema shape, what gets hashed, what gets summarized — follows from that distinction.
+</Callout>
+
+---
+
+## <Label color="green">2</Label> The Core Data Model
+
+<Card>
+
+Every completed agent run produces one `Task` record:
+
+```typescript
+interface Task {
+  id: string;                      // ulid — sortable, unique
+  agent: AgentType;                // 'opencode' | 'claude' | 'codex' | 'pi'
+  intent: string;                  // user's original message (first 500 chars)
+  plan_snapshot?: string;          // agent's plan, if it generated one
+  tool_calls: ToolCall[];          // ordered sequence, all calls in the run
+  outcome: OutcomeType;            // 'success' | 'partial' | 'failed' | 'loop_stopped'
+  failure_class?: FailureClass;    // set by classifier, null on success
+  reflection: string;              // agent-generated or evolvr-generated post-mortem
+  lessons: Lesson[];               // extracted, structured learnings from this run
+  duration_ms: number;
+  token_cost: number;              // input + output tokens
+  parent_task_id?: string;         // set when this run was spawned by another agent
+  session_id: string;
+  agent_version: string;
+  ts: string;                      // ISO8601 UTC
+}
+```
+
+The `intent` field is stored as plain text — it is the user's message and contains no internal state. The `reflection` is also plain text, generated either by the agent at session end or by evolvr's classifier post-hoc. Everything else in the chain is hashed or summarized.
+
+</Card>
+
+---
+
+## <Label color="amber">3</Label> The ToolCall Record
+
+<Card>
+
+Each tool call in the run gets its own record, stored as a JSON array on the Task:
+
+```typescript
+interface ToolCall {
+  seq: number;                     // call order within the run
+  tool: string;                    // tool name
+  args_hash: string;               // SHA-256 of stable-serialized args, first 16 bytes hex
+  result_hash: string;             // SHA-256 of result content, first 16 bytes hex
+  result_summary: string;          // first 200 chars of result (truncated, no hash)
+  latency_ms: number;
+  repeated: boolean;               // true if same tool+args_hash seen before in this run
+  result_repeated: boolean;        // true if same result_hash seen before in this run
+  was_loop_trigger: boolean;       // true if this call triggered a loop detector warning/stop
+  mutating: boolean;               // true if tool is in the mutating set (write, edit, spawn...)
+}
+```
+
+The hashing follows the same approach as GoClaw's `toolloop.go`: SHA-256 over stable JSON-serialized arguments (keys sorted before serialization). This gives deterministic identity without storing the argument content.
+
+`result_summary` is stored as plain text (first 200 characters) precisely because it is already truncated and unlikely to contain sensitive content in most cases. It is the minimum needed for human review of lessons — the classifier works entirely from hashes and structural patterns.
+
+</Card>
+
+<Callout color="teal">
+Stable key-sorted JSON serialization is critical. If the LLM serializes `{"path": "a", "mode": "r"}` differently from `{"mode": "r", "path": "a"}`, the args_hash changes even though the call is identical. SHA-256 over sorted keys prevents this.
+</Callout>
+
+---
+
+## <Label color="rose">4</Label> Failure Classes
+
+<Card>
+
+The `failure_class` field is an enum with ten values, grouped into three categories:
+
+**Structural loop failures** — Detectable without LLM, using the same rule-based classifiers as GoClaw's `toolloop.go`:
+
+```typescript
+type StructuralFailure =
+  | 'exact_repeat_loop'      // same tool + same args + same result, N times
+  | 'read_only_streak'       // N consecutive non-mutating calls with no writes
+  | 'same_result_cycling';   // same result hash from different args, N times
+```
+
+**Resource failures** — Detectable from error codes and event metadata:
+
+```typescript
+type ResourceFailure =
+  | 'context_overflow'       // run terminated by context limit
+  | 'tool_permission_denied' // tool call blocked by policy layer
+  | 'external_service_error'; // downstream API/service returned error
+```
+
+**Semantic failures** — Require LLM classification:
+
+```typescript
+type SemanticFailure =
+  | 'wrong_tool_sequence'    // used tools in order that reliably fails
+  | 'missing_context'        // needed information not available in session
+  | 'ambiguous_intent'       // user message too vague to act on correctly
+  | 'unknown';               // classifier couldn't determine cause
+```
+
+</Card>
+
+<DataTable
+  caption="Failure class distribution — typical production agent workload"
+  accent="rose"
+  headers={["Failure Class", "Detection Method", "Lesson Quality", "Frequency"]}
+  rows={[
+    {
+      "Failure Class": "exact_repeat_loop",
+      "Detection Method": "Rule-based",
+      "Lesson Quality": "High — very specific trigger",
+      "Frequency": "Common",
+    },
+    {
+      "Failure Class": "read_only_streak",
+      "Detection Method": "Rule-based",
+      "Lesson Quality": "High — tool + context specific",
+      "Frequency": "Common",
+    },
+    {
+      "Failure Class": "same_result_cycling",
+      "Detection Method": "Rule-based",
+      "Lesson Quality": "High — tool + task specific",
+      "Frequency": "Moderate",
+    },
+    {
+      "Failure Class": "context_overflow",
+      "Detection Method": "Event metadata",
+      "Lesson Quality": "Medium — suggests compaction strategy",
+      "Frequency": "Moderate",
+    },
+    {
+      "Failure Class": "wrong_tool_sequence",
+      "Detection Method": "LLM semantic",
+      "Lesson Quality": "High — task type specific",
+      "Frequency": "Moderate",
+    },
+    {
+      "Failure Class": "missing_context",
+      "Detection Method": "LLM semantic",
+      "Lesson Quality": "Medium — depends on specificity",
+      "Frequency": "Common",
+    },
+    {
+      "Failure Class": "ambiguous_intent",
+      "Detection Method": "LLM semantic",
+      "Lesson Quality": "Low — hard to generalize",
+      "Frequency": "Low",
+    },
+  ]}
+/>
+
+---
+
+## <Label color="green">5</Label> The Lesson Record
+
+<Card>
+
+Lessons are extracted from Task records and stored separately. A lesson can accumulate evidence from multiple Task records over time:
+
+```typescript
+interface Lesson {
+  id: string;
+  failure_class: FailureClass;
+  trigger_pattern: string;         // natural language: "when doing X in context Y"
+  recommendation: string;          // natural language: "instead, do Z"
+  confidence: number;              // 0.0–1.0
+  evidence_count: number;          // number of Task records supporting this lesson
+  evidence_task_ids: string[];     // the specific Task IDs
+  agent_scope: AgentType[];        // which agents this applies to
+  created_at: string;
+  last_seen_at: string;
+  promoted_to_agents_md: boolean;  // has this been written to AGENTS.md
+  rejected: boolean;               // operator marked as not applicable
+}
+```
+
+The `trigger_pattern` and `recommendation` fields are what get injected into AGENTS.md. They need to be specific enough to be actionable and general enough to apply across similar future runs.
+
+Good lesson: `"When reading from src/generated/ directories, the files are auto-generated and do not change during a session. Stop after reading the same file once. Re-reading is never productive."`
+
+Bad lesson: `"Be more careful with file reads."`
+
+The difference is in how the lesson is generated — which is the Failure Classifier's job.
+
+</Card>
+
+---
+
+## <Label color="violet">6</Label> SQLite Schema
+
+<Card>
+
+The full SQLite schema for v0.1:
+
+```sql
+CREATE TABLE tasks (
+  id          TEXT PRIMARY KEY,         -- ulid
+  agent       TEXT NOT NULL,
+  intent      TEXT NOT NULL,
+  plan        TEXT,
+  outcome     TEXT NOT NULL,
+  failure_class TEXT,
+  reflection  TEXT NOT NULL DEFAULT '',
+  duration_ms INTEGER NOT NULL DEFAULT 0,
+  token_cost  INTEGER NOT NULL DEFAULT 0,
+  parent_id   TEXT REFERENCES tasks(id),
+  session_id  TEXT NOT NULL,
+  agent_ver   TEXT NOT NULL DEFAULT '',
+  ts          TEXT NOT NULL
+);
+
+CREATE TABLE tool_calls (
+  id              TEXT PRIMARY KEY,
+  task_id         TEXT NOT NULL REFERENCES tasks(id),
+  seq             INTEGER NOT NULL,
+  tool            TEXT NOT NULL,
+  args_hash       TEXT NOT NULL,
+  result_hash     TEXT NOT NULL,
+  result_summary  TEXT NOT NULL DEFAULT '',
+  latency_ms      INTEGER NOT NULL DEFAULT 0,
+  repeated        INTEGER NOT NULL DEFAULT 0,   -- boolean
+  result_repeated INTEGER NOT NULL DEFAULT 0,
+  loop_trigger    INTEGER NOT NULL DEFAULT 0,
+  mutating        INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE lessons (
+  id              TEXT PRIMARY KEY,
+  failure_class   TEXT NOT NULL,
+  trigger_pattern TEXT NOT NULL,
+  recommendation  TEXT NOT NULL,
+  confidence      REAL NOT NULL DEFAULT 0.0,
+  evidence_count  INTEGER NOT NULL DEFAULT 0,
+  evidence_ids    TEXT NOT NULL DEFAULT '[]',   -- JSON array of task IDs
+  agent_scope     TEXT NOT NULL DEFAULT '[]',   -- JSON array of agent types
+  created_at      TEXT NOT NULL,
+  last_seen_at    TEXT NOT NULL,
+  promoted        INTEGER NOT NULL DEFAULT 0,
+  rejected        INTEGER NOT NULL DEFAULT 0
+);
+
+-- Indexes for common query patterns
+CREATE INDEX idx_tasks_agent_outcome ON tasks(agent, outcome);
+CREATE INDEX idx_tasks_failure_class ON tasks(failure_class);
+CREATE INDEX idx_tasks_ts ON tasks(ts);
+CREATE INDEX idx_tool_calls_task ON tool_calls(task_id, seq);
+CREATE INDEX idx_tool_calls_tool ON tool_calls(tool, loop_trigger);
+CREATE INDEX idx_lessons_failure ON lessons(failure_class, promoted, rejected);
+```
+
+No ORM. Raw SQL with parameterized queries (`$1, $2` style via `better-sqlite3`). Schema versioned with a simple migration runner — same pattern as GoClaw's `migrations/` directory.
+
+</Card>
+
+---
+
+## <Label color="sky">7</Label> Data Flow Through the Journal
+
+<Mermaid
+  chart={`flowchart TD
+    A[Agent Run Starts] --> B[evolvr: open Task record]
+    B --> C[Tool call occurs]
+    C --> D[record: args_hash, seq]
+    D --> E[Tool executes]
+    E --> F[recordResult: result_hash, summary, latency]
+    F --> G{More tool calls?}
+    G -->|yes| C
+    G -->|no| H[Run completes]
+    H --> I[flush: write Task to SQLite]
+    I --> J[Classifier runs on Task]
+    J --> K{Failure detected?}
+    K -->|no| L[Task stored, outcome=success]
+    K -->|yes| M[Extract Lesson]
+    M --> N[Confidence check >= 0.6?]
+    N -->|no| O[Pending review queue]
+    N -->|yes| P[Store Lesson]
+    P --> Q[evidence_count++]
+    Q --> R{evidence_count >= 3?}
+    R -->|no| S[Await more evidence]
+    R -->|yes| T[Skill Evolver: draft patch]`}
+  caption="Full data flow from agent run to lesson storage and skill evolution trigger"
+/>
+
+---
+
+## <Label color="teal">8</Label> Query Patterns
+
+<Card>
+
+The schema is designed for these queries, all of which serve the learning loop:
+
+**What failure classes affect a specific agent most?**
+```sql
+SELECT failure_class, COUNT(*) as count
+FROM tasks
+WHERE agent = 'pi' AND outcome = 'failed'
+GROUP BY failure_class
+ORDER BY count DESC;
+```
+
+**Which tools most often appear before a loop trigger?**
+```sql
+SELECT t1.tool as preceding_tool, t2.tool as loop_tool, COUNT(*) as count
+FROM tool_calls t1
+JOIN tool_calls t2 ON t1.task_id = t2.task_id
+  AND t2.seq = t1.seq + 1
+  AND t2.loop_trigger = 1
+GROUP BY t1.tool, t2.tool
+ORDER BY count DESC
+LIMIT 20;
+```
+
+**What lessons haven't been promoted yet but have sufficient evidence?**
+```sql
+SELECT id, failure_class, recommendation, evidence_count, confidence
+FROM lessons
+WHERE promoted = 0 AND rejected = 0
+  AND evidence_count >= 3 AND confidence >= 0.6
+ORDER BY evidence_count DESC;
+```
+
+**CLI surface for these queries:**
+```bash
+evolvr tasks --failed --agent pi --limit 20
+evolvr lessons --ready          # evidence >= 3, not yet promoted
+evolvr stats --by failure-class
+```
+
+</Card>
+
+<Callout color="sky">
+The next post covers the Failure Classifier — the component that turns raw Task records into structured lessons with confidence scores. The classifier is what makes the Task Journal useful rather than just comprehensive.
+</Callout>
