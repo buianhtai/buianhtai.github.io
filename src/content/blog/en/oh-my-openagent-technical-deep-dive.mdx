@@ -241,34 +241,33 @@ Three hooks cooperate to prevent context overflow from silently degrading output
 
 ## <Label color="amber">8</Label> End-to-End: `ultrawork` Flow
 
-<Mermaid chart={`
-sequenceDiagram
-    participant User
-    participant CLI as OpenCode CLI
-    participant Sisyphus as Sisyphus (primary)
-    participant BG as BackgroundManager
-    participant Oracle
-    participant Ralph as Ralph Loop
-    participant FS as File System
+<Mermaid chart={`sequenceDiagram
+  participant User
+  participant CLI as OpenCode CLI
+  participant Sisy as Sisyphus
+  participant BG as BackgroundManager
+  participant Oracle
+  participant Ralph as Ralph Loop
+  participant FS as File System
 
-    User->>CLI: /ultrawork "refactor auth module"
-    CLI->>Sisyphus: session start + task injection
-    Sisyphus->>FS: Read files (hashline-read-enhancer adds LINE#IDs)
-    Sisyphus->>BG: launch(Explore, "find all auth usages")
-    BG-->>Sisyphus: stream results
-    Sisyphus->>FS: Write edits (hash validated before apply)
-    Sisyphus->>BG: launch(Oracle, "review security tradeoffs")
-    BG-->>Sisyphus: Oracle response
-    Sisyphus-->>CLI: session ends (context limit)
-    CLI->>Ralph: check loop state
-    Ralph->>Ralph: oracle-verification-detector: task complete?
-    alt Incomplete
-        Ralph->>CLI: inject continuation prompt
-        CLI->>Sisyphus: new session, same goal
-    else Complete
-        Ralph->>CLI: exit loop
-        CLI-->>User: done
-    end
+  User->>CLI: /ultrawork refactor auth module
+  CLI->>Sisy: session start, task injected
+  Sisy->>FS: Read files, hashline-read-enhancer adds LINE IDs
+  Sisy->>BG: launch Explore — find all auth usages
+  BG-->>Sisy: stream results
+  Sisy->>FS: Write edits, hash validated before apply
+  Sisy->>BG: launch Oracle — review security tradeoffs
+  BG-->>Sisy: Oracle response
+  Sisy-->>CLI: session ends, context limit reached
+  CLI->>Ralph: check loop state
+  Ralph->>Ralph: oracle-verification-detector, is task complete?
+  alt Incomplete
+    Ralph->>CLI: inject continuation prompt
+    CLI->>Sisy: new session, same goal
+  else Complete
+    Ralph->>CLI: exit loop
+    CLI-->>User: done
+  end
 `} />
 
 The hash validation, fallback retry, and context injection all happen transparently in hooks — Sisyphus issues standard OpenCode tool calls and receives standard results. The complexity is in the hook layer, not in the agent prompt.
