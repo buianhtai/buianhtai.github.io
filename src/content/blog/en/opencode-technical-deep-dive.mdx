@@ -153,9 +153,9 @@ Actions are one of three values: **`allow`**, **`deny`**, or **`ask`**.
 <DataTable
   headers={["Action", "Behavior", "Persisted?"]}
   rows={[
-    ["allow", "Tool runs immediately, no prompt", "Yes — per-project"],
-    ["deny", "Tool is blocked; error returned to LLM", "No"],
-    ["ask", "TUI prompt shown to user; can reply once or always", "Reply: always → yes"],
+    { "Action": "allow", "Behavior": "Tool runs immediately, no prompt", "Persisted?": "Yes — per-project" },
+    { "Action": "deny", "Behavior": "Tool is blocked; error returned to LLM", "Persisted?": "No" },
+    { "Action": "ask", "Behavior": "TUI prompt shown to user; can reply once or always", "Persisted?": "Reply: always → yes" },
   ]}
 />
 
@@ -211,20 +211,20 @@ The summary template is a fixed Markdown structure the model must follow exactly
 <DataTable
   headers={["Tool", "Permission ID", "What It Does"]}
   rows={[
-    ["read", "read", "Read file contents, supports line ranges"],
-    ["edit", "edit", "Exact string replacement — primary edit mechanism"],
-    ["write", "edit", "Create or overwrite files"],
-    ["apply_patch", "edit", "Unified diff patch application"],
-    ["bash/shell", "bash", "Execute shell commands in project env"],
-    ["glob", "glob", "Find files by glob pattern"],
-    ["grep", "grep", "ripgrep-backed content search with regex"],
-    ["webfetch", "webfetch", "Fetch and convert web pages to Markdown"],
-    ["websearch", "websearch", "Web search (provider-dependent)"],
-    ["lsp", "lsp", "Hover, definitions, diagnostics via Language Server"],
-    ["task", "task", "Spawn a subagent for parallel work"],
-    ["skill", "skill", "Load a SKILL.md skill on demand"],
-    ["plan / plan_exit", "plan_enter / plan_exit", "Enter/exit planning mode"],
-    ["question", "question", "Ask user a clarifying question"],
+    { "Tool": "read", "Permission ID": "read", "What It Does": "Read file contents, supports line ranges" },
+    { "Tool": "edit", "Permission ID": "edit", "What It Does": "Exact string replacement — primary edit mechanism" },
+    { "Tool": "write", "Permission ID": "edit", "What It Does": "Create or overwrite files" },
+    { "Tool": "apply_patch", "Permission ID": "edit", "What It Does": "Unified diff patch application" },
+    { "Tool": "bash/shell", "Permission ID": "bash", "What It Does": "Execute shell commands in project env" },
+    { "Tool": "glob", "Permission ID": "glob", "What It Does": "Find files by glob pattern" },
+    { "Tool": "grep", "Permission ID": "grep", "What It Does": "ripgrep-backed content search with regex" },
+    { "Tool": "webfetch", "Permission ID": "webfetch", "What It Does": "Fetch and convert web pages to Markdown" },
+    { "Tool": "websearch", "Permission ID": "websearch", "What It Does": "Web search (provider-dependent)" },
+    { "Tool": "lsp", "Permission ID": "lsp", "What It Does": "Hover, definitions, diagnostics via Language Server" },
+    { "Tool": "task", "Permission ID": "task", "What It Does": "Spawn a subagent for parallel work" },
+    { "Tool": "skill", "Permission ID": "skill", "What It Does": "Load a SKILL.md skill on demand" },
+    { "Tool": "plan / plan_exit", "Permission ID": "plan_enter / plan_exit", "What It Does": "Enter/exit planning mode" },
+    { "Tool": "question", "Permission ID": "question", "What It Does": "Ask user a clarifying question" },
   ]}
 />
 
