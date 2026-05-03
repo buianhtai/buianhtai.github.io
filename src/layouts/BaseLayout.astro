@@ -50,10 +50,14 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site);
     <!-- Theme init: prevent FOUC -->
     <script is:inline>
       (function() {
+        var ALL_THEMES = ['terminal', 'light', 'dracula', 'nord', 'gruvbox', 'solarized'];
         var saved = localStorage.getItem('theme');
         var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        var theme = saved || (prefersDark ? 'dark' : 'light');
-        if (theme === 'light') document.documentElement.classList.add('light');
+        var theme = saved || (prefersDark ? 'terminal' : 'light');
+        if (ALL_THEMES.indexOf(theme) === -1) theme = 'terminal';
+        if (theme !== 'terminal') {
+          document.documentElement.classList.add('theme-' + theme);
+        }
       })();
     </script>
   </head>

@@ -1,32 +1,161 @@
 ---
 ---
 
-<button
-  id="theme-toggle"
-  aria-label="Toggle theme"
-  style="margin-left: 0.4rem; padding: 0.3rem 0.55rem; font-family: var(--font-mono); font-size: 0.7rem; color: var(--color-text-muted); border: 1px solid var(--color-border); background: transparent; cursor: pointer; transition: color 0.15s, border-color 0.15s;"
-  onmouseover="this.style.color='var(--color-accent)'; this.style.borderColor='var(--color-accent)';"
-  onmouseout="this.style.color='var(--color-text-muted)'; this.style.borderColor='var(--color-border)';"
->
-  <span id="theme-label">dark</span>
-</button>
+<div id="theme-picker" style="position: relative; display: inline-block; margin-left: 0.4rem;">
+  <button
+    id="theme-toggle"
+    aria-label="Switch theme"
+    aria-expanded="false"
+    aria-haspopup="true"
+    style="padding: 0.3rem 0.55rem; font-family: var(--font-mono); font-size: 0.7rem; color: var(--color-text-muted); border: 1px solid var(--color-border); background: transparent; cursor: pointer; transition: color 0.15s, border-color 0.15s; white-space: nowrap;"
+    onmouseover="this.style.color='var(--color-accent)'; this.style.borderColor='var(--color-accent)';"
+    onmouseout="this.style.color='var(--color-text-muted)'; this.style.borderColor='var(--color-border)';"
+  >
+    [<span id="theme-label">terminal</span>]
+  </button>
+
+  <div
+    id="theme-menu"
+    role="menu"
+    hidden
+    style="
+      position: absolute;
+      right: 0;
+      top: calc(100% + 4px);
+      min-width: 11rem;
+      background: var(--color-surface);
+      border: 1px solid var(--color-border-bright);
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      z-index: 999;
+      overflow: hidden;
+    "
+  >
+    <div style="padding: 0.3rem 0.6rem; font-size: 0.62rem; color: var(--color-text-muted); border-bottom: 1px solid var(--color-border); letter-spacing: 0.08em; text-transform: uppercase;">$ select theme</div>
+    <ul style="list-style: none; margin: 0; padding: 0.25rem 0;">
+      <li role="menuitem" data-theme="terminal" class="theme-option">
+        <span class="theme-dot" style="background: #00d9ff;"></span>terminal-dark
+      </li>
+      <li role="menuitem" data-theme="light" class="theme-option">
+        <span class="theme-dot" style="background: #0070a8;"></span>light
+      </li>
+      <li role="menuitem" data-theme="dracula" class="theme-option">
+        <span class="theme-dot" style="background: #bd93f9;"></span>dracula
+      </li>
+      <li role="menuitem" data-theme="nord" class="theme-option">
+        <span class="theme-dot" style="background: #88c0d0;"></span>nord
+      </li>
+      <li role="menuitem" data-theme="gruvbox" class="theme-option">
+        <span class="theme-dot" style="background: #fabd2f;"></span>gruvbox
+      </li>
+      <li role="menuitem" data-theme="solarized" class="theme-option">
+        <span class="theme-dot" style="background: #268bd2;"></span>solarized-dark
+      </li>
+    </ul>
+  </div>
+</div>
+
+<style>
+  .theme-option {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.35rem 0.75rem;
+    cursor: pointer;
+    color: var(--color-text-dim);
+    transition: color 0.1s, background 0.1s;
+  }
+  .theme-option:hover,
+  .theme-option[aria-checked="true"] {
+    color: var(--color-accent);
+    background: var(--color-accent-glow);
+  }
+  .theme-option[aria-checked="true"]::before {
+    content: '▶ ';
+    color: var(--color-accent);
+  }
+  .theme-dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 0;
+    flex-shrink: 0;
+  }
+</style>
 
 <script is:inline>
-  function setTheme(theme) {
-    document.documentElement.classList.toggle('light', theme === 'light');
-    localStorage.setItem('theme', theme);
-    const label = document.getElementById('theme-label');
-    if (label) label.textContent = theme === 'light' ? 'dark' : 'light';
-    document.dispatchEvent(new CustomEvent('theme-change'));
-  }
+  (function () {
+    const ALL_THEMES = ['terminal', 'light', 'dracula', 'nord', 'gruvbox', 'solarized'];
+    const LABELS = {
+      terminal: 'terminal',
+      light: 'light',
+      dracula: 'dracula',
+      nord: 'nord',
+      gruvbox: 'gruvbox',
+      solarized: 'solarized',
+    };
 
-  const saved = localStorage.getItem('theme');
-  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-  const initial = saved || (prefersDark ? 'dark' : 'light');
-  setTheme(initial);
+    function applyTheme(theme) {
+      const html = document.documentElement;
+      // Remove all theme classes
+      ALL_THEMES.forEach(t => html.classList.remove('theme-' + t));
+      // Apply chosen theme class (terminal = no extra class, uses @theme defaults)
+      if (theme !== 'terminal') {
+        html.classList.add('theme-' + theme);
+      }
+      localStorage.setItem('theme', theme);
 
-  document.getElementById('theme-toggle').addEventListener('click', () => {
-    const current = document.documentElement.classList.contains('light') ? 'light' : 'dark';
-    setTheme(current === 'dark' ? 'light' : 'dark');
-  });
+      // Update button label
+      const label = document.getElementById('theme-label');
+      if (label) label.textContent = LABELS[theme] || theme;
+
+      // Update checked state in menu
+      document.querySelectorAll('.theme-option').forEach(el => {
+        el.setAttribute('aria-checked', el.dataset.theme === theme ? 'true' : 'false');
+      });
+
+      document.dispatchEvent(new CustomEvent('theme-change', { detail: { theme } }));
+    }
+
+    function toggleMenu() {
+      const btn = document.getElementById('theme-toggle');
+      const menu = document.getElementById('theme-menu');
+      const open = !menu.hidden;
+      menu.hidden = open;
+      btn.setAttribute('aria-expanded', String(!open));
+    }
+
+    function closeMenu() {
+      const menu = document.getElementById('theme-menu');
+      const btn = document.getElementById('theme-toggle');
+      menu.hidden = true;
+      btn.setAttribute('aria-expanded', 'false');
+    }
+
+    // Init from storage
+    const saved = localStorage.getItem('theme') || 'terminal';
+    applyTheme(saved);
+
+    // Button click
+    document.getElementById('theme-toggle').addEventListener('click', function (e) {
+      e.stopPropagation();
+      toggleMenu();
+    });
+
+    // Menu item click
+    document.querySelectorAll('.theme-option').forEach(function (el) {
+      el.addEventListener('click', function () {
+        applyTheme(el.dataset.theme);
+        closeMenu();
+      });
+    });
+
+    // Close on outside click
+    document.addEventListener('click', closeMenu);
+
+    // Keyboard: Escape closes
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') closeMenu();
+    });
+  })();
 </script>
