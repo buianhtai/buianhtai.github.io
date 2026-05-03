@@ -6,23 +6,15 @@ interface Props {
 const { chart, caption } = Astro.props;
 ---
 
-<div class="mermaid-container">
-  <div class="mermaid-viewport" data-zoom="1" data-pan-x="0" data-pan-y="0">
-    <div class="mermaid-canvas">
-      <pre class="mermaid" set:html={chart}></pre>
-    </div>
+<figure class="mermaid-figure">
+  <div class="mermaid-scroll">
+    <pre class="mermaid" set:html={chart}></pre>
   </div>
-  <div class="mermaid-controls">
-    <button class="mermaid-btn mermaid-zoom-in" title="Zoom in">+</button>
-    <button class="mermaid-btn mermaid-zoom-out" title="Zoom out">−</button>
-    <button class="mermaid-btn mermaid-zoom-fit" title="Fit to view">⊡</button>
-    <span class="mermaid-hint">Ctrl + wheel to zoom · Drag to pan · Double-click to fit</span>
-  </div>
-  {caption && <p class="mermaid-caption">{caption}</p>}
-</div>
+  {caption && <figcaption class="mermaid-caption">{caption}</figcaption>}
+</figure>
 
 <style>
-  .mermaid-container {
+  .mermaid-figure {
     margin: 1.5rem 0;
     border: 1px solid var(--color-border);
     border-radius: 0.75rem;
@@ -30,83 +22,42 @@ const { chart, caption } = Astro.props;
     background: var(--color-surface);
   }
 
-  .mermaid-viewport {
-    position: relative;
-    min-height: 300px;
-    overflow: hidden;
-    cursor: grab;
-    touch-action: none;
+  /* Scrollable wrapper — horizontally scrollable on narrow screens,
+     full-width on desktop. No height cap so the diagram is always visible. */
+  .mermaid-scroll {
+    overflow-x: auto;
+    overflow-y: visible;
+    padding: 1.5rem;
+    /* Smooth scroll on iOS */
+    -webkit-overflow-scrolling: touch;
   }
 
-  .mermaid-viewport:active {
-    cursor: grabbing;
-  }
-
-  .mermaid-canvas {
-    min-height: 300px;
-    transform-origin: 0 0;
-    transition: transform 0.1s ease-out;
-  }
-
-  .mermaid-canvas pre.mermaid {
+  /* Let the pre/SVG breathe at natural size */
+  .mermaid-scroll pre.mermaid {
     background: transparent !important;
     border: none !important;
     padding: 0 !important;
-    margin: 0 !important;
-  }
-
-  .mermaid-controls {
+    margin: 0 auto !important;
+    /* Center the diagram, don't stretch it */
     display: flex;
-    align-items: center;
-    gap: 0.25rem;
-    padding: 0.5rem 1rem;
-    border-top: 1px solid var(--color-border);
-    background: var(--color-bg);
-  }
-
-  .mermaid-btn {
-    width: 28px;
-    height: 28px;
-    display: flex;
-    align-items: center;
     justify-content: center;
-    border: 1px solid var(--color-border);
-    border-radius: 6px;
-    background: var(--color-surface);
-    color: var(--color-text-dim);
-    font-size: 0.9rem;
-    font-family: 'IBM Plex Mono', monospace;
-    cursor: pointer;
-    transition: color 0.15s, border-color 0.15s;
-    line-height: 1;
   }
 
-  .mermaid-btn:hover {
-    color: var(--color-accent);
-    border-color: var(--color-accent);
-  }
-
-  .mermaid-hint {
-    font-size: 0.65rem;
-    color: var(--color-text-dim);
-    font-family: 'IBM Plex Mono', monospace;
-    margin-left: 0.5rem;
-    opacity: 0.7;
+  /* Mermaid injects an <svg> directly into the pre — make it responsive */
+  .mermaid-scroll pre.mermaid > svg {
+    max-width: 100%;
+    height: auto !important;
+    display: block;
+    margin: 0 auto;
   }
 
   .mermaid-caption {
-    padding: 0.75rem 1.5rem;
+    padding: 0.625rem 1.5rem;
     border-top: 1px solid var(--color-border);
     font-size: 0.8rem;
     color: var(--color-text-dim);
     font-family: 'IBM Plex Mono', monospace;
     text-align: center;
     margin: 0;
-  }
-
-  @media (max-width: 640px) {
-    .mermaid-hint { display: none; }
-    .mermaid-canvas { min-height: 200px; }
-    .mermaid-viewport { min-height: 200px; }
   }
 </style>
