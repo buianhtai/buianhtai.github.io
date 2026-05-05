@@ -1,8 +1,8 @@
 ---
-title: "evolvr Adapters: Wiring the Learning Layer Into Pi and GoClaw"
-description: "Implementation walkthrough for the two evolvr adapters — the Pi extension TypeScript module that subscribes to session events, and the GoClaw Go adapter that taps the existing audit event bus — both feeding Task records to the same learning pipeline."
+title: "evolvr Integration: Claude Code Hooks and the MCP Server"
+description: "Implementation walkthrough for evolvr's two integration layers — the Claude Code settings.json hook pipeline that feeds tool calls into the journal, and the @evolvr/mcp server that delivers lessons back to agents."
 pubDate: 2026-05-03
-tags: ["ai", "agents", "architecture", "typescript", "go", "reliability"]
+tags: ["ai", "agents", "architecture", "typescript", "reliability", "mcp"]
 lang: "en"
 category: "architecture"
 series: "evolvr"
@@ -19,356 +19,277 @@ import Mermaid from '../../../components/mdx/Mermaid.astro';
 import ArchLayer from '../../../components/mdx/ArchLayer.astro';
 import Pipeline from '../../../components/mdx/Pipeline.astro';
 
-The previous posts described evolvr's core systems in isolation — the Task Journal, the Failure Classifier, the Skill Evolver. This post closes the loop by showing exactly how these systems connect to real agents. Two integrations: one in TypeScript for Pi, one in Go for GoClaw. Both produce the same output: a Task record in the SQLite journal.
+The previous posts described evolvr's core systems — the Task Journal, the Failure Classifier, and the MCP-based lesson injection model. This post closes the loop by showing exactly how these systems connect to real agents. Two integration surfaces: the Claude Code `settings.json` hook pipeline that writes every tool call to the journal, and the `@evolvr/mcp` server that reads lessons back to agents. Both surfaces are part of the v0.1 release.
 
 <HeroGrid items={[
-  { label: "Pi Adapter", sublabel: "TypeScript extension module\nsubscribing to session lifecycle events", color: "#0891b2" },
-  { label: "GoClaw Adapter", sublabel: "Go subscriber on the existing\nprotocol.EventAuditLog bus", color: "#059669" },
-  { label: "Same Schema", sublabel: "Both adapters write Task records\nto the same SQLite journal", color: "#d97706" },
-  { label: "Zero Runtime Impact", sublabel: "Adapters are async observers.\nNo added latency to agent runs.", color: "#e11d48" },
+  { label: "Hook Pipeline", sublabel: "PreToolUse/PostToolUse/Stop\nhooks via settings.json", color: "#0891b2" },
+  { label: "MCP Server", sublabel: "@evolvr/mcp — 4 tools,\nany MCP-compatible agent", color: "#059669" },
+  { label: "Zero Agent Changes", sublabel: "Config files only.\nNo agent code modified.", color: "#d97706" },
+  { label: "Async Observers", sublabel: "Hooks run asynchronously.\nNo added latency to agent.", color: "#e11d48" },
 ]} />
 
 ---
 
-## <Label color="teal">1</Label> Why Pi Is the Cleanest Integration Point
+## <Label color="teal">1</Label> Why Hooks for the Write Path
 
 <Card>
 
-Pi (pi.dev) exposes a TypeScript extension API that emits structured JSON events for every significant action in a session. This is exactly what evolvr needs — not a log stream to parse, but typed events with structured tool call records.
+Claude Code exposes a hook system in `~/.claude/settings.json` (or the project-level `.claude/settings.json`). Hooks are shell commands that fire at defined lifecycle events: before a tool call, after a tool call, and when the session stops. They run asynchronously — the agent does not wait for them to complete.
 
-Pi already integrates with GoClaw in OpenClaw mode (GoClaw acts as the execution backend for Pi's orchestration layer). This means a Pi extension can observe both Pi-native sessions and sessions that Pi delegates to GoClaw. One adapter, two agent systems.
+This is exactly the right integration point for evolvr's write path. The hook fires, calls `evolvr hook`, the journal records the event, and the agent continues. No latency added to the agent's execution loop.
 
-The extension API provides:
+Three hook events are used:
 
-```typescript
-// pi.d.ts (simplified)
-interface PiExtension {
-  on(event: 'session:start',    cb: (s: Session) => void): void;
-  on(event: 'tool:called',      cb: (s: Session, call: ToolCall) => void): void;
-  on(event: 'tool:completed',   cb: (s: Session, call: ToolCall) => void): void;
-  on(event: 'session:end',      cb: (s: Session, outcome: Outcome) => void): void;
-  injectSystemMessage(text: string): void;
-}
-```
-
-That is the entire surface we need.
+- **PreToolUse** — fires before each tool call. evolvr records the tool name and sequence number.
+- **PostToolUse** — fires after each tool call with result metadata. evolvr records args hash, result hash, result summary, and latency.
+- **Stop** — fires when the session ends. evolvr finalizes the task record and runs the failure classifier.
 
 </Card>
 
 ---
 
-## <Label color="green">2</Label> The Pi Extension Module
+## <Label color="green">2</Label> The Hook Command — `evolvr hook`
 
 <Card>
 
-The extension is a single TypeScript file registered in `pi.config.ts`. It runs in the Pi extension host process, not in the agent process itself — fully isolated from the agent's execution.
+The `evolvr hook` command is the CLI's write path. It handles all four hook event types and routes to the correct journal operation.
 
-```typescript
-// extensions/evolvr/index.ts
-import { Evolvr } from '@evolvr/core';
-import type { PiExtension, Session, ToolCall } from 'pi';
+**Full hook configuration (`~/.claude/settings.json`):**
 
-const evolvr = new Evolvr({
-  journal_path: './evolvr.db',
-  config_path: './evolvr.json',
-});
-
-const activeSessions = new Map<string, Task>();
-
-export function register(pi: PiExtension) {
-  pi.on('session:start', async (session: Session) => {
-    // Inject relevant lessons before the session starts
-    const lessons = await evolvr.getLessons({
-      agent: 'pi',
-      text: session.firstMessage,
-      limit: 5,
-    });
-
-    if (lessons.length > 0) {
-      pi.injectSystemMessage(formatLessons(lessons));
-    }
-
-    // Start tracking this session as a Task
-    const task = await evolvr.startTask({
-      id: session.id,
-      agent: 'pi',
-      intent: session.firstMessage,
-    });
-    activeSessions.set(session.id, task);
-  });
-
-  pi.on('tool:completed', async (session: Session, call: ToolCall) => {
-    const task = activeSessions.get(session.id);
-    if (!task) return;
-
-    await evolvr.recordToolCall(task, {
-      seq: call.seq,
-      tool: call.tool,
-      args_hash: hashArgs(call.args),
-      result_hash: hashResult(call.result),
-      result_summary: summarize(call.result),
-      latency_ms: call.duration_ms,
-      was_loop_trigger: call.was_loop_trigger ?? false,
-      token_cost: call.token_cost ?? 0,
-    });
-  });
-
-  pi.on('session:end', async (session: Session, outcome: Outcome) => {
-    const task = activeSessions.get(session.id);
-    if (!task) return;
-    activeSessions.delete(session.id);
-
-    await evolvr.completeTask(task, {
-      outcome: outcome.status, // 'success' | 'failure' | 'partial'
-      outcome_detail: outcome.detail,
-      token_cost: outcome.total_tokens,
-    });
-
-    // If failed, trigger classification
-    if (outcome.status !== 'success') {
-      await evolvr.classify(task);
-    }
-  });
+```json
+{
+  "hooks": {
+    "PreToolUse": [{
+      "matcher": "*",
+      "hooks": [{
+        "type": "command",
+        "command": "evolvr hook --event pre-tool --task $CLAUDE_SESSION_ID --tool $TOOL_NAME"
+      }]
+    }],
+    "PostToolUse": [{
+      "matcher": "*",
+      "hooks": [{
+        "type": "command",
+        "command": "evolvr hook --event post-tool --task $CLAUDE_SESSION_ID --tool $TOOL_NAME --args-hash $ARGS_HASH --result-hash $RESULT_HASH --latency $LATENCY_MS"
+      }]
+    }],
+    "Stop": [{
+      "hooks": [{
+        "type": "command",
+        "command": "evolvr hook --event stop --task $CLAUDE_SESSION_ID --outcome success"
+      }]
+    }]
+  }
 }
 ```
 
-Registration in `pi.config.ts`:
-
-```typescript
-// pi.config.ts
-import { register as evolvrRegister } from './extensions/evolvr';
-
-export default {
-  extensions: [evolvrRegister],
-  // ... rest of Pi config
-};
-```
+The `$CLAUDE_SESSION_ID`, `$TOOL_NAME`, `$ARGS_HASH`, `$RESULT_HASH`, and `$LATENCY_MS` variables are provided by Claude Code. The args and result hashes are computed by Claude Code itself — evolvr receives pre-hashed values and stores them directly, which means no raw argument content ever passes through the `evolvr hook` command.
 
 </Card>
 
 <Callout color="teal">
-The `injectSystemMessage` call at `session:start` is what makes evolvr's learning visible to the agent. Without this hook, lessons would accumulate in the database but never influence future runs.
+Claude Code computing the hashes before the hook fires is a key privacy boundary. evolvr never sees raw tool arguments. It only sees SHA-256 hashes, result summaries (first 200 chars), and structural metadata like latency and sequence number.
 </Callout>
 
 ---
 
-## <Label color="amber">3</Label> The GoClaw Adapter
+## <Label color="amber">3</Label> Hook Command Internals
 
 <Card>
 
-GoClaw already has an audit event bus. The `protocol.EventAuditLog` event is emitted for every tool call, loop trigger, delegation, and session lifecycle transition. The evolvr adapter is a subscriber on this bus.
-
-```go
-// pkg/evolvr/adapter.go
-package evolvr
-
-import (
-    "context"
-    "sync"
-    
-    "github.com/buianhtai/goclaw/protocol"
-    "github.com/buianhtai/goclaw/pkg/journal"
-)
-
-type Adapter struct {
-    journal    *journal.Client
-    classifier *Classifier
-    evolver    *Evolver
-    
-    mu       sync.Mutex
-    sessions map[string]*journal.Task
-}
-
-func NewAdapter(cfg Config) *Adapter {
-    return &Adapter{
-        journal:    journal.New(cfg.JournalPath),
-        classifier: NewClassifier(cfg.Classifier),
-        evolver:    NewEvolver(cfg.Evolver),
-        sessions:   make(map[string]*journal.Task),
-    }
-}
-
-// Register subscribes to the GoClaw audit event bus
-func (a *Adapter) Register(bus *protocol.EventBus) {
-    bus.Subscribe(protocol.EventAuditLog, a.handleAuditEvent)
-}
-
-func (a *Adapter) handleAuditEvent(ctx context.Context, e protocol.AuditEvent) {
-    switch e.Type {
-    case protocol.AuditSessionStart:
-        a.onSessionStart(ctx, e)
-    case protocol.AuditToolCall:
-        a.onToolCall(ctx, e)
-    case protocol.AuditSessionEnd:
-        a.onSessionEnd(ctx, e)
-    }
-}
-
-func (a *Adapter) onSessionStart(ctx context.Context, e protocol.AuditEvent) {
-    task, err := a.journal.StartTask(ctx, journal.StartParams{
-        ID:     e.SessionID,
-        Agent:  e.Agent,    // "opencode", "claude", "codex"
-        Intent: e.Intent,
-    })
-    if err != nil {
-        // Log and return — never block the agent
-        return
-    }
-
-    a.mu.Lock()
-    a.sessions[e.SessionID] = task
-    a.mu.Unlock()
-
-    // Inject relevant lessons via GoClaw's PendingMessageStore
-    a.injectLessons(ctx, e.SessionID, e.Agent, e.Intent)
-}
-
-func (a *Adapter) onToolCall(ctx context.Context, e protocol.AuditEvent) {
-    a.mu.Lock()
-    task := a.sessions[e.SessionID]
-    a.mu.Unlock()
-
-    if task == nil {
-        return
-    }
-
-    _ = a.journal.RecordToolCall(ctx, task, journal.ToolCallRecord{
-        Seq:            e.Seq,
-        Tool:           e.Tool,
-        ArgsHash:       hashArgs(e.Args),
-        ResultHash:     hashResult(e.Result),
-        ResultSummary:  summarize(e.Result, 80),
-        LatencyMs:      e.LatencyMs,
-        WasLoopTrigger: e.WasLoopTrigger,
-        TokenCost:      e.TokenCost,
-    })
-}
-
-func (a *Adapter) onSessionEnd(ctx context.Context, e protocol.AuditEvent) {
-    a.mu.Lock()
-    task := a.sessions[e.SessionID]
-    delete(a.sessions, e.SessionID)
-    a.mu.Unlock()
-
-    if task == nil {
-        return
-    }
-
-    _ = a.journal.CompleteTask(ctx, task, journal.OutcomeRecord{
-        Outcome:       e.Outcome,
-        OutcomeDetail: e.OutcomeDetail,
-        TokenCost:     e.TotalTokenCost,
-    })
-
-    if e.Outcome != "success" {
-        // Run async — do not block the event bus
-        go a.runClassification(context.Background(), task)
-    }
-}
-```
-
-</Card>
-
----
-
-## <Label color="rose">4</Label> Lesson Injection via PendingMessageStore
-
-<Card>
-
-GoClaw has a `PendingMessageStore` — a thread-safe queue that delivers messages to agents at the next tool response boundary. evolvr uses this to inject lessons without modifying the agent's conversation history.
-
-```go
-func (a *Adapter) injectLessons(
-    ctx context.Context,
-    sessionID, agent, intent string,
-) {
-    lessons, err := a.journal.GetRelevantLessons(ctx, journal.LessonQuery{
-        Agent:         agent,
-        TextForSearch: intent,
-        MinConfidence: 0.6,
-        Limit:         5,
-    })
-    if err != nil || len(lessons) == 0 {
-        return
-    }
-
-    formatted := formatLessonsForInjection(lessons)
-    a.pendingMessages.Add(sessionID, formatted, protocol.PriorityHigh)
-}
-
-func formatLessonsForInjection(lessons []journal.Lesson) string {
-    if len(lessons) == 0 {
-        return ""
-    }
-    lines := []string{"[evolvr] Learned behaviors relevant to this task:"}
-    for _, l := range lessons {
-        lines = append(lines,
-            fmt.Sprintf("- %s: %s", l.FailureClass, l.Recommendation))
-    }
-    return strings.Join(lines, "\n")
-}
-```
-
-The `PendingMessageStore.Add()` call is the same mechanism used by GoClaw's mid-run message injection (introduced in the GoClaw production ops series). evolvr gets this capability for free by registering on the same infrastructure.
-
-</Card>
-
----
-
-## <Label color="violet">5</Label> The Shared Journal — One SQLite, Two Adapters
-
-<Card>
-
-Both the Pi adapter and the GoClaw adapter write to the same SQLite journal. This means lessons learned from Pi sessions apply to GoClaw-routed sessions and vice versa — the learning is cross-agent.
-
-The journal client handles concurrent writes safely:
+Inside `@evolvr/cli`, the `hook` command routes each event to the corresponding journal operation:
 
 ```typescript
-// @evolvr/core/journal.ts
-export class JournalClient {
-  private db: Database;
+// packages/cli/src/commands/hook.ts
+import { Evolvr } from '@evolvr/core';
 
-  constructor(path: string) {
-    // WAL mode: concurrent reads with a single writer
-    this.db = new Database(path);
-    this.db.pragma('journal_mode = WAL');
-    this.db.pragma('foreign_keys = ON');
-    this.applyMigrations();
+interface HookOptions {
+  event: 'start' | 'pre-tool' | 'post-tool' | 'stop';
+  task: string;          // session ID from $CLAUDE_SESSION_ID
+  tool?: string;
+  argsHash?: string;
+  resultHash?: string;
+  latency?: number;
+  outcome?: string;
+}
+
+export async function hookCommand(opts: HookOptions): Promise<void> {
+  const evolvr = await Evolvr.load();  // reads .evolvr/config.json
+
+  switch (opts.event) {
+    case 'start': {
+      await evolvr.startTask({ id: opts.task, agent: 'claude' });
+      break;
+    }
+    case 'pre-tool': {
+      await evolvr.recordPreTool({
+        taskId: opts.task,
+        tool: opts.tool!,
+      });
+      break;
+    }
+    case 'post-tool': {
+      await evolvr.recordPostTool({
+        taskId: opts.task,
+        tool: opts.tool!,
+        argsHash: opts.argsHash!,
+        resultHash: opts.resultHash!,
+        latencyMs: opts.latency ?? 0,
+      });
+      break;
+    }
+    case 'stop': {
+      const result = await evolvr.completeTask({
+        taskId: opts.task,
+        outcome: (opts.outcome ?? 'success') as 'success' | 'partial' | 'failed',
+      });
+      // Run classifier — sync, fast (rule-based only in v0.1)
+      if (result.outcome !== 'success') {
+        await evolvr.classify(opts.task);
+      }
+      break;
+    }
   }
-
-  async startTask(params: StartParams): Promise<Task> {
-    return this.db.transaction(() => {
-      const id = params.id ?? ulid();
-      this.db.prepare(`
-        INSERT INTO tasks (id, agent, intent, started_at, status)
-        VALUES (?, ?, ?, ?, 'running')
-      `).run(id, params.agent, params.intent, new Date().toISOString());
-
-      return this.db.prepare(
-        `SELECT * FROM tasks WHERE id = ?`
-      ).get(id) as Task;
-    })();
-  }
-  // ... rest of journal operations
 }
 ```
 
-The SQLite WAL mode allows the Pi extension (TypeScript) and the GoClaw adapter (Go, via `mattn/go-sqlite3`) to write concurrently without blocking each other. This is the most pragmatic choice for a local-first system — no daemon, no network, just a file.
+The `Evolvr.load()` call reads `.evolvr/config.json` from the project root (or `~/.evolvr/config.json` as a fallback). Each hook invocation is a standalone CLI process — no persistent daemon required.
+
+</Card>
+
+---
+
+## <Label color="rose">4</Label> The MCP Server Implementation
+
+<Card>
+
+`@evolvr/mcp` is a thin MCP server layer over `@evolvr/core`. It starts a persistent process that Claude Code (or any MCP client) connects to via stdio.
+
+**Server initialization:**
+
+```typescript
+// packages/mcp/src/index.ts
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { Evolvr } from '@evolvr/core';
+import { registerTools } from './tools.js';
+
+async function main() {
+  const projectRoot = process.argv[2] 
+    ? process.argv[process.argv.indexOf('--project-root') + 1]
+    : process.cwd();
+
+  const evolvr = await Evolvr.load({ root: projectRoot });
+
+  const server = new Server(
+    { name: 'evolvr', version: '0.1.0' },
+    { capabilities: { tools: {} } }
+  );
+
+  registerTools(server, evolvr);
+
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+}
+
+main().catch(console.error);
+```
+
+**Tool registration:**
+
+```typescript
+// packages/mcp/src/tools.ts
+export function registerTools(server: Server, evolvr: Evolvr) {
+  server.setRequestHandler(ListToolsRequestSchema, async () => ({
+    tools: [
+      {
+        name: 'evolvr_get_lessons',
+        description: 'Get learned lessons relevant to the current task for system prompt injection.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            text: { type: 'string', description: 'Task description or first message' },
+            agent: { type: 'string', description: 'Agent type filter (claude, opencode, codex)' },
+            limit: { type: 'number', description: 'Max lessons to return (default 5)' },
+          },
+          required: ['text'],
+        },
+      },
+      // ... evolvr_record_tool_call, evolvr_session_end, evolvr_get_status
+    ],
+  }));
+
+  server.setRequestHandler(CallToolRequestSchema, async (req) => {
+    switch (req.params.name) {
+      case 'evolvr_get_lessons': {
+        const lessons = await evolvr.getLessons({
+          text: req.params.arguments.text as string,
+          agent: req.params.arguments.agent as string | undefined,
+          limit: req.params.arguments.limit as number | undefined,
+        });
+        return {
+          content: [{ type: 'text', text: formatLessons(lessons) }],
+        };
+      }
+      // ... other tool handlers
+    }
+  });
+}
+```
 
 </Card>
 
 <Callout color="rose">
-Cross-agent learning is the underrated benefit of a shared journal. A lesson from a Claude session running through GoClaw is visible to Pi before its next run on a similar task. The agents effectively teach each other.
+The MCP server runs as a persistent child process. Claude Code starts it on the first tool call and keeps it alive for the session. This means the `Evolvr.load()` call and database connection happen once per session, not once per tool call — unlike the hook command which is a fresh process each time.
 </Callout>
+
+---
+
+## <Label color="violet">5</Label> The Shared Journal — One Database, Two Surfaces
+
+<Card>
+
+Both the hook pipeline and the MCP server write to the same journal database. The hook command handles writes (pre-tool, post-tool, stop), and the MCP server handles reads (`evolvr_get_lessons`, `evolvr_get_status`).
+
+Write/read concurrency is handled by libsql's WAL mode:
+
+```typescript
+// packages/core/src/adapters/sqlite.ts
+import { createClient } from '@libsql/client';
+
+export function createSQLiteAdapter(path: string) {
+  const client = createClient({ url: `file:${path}` });
+
+  // WAL mode: concurrent reads alongside writes
+  await client.execute('PRAGMA journal_mode = WAL');
+  await client.execute('PRAGMA foreign_keys = ON');
+
+  return client;
+}
+```
+
+The hook command (write path) and MCP server (read path) can operate concurrently without blocking. Hook writes are fast — a single `INSERT` or `UPDATE` per call. MCP reads are queries over indexed columns. No contention in practice.
+
+For teams using PostgreSQL, the same `@evolvr/core` adapters work with a Postgres URL — no code changes, just config:
+
+```json
+{
+  "storage": {
+    "type": "postgres",
+    "url": "postgresql://user:pass@host:5432/evolvr"
+  }
+}
+```
+
+</Card>
 
 ---
 
 ## <Label color="sky">6</Label> Full System Architecture
 
-<ArchLayer badge="layer 4" badgeColor="teal" label="Agent Runtime" items={["Pi (pi.dev)", "OpenCode via GoClaw", "Claude CLI via GoClaw", "Codex via GoClaw"]} />
-<ArchLayer badge="layer 3" badgeColor="green" label="Adapter Layer" items={["Pi Extension (TypeScript)", "GoClaw Adapter (Go)", "PendingMessageStore injection"]} />
-<ArchLayer badge="layer 2" badgeColor="amber" label="Core Learning" items={["Task Journal (SQLite/WAL)", "Failure Classifier (rule-based + LLM)", "Skill Evolver (A/B + patch)"]} />
-<ArchLayer badge="layer 1" badgeColor="rose" label="Output Layer" items={["AGENTS.md (session-start injection)", "Lesson DB (context-relevant retrieval)", "git commits (promotion audit trail)"]} />
+<ArchLayer badge="layer 3" badgeColor="teal" label="Agent Runtime" items={["Claude Code (via settings.json hooks)", "Any MCP-compatible agent (Cursor, Windsurf, ...)", "OpenCode, Codex — roadmap (v0.4)"]} />
+<ArchLayer badge="layer 2" badgeColor="green" label="Integration Layer" items={["@evolvr/cli — hook command (write path)", "@evolvr/mcp — MCP server (read/write path)", "settings.json hooks — async, no latency impact"]} />
+<ArchLayer badge="layer 1" badgeColor="amber" label="Core" items={["@evolvr/core — Task Journal (libsql/Postgres)", "Failure Classifier (rule-based, stage 2 roadmap)", "Lesson store (confidence-gated, keyword-indexed)"]} />
 
 ---
 
@@ -380,7 +301,7 @@ Cross-agent learning is the underrated benefit of a shared journal. A lesson fro
 
 ```bash
 npm install -g @evolvr/cli
-# or: pnpm add -D @evolvr/cli
+# also installs evolvr-mcp binary
 ```
 
 **Initialize in a project:**
@@ -388,54 +309,57 @@ npm install -g @evolvr/cli
 ```bash
 cd my-project
 evolvr init
-# Creates: evolvr.db, evolvr.json, adds evolvr section to AGENTS.md
+# creates: .evolvr/config.json, evolvr.db
 ```
 
-**Register the Pi extension:**
+**Add the MCP server to Claude Code:**
 
-```typescript
-// pi.config.ts
-import { register as evolvrRegister } from '@evolvr/pi';
-export default { extensions: [evolvrRegister] };
+```json
+// ~/.claude/mcp.json
+{
+  "mcpServers": {
+    "evolvr": {
+      "command": "evolvr-mcp",
+      "args": ["--project-root", "/path/to/my-project"]
+    }
+  }
+}
 ```
 
-**Register the GoClaw adapter:**
+**Add hooks to Claude Code:**
 
-```go
-// In your GoClaw initialization
-adapter := evolvr.NewAdapter(evolvr.ConfigFromFile("evolvr.json"))
-adapter.Register(protocol.GlobalEventBus)
+```json
+// ~/.claude/settings.json — add the hooks block shown in section 2
 ```
 
 **Day-to-day commands:**
 
 ```bash
-evolvr status                  # journal stats: runs, failures, lessons
-evolvr lessons                 # list active lessons
-evolvr lessons --pending       # review queue
-evolvr lessons approve <id>    # approve patch
-evolvr lessons reject <id>     # reject lesson
-evolvr patches --ready         # patches ready for review
-evolvr patches history         # committed patches with A/B results
+evolvr status                           # journal stats
+evolvr tasks --outcome failed --limit 20  # recent failures
+evolvr tasks --agent claude --show-tool-calls  # with tool call detail
+evolvr lessons                          # active lessons
+evolvr lessons --class exact_repeat_loop  # filter by class
+evolvr lessons --promote                # mark lessons for AGENTS.md (v0.3)
 ```
 
 </Card>
 
 <Pipeline
   nodes={[
-    { title: "Install + init", subtitle: "evolvr init scaffolds db and config" },
-    { title: "Register adapters", subtitle: "Pi extension + GoClaw subscriber" },
-    { title: "Agents run normally", subtitle: "Adapter observes, journal grows" },
-    { title: "Failures classified", subtitle: "Rule-based or LLM, confidence-gated" },
-    { title: "Review + approve", subtitle: "Operator reviews AGENTS.md patches" },
-    { title: "A/B test + promote", subtitle: "10-run shadow test, then git commit" },
+    { title: "Install + init", subtitle: "evolvr init creates db and config" },
+    { title: "Configure MCP", subtitle: "Add evolvr-mcp to claude mcp.json" },
+    { title: "Add hooks", subtitle: "PreToolUse/PostToolUse/Stop in settings.json" },
+    { title: "Agents run normally", subtitle: "Hooks record, journal grows" },
+    { title: "Failures classified", subtitle: "Rule-based, confidence-gated" },
+    { title: "Lessons injected", subtitle: "evolvr_get_lessons at next session start" },
   ]}
   arrows={[
     { label: "setup", direction: "right" },
+    { label: "config", direction: "right" },
     { label: "observe", direction: "right" },
     { label: "classify", direction: "right" },
-    { label: "gate", direction: "right" },
-    { label: "promote", direction: "right" },
+    { label: "inject", direction: "right" },
   ]}
 />
 
@@ -445,27 +369,27 @@ evolvr patches history         # committed patches with A/B results
 
 <Card>
 
-This series covered evolvr's core MVP. The design doc at `docs/evolvr-design.md` in the GoClaw repository tracks planned extensions:
+The v0.1 series covered evolvr's shipped MVP. The roadmap:
 
-**v0.2 — Semantic classifier and embedding search**
+**v0.2 — Semantic classifier**
 - Stage 2 LLM classification enabled by default
-- Lesson retrieval by embedding similarity (not just agent scope)
-- Vector index on lesson content for fast context-relevant lookup
+- Embedding-based lesson retrieval in `evolvr_get_lessons` (not just keyword matching)
+- Vector index on lesson content for context-relevant lookup
 
-**v0.3 — Multi-repo journal federation**
-- Shared lessons across projects on the same machine
-- Opt-in "global" lessons that apply everywhere
-- Lesson export/import for team knowledge sharing
+**v0.3 — AGENTS.md auto-promotion**
+- Evidence-gated patch generation (3+ instances required)
+- Human review gate via `evolvr lessons --promote`
+- A/B shadow testing over 10 matching runs before permanent commit
 
-**v0.4 — Team-aware learning**
-- Per-engineer behavioral patterns
-- Cross-session trend detection
-- Weekly digest: "these 3 patterns caused 80% of your session failures this week"
+**v0.4 — Broader agent support**
+- OpenCode plugin (event bus subscriber)
+- Codex provider client wrapper
+- Cross-project lesson sharing and global lesson scope
 
-The project starts at [github.com/buianhtai/evolvr](https://github.com/buianhtai/evolvr). The Pi extension and GoClaw adapter are in separate packages under the `packages/` directory.
+The project is at [github.com/buianhtai/evolvr](https://github.com/buianhtai/evolvr). Packages are in `packages/core`, `packages/cli`, and `packages/mcp`.
 
 </Card>
 
 <Callout color="sky">
-The GoClaw series (posts 1-12) provides the infrastructure that evolvr builds on — particularly the audit event bus, loop detection system, and pending message injection. If you haven't read those posts, the [GoClaw series](https://buianhtai.github.io/en/blog/) is the right starting point.
+If you're using Claude Code daily, the hook + MCP setup takes about 5 minutes and immediately starts building a failure record. After a week of normal use, `evolvr lessons` will show the patterns Claude keeps hitting in your specific codebase.
 </Callout>

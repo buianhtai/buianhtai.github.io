@@ -1,8 +1,8 @@
 ---
-title: "The Skill Evolver: Evidence-Gated Self-Modification for AI Agents"
-description: "How evolvr turns accumulated failure lessons into AGENTS.md patches — with evidence thresholds, human review gates, A/B shadow testing, and git-committed promotion. Self-modification with a safety harness."
+title: "Lesson Injection and the AGENTS.md Roadmap"
+description: "How evolvr surfaces learned lessons to agents via the MCP server's evolvr_get_lessons tool — and what the full self-modification pipeline (evidence gating, review gate, A/B testing) looks like on the roadmap."
 pubDate: 2026-05-03
-tags: ["ai", "agents", "architecture", "typescript", "reliability"]
+tags: ["ai", "agents", "architecture", "typescript", "reliability", "mcp"]
 lang: "en"
 category: "architecture"
 series: "evolvr"
@@ -17,340 +17,265 @@ import DataTable from '../../../components/mdx/DataTable.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
 import Mermaid from '../../../components/mdx/Mermaid.astro';
 
-An agent that learns from failure is not useful if the learning only lives in a database. The Skill Evolver closes the loop: it takes lessons with sufficient evidence and writes them back into the agent's instruction files — the AGENTS.md and SKILL.md files the agent reads at session start. Autonomously, conservatively, with a review gate, and with A/B verification before permanent promotion.
+Once a lesson passes the confidence gate, it sits in the journal. The question is how it gets back to the agent that will benefit from it. In v0.1, the answer is the MCP server: the agent calls `evolvr_get_lessons` before starting work and receives the top relevant lessons as structured text. Simple, deterministic, no LLM required. The more ambitious self-modification pipeline — where evolvr autonomously writes patches to AGENTS.md, A/B tests them, and commits the results — is the v0.3 roadmap, described at the end of this post.
 
 <HeroGrid items={[
-  { label: "Evidence-Gated", sublabel: "3+ instances before any\npatch is drafted", color: "#0891b2" },
-  { label: "Review Gate", sublabel: "Operator approves or rejects\nevery patch before apply", color: "#059669" },
-  { label: "A/B Shadow Test", sublabel: "10 similar tasks: new skill\nvs old, outcome delta decides", color: "#d97706" },
-  { label: "Git-Committed", sublabel: "Promotions are commits.\nFull audit trail.", color: "#e11d48" },
+  { label: "MCP Delivery", sublabel: "evolvr_get_lessons returns\nrelevant lessons on demand", color: "#0891b2" },
+  { label: "No LLM in v0.1", sublabel: "Lesson retrieval is purely\nrule-based and keyword-scoped", color: "#059669" },
+  { label: "4 MCP Tools", sublabel: "record, session_end,\nget_lessons, get_status", color: "#d97706" },
+  { label: "v0.3 Roadmap", sublabel: "Auto-patch AGENTS.md with\nevidence-gated A/B promotion", color: "#e11d48" },
 ]} />
 
 ---
 
-## <Label color="teal">1</Label> The Problem With Self-Modification
+## <Label color="teal">1</Label> The MCP Server — Four Tools
 
 <Card>
 
-Self-modifying agents are dangerous in a specific way: a bad lesson applied confidently makes the agent systematically worse, not just occasionally worse. A single wrong AGENTS.md entry affects every future run, not just the next one.
+`@evolvr/mcp` is a lightweight MCP server built on `@modelcontextprotocol/sdk`. It exposes four tools that together form the read/write interface between agents and the evolvr journal.
 
-This is why the Skill Evolver is conservative by default and requires evidence accumulation before doing anything. The design principle is: **the agent earns the right to modify its own instructions through repeated, consistent evidence.**
+```typescript
+// The four MCP tool names
+const TOOLS = [
+  'evolvr_record_tool_call',  // write: log a tool invocation
+  'evolvr_session_end',       // write: finalize session, run classifier
+  'evolvr_get_lessons',       // read: get lessons for system prompt injection
+  'evolvr_get_status',        // read: journal stats
+] as const;
+```
 
-Three safeguards operate in sequence:
-
-1. **Evidence threshold** — A lesson must appear in 3 or more separate Task records before a patch is drafted. One bad run does not trigger anything.
-2. **Review gate** — A human operator sees the diff before it is applied (unless `auto_evolve: true` is set).
-3. **A/B shadow test** — The patched version runs alongside the un-patched version for 10 similar tasks. The outcome delta determines whether the patch is promoted or reverted.
-
-Any of these can kill a patch. All three must pass for permanent promotion.
+Agents that support MCP (Claude Code, Cursor, Windsurf, and others) can use all four tools. For agents that don't support MCP natively — or when you want lower-latency hook-based recording — the CLI `evolvr hook` command provides the same write path without MCP overhead.
 
 </Card>
 
-<Callout color="amber">
-`auto_evolve: true` bypasses the review gate but not the evidence threshold or the A/B test. Full automation is possible but opt-in. The default requires a human to approve every AGENTS.md change.
+---
+
+## <Label color="green">2</Label> evolvr_get_lessons — The Injection Tool
+
+<Card>
+
+`evolvr_get_lessons` is the tool the agent calls when it wants to know what evolvr has learned. The agent passes its current task description, and evolvr returns the top matching lessons.
+
+**Input schema:**
+
+```typescript
+{
+  text: string;       // task description or first message — used for keyword matching
+  agent?: string;     // filter by agent type ('claude', 'opencode', 'codex', ...)
+  limit?: number;     // default 5, max 20
+}
+```
+
+**Output:**
+
+```
+[evolvr] Learned behaviors relevant to this task (3 lessons):
+
+1. [exact_repeat_loop] confidence: 1.0 | evidence: 5 runs
+   Trigger: Reading files in src/generated/ during refactoring tasks
+   Recommendation: Files in src/generated/ are auto-generated and do not change
+   during a session. Read each file at most once. Re-reading is never productive.
+
+2. [same_result_cycling] confidence: 0.82 | evidence: 4 runs
+   Trigger: Searching for a symbol with pattern variations that all return empty
+   Recommendation: After 3 searches with different patterns return empty results,
+   stop and ask the user to confirm the symbol name.
+
+3. [read_only_streak] confidence: 0.8 | evidence: 3 runs
+   Trigger: Long read streaks during database migration tasks
+   Recommendation: Before writing any migration file, run the migration listing
+   command first. Blind migrations cause version conflicts.
+```
+
+The output is plain text formatted for direct injection into a system prompt. The agent reads it as part of its working context for the session.
+
+</Card>
+
+<Callout color="teal">
+The keyword matching in v0.1 is simple: lessons are filtered by agent scope and ranked by evidence count × confidence. Semantic similarity search (embedding-based retrieval) is planned for v0.2 when the stage 2 classifier is enabled.
 </Callout>
 
 ---
 
-## <Label color="green">2</Label> Patch Generation
+## <Label color="amber">3</Label> The Other Three Tools
 
 <Card>
 
-When a lesson's `evidence_count` reaches 3 and its confidence is ≥ 0.6, the Skill Evolver drafts a patch.
-
-The patch is a diff against the current AGENTS.md (or relevant SKILL.md). The content comes directly from the lesson's `trigger_pattern` and `recommendation` fields, formatted as a structured AGENTS.md entry:
+**`evolvr_record_tool_call`** — The write path for agents that prefer MCP over CLI hooks. Accepts tool name, args hash, result hash, result summary, latency, and sequence number. Returns the updated task record.
 
 ```typescript
-function generatePatch(lesson: Lesson, agentsMdPath: string): Patch {
-  const current = fs.readFileSync(agentsMdPath, 'utf-8');
-
-  // Find or create the evolvr-managed section
-  const sectionMarker = '## evolvr — learned behaviors';
-  const entry = formatLessonEntry(lesson);
-
-  let patched: string;
-  if (current.includes(sectionMarker)) {
-    // Append to existing section
-    patched = current.replace(
-      sectionMarker,
-      `${sectionMarker}\n\n${entry}`
-    );
-  } else {
-    // Create section at end of file
-    patched = `${current}\n\n${sectionMarker}\n\n${entry}\n`;
+// MCP call
+{
+  "tool": "evolvr_record_tool_call",
+  "arguments": {
+    "task_id": "01HWXY...",
+    "seq": 7,
+    "tool_name": "read_file",
+    "args_hash": "a3f9c2b1",
+    "result_hash": "d8e4f7a2",
+    "result_summary": "// auto-generated by build script\nexport const routes = ...",
+    "latency_ms": 45
   }
-
-  return {
-    lesson_id: lesson.id,
-    target_file: agentsMdPath,
-    original: current,
-    patched,
-    diff: unified_diff(current, patched),
-    created_at: new Date().toISOString(),
-  };
-}
-
-function formatLessonEntry(lesson: Lesson): string {
-  const agents = lesson.agent_scope.join(', ');
-  const date = lesson.last_seen_at.slice(0, 10);
-  return `### [${lesson.failure_class}] ${lesson.trigger_pattern}
-
-> Applies to: ${agents}  
-> Evidence: ${lesson.evidence_count} instances  
-> Last seen: ${date}
-
-${lesson.recommendation}`;
 }
 ```
 
-The `## evolvr — learned behaviors` section is evolvr-managed and clearly marked. Human-written AGENTS.md content above this marker is never touched.
-
-</Card>
-
----
-
-## <Label color="amber">3</Label> The Review Gate
-
-<Card>
-
-After patch generation, the CLI surfaces the diff for operator review:
-
-```
-evolvr patches --ready
-
-  Patch #3 ready for review
-  ─────────────────────────────────────────
-  File:         AGENTS.md
-  Lesson:       same_result_cycling (id: 01HWXY...)
-  Evidence:     4 instances across 3 sessions
-  Confidence:   0.82
-  Agents:       pi, opencode
-
-  Diff:
-  + ### [same_result_cycling] Searching for symbols that don't exist
-  +
-  + > Applies to: pi, opencode
-  + > Evidence: 4 instances
-  + > Last seen: 2026-05-02
-  +
-  + After 3 search_codebase calls with different patterns return empty results,
-  + stop searching and ask the user to confirm the symbol name. The symbol is
-  + likely named differently than expected or does not exist yet.
-
-  Actions: [a]pprove  [r]eject  [e]dit  [s]kip
-```
-
-Three non-skip options:
-
-- **Approve** — Applies the patch to AGENTS.md and marks the patch for A/B testing. Does not commit yet.
-- **Reject** — Marks the lesson as rejected. It will not trigger future patches unless manually un-rejected.
-- **Edit** — Opens the recommendation text in `$EDITOR`. Operator can refine the wording before approving.
-
-</Card>
-
----
-
-## <Label color="rose">4</Label> A/B Shadow Testing
-
-<Card>
-
-Approved patches do not go to production immediately. They enter a shadow test against the un-patched baseline.
-
-Shadow testing works by tracking runs that match the lesson's `trigger_pattern` after the patch is applied:
+**`evolvr_session_end`** — Finalizes the task record and triggers the failure classifier. Should be called when the agent's session completes (success or failure). Returns the classification result and any new lessons created.
 
 ```typescript
-interface ShadowTest {
-  patch_id: string;
-  lesson_id: string;
-  started_at: string;
-  target_runs: number;          // default: 10
-  completed_runs: number;
-  patched_outcomes: Outcome[];  // runs where patch was active
-  baseline_outcomes: Outcome[]; // recent historical runs before patch
-  status: 'running' | 'promoted' | 'reverted';
+{
+  "tool": "evolvr_session_end",
+  "arguments": {
+    "task_id": "01HWXY...",
+    "outcome": "failed",           // "success" | "partial" | "failed"
+    "outcome_detail": "read_only_streak detected: 14 consecutive reads"
+  }
 }
 ```
 
-The test compares outcome distributions:
-- `patched_outcomes`: outcomes from the 10 runs after patch application
-- `baseline_outcomes`: outcomes from the 10 most recent matching runs before the patch
-
-**Promotion criteria** (all must pass):
-- Patched failure rate ≤ baseline failure rate × 0.7 (30% improvement required)
-- No new failure class introduced by the patch
-- At least 7 of 10 patched runs completed (sufficient sample)
-
-**Revert criteria** (any triggers revert):
-- Patched failure rate > baseline failure rate (patch made things worse)
-- New failure class appears in ≥ 3 patched runs
-
-If neither threshold is reached after 10 runs (inconclusive), the patch is flagged for manual review.
+**`evolvr_get_status`** — Returns journal statistics: total tasks, failure rate by class, lesson count, pending review count. Useful for agents that want to surface evolvr health in status reports.
 
 </Card>
+
+---
+
+## <Label color="rose">4</Label> Connecting Claude Code
+
+<Card>
+
+For Claude Code, the recommended integration uses CLI hooks (not the MCP record tools) for the write path, combined with the MCP server for the read path. This gives lower latency on writes (the hook command is a fast CLI invocation) while keeping lesson retrieval in-band as an MCP tool call.
+
+**MCP config (`~/.claude/mcp.json`):**
+
+```json
+{
+  "mcpServers": {
+    "evolvr": {
+      "command": "evolvr-mcp",
+      "args": ["--project-root", "/path/to/your/project"]
+    }
+  }
+}
+```
+
+**Hook config (`~/.claude/settings.json`):**
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [{
+      "matcher": "*",
+      "hooks": [{
+        "type": "command",
+        "command": "evolvr hook --event pre-tool --task $CLAUDE_SESSION_ID --tool $TOOL_NAME"
+      }]
+    }],
+    "PostToolUse": [{
+      "matcher": "*",
+      "hooks": [{
+        "type": "command",
+        "command": "evolvr hook --event post-tool --task $CLAUDE_SESSION_ID --tool $TOOL_NAME --args-hash $ARGS_HASH --result-hash $RESULT_HASH --latency $LATENCY_MS"
+      }]
+    }],
+    "Stop": [{
+      "hooks": [{
+        "type": "command",
+        "command": "evolvr hook --event stop --task $CLAUDE_SESSION_ID --outcome success"
+      }]
+    }]
+  }
+}
+```
+
+With both configs in place, Claude Code calls `evolvr_get_lessons` at the start of each session and every tool call is recorded to the journal without any manual intervention.
+
+</Card>
+
+---
+
+## <Label color="violet">5</Label> The Full v0.1 Flow
 
 <Mermaid
   chart={`flowchart TD
-    A[Lesson: evidence_count >= 3] --> B[Draft Patch]
-    B --> C{auto_evolve?}
-    C -->|no| D[Review gate: show diff]
-    D --> E{Operator decision}
-    E -->|reject| REJECT[Mark rejected, no patch]
-    E -->|edit| F[Edit recommendation]
-    F --> D
-    E -->|approve| G[Apply patch to AGENTS.md]
-    C -->|yes| G
-    G --> H[Start A/B shadow test]
-    H --> I[Run 10 matching tasks]
-    I --> J{Outcome delta?}
-    J -->|patched < baseline x0.7| PROMOTE[Promote: git commit]
-    J -->|patched > baseline| REVERT[Revert patch]
-    J -->|inconclusive| MANUAL[Flag for manual review]
-    PROMOTE --> K[evolvr commit to AGENTS.md]`}
-  caption="Skill Evolver pipeline: evidence threshold → review gate → A/B test → promotion or revert"
+    A[Claude Code session starts] --> B[Agent calls evolvr_get_lessons MCP tool]
+    B --> C[Journal returns top 5 lessons for task]
+    C --> D[Agent reads lessons in system context]
+    D --> E[Tool calls begin]
+    E --> F[PreToolUse hook: evolvr hook pre-tool]
+    F --> G[PostToolUse hook: evolvr hook post-tool]
+    G --> H{More tool calls?}
+    H -->|yes| E
+    H -->|no| I[Stop hook: evolvr hook stop]
+    I --> J[Classifier runs over task record]
+    J --> K{Failure class detected?}
+    K -->|no| L[Task stored — outcome success]
+    K -->|yes, confidence >= 0.6| M[Lesson upserted in journal]
+    K -->|yes, confidence 0.35-0.6| N[Pending review queue]
+    M --> O[Available for next evolvr_get_lessons call]`}
+  caption="v0.1 end-to-end flow: lesson injection at start, tool recording via hooks, classification at stop"
 />
 
 ---
 
-## <Label color="violet">5</Label> Promotion — The Git Commit
+## <Label color="sky">6</Label> The v0.3 Roadmap — AGENTS.md Auto-Promotion
 
 <Card>
 
-When a patch passes the A/B test, it is committed to the repository with a structured commit message that makes the change fully auditable:
+The v0.1 MCP delivery model is intentionally conservative: lessons inform the agent at the start of a session but do not modify any files. The more powerful capability — autonomously writing lessons back into AGENTS.md — is planned for v0.3, with three safeguards:
 
+**Evidence threshold** — A lesson must accumulate 3 or more separate Task records before a patch is drafted. One bad run triggers nothing.
+
+**Review gate** — A human operator sees the diff before it is applied (unless `auto_evolve: true` is configured).
+
+**A/B shadow test** — The patched AGENTS.md runs alongside the un-patched version for 10 similar tasks. The outcome delta determines whether the patch is promoted or reverted.
+
+The patch format will be a clearly marked section in AGENTS.md:
+
+```markdown
+## evolvr — learned behaviors
+
+### [exact_repeat_loop] Reading from src/generated/ directories
+
+> Applies to: claude  
+> Evidence: 5 instances  
+> Last seen: 2026-05-02
+
+Files in src/generated/ are auto-generated at build time and do not change
+during a session. Read each generated file at most once. If you need its
+content again, it is still in your context — do not re-read.
 ```
-evolvr: apply lesson patch [same_result_cycling/symbol_search]
 
-Failure class:   same_result_cycling
-Evidence:        4 instances over 3 sessions (2026-04-28 to 2026-05-02)
-Confidence:      0.82
-Agents:          pi, opencode
-A/B test:        10 runs — patched 1 failure, baseline 4 failures (75% reduction)
-
-Lesson ID: 01HWXY...
-Task IDs:  01HPQR..., 01HSTU..., 01HVWX..., 01HYZAB...
-
-Generated by evolvr v0.1.0
-```
-
-The commit:
-1. Is tagged with `evolvr:` prefix for easy filtering in git log
-2. References the specific lesson and task IDs that generated it
-3. Includes the A/B test outcome as evidence of effectiveness
-4. Is made to AGENTS.md only — no source code is ever modified by evolvr
-
-```typescript
-async function promotePatches(patch: Patch, test: ShadowTest): Promise<void> {
-  // Write the patched content
-  fs.writeFileSync(patch.target_file, patch.patched, 'utf-8');
-
-  const message = buildCommitMessage(patch, test);
-  await exec(`git add ${patch.target_file}`);
-  await exec(`git commit -m ${JSON.stringify(message)}`);
-
-  // Update lesson and patch records
-  await db.run(
-    `UPDATE lessons SET promoted_to_agents_md = 1 WHERE id = ?`,
-    [patch.lesson_id]
-  );
-  await db.run(
-    `UPDATE shadow_tests SET status = 'promoted' WHERE id = ?`,
-    [test.id]
-  );
-}
-```
+The section is evolvr-managed and clearly separated from human-written AGENTS.md content. Human-written content above the marker is never touched.
 
 </Card>
-
-<Callout color="violet">
-evolvr never modifies source code. It only modifies agent instruction files (AGENTS.md, SKILL.md). This is a hard boundary — the Skill Evolver's scope is agent behavior, not the project it is working on.
-</Callout>
-
----
-
-## <Label color="sky">6</Label> Lesson Injection at Session Start
-
-<Card>
-
-Lessons don't wait for promotion to AGENTS.md to be useful. Any lesson with `evidence_count ≥ 1` and `confidence ≥ 0.6` is injected into the agent's context at session start — even before it has enough evidence to trigger the full evolution pipeline.
-
-For Pi, this happens via the extension's `session:start` hook:
-
-```typescript
-pi.on('session:start', async (session) => {
-  const relevantLessons = await lessons.query({
-    agent: 'pi',
-    context_embedding: await embed(session.firstMessage),
-    min_confidence: 0.6,
-    limit: 5,
-  });
-
-  if (relevantLessons.length > 0) {
-    const injected = formatLessonsForContext(relevantLessons);
-    pi.injectSystemMessage(injected);
-  }
-});
-```
-
-For GoClaw-routed agents (OpenCode, Claude, Codex), lessons are delivered via `PendingMessageStore.Add()` before the run starts — the same mechanism GoClaw uses for mid-run message injection.
-
-The injected format is concise — one lesson per line in the system message, not a wall of text:
-
-```
-[evolvr] Learned behaviors for this session:
-- same_result_cycling: After 3 searches with different patterns return empty results,
-  stop and ask the user to confirm the symbol name.
-- read_only_streak: Files in src/generated/ are auto-generated. Read each once only.
-```
-
-</Card>
-
----
-
-## <Label color="teal">7</Label> Skill Evolver Configuration
 
 <DataTable
-  caption="Skill Evolver configuration options"
-  accent="teal"
-  headers={["Option", "Default", "Description"]}
+  caption="Evolvr roadmap milestones"
+  accent="sky"
+  headers={["Version", "Feature", "Status"]}
   rows={[
     {
-      Option: "auto_evolve",
-      Default: "false",
-      Description: "Skip review gate. Patch applies automatically if confidence >= threshold.",
+      "Version": "v0.1",
+      "Feature": "Task journal, rule-based classifier, MCP server, Claude Code hooks",
+      "Status": "Shipped",
     },
     {
-      Option: "min_evidence",
-      Default: "3",
-      Description: "Minimum Task record evidence before patch is drafted.",
+      "Version": "v0.2",
+      "Feature": "Stage 2 LLM classifier, embedding-based lesson retrieval",
+      "Status": "Roadmap",
     },
     {
-      Option: "ab_test_runs",
-      Default: "10",
-      Description: "Number of matching runs to collect before evaluating A/B result.",
+      "Version": "v0.3",
+      "Feature": "AGENTS.md auto-promotion with evidence gating, review gate, A/B test",
+      "Status": "Roadmap",
     },
     {
-      Option: "ab_improvement_threshold",
-      Default: "0.7",
-      Description: "Patched failure rate must be <= baseline * this value to promote.",
-    },
-    {
-      Option: "max_lessons_per_session",
-      Default: "5",
-      Description: "Maximum lessons injected into a single session context.",
-    },
-    {
-      Option: "inject_unpromoted",
-      Default: "true",
-      Description: "Inject lessons before promotion to AGENTS.md (evidence >= 1).",
-    },
-    {
-      Option: "commit_on_promote",
-      Default: "true",
-      Description: "Auto-commit promoted patches to git.",
+      "Version": "v0.4",
+      "Feature": "OpenCode plugin, Codex adapter, cross-project lesson sharing",
+      "Status": "Roadmap",
     },
   ]}
 />
 
 <Callout color="sky">
-The final post in this series covers the adapter implementations in detail: the Pi extension TypeScript module and the GoClaw Go adapter that wires evolvr into the existing audit event bus.
+The final post in this series covers the Claude Code hook integration in detail — how the `evolvr hook` command works internally, the args/result hashing scheme, and the MCP server startup and tool dispatch.
 </Callout>

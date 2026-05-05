@@ -2,7 +2,7 @@
 title: "The Task Journal: Recording What Agents Actually Do"
 description: "evolvr's Task Journal captures the full causal chain of every agent run — intent, tool calls, outcome, and extracted lessons — in a schema designed for failure analysis, not conversation replay."
 pubDate: 2026-05-03
-tags: ["ai", "agents", "architecture", "sqlite", "typescript"]
+tags: ["ai", "agents", "architecture", "sqlite", "typescript", "mcp"]
 lang: "en"
 category: "architecture"
 series: "evolvr"
@@ -20,9 +20,9 @@ import Mermaid from '../../../components/mdx/Mermaid.astro';
 Most observability tools record what an agent *said*. The Task Journal records what an agent *did* — the ordered sequence of tool calls, their outcomes, the failure pattern that emerged, and the lesson extracted. This is a fundamentally different schema, optimized for failure analysis rather than conversation replay.
 
 <HeroGrid items={[
-  { label: "Causal Chain", sublabel: "Intent → plan → tool calls\n→ outcome → lesson", color: "#0891b2" },
+  { label: "Causal Chain", sublabel: "Intent → tool calls\n→ outcome → lesson", color: "#0891b2" },
   { label: "Hash-Based Privacy", sublabel: "Args hashed, not stored raw.\nResult summaries only.", color: "#059669" },
-  { label: "SQLite First", sublabel: "Zero infra. Single file.\nPostgres for teams.", color: "#d97706" },
+  { label: "libsql / Postgres", sublabel: "Zero infra. Single file.\nPostgres for teams.", color: "#d97706" },
   { label: "Queryable", sublabel: "Failure class, agent, tool,\ntime range — all indexed.", color: "#e11d48" },
 ]} />
 
@@ -302,7 +302,7 @@ CREATE INDEX idx_tool_calls_tool ON tool_calls(tool, loop_trigger);
 CREATE INDEX idx_lessons_failure ON lessons(failure_class, promoted, rejected);
 ```
 
-No ORM. Raw SQL with parameterized queries (`$1, $2` style via `better-sqlite3`). Schema versioned with a simple migration runner — same pattern as GoClaw's `migrations/` directory.
+No ORM. Raw SQL with parameterized queries. Storage uses `libsql` (the Turso fork of SQLite) for local development and standard Postgres for teams. Schema versioned with a simple migration runner in `@evolvr/core`.
 
 </Card>
 
@@ -312,15 +312,15 @@ No ORM. Raw SQL with parameterized queries (`$1, $2` style via `better-sqlite3`)
 
 <Mermaid
   chart={`flowchart TD
-    A[Agent Run Starts] --> B[evolvr: open Task record]
+    A[Agent Run Starts] --> B[hook: start — open Task record]
     B --> C[Tool call occurs]
-    C --> D[record: args_hash, seq]
+    C --> D[hook: pre-tool — record tool name + seq]
     D --> E[Tool executes]
-    E --> F[recordResult: result_hash, summary, latency]
+    E --> F[hook: post-tool — record args_hash, result_hash, latency]
     F --> G{More tool calls?}
     G -->|yes| C
-    G -->|no| H[Run completes]
-    H --> I[flush: write Task to SQLite]
+    G -->|no| H[hook: stop — run completes]
+    H --> I[flush: write Task to libsql]
     I --> J[Classifier runs on Task]
     J --> K{Failure detected?}
     K -->|no| L[Task stored, outcome=success]
@@ -329,10 +329,8 @@ No ORM. Raw SQL with parameterized queries (`$1, $2` style via `better-sqlite3`)
     N -->|no| O[Pending review queue]
     N -->|yes| P[Store Lesson]
     P --> Q[evidence_count++]
-    Q --> R{evidence_count >= 3?}
-    R -->|no| S[Await more evidence]
-    R -->|yes| T[Skill Evolver: draft patch]`}
-  caption="Full data flow from agent run to lesson storage and skill evolution trigger"
+    Q --> R[Available via evolvr_get_lessons MCP tool]`}
+  caption="Full data flow from agent run through hook commands to lesson storage"
 />
 
 ---
@@ -383,5 +381,5 @@ evolvr stats --by failure-class
 </Card>
 
 <Callout color="sky">
-The next post covers the Failure Classifier — the component that turns raw Task records into structured lessons with confidence scores. The classifier is what makes the Task Journal useful rather than just comprehensive.
+The next post covers the Failure Classifier — the component that turns raw Task records into structured, confidence-gated lessons. The classifier is what makes the Task Journal useful rather than just comprehensive.
 </Callout>

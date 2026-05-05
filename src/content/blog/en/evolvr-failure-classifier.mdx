@@ -2,7 +2,7 @@
 title: "The Failure Classifier: Turning Agent Crashes Into Structured Lessons"
 description: "evolvr's two-stage classification pipeline — deterministic rule-based detection for loop patterns, LLM-based semantic analysis for everything else — with confidence gating and a lesson extraction schema designed for actionability."
 pubDate: 2026-05-03
-tags: ["ai", "agents", "architecture", "typescript", "reliability"]
+tags: ["ai", "agents", "architecture", "typescript", "reliability", "mcp"]
 lang: "en"
 category: "architecture"
 series: "evolvr"
@@ -376,12 +376,12 @@ The vague-recommendation penalty in the semantic classifier serves a purpose bey
 }
 ```
 
-`stage2_enabled: false` by default — v0.1 runs without LLM calls. Enabling stage 2 adds approximately 1–3 seconds per failed run (Haiku is fast) and costs roughly $0.0001 per classification at current pricing.
+`stage2_enabled: false` by default — v0.1 runs entirely without LLM calls during classification. The three rule-based detectors cover the most common production failure patterns without any API cost. Enabling stage 2 adds approximately 1–3 seconds per failed run and costs roughly $0.0001 per classification at current pricing.
 
-The thresholds are configurable because different codebases have different patterns. A codebase with large generated directories might legitimately have 10 consecutive reads of generated files without looping. Tuning the thresholds for your project prevents false positives.
+This configuration lives in `.evolvr/config.json` (created by `evolvr init`) and can be edited directly. The thresholds are configurable because different codebases have different patterns — a project with large generated directories might legitimately have 10 consecutive reads without looping. Tuning the thresholds for your project prevents false positives.
 
 </Card>
 
 <Callout color="sky">
-The next post covers the Skill Evolver — what happens after evidence_count reaches 3 and a lesson is ready to become a change in agent behavior.
+The next post covers the MCP server and lesson injection — how lessons that have passed the confidence gate are surfaced to agents via `evolvr_get_lessons`, and what the AGENTS.md auto-promotion roadmap looks like.
 </Callout>
