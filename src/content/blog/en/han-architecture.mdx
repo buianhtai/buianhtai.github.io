@@ -1,0 +1,321 @@
+---
+title: "Han: Plugin Infrastructure for Claude Code's Hook System"
+description: "A deep dive into Han's architecture — the gRPC coordinator daemon backed by a Rust binary, the hash-manifest cache layer, multi-strategy memory with RRF fusion, the MCP orchestrator backend pool, and how 139 plugins ship behind a two-command install."
+pubDate: 2026-05-08
+tags: ["ai", "architecture", "agents", "typescript", "rust", "grpc", "plugins", "claude-code"]
+lang: "en"
+category: "architecture"
+series: "ai-agent-tools"
+seriesOrder: 12
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import Pipeline from '../../../components/mdx/Pipeline.astro';
+import LayerStack from '../../../components/mdx/LayerStack.astro';
+import CompareTable from '../../../components/mdx/CompareTable.astro';
+import PatternLifecycle from '../../../components/mdx/PatternLifecycle.astro';
+import ControlLoop from '../../../components/mdx/ControlLoop.astro';
+
+The premise is simple but the execution is not: make Claude Code write code that's actually ready to merge. Claude writes code aggressively and quickly; the hard part is attaching quality gates — linters, formatters, type checkers, tests — without requiring the AI to understand how to run them. Han's answer is Claude Code's hook system: hooks are shell commands that fire at defined lifecycle events (`PreToolUse`, `PostToolUse`, `Stop`, `SessionStart`, `SubagentStop`). Run those hooks reliably, cache them intelligently, and you can attach a 139-plugin ecosystem to any Claude Code session with two commands.
+
+148 stars, 16 forks, MIT, TypeScript + Rust. Built by The Bushido Collective.
+
+<HeroGrid items={[
+  { label: "gRPC Coordinator", sublabel: "Rust binary — sessions, hooks, memory, slots",  color: "#0891b2" },
+  { label: "Hash Cache",       sublabel: "Manifest per-plugin, skips unchanged files",      color: "#059669" },
+  { label: "3-Layer Memory",   sublabel: "Personal · Team · Rules — FTS5 + vector RRF",    color: "#d97706" },
+  { label: "MCP Orchestrator", sublabel: "Backend pool — stdio/HTTP/Docker transports",     color: "#7c3aed" },
+]} />
+
+## <Label color="teal">1</Label> Two Commands, 139 Plugins
+
+The installation surface is deliberately minimal:
+
+```bash
+curl -fsSL https://han.guru/install.sh | bash
+han plugin install --auto
+```
+
+`--auto` triggers `lib/commands/plugin/install.ts`'s auto-detection path, which combines file-marker analysis (looking for `package.json`, `Cargo.toml`, `pyproject.toml`, `go.mod`, etc.) with optional AI-driven codebase analysis via the `lib/analyze/codebase-analyzer.ts` module. The result is a ranked list of plugins to install, scoped to `project` (`.claude/settings.json`) by default. User-scope installation is explicitly blocked — plugins are per-project by design.
+
+The 139 plugins live in six categories:
+
+<DataTable
+  caption="Plugin categories"
+  accent="teal"
+  headers={["Category", "Examples", "Role"]}
+  rows={[
+    { Category: "Core",        Examples: "han binary, metrics, MCP server",         Role: "Required infrastructure — auto-installs on first session" },
+    { Category: "Languages",   Examples: "TypeScript, Rust, Python, Go, Ruby",       Role: "Compiler / runtime validation per language" },
+    { Category: "Validation",  Examples: "Biome, ESLint, ShellCheck, Pytest",        Role: "Linters, formatters, quality tools" },
+    { Category: "Disciplines", Examples: "Security, accessibility, API design",      Role: "Specialized AI agents for engineering domains" },
+    { Category: "Services",    Examples: "GitHub, GitLab, Linear MCP servers",       Role: "External platform integrations" },
+    { Category: "Tools",       Examples: "Playwright, Blueprints, Context7",         Role: "Development utility MCP servers" },
+  ]}
+/>
+
+Each plugin is a directory with a `hooks/hooks.json` manifest and optional prompt/command hook implementations. Three plugin archetypes exist in the repo: `jutsu` (full hooks), `do` (command-focused), and `hashi` (hash-manifest-driven validation).
+
+## <Label color="teal">2</Label> The Coordinator: A Rust Process Behind Every Session
+
+The most architecturally interesting piece is the coordinator. `han coordinator start` spawns a Rust binary (`han-coordinator`) as a background daemon — not a Node.js server. TypeScript communicates with it exclusively via gRPC.
+
+```
+~/.han/coordinator.pid    — PID file
+~/.han/coordinator.log    — daemon stdout/stderr
+~/.han/han.db             — SQLite: sessions, messages, hook cache, FTS5
+~/.han/memory/index/      — vector embeddings (ONNX + SurrealDB)
+```
+
+The `coordinator.proto` defines six gRPC services:
+
+<DataTable
+  caption="coordinator.proto services"
+  accent="green"
+  headers={["Service", "Key RPCs"]}
+  rows={[
+    { Service: "CoordinatorService", "Key RPCs": "Health, Status, Shutdown" },
+    { Service: "SessionService",     "Key RPCs": "GetActive, Get, List" },
+    { Service: "IndexerService",     "Key RPCs": "TriggerScan, IndexFile" },
+    { Service: "HookService",        "Key RPCs": "ExecuteHooks (server-streaming), ListHooks" },
+    { Service: "SlotService",        "Key RPCs": "Acquire, Release, List" },
+    { Service: "MemoryService",      "Key RPCs": "Search, IndexDocument" },
+  ]}
+/>
+
+`HookService.ExecuteHooks` is a **server-streaming** RPC. The TypeScript client streams `HookOutput` messages in real time — each message is either a `stdout_line`, `stderr_line`, or `complete` (with `exit_code`, `cached`, `error`, `duration_ms`). This means hook output arrives progressively to the CLI rather than in a batch at the end.
+
+<Callout color="teal">
+The Rust coordinator manages the actual hook process lifecycle: caching, parallel execution, gRPC streaming, and SurrealKV persistence. TypeScript is the thin CLI wrapper.
+</Callout>
+
+The TypeScript side (`lib/grpc/hook-executor.ts`) wraps the stream:
+
+```typescript
+const stream = clients.hooks.executeHooks({ event, sessionId, toolName, cwd, env });
+for await (const output of stream) {
+  if (output.payload.case === 'stdoutLine')  process.stdout.write(`${payload.value}\n`);
+  else if (output.payload.case === 'complete') results.push({ exitCode, cached, durationMs });
+}
+```
+
+## <Label color="teal">3</Label> Hook Dispatch: stdin Fanout, gRPC, and Fallback
+
+When Claude Code fires a hook event, `han hook run <event>` executes. The dispatch path (`lib/commands/hook/dispatch.ts`) reads the full hook payload from stdin — a JSON object with `session_id`, `hook_event_name`, `agent_id`, `tool_name`, `tool_input`, `cwd`. This raw stdin is then **piped to child hook processes** so each hook sees the same payload Claude Code provided.
+
+<Pipeline
+  nodes={[
+    { title: "Claude Code", subtitle: "hook event fires" },
+    { title: "han hook run", subtitle: "reads stdin payload" },
+    { title: "Coordinator (gRPC)", subtitle: "streams HookOutput" },
+    { title: "Plugin Hook", subtitle: "receives stdin + executes" },
+  ]}
+  arrows={[
+    { label: "JSON payload", direction: "right" },
+    { label: "ExecuteHooks RPC", direction: "right" },
+    { label: "stdout/stderr live", direction: "right" },
+  ]}
+  footer="Raw stdin is forwarded to every child hook process — plugins can inspect tool input."
+/>
+
+If the gRPC coordinator is not running, dispatch falls back to direct in-process execution. The `isCoordinatorHealthy()` check happens before every dispatch attempt, and the CLI will auto-start the coordinator if it's missing.
+
+Checkpoint semantics are baked into dispatch: `Stop` hooks use `session` checkpoints; `SubagentStop` hooks use `agent` checkpoints. These checkpoint types control which cache entries are scoped to a session versus a subagent invocation.
+
+## <Label color="teal">4</Label> Hash Manifest Caching
+
+Hooks are expensive — running a full TypeScript build or test suite on every file save would be unusable. Han's answer is a **hash-manifest cache** per plugin/hook combination.
+
+`lib/hooks/hook-cache.ts` implements `buildManifest(files, rootDir)` which walks a list of files and records `relative_path → SHA256(content)`. Before executing a hook, Han computes the current manifest and compares it against the stored one. If all hashes match, the hook is skipped as cached.
+
+The manifest itself is stored in two places — a filesystem JSON file (legacy) and the coordinator's SurrealKV store (current):
+
+```
+~/.claude/han/repos/{git-remote-slug}/cache/{plugin}_{hook}.json   ← legacy FS
+han.db hookCache table (via gRPC SetHookCache/GetHookCache)         ← current
+```
+
+The cache key is derived from the git remote URL, normalized to a filesystem-safe slug. This means two projects with the same remote share a cache entry — which is correct for monorepos and problematic for fresh clones, a tradeoff the code handles by validating file existence before cache hits.
+
+<Callout color="amber">
+The `--no-cache` and `--no-checkpoints` flags on `han hook run` bypass both layers for debugging. Without them, the Rust coordinator handles cache invalidation.
+</Callout>
+
+`lib/hooks/hash-cycle-detector.ts` adds a runtime safety layer. If hook A modifies a file to hash H1 and hook B modifies it back to H0, the `HashCycleDetector` class detects the return to a previously-seen hash and surfaces it as a conflict — preventing infinite hook oscillation without requiring hooks to know about each other.
+
+## <Label color="teal">5</Label> Memory System: Three Layers, Five Storage Tables
+
+Han's memory system is a standalone subsystem with a clean public API (`lib/memory/index.ts`). It is independent of hooks but shares the same gRPC coordinator for storage.
+
+<LayerStack
+  layers={[
+    { tag: "L3", color: "teal",  title: "Rules",        items: [".claude/rules/*.md", "auto-promoted from patterns", "permanent wisdom"], note: "promotion.ts" },
+    { tag: "L2", color: "green", title: "Team Memory",  items: ["git provider research", "PR summaries", "org learnings"], note: "providers/git.ts" },
+    { tag: "L1", color: "amber", title: "Personal",     items: ["session transcripts", "summaries (JSONL)", "observations"], note: "han.db" },
+  ]}
+  arrows={["auto-promote → rules on confidence ≥ 0.8 × 3+ occurrences", "session completion → summarize → summaries layer"]}
+  caption="Three-layer memory. Personal is volatile; Rules are permanent; Team bridges them."
+/>
+
+The five SQLite tables (via `lib/memory/indexer.ts`) are:
+
+- `han_observations` — raw observations appended during sessions
+- `han_summaries` — post-session JSONL summaries, keyed by git remote
+- `han_transcripts` — FTS5-indexed Claude Code JSONL transcript lines
+- `han_team_{repo-slug}` — per-repo team knowledge from git/GitHub
+- `han_events` — internal event log
+
+Search uses **Reciprocal Rank Fusion** across up to four strategies in parallel:
+
+<DataTable
+  caption="Multi-strategy search (multi-strategy-search.ts)"
+  accent="teal"
+  headers={["Strategy", "Mechanism", "Use case"]}
+  rows={[
+    { Strategy: "direct_fts",    Mechanism: "BM25 FTS5 (no expansion)",     "Use case": "Exact term recall" },
+    { Strategy: "expanded_fts",  Mechanism: "BM25 + acronym/synonym expand", "Use case": "Fuzzy recall — 'auth' → 'authentication', 'JWT'" },
+    { Strategy: "semantic",      Mechanism: "ONNX embeddings + SurrealDB ANN", "Use case": "Semantic similarity" },
+    { Strategy: "summaries",     Mechanism: "FTS over session summaries",    "Use case": "Past session recall" },
+  ]}
+/>
+
+The result is a `MultiStrategySearchResult` with a `confidence` field: `high` when 3+ strategies returned results, `medium` when 2 did, `low` when 1 did, `none` otherwise. This confidence drives the MCP tool response quality indicator shown to Claude.
+
+**Auto-promotion** (`lib/memory/promotion.ts`) watches for patterns that appear 3+ times across different sources with confidence ≥ 0.8. When found, it writes a new `.claude/rules/{domain}.md` file automatically — no user action needed. The rules are git-tracked, additive, and revertible, so the risk of incorrect promotion is low.
+
+<PatternLifecycle
+  stages={[
+    { id: "observed",    label: "Observed",    sublabel: "1–2 sessions",  color: "amber" },
+    { id: "candidate",   label: "Candidate",   sublabel: "3+ occurrences", color: "teal"  },
+    { id: "promoted",    label: "Promoted",    sublabel: "conf ≥ 0.8",    color: "green" },
+  ]}
+  decayArrow={{ from: "promoted", to: "observed", label: "pattern invalidated" }}
+  caption="Auto-promotion lifecycle. Candidate patterns promote to rules when confidence and recurrence thresholds are both met."
+/>
+
+Session completion detection (`lib/memory/session-completion.ts`) uses a 30-minute inactivity gap plus a 5-minute cooldown to avoid race conditions. Completed sessions are summarized post-hoc and stored in the summaries layer, making them queryable as team context on future sessions.
+
+## <Label color="teal">6</Label> MCP Server and Backend Pool
+
+`han mcp` starts an MCP server (`lib/commands/mcp/server.ts`) that exposes a single unified `memory` tool to Claude. The tool auto-routes queries across all three memory layers based on question semantics — Claude never has to specify which layer to search.
+
+The MCP server also acts as a **proxy orchestrator** for external MCP servers. `lib/commands/mcp/backend-pool.ts` manages lazy connections to backend MCP servers (stdio, HTTP, Docker transports) with idle-timeout disconnection and tool-definition caching:
+
+<Pipeline
+  nodes={[
+    { title: "Claude (MCP client)", subtitle: "tool call" },
+    { title: "han mcp",            subtitle: "routes to backend" },
+    { title: "Backend Pool",       subtitle: "lazy spawn / connect" },
+    { title: "External MCP server",subtitle: "stdio / HTTP / Docker" },
+  ]}
+  arrows={[
+    { label: "JSON-RPC", direction: "right" },
+    { label: "fan-out", direction: "right" },
+    { label: "stdio / HTTP", direction: "right" },
+  ]}
+  footer="Tool definitions are cached separately from connections — backend is idle until first call."
+/>
+
+Each backend is configured in `han.yml` under `orchestrator.backends`. On first call to a backend's tool, the pool spawns/connects the process and caches its tool definitions. After `idle_timeout` seconds (default 300), the connection closes but the cached tool schema remains, allowing Claude's tool list to stay stable without keeping all backends alive.
+
+`lib/commands/mcp/auto-learn.ts` enables the MCP server to learn new MCP tool behaviors automatically, indexing them into the memory system for future reference.
+
+## <Label color="teal">7</Label> Slot Service: Distributed Hook Coordination
+
+Claude Code can run multiple parallel agents in the same project. Han's `SlotService` in the coordinator handles mutual exclusion: a plugin can call `Acquire(slot_name, owner, ttl_seconds)` before running a hook, ensuring only one instance of a given hook runs at a time across agents.
+
+`lib/hooks/slot-client.ts` wraps this for TypeScript callers. The `TranscriptFilter` (`lib/hooks/transcript-filter.ts`) adds a second layer of session scoping — Stop hooks only run on files the current session modified, preventing hook conflicts when multiple sessions share a working tree:
+
+```typescript
+// Only run hooks on files THIS session wrote/edited
+const modified = await extractTranscriptModifiedFiles(sessionId, projectPath);
+const scopedFiles = filterFilesToManifest(allFiles, modified.allModified);
+```
+
+The filter parses Claude Code's JSONL transcript to extract `write_file` and `edit_file` operations, building a session-specific file set. This is a runtime-only filter — the coordinator's transcript indexer runs separately via `IndexerService.IndexFile`.
+
+## <Label color="teal">8</Label> SessionStart Injection: Context at Boot
+
+The `SessionStart` hook calls `han hook context`, which runs `lib/commands/hook/context.ts`. This command outputs a formatted block injected into Claude's context window at session start — combining:
+
+- Current session ID (parsed from stdin payload or inferred from most-recently-modified `.jsonl`)
+- Memory search results for recent work context
+- Performance calibration data from the coordinator's task metrics
+- Hook execution stats
+
+The calibration score is derived from `hookExecutions.queryStats()` and `tasks.queryMetrics()` — how many tasks succeeded, how many hooks passed, what the trending confidence is. The output uses a calibration emoji tier (`🎯 ≥85`, `📈 ≥70`, `⚠️ ≥50`, `🔴 <50`) and injects it as a markdown block Claude sees before writing a single line of code.
+
+<ControlLoop
+  nodes={[
+    { id: "session",  title: "SessionStart",  subtitle: "context injection",  color: "teal"  },
+    { id: "hooks",    title: "Stop Hooks",    subtitle: "hash cache + gRPC",  color: "green" },
+    { id: "memory",   title: "Memory",        subtitle: "summarize + promote", color: "amber" },
+  ]}
+  edges={[
+    { from: "session",  to: "hooks",   label: "session_id scoping" },
+    { from: "hooks",    to: "memory",  label: "execution metrics" },
+    { from: "memory",   to: "session", label: "injected context" },
+  ]}
+  caption="The per-session feedback loop. Memory informs the next session; hooks feed memory."
+/>
+
+## <Label color="teal">9</Label> Coordinator Lifecycle Management
+
+The coordinator daemon's lifecycle is managed entirely from TypeScript. `lib/commands/coordinator/daemon.ts` handles start/stop/status with PID files. On macOS, `lib/commands/coordinator/launchd/install.ts` generates a launchd plist so the coordinator starts at login.
+
+`lib/commands/coordinator/tls.ts` handles mTLS certificate generation for the gRPC channel — the coordinator and CLI communicate over a locally-bound TLS socket rather than plaintext, which prevents other local processes from injecting hook commands.
+
+`lib/services/coordinator-service.ts` wraps the Rust binary launch:
+
+```typescript
+await startCoordinatorService();   // spawns han-coordinator binary
+void stopCoordinatorService();     // graceful shutdown
+```
+
+The TypeScript layer never imports the Rust binary directly — it spawns it as a child process and communicates solely via gRPC. This clean separation means the Rust binary can be updated independently and the TypeScript CLI remains stable.
+
+## <Label color="teal">10</Label> Authentication and Team Features
+
+Han has a full authentication stack (`lib/auth/`) — JWT, magic-link, GitHub/GitLab OAuth with PKCE, rate limiting, and session management. This serves the hosted `han.guru` platform rather than local CLI usage.
+
+The hosted schema (`lib/data/hosted/schema/`) mirrors the local SQLite schema: sessions, messages, hook executions, file changes, file validations, projects, teams, organizations, repositories. The `lib/sync/` subsystem syncs local data to the hosted backend with delta compression, a privacy filter (strips PII before upload), and a queue for offline operation.
+
+`lib/memory/team-memory-agent.ts` and `lib/memory/team-memory-query.ts` extend the three-layer memory to include **org-wide learnings** (`lib/memory/org-learnings.ts`) — patterns promoted across all team members rather than just the local machine. `lib/memory/share-learning.ts` handles the opt-in mechanism for pushing a local learning to the team.
+
+<CompareTable
+  products={[
+    { name: "Hooks only" },
+    { name: "han (local)" },
+    { name: "han (team)", highlight: true },
+  ]}
+  features={[
+    { label: "Quality gates on Stop",       values: ["yes", "yes", "yes"] },
+    { label: "Hash-manifest cache",         values: ["no",  "yes", "yes"] },
+    { label: "Session context injection",   values: ["no",  "yes", "yes"] },
+    { label: "FTS5 + vector memory search", values: ["no",  "yes", "yes"] },
+    { label: "Auto-promote rules",          values: ["no",  "yes", "yes"] },
+    { label: "Org-wide learnings",          values: ["no",  "no",  "yes"] },
+    { label: "Team memory sync",            values: ["no",  "no",  "yes"] },
+  ]}
+  caption="Feature progression from raw Claude Code hooks to the full Han team tier."
+/>
+
+## <Label color="teal">11</Label> What the Architecture Gets Right
+
+Han solves a real problem with a clean stack. The key design decisions:
+
+**Rust coordinator, TypeScript CLI.** The performance-critical path — hook execution, caching, indexing, gRPC serving — is in Rust. TypeScript handles the CLI UX, plugin resolution, and user-facing config. The boundary is the gRPC proto, which is stable and versioned.
+
+**Hash manifests instead of file watchers.** Hooks only run when files relevant to that plugin have changed. There is no daemon polling the filesystem from TypeScript — the Rust coordinator's watcher handles it, and the manifest cache persists to SQLite so it survives restarts.
+
+**Three-layer memory with explicit confidence.** The `MultiStrategySearchResult.confidence` field is surfaced to Claude in the MCP tool response. Claude can reason about whether memory results are trustworthy, not just receive a list. The RRF fusion approach means a weak FTS result and a strong semantic result combine better than either alone.
+
+**Session scoping on Stop hooks.** Running hooks only on files the current session modified is the right default for parallel agent workflows. The transcript filter approach is clever — it reuses Claude Code's own JSONL format rather than inventing a separate tracking mechanism.
+
+The weakest point is the `--auto` plugin detection — it works well for single-language projects but requires manual curation for polyglot monorepos. The discipline plugins (security audits, accessibility checks) are powerful but can produce false positives that slow down the Stop hook phase in ways that erode the quality-gate habit.
+
+Han's value proposition is ultimately that quality gates are only useful if they run every time. The hash cache, the gRPC streaming, and the project-scoped plugin install are all in service of making "every time" feel fast enough that you don't turn them off.
