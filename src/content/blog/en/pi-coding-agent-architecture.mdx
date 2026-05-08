@@ -1,0 +1,342 @@
+---
+title: "Pi: The Coding Agent That Ships Nothing You Can't Replace"
+description: "A deep dive into Pi's architecture — the JSONL tree session format, compaction with file-op tracking, a four-mode runtime, a per-file mutex queue for parallel edits, and an extension API surface large enough to implement plan mode, git checkpointing, and Doom."
+pubDate: 2026-05-08
+tags: ["ai", "architecture", "agents", "typescript", "tui", "extensions", "coding-agent"]
+lang: "en"
+category: "architecture"
+series: "ai-agent-tools"
+seriesOrder: 11
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import Pipeline from '../../../components/mdx/Pipeline.astro';
+import LayerStack from '../../../components/mdx/LayerStack.astro';
+import CompareTable from '../../../components/mdx/CompareTable.astro';
+import PatternLifecycle from '../../../components/mdx/PatternLifecycle.astro';
+
+Most coding agents ship with plan mode, sub-agents, permission popups, and a TODO system. Pi ships without any of them — intentionally. The thesis is that everything those features do can be built as a TypeScript extension, and the right architecture for an extensible tool looks very different from a monolithic one. Pi's core is therefore minimal by design: four built-in tools (`read`, `write`, `edit`, `bash`), a JSONL session tree, and an extension API capable enough that someone built a working Doom port as a proof of concept.
+
+46k stars, 5.4k forks, MIT, TypeScript. Built by Mario Zechner (of libgdx fame) and Armin Ronacher.
+
+<HeroGrid items={[
+  { label: "JSONL Tree",  sublabel: "Branch-in-place sessions — no new files on fork",    color: "#0891b2" },
+  { label: "Compaction",  sublabel: "File-op tracking across summarization epochs",        color: "#059669" },
+  { label: "4 Modes",     sublabel: "Interactive, print, JSON events, RPC over stdin/out", color: "#d97706" },
+  { label: "Extensions",  sublabel: "Tools, events, UI, commands — all replaceable",      color: "#7c3aed" },
+]} />
+
+## <Label color="teal">1</Label> The Philosophy: What Pi Refuses to Bake In
+
+The README has a dedicated "No" section worth reading in full. Pi explicitly ships without:
+
+- **Sub-agents** — spawn pi instances via tmux, or build your own with extensions
+- **Plan mode** — write plans to files, or install the [plan-mode example extension](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/examples/extensions/plan-mode/index.ts)
+- **Permission popups** — run in a container, or build confirmation flows with `ctx.ui.confirm()`
+- **MCP** — build an extension that adds MCP support if you want it
+- **Background bash** — use tmux; full observability, direct interaction
+- **Built-in todos** — they confuse models; use a `TODO.md`, or build it with extensions
+
+This isn't minimalism for its own sake. It's a specific claim: the hardest part of an extensible tool is the extension API. Once you have a rich enough API surface, baking in features is worse than leaving them to extensions — because built-in features make assumptions that break for someone's workflow. The architecture choices throughout the codebase are optimized for this: everything the core does should be interceptable, overridable, or replaceable.
+
+## <Label color="teal">2</Label> Session Format: JSONL Tree with In-Place Branching
+
+Sessions are stored as JSONL files — one JSON object per line, each with `type`, `id`, `parentId`, and `timestamp` fields. The tree structure via `id`/`parentId` allows in-place branching: `/fork` adds a new branch to the same `.jsonl` file rather than creating a new file.
+
+```
+~/.pi/agent/sessions/--path-to-project--/<timestamp>_<uuid>.jsonl
+```
+
+The entry types form a union:
+
+<DataTable
+  caption="SessionEntry union members"
+  accent="teal"
+  headers={["Type", "Goes to LLM?", "Purpose"]}
+  rows={[
+    { Type: "message",          "Goes to LLM?": "yes", Purpose: "Core user/assistant/tool call/result messages" },
+    { Type: "compaction",       "Goes to LLM?": "yes (as summary)", Purpose: "Summary replacing older messages; carries firstKeptEntryId" },
+    { Type: "branch_summary",   "Goes to LLM?": "yes", Purpose: "Injected when switching branches via /tree" },
+    { Type: "custom_message",   "Goes to LLM?": "yes", Purpose: "Extension-injected context (display flag controls TUI rendering)" },
+    { Type: "custom",           "Goes to LLM?": "no",  Purpose: "Extension state persistence across session reloads" },
+    { Type: "thinking_level_change", "Goes to LLM?": "no", Purpose: "Records thinking level changes for session replay" },
+    { Type: "model_change",     "Goes to LLM?": "no",  Purpose: "Records model switches" },
+    { Type: "label",            "Goes to LLM?": "no",  Purpose: "User bookmarks/markers on entries" },
+    { Type: "session_info",     "Goes to LLM?": "no",  Purpose: "Display name and metadata" },
+  ]}
+/>
+
+The distinction between `custom` and `custom_message` is important for extension authors: `custom` is extension-only state that never reaches the LLM (use it to reconstruct extension internals on reload), while `custom_message` injects content into the actual LLM context (use it for things like "here are the files I've indexed" that the model needs to know).
+
+Sessions are versioned: v1 is linear (legacy), v2 adds `id`/`parentId`, v3 renames `hookMessage` to `custom`. Migration runs on load via `migrateSessionEntries()` — old sessions are transparently upgraded in memory without rewriting the file.
+
+## <Label color="teal">3</Label> Compaction: Summarize With File-Op Memory
+
+Long sessions exhaust context windows. Pi's compaction is architecturally unusual in that it tracks **file operations across epochs** — read files and modified files from every assistant turn accumulate into the next summary, so the LLM always sees what files have been touched even across multiple compaction cycles.
+
+<Pipeline
+  nodes={[
+    { title: "Find cut point",    subtitle: "walk back from newest until keepRecentTokens" },
+    { title: "Collect messages",  subtitle: "from prev compaction boundary to cut" },
+    { title: "Extract file ops",  subtitle: "read/write/edit from all tool calls" },
+    { title: "Call LLM",          subtitle: "summarize with prev summary as iterative context" },
+    { title: "Append CompactionEntry", subtitle: "summary + firstKeptEntryId + file lists" },
+    { title: "Reload session",    subtitle: "summary + messages from firstKeptEntryId" },
+  ]}
+  arrows={[
+    { label: "", direction: "right" },
+    { label: "", direction: "right" },
+    { label: "", direction: "right" },
+    { label: "", direction: "right" },
+    { label: "", direction: "right" },
+  ]}
+  footer="On repeated compactions, the summarized span starts at the previous compaction's firstKeptEntryId — not at the compaction entry itself."
+/>
+
+The `CompactionDetails` stored in each `CompactionEntry` carries `readFiles: string[]` and `modifiedFiles: string[]`. When the next compaction runs, it seeds the new file op tracker with those lists before scanning new messages — so files read two compaction epochs ago are still in the summary's `<read-files>` block.
+
+**Branch summarization** is a parallel mechanism for `/tree` navigation. When switching branches, pi generates a brief summary of the branch you're leaving and injects it as a `BranchSummaryEntry`. This prevents context amnesia when exploring session branches.
+
+Extensions can intercept both via `session_before_compact` and supply their own summary content — bypassing pi's built-in LLM summarization entirely if they want custom compaction behavior.
+
+## <Label color="teal">4</Label> The Edit Tool: Per-File Mutex Queue
+
+The `edit` tool's most interesting internal is `withFileMutationQueue` in `file-mutation-queue.ts`:
+
+```typescript
+export async function withFileMutationQueue<T>(filePath: string, fn: () => Promise<T>): Promise<T> {
+  const key = getMutationQueueKey(filePath); // realpathSync.native — resolves symlinks
+  const currentQueue = fileMutationQueues.get(key) ?? Promise.resolve();
+
+  let releaseNext!: () => void;
+  const nextQueue = new Promise<void>((resolveQueue) => { releaseNext = resolveQueue; });
+  const chainedQueue = currentQueue.then(() => nextQueue);
+  fileMutationQueues.set(key, chainedQueue);
+
+  await currentQueue;
+  try { return await fn(); }
+  finally {
+    releaseNext();
+    if (fileMutationQueues.get(key) === chainedQueue) fileMutationQueues.delete(key);
+  }
+}
+```
+
+This is a per-file promise chain mutex. Two concurrent `edit` calls on the same file serialize automatically; calls on different files run in parallel. The key is derived via `realpathSync.native` — symlinks to the same file share the same queue, which the test suite explicitly verifies.
+
+The test for this is beautiful: `edit` and `write` both go through the same mutex. So if `write` is queued behind an in-flight `edit`, the write always sees the edit's output as its baseline. The test places a 5ms delay between `edit` dispatch and `write` dispatch, then asserts the final file contents equal the `write` result — the write correctly overwrites the edit because they serialized.
+
+The edit logic itself (`edit-diff.ts`) applies multiple `{oldText, newText}` pairs to the original file content in a single pass. The schema comment is explicit: **"Each edit is matched against the original file, not incrementally."** All old texts must be unique and non-overlapping. If two changes touch nearby lines, the caller is supposed to merge them into one edit. This avoids the fragile sequential-patch problem where edit 2 fails because edit 1 shifted line numbers.
+
+## <Label color="teal">5</Label> Four Run Modes
+
+<DataTable
+  caption="Pi's four run modes"
+  accent="amber"
+  headers={["Mode", "Flag", "Use case"]}
+  rows={[
+    { Mode: "Interactive", Flag: "(default)", "Use case": "Full TUI with editor, themes, keyboard shortcuts, extension UI" },
+    { Mode: "Print",       Flag: "-p",        "Use case": "Non-interactive one-shot; also reads piped stdin" },
+    { Mode: "JSON events", Flag: "--mode json","Use case": "Machine-readable event stream; every lifecycle event as a JSON line" },
+    { Mode: "RPC",         Flag: "--mode rpc", "Use case": "Bidirectional JSONL over stdin/stdout for process integration" },
+  ]}
+/>
+
+**RPC mode** deserves special attention. It uses strict LF-only JSONL framing via `attachJsonlLineReader` — explicitly not Node's `readline`, which also splits on U+2028 and U+2029 (Unicode line/paragraph separators valid inside JSON strings). The custom reader does a manual `buffer.indexOf("\n")` scan. The JSONL framing test explicitly verifies that `{ text: "a\u2028b\u2029c" }` survives a round-trip as a single record.
+
+The RPC command set is extensive: `prompt`, `steer`, `follow_up`, `abort`, `compact`, `fork`, `clone`, `get_fork_messages`, `set_model`, `cycle_thinking_level`, `bash`, `abort_bash`, `export_html`, and more. This makes pi embeddable in any language that can spawn a subprocess and read/write JSONL — the [openclaw/openclaw](https://github.com/openclaw/openclaw) project uses the SDK variant for a real-world integration.
+
+**Print mode** merges piped stdin with the initial prompt automatically:
+```bash
+cat README.md | pi -p "Summarize this"
+```
+
+## <Label color="teal">6</Label> AgentSession: The State Machine
+
+`AgentSession` is the class all four modes share. It is ~700 lines of pure session lifecycle management — no I/O, no rendering. Key state it owns:
+
+- Steering/follow-up message queues (delivered at different points in the turn cycle)
+- `_pendingNextTurnMessages`: custom messages injected as context with the next user prompt
+- Compaction abort controllers (manual vs. auto-triggered)
+- Branch summarization abort controller
+- Auto-retry state and exponential backoff logic
+
+**Message queue semantics:** two different queuing behaviors for interruption:
+- **Steering** (Enter while running): delivered after the current tool calls finish, before the next LLM turn
+- **Follow-up** (Alt+Enter): delivered only after the agent finishes all work
+
+This is surfaced in RPC mode as `type: "steer"` vs `type: "follow_up"` — so orchestrators can precisely control interrupt timing.
+
+**Auto-retry:** pi retries on transient errors (network failures, rate limits) with configurable delay and max attempts, emitting `auto_retry_start` and `auto_retry_end` events. Extensions can subscribe to these to show retry UI or adjust behavior.
+
+**AgentSessionEvent** extends `AgentEvent` with session-specific events — `queue_update`, `compaction_start`, `compaction_end`, `session_info_changed`, `thinking_level_changed`, `auto_retry_start`, `auto_retry_end`. The full event bus (`createEventBus`) uses Node `EventEmitter` with async-safe handlers — errors in handlers are caught and logged, not propagated.
+
+## <Label color="teal">7</Label> Extension API: 40+ Event Hooks
+
+The extension API surface is where the philosophy materializes. The `ExtensionAPI` provides:
+
+**Event hooks (selected):**
+
+<DataTable
+  caption="Extension event hooks"
+  accent="green"
+  headers={["Event", "Can block/modify?", "Use case"]}
+  rows={[
+    { Event: "session_start",           "Can block/modify?": "no",  "Use case": "Initialize state, inject context" },
+    { Event: "tool_call",               "Can block/modify?": "yes", "Use case": "Permission gates, command rewriting, pre-execution hooks" },
+    { Event: "tool_result",             "Can block/modify?": "yes", "Use case": "Filter or augment tool output before LLM sees it" },
+    { Event: "user_bash",               "Can block/modify?": "yes", "Use case": "Intercept `!command` inline bash, redirect to sandbox" },
+    { Event: "before_agent_start",      "Can block/modify?": "yes", "Use case": "Modify system prompt or inject messages right before LLM call" },
+    { Event: "before_provider_request", "Can block/modify?": "yes", "Use case": "Override model, provider, or raw request payload" },
+    { Event: "message_end",             "Can block/modify?": "yes", "Use case": "Override cost, intercept final response" },
+    { Event: "session_before_compact",  "Can block/modify?": "yes", "Use case": "Custom summarization, bypass pi's built-in compaction" },
+    { Event: "session_before_fork",     "Can block/modify?": "no",  "Use case": "Git checkpoint restore (the example extension does this)" },
+    { Event: "session_before_tree",     "Can block/modify?": "yes", "Use case": "Inject context before branch switch" },
+    { Event: "context",                 "Can block/modify?": "yes", "Use case": "Replace entire LLM context (RLM-style recursive access)" },
+    { Event: "resources_discover",      "Can block/modify?": "yes", "Use case": "Inject dynamic skills, context files at discovery time" },
+  ]}
+/>
+
+**UI primitives (interactive mode only):**
+
+```typescript
+ctx.ui.select(title, options)     // Picker dialog
+ctx.ui.confirm(title, message)    // Yes/No dialog
+ctx.ui.input(title, placeholder)  // Text input
+ctx.ui.notify(message, type)      // Notification
+ctx.ui.custom(factory)            // Full TUI component with keyboard focus
+ctx.ui.setWidget(key, lines)      // Above/below editor widget
+ctx.ui.setFooter(factory)         // Replace the footer component
+ctx.ui.setHeader(factory)         // Replace the header
+ctx.ui.setEditorComponent(factory)// Replace the editor itself
+ctx.ui.setStatus(key, text)       // Status bar text
+ctx.ui.setWorkingMessage()        // Customize streaming loader
+ctx.ui.setWorkingIndicator()      // Custom animation frames
+```
+
+`ctx.ui.custom()` accepts a factory that receives a `TUI` handle and a `done` callback — it can render a full-screen interactive component and return a typed result. This is how the built-in `/settings` and model selector work, and how the plan-mode extension renders its todo-item overlay.
+
+**The `context` event** is particularly powerful: it lets an extension replace the entire message list sent to the LLM. Combined with `registerProvider()`, this is how you'd wire up a CodeRLM-style external index — intercept context, swap relevant messages for indexed lookups, reduce context size before the provider call.
+
+## <Label color="teal">8</Label> Extension Examples: What's Actually Possible
+
+The `examples/extensions/` directory has 40+ working implementations. A selection:
+
+<DataTable
+  caption="Notable example extensions"
+  accent="teal"
+  headers={["Extension", "What it does"]}
+  rows={[
+    { Extension: "plan-mode",         "What it does": "Read-only exploration with /plan toggle, bash command allowlist, TODO widget with [DONE:n] markers" },
+    { Extension: "git-checkpoint",    "What it does": "git stash create at each turn; session_before_fork offers to restore code state" },
+    { Extension: "confirm-destructive","What it does": "Intercepts rm -rf, sudo, DROP TABLE in bash and shows confirmation dialog" },
+    { Extension: "permission-gate",   "What it does": "Blocks all tool calls until user approves each one" },
+    { Extension: "custom-compaction", "What it does": "Replaces pi's summarization with a custom LLM call and structured output" },
+    { Extension: "dynamic-tools",     "What it does": "Registers tools that appear/disappear based on session state" },
+    { Extension: "dynamic-resources", "What it does": "Injects skills and context files at discovery time from a remote source" },
+    { Extension: "event-bus",         "What it does": "Pub/sub channel between extensions for coordination" },
+    { Extension: "handoff",           "What it does": "Saves session state for handing off to another pi instance" },
+    { Extension: "doom-overlay",      "What it does": "Full Doom (WASM) running as a TUI overlay — playable while waiting for LLM" },
+  ]}
+/>
+
+The Doom extension is the canonical "what's possible" demo: it compiles Doom to WASM, renders the framebuffer as unicode block characters in the terminal, and wires keyboard input through pi's `onTerminalInput` hook. It's listed in the README without irony.
+
+<Callout color="amber">
+  Extensions run with full system access. The README is explicit: "Extensions execute arbitrary code, and skills can instruct the model to perform any action including running executables. Review source code before installing third-party packages."
+</Callout>
+
+## <Label color="teal">9</Label> Bash Tool: Pluggable Operations
+
+The bash tool exposes a `BashOperations` interface:
+
+```typescript
+export interface BashOperations {
+  exec: (
+    command: string,
+    cwd: string,
+    options: { onData: (data: Buffer) => void; signal?: AbortSignal; timeout?: number; env?: NodeJS.ProcessEnv },
+  ) => Promise<{ exitCode: number | null }>;
+}
+```
+
+`createLocalBashOperations()` implements this with `child_process.spawn` using process group detachment on Unix (so `killProcessTree` can kill the entire tree on abort/timeout, not just the shell). Extensions can override `BashOperations` entirely — pointing execution at SSH, a Docker container, or a remote sandbox without changing any other tool behavior.
+
+Output is streamed via `onData`, accumulated in an `OutputAccumulator`, and truncated at `DEFAULT_MAX_BYTES * 2` — with the full output written to a temp file and the path returned as `BashToolDetails.fullOutputPath` so extensions can read the untruncated output if needed.
+
+**The hang fix for Windows** (`bash-close-hang-windows.test.ts`): on Windows, closing stdin on a process that has spawned children doesn't always let the parent exit cleanly. Pi has an explicit test for this — it spawns a bash command that creates a background process and verifies the bash tool completes without hanging. The fix is platform-specific process tree handling in `waitForChildProcess`.
+
+## <Label color="teal">10</Label> Test Quality
+
+130+ test files across the coding-agent package. The structure separates unit tests from suite tests:
+
+**Unit tests** (`test/*.test.ts`): fast, no LLM calls. Cover:
+- `file-mutation-queue.test.ts` — mutex serialization, parallel distinct files, symlink aliasing
+- `rpc-jsonl.test.ts` — Unicode separator handling, CRLF normalization, unterminated final line
+- `compaction.test.ts` — cut point calculation, `shouldCompact`, token estimation with real session fixture (`fixtures/large-session.jsonl`)
+- `extensions-runner.test.ts` — keybinding conflict detection, reserved key protection
+- `agent-session-compaction.test.ts` — compaction entry written to session file, queue semantics
+
+**Suite tests** (`test/suite/`) — require LLM API keys, skipped via `describe.skipIf(!API_KEY)`. Cover real end-to-end flows including actual LLM summarization, branch switching with real context, retry on simulated network failure.
+
+**Regression tests** (`test/suite/regressions/`) — numbered by issue ID. Each regression test is named after the bug it guards:
+- `2781-skill-collision-precedence.test.ts` — two skills with the same name in different directories
+- `3317-network-connection-lost-retry.test.ts` — retry on connection drop mid-stream
+- `4167-thinking-toggle-pending-tool-render.test.ts` — thinking blocks in UI while tool renders are pending
+
+This is the pattern of a project that has been in production long enough to accumulate real bugs, and cares enough to lock them in tests rather than comment them out.
+
+## <Label color="teal">11</Label> Package System
+
+Pi has its own package manager layered on top of npm and git:
+
+```bash
+pi install npm:@foo/pi-tools
+pi install git:github.com/user/repo
+pi install https://github.com/user/repo@v1
+```
+
+Packages install to `~/.pi/agent/git/` (global) or `.pi/git/` (project-local with `-l`). A `pi` key in `package.json` declares what the package provides:
+
+```json
+{ "pi": { "extensions": ["./extensions"], "skills": ["./skills"] } }
+```
+
+Without a manifest, pi auto-discovers from conventional directories. The `npmCommand` setting lets Node version manager users point package installs at a specific node context — e.g., `["mise", "exec", "node@20", "--", "npm"]` — so runtime deps resolve consistently.
+
+`pi config` enables/disables individual extensions, skills, prompts, and themes from installed packages without uninstalling. `pi update` skips pinned packages (installed with an explicit version tag).
+
+## <Label color="teal">12</Label> What Pi Is Optimizing For
+
+<CompareTable
+  products={[
+    { name: "Claude Code" },
+    { name: "Cursor" },
+    { name: "Pi", highlight: true },
+  ]}
+  features={[
+    { label: "Built-in plan mode",       values: ["yes",     "no",      "no (extension)"]  },
+    { label: "Built-in sub-agents",      values: ["yes",     "no",      "no (extension)"]  },
+    { label: "Built-in MCP",             values: ["yes",     "yes",     "no (extension)"]  },
+    { label: "Permission popups",        values: ["yes",     "no",      "no (extension)"]  },
+    { label: "Extension API",            values: ["hooks",   "limited", "40+ events + UI"] },
+    { label: "Replace built-in tools",   values: ["no",      "no",      "yes"]             },
+    { label: "Replace editor component", values: ["no",      "no",      "yes"]             },
+    { label: "Custom compaction",        values: ["no",      "no",      "yes"]             },
+    { label: "RPC mode",                 values: ["no",      "no",      "yes"]             },
+    { label: "Session branching",        values: ["no",      "no",      "yes"]             },
+    { label: "25+ providers",            values: ["partial", "partial", "yes"]             },
+    { label: "Test coverage",            values: ["partial", "n/a",     "130+ files"]      },
+  ]}
+  caption="Pi vs. alternatives from an extensibility perspective."
+/>
+
+Pi's bet is that workflow diversity is high enough that a built-in answer is wrong for someone. The extension API is the product: every capability in the examples directory — plan mode, git checkpointing, confirmation dialogs, Doom — was built using public APIs that ship with pi. Nothing in those examples required forking or monkeypatching internals.
+
+The session format is designed for the same reason. The JSONL tree with typed entries, migration support, and the `custom`/`custom_message` split gives extensions a durable persistence layer and context injection point without requiring them to understand session internals. The file mutation queue serializes edits correctly without the extension knowing which other tools are touching which files.
+
+It's a coherent design: minimal core, rich extension surface, everything the core does is hookable. Whether that's the right trade-off for your workflow depends on how much of your coding-agent experience you want to own.
