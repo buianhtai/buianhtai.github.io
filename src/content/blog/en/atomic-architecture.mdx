@@ -1,0 +1,251 @@
+---
+title: "Atomic: Deterministic Workflow Orchestration for Coding Agents"
+description: "A deep dive into Atomic's architecture — how tmux-backed session graphs, frontier-based topology inference, the defineWorkflow SDK, and the Ralph plan-orchestrate-review loop turn unpredictable AI agents into reproducible engineering pipelines."
+pubDate: 2026-05-08
+tags: ["ai", "architecture", "agents", "multi-agent", "typescript", "workflow"]
+lang: "en"
+category: "architecture"
+series: "ai-agent-tools"
+seriesOrder: 10
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import LayerStack from '../../../components/mdx/LayerStack.astro';
+import Pipeline from '../../../components/mdx/Pipeline.astro';
+import CompareTable from '../../../components/mdx/CompareTable.astro';
+
+Coding agents work well inside a single session. The trouble starts when the task is long, ambiguous, or requires a handoff: the agent improvises the process, loses context mid-task, and produces results that vary depending on how you phrased the prompt. Atomic is a CLI and TypeScript SDK that wraps Claude Code, OpenCode, and GitHub Copilot CLI in a **deterministic workflow layer** — control flow is frozen TypeScript, agent sessions are spawned dynamically and tracked in a live graph, transcripts pass explicitly between stages, and the whole pipeline is a file you version with the repo.
+
+MIT, TypeScript, Bun. 165 stars, 34 forks.
+
+<HeroGrid items={[
+  { label: "defineWorkflow",  sublabel: "Typed SDK — freeze control flow, spawn sessions, pass transcripts", color: "#0891b2" },
+  { label: "tmux graph",      sublabel: "Each stage = own pane; topology inferred from await/Promise.all",  color: "#059669" },
+  { label: "Ralph",           sublabel: "Plan → orchestrate → simplify → dual review loop, 10 iterations", color: "#d97706" },
+  { label: "57 skills",       sublabel: "Auto-invoked SKILL.md modules across all three agent CLIs",        color: "#7c3aed" },
+]} />
+
+## <Label color="teal">1</Label> The Problem: Agent Process Is Improvised Every Time
+
+An AI agent asked to "implement the caching layer" will plan differently on Tuesday than it did on Monday. With a different context length, it takes different shortcuts. When you hand the task to a colleague, they steer the agent differently. The process — research first, then spec, then implement, then review — lives only in your head or in a Slack message, not in the codebase.
+
+The second problem is handoff. Stage one produces a transcript; stage two needs only the relevant excerpt. Without explicit transcript passing, the second agent either re-reads everything (token waste) or loses critical context (correctness risk). There is no durable mechanism connecting the outputs of sequential sessions.
+
+Atomic addresses both: encode the process as TypeScript once, run it identically across agents and machines, and pass exactly the right transcript slice to each downstream stage.
+
+## <Label color="green">2</Label> System Architecture
+
+<LayerStack
+  layers={[
+    {
+      tag: "CLI",
+      color: "teal",
+      title: "atomic binary — user interface",
+      items: ["atomic workflow -n ralph -a claude", "atomic chat -a opencode", "atomic session list/connect/kill", "atomic workflow refresh"],
+      note: "packages/atomic/",
+    },
+    {
+      tag: "SDK",
+      color: "amber",
+      title: "atomic-sdk — workflow runtime",
+      items: ["defineWorkflow / compile()", "runWorkflow / executeWorkflow", "ctx.stage() / s.session.query()", "GraphFrontierTracker", "OrchestratorPanel (OpenTUI)"],
+      note: "packages/atomic-sdk/src/",
+    },
+    {
+      tag: "MUX",
+      color: "green",
+      title: "tmux / psmux — session substrate",
+      items: ["one pane per stage", "dedicated atomic socket (not user tmux)", "session persistence across attach/detach"],
+      note: "runtime/tmux.ts",
+    },
+    {
+      tag: "AGT",
+      color: "rose",
+      title: "agent CLIs — execution layer",
+      items: ["Claude Code (--dangerously-skip-permissions)", "GitHub Copilot CLI (--yolo)", "OpenCode (SSE auto-reply)"],
+      note: "providers/",
+    },
+  ]}
+  arrows={["CLI invokes SDK runWorkflow", "SDK spawns tmux panes", "each pane runs an agent CLI"]}
+  caption="Four layers. The SDK owns control flow; tmux owns process isolation; agent CLIs own file editing and tool use."
+/>
+
+The key architectural separation: **Atomic owns the outer loop; the agent owns the inner loop**. The `defineWorkflow` SDK never touches files, never calls MCP tools, and never runs code. It only:
+
+1. Spawns tmux panes with the correct agent CLI flags
+2. Sends prompts via each provider's SDK
+3. Waits for idle signals
+4. Saves and routes transcripts
+
+Everything inside each pane — file edits, bash commands, MCP server calls, tool use — is the agent CLI's domain.
+
+## <Label color="amber">3</Label> The defineWorkflow SDK
+
+`defineWorkflow` is a builder that chains `.for(agent)`, `.run(async (ctx) => { ... })`, and `.compile()`. The result is a frozen `WorkflowDefinition` — a sealed object with a name, agent target, input schema, and the user's callback function.
+
+```typescript
+export default defineWorkflow({
+  name: "review-to-merge",
+  description: "Review → CI → PR → Approve → Merge",
+  source: import.meta.path,
+  inputs: [{ name: "target_branch", type: "text", required: true }],
+})
+  .for("claude")
+  .run(async (ctx) => {
+    // Sequential: review first
+    const review = await ctx.stage({ name: "review" }, {}, {}, async (s) => {
+      await s.session.query("Review uncommitted changes.");
+      s.save(s.sessionId);
+    });
+
+    // Parallel: security scan and CI at the same time
+    await Promise.all([
+      ctx.stage({ name: "security-scan" }, {}, {}, async (s) => {
+        await s.session.query("Run bun audit and scan for secrets.");
+        s.save(s.sessionId);
+      }),
+      ctx.stage({ name: "ci-checks" }, {}, {}, async (s) => {
+        await s.session.query("Run bun lint and bun test.");
+        s.save(s.sessionId);
+      }),
+    ]);
+
+    // Sequential fan-in: merge reads the review transcript
+    await ctx.stage({ name: "merge" }, {}, {}, async (s) => {
+      const t = await s.transcript(review);
+      await s.session.query(`Read ${t.path}, open a PR, ask user to confirm.`);
+      s.save(s.sessionId);
+    });
+  })
+  .compile();
+```
+
+`ctx.stage()` is the core primitive. It spawns a tmux pane, starts the agent CLI, sends the prompt, waits for completion, and returns a `SessionHandle<T>` with the stage's return value and a reference to its saved transcript. The callback's return value becomes `handle.result` — typed through TypeScript generics.
+
+`s.transcript(handle)` resolves a prior handle to `{ path, content }` — a file on disk under `~/.atomic/sessions/<runId>/`. The second agent reads the file; it never has the first agent's session in memory.
+
+### How the Graph Is Inferred
+
+Atomic renders a live dependency graph of stages during workflow execution. The topology is inferred automatically from JavaScript execution order — no explicit edge declarations:
+
+```
+GraphFrontierTracker.onSpawn():
+  if frontier is non-empty  → sequential (new wave, frontier becomes parents)
+  if frontier is empty       → parallel sibling (share same ancestors as previous spawn)
+
+GraphFrontierTracker.onSettle(name):
+  push name to frontier
+```
+
+`await ctx.stage(...)` completes synchronously from JavaScript's perspective only after the stage settles — so sequential stages always see a non-empty frontier. `Promise.all([ctx.stage(...), ctx.stage(...)])` fires both spawns in the same event loop tick — both see an empty frontier, making them siblings. After `Promise.all` resolves, both names are in the frontier — the next spawn depends on both (fan-in).
+
+<Callout color="teal">
+  No graph DSL, no explicit edge list. The topology is implicit in how you use `await` and `Promise.all`. Any JavaScript developer already knows how to express sequential, parallel, and fan-in dependencies — Atomic's graph inference reuses that intuition at zero additional API surface.
+</Callout>
+
+### Headless Stages
+
+`headless: true` runs a stage in-process without a tmux pane. No TUI, no visible window — same callback API, same transcript saving, just invisible in the graph. Ralph uses headless stages for the reviewer passes: they run via the Claude Agent SDK with JSON-schema output enforcement, never touch the terminal, and their results are read programmatically by the next iteration's planner.
+
+## <Label color="rose">4</Label> Ralph: The Plan-Orchestrate-Review Loop
+
+Ralph is Atomic's flagship built-in workflow — a bounded iteration loop that runs until either two parallel reviewers agree the work is correct, or `max_loops` (default 10) exhausts.
+
+<Pipeline
+  nodes={[
+    { title: "planner",          subtitle: "RFC + task list" },
+    { title: "orchestrator",     subtitle: "implements changes" },
+    { title: "code-simplifier",  subtitle: "refactors for clarity" },
+    { title: "infra discovery",  subtitle: "3 parallel headless" },
+    { title: "reviewer A + B",   subtitle: "2 parallel headless" },
+    { title: "→ loop or done",   subtitle: "findings → next planner" },
+  ]}
+  arrows={[
+    { label: "plan notes", direction: "right" },
+    { label: "diff", direction: "right" },
+    { label: "changeset", direction: "right" },
+    { label: "context", direction: "right" },
+    { label: "merged findings", direction: "right" },
+  ]}
+  footer="Each box is a separate tmux pane with its own agent session. Headless stages run via SDK, no pane. Loop repeats if findings are actionable."
+/>
+
+Each stage is a full agent session with its own context window, tool access, and transcript:
+
+**Planner** — receives the original prompt and, on iterations 2+, the formatted review findings from the previous pass. Its job is to validate, deduplicate, and cluster findings into root causes, then produce an updated RFC. The planner uses the `planner` sub-agent, which is specialized for structured decomposition.
+
+**Orchestrator** — receives the planner's RFC and implements the changes. This is the stage that edits files, runs commands, and calls MCP tools. It can run for minutes or hours on large tasks; completion is detected by Claude SDK idle signals (`session_state_changed` events in the JSONL transcript) rather than a timeout.
+
+**Code Simplifier** — runs after implementation, before review. Its mandate is to reduce complexity without changing behavior — a dedicated refactor pass that keeps the reviewer's focus on correctness rather than style.
+
+**Infra Discovery (3 parallel headless)** — `codebase-locator`, `codebase-analyzer`, and `codebase-pattern-finder` run concurrently, building a discovery context (file list + analysis + build/test patterns). This context is injected into the review prompt so reviewers understand the project structure without reading the whole codebase.
+
+**Reviewers A and B (parallel headless with JSON-schema enforcement)** — each reviewer runs with `outputFormat: { type: "json_schema", schema: REVIEW_RESULT_JSON_SCHEMA }` and the validated structured output is read from `s.session.lastStructuredOutput`. No text parsing. `mergeReviewResults` combines the two passes; if neither has actionable findings, the loop exits. If findings exist, `formatReviewForReplan` converts them into a markdown brief that feeds the next iteration's planner.
+
+The early-exit condition:
+
+```typescript
+if (!hasActionableFindings(parsed, reviewRaw)) break;
+reviewReport = formatReviewForReplan(parsed, reviewRaw);
+// → next iteration's planner receives this as context
+```
+
+## <Label color="teal">5</Label> Provider Abstraction
+
+Atomic supports Claude Code, GitHub Copilot CLI, and OpenCode through provider wrappers that normalize three different session APIs into a consistent interface.
+
+<DataTable
+  caption="Per-provider session interface inside ctx.stage() callbacks"
+  headers={["Provider", "Prompt call", "Save transcript", "Permission bypass"]}
+  rows={[
+    { "Provider": "Claude Code",      "Prompt call": "s.session.query(prompt)",               "Save transcript": "s.save(s.sessionId)",           "Permission bypass": "--dangerously-skip-permissions" },
+    { "Provider": "Copilot CLI",      "Prompt call": "s.session.send({ prompt })",             "Save transcript": "s.save(await session.getMessages())", "Permission bypass": "--yolo / COPILOT_ALLOW_ALL=true" },
+    { "Provider": "OpenCode",         "Prompt call": "s.client.session.prompt({ ... })",       "Save transcript": "s.save(result.data!)",           "Permission bypass": "SSE auto-reply" },
+  ]}
+/>
+
+Permissions are bypassed at the CLI flag level — Atomic sets `--dangerously-skip-permissions` (Claude), `--yolo` (Copilot), or replies to SSE permission events (OpenCode) so pipelines don't block on prompts. This is why the README recommends running in a devcontainer: autonomous agents with all permissions bypassed should not run on a host machine.
+
+Provider-specific logic is isolated in `providers/claude.ts`, `providers/copilot.ts`, and `providers/opencode.ts`. The `claude.ts` wrapper additionally implements idle detection from `CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS=1`, which makes Claude emit `session_state_changed` events to its JSONL transcript. The wrapper watches these events rather than using a wall-clock timeout — it knows the agent is truly idle, not just thinking slowly.
+
+## <Label color="green">6</Label> Skills: 57 Capability Modules
+
+Beyond workflows, Atomic ships 57 `SKILL.md` files in `.agents/skills/<name>/`. Skills give agents reusable procedures — structured `SKILL.md` documents the trigger conditions, steps, and output format for a specific task. They auto-invoke when the agent detects the trigger in natural language, or you call them explicitly with `/<skill-name>`.
+
+<CompareTable
+  products={[
+    { name: "Ad-hoc prompts" },
+    { name: "Atomic skills", highlight: true },
+  ]}
+  features={[
+    { label: "Versioned with repo",          values: ["no",  "yes"] },
+    { label: "Auto-invoked on trigger",      values: ["no",  "yes"] },
+    { label: "Shared across team",           values: ["no",  "yes"] },
+    { label: "Composable (skills call skills)", values: ["no", "yes"] },
+    { label: "Works across all 3 agents",    values: ["partial", "yes"] },
+    { label: "Community-installable",        values: ["no",  "yes"] },
+  ]}
+  caption="Skills vs ad-hoc prompts. The find-skills skill itself can discover and install community skills not bundled with Atomic."
+/>
+
+The most architecturally interesting skill is `workflow-creator`: describe a workflow in natural language and it scaffolds a `defineWorkflow()` file with typed CLI flags, correct SDK patterns, and a registry entry for `.atomic/settings.json`. The abstraction is self-hosting — Atomic uses its own skill to extend Atomic.
+
+## What's Genuinely Interesting
+
+**The graph inference algorithm.** `GraphFrontierTracker` infers sequential, parallel, and fan-in topology from JavaScript execution semantics alone. An `await` after a stage guarantees the frontier is non-empty before the next spawn — sequential. Both spawns inside `Promise.all` fire synchronously — parallel. After `Promise.all` resolves, both names are in the frontier — the next stage depends on both. This is a direct consequence of how the JS event loop works, not a framework convention.
+
+**Self-exec dispatch.** `runWorkflow` spawns a tmux orchestrator pane that runs the CLI's hidden `_orchestrator-entry` sub-command with the workflow name, agent, inputs (base64), and source path as positional args. In production binary mode, the CLI self-execs into its own binary — no external dispatcher needed. In dev mode it dynamic-imports the source file. The user's CLI is never re-imported; the orchestrator entry script is the only re-exec target.
+
+**Headless stages with schema-validated output.** Ralph's reviewer stages run `outputFormat: { type: "json_schema", schema: REVIEW_RESULT_JSON_SCHEMA }` against the Claude Agent SDK. The SDK validates the JSON before returning; `s.session.lastStructuredOutput` is a typed object, not a string to parse. This eliminates an entire class of flakiness — reviewer disagreements are computed on validated typed objects, not by regex-matching strings like "the code is correct".
+
+**Transcript isolation as first-class semantics.** `s.transcript(handle)` writes the prior session's output to `~/.atomic/sessions/<runId>/` and returns a path. The downstream stage reads from disk, not from memory. Each session starts with a fresh context window; only the explicit transcript slice is injected. This is not a convenience wrapper — it's a deliberate architectural choice to prevent context contamination between stages.
+
+**devcontainer features as the safety boundary.** `ghcr.io/flora131/atomic/claude:1` bundles Atomic + Claude Code into a devcontainer feature. The recommended workflow is: run autonomous agents (all permissions bypassed) inside a container with a read-only host filesystem mount — not on the host. The CLI's `--dangerously-skip-permissions` flag is intentionally named to signal the risk to anyone reading the command.
+
+---
+
+[GitHub: flora131/atomic](https://github.com/flora131/atomic) — 165 stars · 34 forks · MIT · TypeScript · Bun
