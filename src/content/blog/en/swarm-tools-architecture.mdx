@@ -1,0 +1,232 @@
+---
+title: "Swarm Tools: Multi-Agent Coordination That Survives Context Death"
+description: "A deep dive into Swarm Tools' architecture — event-sourced coordination via libSQL, the Hive git-backed task tracker, Hivemind semantic memory, the coordinator/worker role split, and a learning system that improves across sessions."
+pubDate: 2026-05-08
+tags: ["ai", "architecture", "agents", "multi-agent", "mcp", "typescript", "event-sourcing"]
+lang: "en"
+category: "architecture"
+series: "ai-agent-tools"
+seriesOrder: 9
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import ArchLayer from '../../../components/mdx/ArchLayer.astro';
+import Pipeline from '../../../components/mdx/Pipeline.astro';
+import PatternLifecycle from '../../../components/mdx/PatternLifecycle.astro';
+import LayerStack from '../../../components/mdx/LayerStack.astro';
+
+Parallel AI agents that share a codebase collide on files, duplicate work, and lose progress when a context window fills and compaction discards the coordination state. The first agent to finish doesn't know what the second started; the coordinator that decomposed the task forgets it did so. Swarm Tools is a MCP plugin that gives OpenCode and Claude Code agents a durable shared substrate — event-sourced coordination, file reservations, actor-model messaging, and a learning system that persists across every context death — without any external server.
+
+MIT, TypeScript, Bun. Works with both OpenCode and Claude Code.
+
+<HeroGrid items={[
+  { label: "Hive",      sublabel: "Git-backed task tracker — survives sessions and reboots", color: "#0891b2" },
+  { label: "Hivemind",  sublabel: "Semantic memory with Ollama embeddings + FTS fallback",   color: "#059669" },
+  { label: "Swarm Mail",sublabel: "Actor-model coordination: locks, mailboxes, deferred",    color: "#d97706" },
+  { label: "Learning",  sublabel: "Pattern maturity + 90-day confidence decay per criterion",color: "#7c3aed" },
+]} />
+
+## <Label color="teal">1</Label> The Problem: Coordination State Is Ephemeral
+
+When an AI agent's context window fills, the runtime compacts it. Prose history is summarized; tool call details are discarded. An agent that decomposed a 12-subtask epic at turn 1 may, at turn 80, have lost the decomposition entirely — it sees only a summary sentence. If it spawns workers from that summary, it respawns work that's already done. Workers edit the same file, produce conflicting patches, and the coordinator has no way to detect the collision.
+
+The second problem is that each session starts fresh. Lessons from the last task — "use idempotency keys with the payment API", "the auth module has a race condition under concurrent refresh" — evaporate when the session ends. The next agent repeats the same mistakes.
+
+## <Label color="green">2</Label> System Architecture
+
+Swarm Tools is a Bun monorepo with two npm packages and a plugin manifest layer:
+
+<LayerStack
+  layers={[
+    {
+      tag: "P",
+      color: "teal",
+      title: "Plugin Layer — claude-code-swarm-plugin / opencode-swarm-plugin",
+      items: ["/swarm command", "/hive", "/inbox", "/status", "/handoff", "coordinator agent", "worker agent"],
+      note: "packages/*/",
+    },
+    {
+      tag: "S",
+      color: "amber",
+      title: "Services — opencode-swarm-plugin MCP server (exposed via MCP)",
+      items: ["hive tools", "hivemind tools", "swarmmail tools", "swarm orchestration", "learning tools", "skills tools"],
+      note: "src/",
+    },
+    {
+      tag: "C",
+      color: "green",
+      title: "Core — swarm-mail (embedded libSQL, Effect-TS primitives)",
+      items: ["event store (append-only)", "DurableLock (CAS)", "DurableMailbox", "DurableDeferred", "MemoryStore + Ollama"],
+      note: "packages/swarm-mail/",
+    },
+  ]}
+  arrows={["MCP tools → service dispatch", "services → swarm-mail primitives"]}
+  caption="Three layers. The plugin layer defines agent personas and slash commands. The service layer exposes MCP tools. swarm-mail owns all durable state."
+/>
+
+The MCP server (`bin/mcp-server.ts`) starts automatically when Claude Code launches — no user-managed daemon. It exposes ~40 tools across the hive, hivemind, swarmmail, and learning namespaces. All state lives in embedded libSQL (via `@libsql/client`), which means no Postgres, no Redis, no network.
+
+## <Label color="amber">3</Label> Hive: Git-Backed Task Tracking
+
+The Hive is the answer to "how does the coordinator remember what it decomposed?" It writes task cells as JSONL to `.hive/issues.jsonl` in the project directory. Git tracks this file; `git pull` syncs it across machines and CI. The cells survive context death because they live on disk, not in the agent's context window.
+
+A **cell** is a typed record with id, status, parent epic, assigned files, and a completion summary:
+
+```typescript
+type CellStatus = "backlog" | "in_progress" | "blocked" | "done" | "failed";
+
+// Every subtask becomes a cell:
+hive_create({ title: "Implement OAuth refresh", type: "task", epic_id: "epic-001" })
+hive_update({ id: "cell-abc", status: "in_progress" })
+hive_close({  id: "cell-abc", reason: "Implemented with 5min buffer, see src/auth/refresh.ts" })
+```
+
+The coordinator creates an **epic** cell for the overall task, then child cells for each subtask. Workers update their own cell's status as they progress. The coordinator polls `hive_cells({ status: "in_progress" })` to know what's running without the status being in-context. When the coordinator's context is compacted, the Hive is still there — `hive_cells` returns the full ground truth.
+
+<Callout color="amber">
+  The Hive's `hive_sync` tool runs `git add .hive && git commit && git push` atomically. Workers call this on completion. This means task state is durable to machine failure, not just process death.
+</Callout>
+
+## <Label color="rose">4</Label> The Coordinator / Worker Role Split
+
+The most structurally important decision in Swarm Tools is the **hard enforcement** of the coordinator/worker boundary. Coordinators are configured with `disallowedTools: [Write, Edit]` in their agent manifest — they cannot edit files at all, even if they try. At runtime, `CoordinatorGuardError` intercepts any attempt by a coordinator to call `edit`, `write`, `swarmmail_reserve`, or run tests.
+
+<DataTable
+  caption="Coordinator vs Worker — enforced role boundaries"
+  headers={["", "Coordinator", "Worker"]}
+  rows={[
+    { "": "Edit files",           "Coordinator": "✗ blocked",   "Worker": "✓ after reserving" },
+    { "": "Run tests",            "Coordinator": "✗ blocked",   "Worker": "✓ verify own work" },
+    { "": "Reserve files",        "Coordinator": "✗ blocked",   "Worker": "✓ exclusive lock" },
+    { "": "Spawn subtasks",       "Coordinator": "✓ required",  "Worker": "✗ not applicable" },
+    { "": "Review completions",   "Coordinator": "✓ required",  "Worker": "✗ not applicable" },
+    { "": "Record outcomes",      "Coordinator": "✓ on complete","Worker": "✗ not applicable" },
+    { "": "Query Hivemind",       "Coordinator": "✓",           "Worker": "✓" },
+    { "": "Send Swarm Mail",      "Coordinator": "✓",           "Worker": "✓" },
+    { "": "Edit own cell status", "Coordinator": "✓ (hive)",    "Worker": "✓ (hive)" },
+  ]}
+/>
+
+The principle is named **"conductors don't perform"**: the coordinator's job is to decompose, dispatch, review, and learn — never to write a line of code. This matters because a coordinator that edits files loses the ability to enforce non-overlapping file assignments, the key invariant that makes parallel execution safe.
+
+Worker spawning uses a typed `WorkerHandoff` contract, not free-form prose:
+
+```typescript
+const handoff: WorkerHandoff = {
+  contract: {
+    task_id: "cell-002",
+    files_owned: ["src/auth/refresh.ts", "src/auth/refresh.test.ts"],
+    files_readonly: ["src/auth/types.ts"],
+    success_criteria: ["All tests pass", "Token refresh handles 401 correctly"],
+    epic_summary: "Add OAuth token refresh",
+    your_role: "Implement the refresh path",
+    what_comes_next: "Worker C will wire this to the session store",
+  }
+};
+```
+
+Workers reserve their `files_owned` via `swarmmail_reserve` before touching them — acquiring an exclusive lock that blocks any other agent from reserving the same path.
+
+## <Label color="teal">5</Label> Swarm Mail: Three Durable Primitives
+
+All coordination state in Swarm Mail is stored as an **append-only event log** in libSQL. Current state is computed by replaying events (projections). No UPDATE statements — all writes are INSERT.
+
+<DataTable
+  caption="Event types in the append-only stream"
+  headers={["Event", "Payload", "What it enables"]}
+  rows={[
+    { "Event": "agent_registered",   "Payload": "name, model, task",           "What it enables": "agent discovery, inbox addressing" },
+    { "Event": "message_sent",       "Payload": "from, to[], subject, body",    "What it enables": "Swarm Mail inbox, thread tracking" },
+    { "Event": "file_reserved",      "Payload": "paths[], agent, exclusive",    "What it enables": "DurableLock conflict detection" },
+    { "Event": "file_released",      "Payload": "paths[], agent",              "What it enables": "lock release, worker done" },
+    { "Event": "checkpoint",         "Payload": "epic_id, progress_json",      "What it enables": "mid-task compaction recovery" },
+    { "Event": "outcome",            "Payload": "success, duration_ms, errors", "What it enables": "learning system training signal" },
+    { "Event": "coordinator_decision","Payload": "decision_type, context",     "What it enables": "eval data capture, observability" },
+  ]}
+/>
+
+Three Effect-TS service primitives power the live coordination:
+
+**DurableLock** — Compare-And-Swap (CAS) on sequence number. `acquire` inserts an event with the current sequence; success means no one else wrote in between. Exponential backoff for contention. TTL expiry handles crash recovery — a lock held by a dead agent expires and the next agent reclaims it.
+
+**DurableMailbox** — Each agent has an inbox. Messages are appended as `message_sent` events. `getInbox(agentName)` replays and projects unread messages. Supports priority levels (`urgent`, `high`, `normal`, `low`), thread IDs, and `ack_required` flags. A blocked worker can `swarmmail_send` to its coordinator without waiting.
+
+**DurableDeferred** — A distributed promise: create a pending entry in the `deferred` table with a TTL, pass the URL to a requestor, await resolution. The database is polled until the URL resolves or the TTL expires. Used for request/response patterns between agents.
+
+## <Label color="green">6</Label> Hivemind: Semantic Memory That Decays
+
+Hivemind stores learnings as vector embeddings in libSQL via Ollama (`mxbai-embed-large` by default, 1024d). If Ollama is not available, it falls back to full-text search. Memories are stored with confidence (0.0–1.0) and can be tagged or auto-tagged via LLM.
+
+The critical feature is **confidence decay**: memories that are not revalidated lose weight over time. The decay formula uses a configurable half-life (default 90 days):
+
+```
+weight(t) = initial_weight × 0.5^(days_since_validated / half_life)
+```
+
+A memory stored 90 days ago with confidence 1.0 now has weight ~0.5. At 180 days, ~0.25. This prevents Hivemind from confidently recommending stale patterns — "the old auth module required JWT" — after the codebase has changed.
+
+Search results are scored by `weight × semantic_similarity`. A recent low-confidence memory can outscore an old high-confidence one if the context relevance is high enough.
+
+## <Label color="amber">7</Label> Learning System: From Outcome to Proven Pattern
+
+Every completed swarm records an `outcome` event. The learning module (`src/learning.ts`) processes these signals into **patterns** — reusable decomposition strategies and implementation notes.
+
+<PatternLifecycle
+  stages={[
+    { id: "candidate",   label: "Candidate",   sublabel: "1-2 successes",  color: "amber" },
+    { id: "established", label: "Established", sublabel: "3-9 successes",  color: "teal"  },
+    { id: "proven",      label: "Proven",      sublabel: "10+ successes",  color: "green" },
+  ]}
+  decayArrow={{ from: "proven", to: "candidate", label: "90-day confidence decay" }}
+  caption="Pattern maturity states. A pattern promoted to Proven regresses toward Candidate if it is not revalidated within 90 days."
+/>
+
+**Anti-pattern generation** is automatic: if a criterion's failure rate crosses 60%, the system generates an anti-pattern entry that warns future agents. Anti-patterns appear in the coordinator's context via `hivemind_find` before decomposition.
+
+The **3-strike system** detects architectural problems that cannot be solved by retrying the same subtask. Three consecutive failures on the same subtask with the same failure mode trigger a `formatMemoryStoreOn3Strike` event — the coordinator surfaces this to the user rather than silently retrying.
+
+## <Label color="rose">8</Label> End-to-End: The `/swarm` Flow
+
+<FlowStep step="1" color="teal" title="swarmmail_init — register and discover">
+  The coordinator registers itself as `agent_registered`, queries hivemind for relevant past learnings, and discovers available skills via `listSkills`.
+</FlowStep>
+
+<FlowStep step="2" color="teal" title="swarm_plan_prompt + swarm_validate_decomposition">
+  The coordinator queries past decompositions from the event store. It picks a strategy (`file-based`, `feature-based`, `risk-based`, `research-based`) and generates a JSON decomposition: one epic + N subtasks with file assignments and dependency ordering. `swarm_validate_decomposition` checks for file overlaps and circular dependencies before any cells are created.
+</FlowStep>
+
+<FlowStep step="3" color="amber" title="hive_create (epic + cells) + swarmmail_reserve">
+  The epic and all child cells are created atomically in the Hive. Each worker call to `swarm_spawn_subtask` produces a `WorkerHandoff` contract; workers call `swarmmail_reserve` on their assigned files before editing.
+</FlowStep>
+
+<FlowStep step="4" color="amber" title="Workers execute in parallel">
+  Workers edit files, run their own tests, and update cell status via `hive_update`. If blocked, they send a `swarmmail_send` to the coordinator. On completion, they call `hive_close` with a summary and release their file reservations.
+</FlowStep>
+
+<FlowStep step="5" color="green" title="swarm_review + swarm_review_feedback (per worker)">
+  The coordinator reviews each worker's output against the epic goal — not just the subtask spec. Max 3 review rounds. On `needs_changes`, structured `ReviewIssue[]` is sent back via Swarm Mail. On `approved`, the next dependent subtasks unlock.
+</FlowStep>
+
+<FlowStep step="6" color="green" title="swarm_complete + swarm_record_outcome">
+  On final epic completion, the coordinator runs `swarm_verify` (the verification gate), calls `swarm_complete`, and records outcome signals (duration, error counts, files touched, success). This feeds the learning system. `hivemind_store` saves session learnings for future coordinators.
+</FlowStep>
+
+## What's Genuinely Interesting
+
+**Compaction-resistant coordination.** The Hive's git-backed JSONL is the ground truth, not the context window. Compaction summarizes prose; it doesn't delete `.hive/issues.jsonl`. A coordinator can lose 80 turns of history and recover full task state in one `hive_cells` call.
+
+**CAS-based locking without a coordinator.** DurableLock uses sequence-number CAS on libSQL — an optimistic write that fails if any other agent wrote concurrently. No lock server, no Zookeeper, no Redis. libSQL's serialized write model makes CAS exact with no race window.
+
+**The `disallowedTools` enforcement.** Configuring `disallowedTools: [Write, Edit]` in the coordinator's agent manifest is a native Claude Code 2.1.32 feature, not a soft policy. The runtime blocks the tools before the agent can invoke them. The `CoordinatorGuardError` adds a second layer for tools that aren't in the manifest's disallow list but violate protocol (like `swarmmail_reserve`).
+
+**Eval data capture on every run.** Every decomposition, violation, and outcome is recorded as an event (`coordinator_decision`, `coordinator_violation`, `outcome`). These events are the training data — `observability-tools.ts` provides `querySwarmHistory` and `formatSwarmStats` over them. The learning system doesn't need a separate eval harness; every production run IS an eval.
+
+**Git worktree isolation as an alternative to file reservations.** `swarm-worktree.ts` offers an opt-in mode where each worker gets a `git worktree` at a shared commit. Workers make independent branches; the coordinator cherry-picks on completion. This eliminates the need for file reservations entirely at the cost of merge complexity. Available via `canUseWorktreeIsolation()`.
+
+---
+
+[GitHub: joelhooks/swarm-tools](https://github.com/joelhooks/swarm-tools) — 660 stars · 53 forks · MIT · TypeScript · Bun

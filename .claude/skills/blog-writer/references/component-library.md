@@ -497,3 +497,39 @@ interface Props {
 />
 ```
 **When to use:** Before/after performance comparisons where you want to show both raw values (as bars) and the improvement delta (as badges). Bar widths are scaled globally across all rows so relative magnitude is visible. Use `totalRow` for aggregate results. Prefer over `DataTable` when visual magnitude matters.
+
+### PatternLifecycle
+**Pattern:** Linear state-machine diagram showing ordered lifecycle stages with optional dashed decay/regression arrow back to an earlier state. No client-side JS.
+**Props:**
+```ts
+interface Stage {
+  id: string;
+  label: string;
+  sublabel?: string;
+  color?: 'teal' | 'green' | 'amber' | 'rose';
+}
+interface DecayArrow {
+  from: string;
+  to: string;
+  label?: string;
+}
+interface Props {
+  stages: Stage[];
+  decayArrow?: DecayArrow;
+  caption?: string;
+  label?: string;   // small dim label shown top-left
+}
+```
+**Usage:**
+```mdx
+<PatternLifecycle
+  stages={[
+    { id: "candidate",   label: "Candidate",   sublabel: "1-2 successes", color: "amber" },
+    { id: "established", label: "Established", sublabel: "3-9 successes", color: "teal"  },
+    { id: "proven",      label: "Proven",      sublabel: "10+ successes", color: "green" },
+  ]}
+  decayArrow={{ from: "proven", to: "candidate", label: "90-day decay" }}
+  caption="Pattern maturity states. Proven regresses to Candidate after 90 days without revalidation."
+/>
+```
+**When to use:** Lifecycle progressions where an item moves through ordered states, especially when there is a decay/regression path back to an earlier state (learning systems, certificate expiry, pattern maturity). Works for any finite-state sequence (2–5 stages recommended). For non-sequential flows, use `Pipeline`. For cyclic control loops, use `ControlLoop`.
