@@ -1,0 +1,184 @@
+---
+/**
+ * CompareTable — Feature comparison matrix with product columns.
+ *
+ * Renders a table where columns are products/tools and rows are features.
+ * Each cell value is one of: "yes", "no", "partial", or a plain string.
+ * "yes" → colored check ✓, "no" → dim dash —, "partial" → amber tilde ~.
+ * One column can be highlighted as "highlight" (accent color header).
+ *
+ * Usage:
+ *   <CompareTable
+ *     products={[
+ *       { name: "Claude Code" },
+ *       { name: "Cursor" },
+ *       { name: "+ SocratiCode", highlight: true },
+ *     ]}
+ *     features={[
+ *       { label: "Hybrid search (fused)", values: ["no", "no", "yes"] },
+ *       { label: "Symbol-level impact", values: ["no", "no", "yes"] },
+ *       { label: "Fully local / private", values: ["yes", "no", "yes"] },
+ *     ]}
+ *     caption="Feature comparison vs built-in AI search tools."
+ *   />
+ */
+interface Product {
+  name: string;
+  /** If true, this column gets an accent-color header. */
+  highlight?: boolean;
+}
+
+interface Feature {
+  label: string;
+  /** One value per product column. "yes"|"no"|"partial" get icons; any other string is shown as-is. */
+  values: string[];
+  /** If true, visually groups this row (top border). */
+  group?: boolean;
+}
+
+interface Props {
+  products: Product[];
+  features: Feature[];
+  caption?: string;
+}
+
+const { products, features, caption } = Astro.props;
+
+function cellIcon(v: string): { icon: string; cls: string } {
+  if (v === 'yes')     return { icon: '✓', cls: 'ct-yes'     };
+  if (v === 'no')      return { icon: '—', cls: 'ct-no'      };
+  if (v === 'partial') return { icon: '~', cls: 'ct-partial'  };
+  return { icon: v, cls: 'ct-text' };
+}
+---
+
+<div class="ct-wrap">
+  <div class="ct-scroll">
+    <table class="ct-table">
+      <thead>
+        <tr>
+          <th class="ct-th ct-th-feature">Feature</th>
+          {products.map((p) => (
+            <th class={`ct-th ct-th-product${p.highlight ? ' ct-th-highlight' : ''}`}>
+              {p.name}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {features.map((f) => (
+          <tr class={`ct-row${f.group ? ' ct-row-group' : ''}`}>
+            <td class="ct-td ct-td-label">{f.label}</td>
+            {f.values.map((v, ci) => {
+              const { icon, cls } = cellIcon(v);
+              const isHighlight = products[ci]?.highlight;
+              return (
+                <td class={`ct-td ct-td-value ${cls}${isHighlight ? ' ct-td-highlight' : ''}`}>
+                  {icon}
+                </td>
+              );
+            })}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+  {caption && <div class="ct-caption">{caption}</div>}
+</div>
+
+<style>
+  .ct-wrap {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    margin: 1.25rem 0;
+    overflow: hidden;
+  }
+
+  .ct-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .ct-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+    font-size: 0.72rem;
+    min-width: 480px;
+  }
+
+  .ct-th {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 2px solid var(--color-border);
+    border-right: 1px solid var(--color-border);
+    background: var(--color-surface-2, var(--color-surface));
+    font-weight: 700;
+    font-size: 0.68rem;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    color: var(--color-text);
+    text-align: center;
+  }
+
+  .ct-th-feature {
+    text-align: left;
+    min-width: 12rem;
+  }
+
+  .ct-th-highlight {
+    color: var(--color-accent);
+    border-bottom-color: var(--color-accent);
+  }
+
+  .ct-row {
+    border-bottom: 1px solid var(--color-border);
+    transition: background 0.1s;
+  }
+
+  .ct-row:hover {
+    background: var(--color-bg);
+  }
+
+  .ct-row-group {
+    border-top: 2px solid var(--color-border);
+  }
+
+  .ct-td {
+    padding: 0.4rem 0.75rem;
+    border-right: 1px solid var(--color-border);
+    vertical-align: middle;
+  }
+
+  .ct-td-label {
+    font-size: 0.72rem;
+    color: var(--color-text);
+    font-weight: 500;
+  }
+
+  .ct-td-value {
+    text-align: center;
+    font-size: 0.82rem;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .ct-td-highlight {
+    background: rgba(8, 145, 178, 0.05);
+  }
+
+  /* Cell states */
+  .ct-yes     { color: #059669; }
+  .ct-no      { color: var(--color-text-dim); opacity: 0.4; font-weight: 400; }
+  .ct-partial { color: #d97706; }
+  .ct-text    { color: var(--color-text); font-size: 0.65rem; }
+
+  .ct-caption {
+    padding: 0.45rem 0.875rem;
+    border-top: 1px solid var(--color-border);
+    font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+    font-size: 0.62rem;
+    color: var(--color-text-dim);
+    background: var(--color-bg);
+    line-height: 1.5;
+  }
+</style>

@@ -1,0 +1,267 @@
+---
+title: "SocratiCode: How Hybrid Search + Code Graphs Close the Context Gap for AI Agents"
+description: "A deep dive into SocratiCode's architecture — hybrid semantic + BM25 search, AST-aware chunking, polyglot call graphs, cross-process locking, and the design decisions behind 61% fewer tokens and 84% fewer tool calls."
+pubDate: 2026-05-08
+tags: ["ai", "architecture", "agents", "static-analysis", "mcp", "typescript"]
+lang: "en"
+category: "architecture"
+series: "ai-agent-tools"
+seriesOrder: 8
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import LayerStack from '../../../components/mdx/LayerStack.astro';
+import CompareTable from '../../../components/mdx/CompareTable.astro';
+import BenchmarkBar from '../../../components/mdx/BenchmarkBar.astro';
+import Pipeline from '../../../components/mdx/Pipeline.astro';
+
+AI agents searching large codebases with grep and `read_file` repeat the same expensive pattern: scan for filenames, read files in 200-line chunks, scan again, repeat. On a 2.45-million-line codebase, answering five architectural questions this way consumes 250KB of context and 31 tool calls. Most of that is noise — the agent reads the right file eventually, buried under dozens of wrong ones.
+
+[SocratiCode](https://github.com/giancarloerra/SocratiCode) is an MCP server that replaces that pattern with hybrid semantic + keyword search backed by a persistent vector index, a polyglot code graph, and symbol-level impact analysis. AGPL-3.0, 2.4K stars, TypeScript, works with any MCP host.
+
+<HeroGrid items={[
+  { label: "61% fewer tokens",  sublabel: "vs grep on 2.45M LOC VSCode repo", color: "#0891b2" },
+  { label: "84% fewer calls",   sublabel: "31 tool calls → 5 per 5 questions", color: "#059669" },
+  { label: "37× faster",        sublabel: "median speedup per question",       color: "#d97706" },
+  { label: "40M+ LOC",          sublabel: "enterprise-scale tested",           color: "#7c3aed" },
+]} />
+
+## <Label color="teal">1</Label> The Problem: Grep Is a Scanner, Not an Index
+
+When an AI agent searches code with grep, it operates as a scanner: traverse the entire tree, match strings, open matching files, read chunks, infer relevance. The process is correct but blind — it treats all code as undifferentiated text. It cannot distinguish a function definition from a call site, a public API from an internal helper, or a direct import from a transitive dependency.
+
+This matters because the questions AI agents actually ask are not keyword questions. "Where do we handle database connection pooling?" is a concept — the code that answers it might use the word "pool," or it might use "client," "session," or "acquire." Grep finds words. Semantic search finds intent.
+
+The second problem is scale. At 2.45M lines, `grep -rl` on a cold filesystem is slow. Repeated across 31 steps per five questions, it consumes a significant fraction of the agent's context budget just to locate files — before reading a single line of relevant code.
+
+<CompareTable
+  products={[
+    { name: "Claude Code" },
+    { name: "Cursor" },
+    { name: "VS Code Copilot" },
+    { name: "+ SocratiCode", highlight: true },
+  ]}
+  features={[
+    { label: "Text / grep search",              values: ["yes", "yes", "yes", "yes"] },
+    { label: "Semantic search",                  values: ["no",  "yes", "yes", "yes"] },
+    { label: "Hybrid search (dense + BM25 RRF)", values: ["no",  "no",  "no",  "yes"] },
+    { label: "Polyglot dependency graph",        values: ["no",  "no",  "partial", "yes"] },
+    { label: "Symbol-level impact / blast radius",values: ["no", "no",  "no",  "yes"] },
+    { label: "Call-flow tracing",                values: ["no",  "no",  "no",  "yes"] },
+    { label: "Interactive graph explorer",        values: ["no",  "no",  "no",  "yes"] },
+    { label: "Non-code knowledge (schemas, specs)",values: ["no", "no", "no",  "yes"] },
+    { label: "Cross-project search",             values: ["no",  "no",  "no",  "yes"] },
+    { label: "Branch-aware indexing",            values: ["no",  "no",  "no",  "yes"] },
+    { label: "Multi-agent shared index",         values: ["no",  "no",  "no",  "yes"] },
+    { label: "Fully local / private",            values: ["yes", "no",  "no",  "yes"] },
+    { label: "Resumable indexing",               values: ["no",  "no",  "no",  "yes"] },
+  ]}
+  caption="Built-in search tools vs SocratiCode. Cursor embeds on remote servers. VS Code Copilot uses GitHub-hosted index. ² LSP Find References, not a full graph."
+/>
+
+## <Label color="green">2</Label> How It Works: The Technical Design
+
+### System Architecture
+
+SocratiCode is a TypeScript MCP server with three logical layers: the MCP tool interface, a service layer, and persistent storage in Qdrant.
+
+<LayerStack
+  layers={[
+    {
+      tag: "L3",
+      color: "teal",
+      title: "MCP Tools (17 tools exposed to the agent)",
+      items: ["codebase_search", "codebase_impact", "codebase_flow", "codebase_symbol", "codebase_graph_query", "codebase_graph_visualize", "codebase_context_search"],
+      note: "src/tools/",
+    },
+    {
+      tag: "L2",
+      color: "amber",
+      title: "Services",
+      items: ["indexer", "code-graph", "graph-symbols", "graph-impact", "embeddings", "watcher", "lock", "context-artifacts", "embedding-provider"],
+      note: "src/services/",
+    },
+    {
+      tag: "L1",
+      color: "green",
+      title: "Storage",
+      items: ["Qdrant: vector chunks (dense)", "Qdrant: BM25 index (sparse)", "Qdrant: graph shards", "lock files (OS temp)"],
+      note: "Docker-managed",
+    },
+  ]}
+  arrows={["tool call → service dispatch", "service → persist / query"]}
+  caption="Three-layer architecture. Each layer has a clean boundary — tools call services, services own storage. No tool touches Qdrant directly."
+/>
+
+### Indexing: AST-Aware Chunking
+
+The indexer (`src/services/indexer.ts`) is where the quality of search results is determined. The fundamental problem with line-based chunking is that it breaks semantic units — a function split across two chunks loses coherence for embedding. SocratiCode uses `@ast-grep/napi` to parse source files and chunk at function/class/method boundaries for 20 languages with full AST support.
+
+For each file it:
+
+<FlowStep step="1" color="teal" title="Detects language from extension">
+  Maps extensions to AST-grep language tags. Files above `MAX_FILE_SIZE_MB` (default 5 MB) are skipped. Generated files, binaries, and `.gitignore`-covered paths are excluded.
+</FlowStep>
+
+<FlowStep step="2" color="teal" title="Extracts AST nodes at semantic boundaries">
+  Functions, methods, classes, and top-level declarations become chunk candidates. Large nodes are split at `CHUNK_SIZE` with `CHUNK_OVERLAP` to maintain context continuity across boundaries.
+</FlowStep>
+
+<FlowStep step="3" color="teal" title="Generates embeddings in batches">
+  Chunks are embedded via the configured provider (Ollama local, OpenAI, Google, LM Studio). Batch size is `INDEX_BATCH_SIZE`. Each batch is checkpointed to Qdrant after upload — so indexing is resumable at any batch boundary if the process is interrupted.
+</FlowStep>
+
+<FlowStep step="4" color="teal" title="Stores as both dense and sparse vectors">
+  Qdrant v1.15+ supports server-side BM25 inference. Each chunk is stored with a dense embedding vector (semantic) and a sparse BM25 index (keyword). Both are queryable in a single request.
+</FlowStep>
+
+Each file's content hash is persisted in Qdrant metadata. On subsequent index runs, only files whose hash changed are re-embedded — making incremental reindexing fast on large codebases.
+
+### Search: Hybrid Dense + BM25 with RRF Fusion
+
+`codebase_search` executes a single Qdrant query that returns results from both the dense (semantic) and sparse (BM25) indexes, then fuses the ranked lists using **Reciprocal Rank Fusion (RRF)**:
+
+```
+RRF_score(d) = Σ 1 / (k + rank_i(d))
+```
+
+where `k = 60` (standard constant) and `rank_i(d)` is the rank of document `d` in result list `i`. RRF is rank-only — it doesn't need the raw scores from each retriever to be on the same scale, which makes it robust for combining dense cosine similarity with BM25's TF-IDF-style scores.
+
+<Callout color="teal">
+  RRF is the right fusion function here because dense and BM25 scores are not comparable in magnitude — cosine similarity lives in [-1, 1], BM25 in [0, ∞). Rank-based fusion sidesteps the normalization problem entirely. The `SEARCH_MIN_SCORE` threshold (default 0.10) is applied to RRF output, not to raw scores.
+</Callout>
+
+The result: a single `codebase_search` call returns the 10 most relevant chunks from 55,437 indexed chunks, ranked by conceptual relevance and keyword match simultaneously — in one round trip.
+
+### The Benchmark
+
+<BenchmarkBar
+  baselineLabel="grep workflow"
+  optimizedLabel="SocratiCode"
+  unit="bytes"
+  rows={[
+    { label: "Workspace trust restrictions", baseline: 56383, optimized: 2068,  reduction: "96.3%", speedup: "37.2×" },
+    { label: "Auth provider loading",         baseline: 36392, optimized: 16930, reduction: "53.5%", speedup: "31.4×" },
+    { label: "Extension host protocol",       baseline: 36231, optimized: 16181, reduction: "55.3%", speedup: "34.4×" },
+    { label: "Terminal shell management",     baseline: 50159, optimized: 22518, reduction: "55.1%", speedup: "31.1×" },
+    { label: "Command palette / quick pick",  baseline: 70087, optimized: 20676, reduction: "70.5%", speedup: "31.7×" },
+  ]}
+  totalRow={{ label: "Total (5 questions)", baseline: 250510, optimized: 96485, reduction: "61.5%", speedup: "37.2×" }}
+  caption="VS Code codebase (2.45M LOC, 55,437 indexed chunks). Claude Opus 4.6. Grep: 31 tool calls total. SocratiCode: 5 tool calls total."
+/>
+
+## <Label color="amber">3</Label> Code Graph + Impact Analysis
+
+The second layer above text search is the code graph. `codebase_graph_build` runs as a background job, extracting import and call edges from every source file using two mechanisms:
+
+- **AST-based** (20 languages): `@ast-grep/napi` extracts `import`/`require`/`use` statements and resolves them against `tsconfig.json` path aliases, `SCSS` partial conventions, and `<script>` blocks in Svelte/Vue files.
+- **Regex-based** (32 more languages): pattern matching on common import syntax for languages where a full AST parser is not bundled.
+
+The result is two graphs stored in Qdrant shards:
+
+**File dependency graph** — nodes are files, edges are import relationships. Enables:
+- `codebase_graph_query` — imports and dependents for a file
+- `codebase_graph_circular` — SCC-based cycle detection
+- `codebase_graph_visualize` — interactive HTML explorer (Cytoscape.js + Dagre, vendored, works offline)
+
+**Symbol call graph** — nodes are functions/methods, edges are call relationships. Enables:
+- `codebase_impact` — BFS through reverse-call edges: "what breaks if I change function X?"
+- `codebase_flow` — forward execution tracing from entry points
+- `codebase_symbol` — 360° view: definition + callers + callees
+
+<Callout color="amber">
+  The call graph is static-analysis-based with acknowledged limits: dynamic dispatch (`getattr`, reflection), framework DI (`@Autowired`, `has_many`), and decorator routing are invisible. `codebase_graph_status` reports `unresolvedEdgePct` as a signal. The rule: treat "zero callers" as a hint to double-check on DI-heavy codebases, not a guarantee.
+</Callout>
+
+The symbol graph uses incremental updates: when the file watcher detects a change, only the affected file's symbols are re-extracted and the shards merged — unless more than 50 files changed, at which point a full rebuild is faster than patching 50+ shards individually.
+
+## <Label color="rose">4</Label> Design Patterns Worth Understanding
+
+### Cross-Process Locking Without a Coordinator
+
+Multiple AI agents can run against the same project simultaneously. SocratiCode handles this without a central coordinator — pure file-system locking via `proper-lockfile`:
+
+```
+/tmp/socraticode-locks/{projectId}-index.lock
+/tmp/socraticode-locks/{projectId}-watch.lock
+```
+
+Lock files are refreshed every 30 seconds. Staleness threshold: 2 minutes. If the process holding the lock crashes, the next agent's interaction reclaims it automatically. The watcher lock ensures exactly one process watches per project — others detect this and skip watcher startup, but share the index updates the watcher produces.
+
+This is the **lease-based coordination** pattern without a distributed system: locks have TTLs, not manual release guarantees. It works because the operations being coordinated (indexing, watching) are idempotent — if a lock expires and two agents both try to index, the second one's chunks overwrite the first's with identical data.
+
+### Resumable Indexing via Batch Checkpointing
+
+Indexing a large codebase can take minutes. SocratiCode makes it safe to interrupt:
+
+```typescript
+// After each batch of files is embedded and uploaded:
+batchesProcessed++;
+// Progress is checkpointed to Qdrant metadata
+// On restart, already-indexed file hashes are loaded
+// and only changed/new files are re-embedded
+```
+
+The state that makes this possible is the per-project hash map stored in Qdrant itself. On restart, `loadProjectHashes()` retrieves all stored hashes; the indexer skips any file whose current hash matches. No separate database or state file — Qdrant is both the index and the checkpoint store.
+
+### Branch-Aware vs Shared Index
+
+By default, all branches share one Qdrant collection per project. This is correct for typical development: file changes are incremental and the watcher keeps the index current across branch switches.
+
+When you need isolated indexes per branch (CI/CD, branch comparison), `SOCRATICODE_BRANCH_AWARE=true` appends the sanitized git branch name to the collection name: `codebase_abc123__feat_my-feature`. The mechanism is `git rev-parse --abbrev-ref HEAD` called at collection name resolution time — no daemon, no event listener, just a shell call that determines which Qdrant collections this session addresses.
+
+### Context Artifacts: Indexing What Isn't Code
+
+The third search space is deliberately not source code. `.socraticodecontextartifacts.json` lists external knowledge files — database schemas, OpenAPI specs, Terraform configs, ADRs — that the agent needs but that live outside the codebase or aren't meaningfully parseable as source:
+
+```json
+{
+  "artifacts": [
+    { "name": "DB Schema", "description": "PostgreSQL schema", "path": "schema.sql" },
+    { "name": "API Spec",  "description": "OpenAPI contract",  "path": "openapi.yaml" }
+  ]
+}
+```
+
+`codebase_context_search` performs semantic search over these artifacts separately from code chunks. The index is built lazily on first use and staleness-detected on subsequent uses via file modification time — no manual re-indexing required.
+
+## <Label color="teal">5</Label> End-to-End Agent Workflow
+
+<Pipeline
+  nodes={[
+    { title: "index",          subtitle: "codebase_index" },
+    { title: "graph build",    subtitle: "codebase_graph_build" },
+    { title: "search",         subtitle: "codebase_search" },
+    { title: "impact check",   subtitle: "codebase_impact" },
+    { title: "edit",           subtitle: "agent writes code" },
+    { title: "watcher rescan", subtitle: "auto-incremental" },
+  ]}
+  arrows={[
+    { label: "once",        direction: "right" },
+    { label: "background",  direction: "right" },
+    { label: "per query",   direction: "right" },
+    { label: "before refactor", direction: "right" },
+    { label: "file change", direction: "right" },
+  ]}
+  footer="After initial setup, search and impact are the only tools the agent calls per task. The watcher handles resync invisibly."
+/>
+
+The recommended agent instruction is a single principle: **search before reading**. Call `codebase_search` first, then read only the files it returns. On a 2.45M-LOC codebase, this reduces the agent's working set from thousands of candidate files to 10 ranked chunks — in one tool call.
+
+## What's Genuinely Interesting
+
+**The indexing-as-checkpoint pattern.** Using Qdrant metadata as both the vector store and the resume state is architecturally clean — one fewer system to manage, and the hash map is co-located with the data it describes. The tradeoff is that removing the index loses the checkpoint too.
+
+**RRF over score normalization.** The choice to use Reciprocal Rank Fusion rather than normalizing dense and BM25 scores is pragmatic and correct — the scores don't share a scale, and any normalization would introduce bias. Rank fusion is unit-free by definition.
+
+**The static call graph's honest limits.** The README explicitly documents what the call graph cannot see (dynamic dispatch, DI frameworks, macros) and exposes `unresolvedEdgePct` as a quality signal. This is rare — most tools paper over static analysis limits rather than surfacing them. The "zero callers = hint, not guarantee" framing is exactly right.
+
+**Multi-agent coordination without a broker.** File-based locking with 2-minute TTLs and 30-second refreshes is a surprisingly effective coordination mechanism for the "at most one indexer, at most one watcher" requirement. It handles the crash case (stale lock reclaimed after TTL), the concurrent case (second agent receives progress instead of duplicating), and the normal case (lock released on process exit) — all without Redis, ZooKeeper, or any coordination service.
+
+---
+
+[GitHub: giancarloerra/SocratiCode](https://github.com/giancarloerra/SocratiCode) — 2.4K stars · 331 forks · AGPL-3.0 · TypeScript

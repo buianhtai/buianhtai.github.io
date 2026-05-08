@@ -1,0 +1,198 @@
+---
+/**
+ * LayerStack — Vertical architecture layer diagram.
+ *
+ * Renders a stacked set of labeled horizontal bands, each with a colored
+ * accent, a tag badge, a title, and a list of module chips.
+ * Connector arrows between layers indicate data/call direction.
+ *
+ * Usage:
+ *   <LayerStack
+ *     layers={[
+ *       { tag: "L3", color: "teal",  title: "MCP Tools",  items: ["codebase_search", "codebase_impact", "codebase_flow"] },
+ *       { tag: "L2", color: "amber", title: "Services",   items: ["indexer", "code-graph", "embeddings", "qdrant", "watcher", "lock"] },
+ *       { tag: "L1", color: "green", title: "Storage",    items: ["Qdrant (vectors + BM25)", "Qdrant (graph shards)", "lock files"] },
+ *     ]}
+ *     arrows={["tool call", "service call", "persist"]}
+ *   />
+ */
+interface Layer {
+  tag: string;
+  color?: 'teal' | 'green' | 'amber' | 'rose';
+  title: string;
+  items: string[];
+  note?: string;
+}
+
+interface Props {
+  layers: Layer[];
+  /** Labels for the downward arrows between layers (length = layers.length - 1). */
+  arrows?: string[];
+  caption?: string;
+}
+
+const { layers, arrows = [], caption } = Astro.props;
+
+const fgColors: Record<string, string> = {
+  teal:  '#0891b2',
+  green: '#059669',
+  amber: '#d97706',
+  rose:  '#be123c',
+};
+const bgColors: Record<string, string> = {
+  teal:  'rgba(8,145,178,0.10)',
+  green: 'rgba(5,150,105,0.10)',
+  amber: 'rgba(217,119,6,0.10)',
+  rose:  'rgba(190,18,60,0.10)',
+};
+const chipBg: Record<string, string> = {
+  teal:  'rgba(8,145,178,0.14)',
+  green: 'rgba(5,150,105,0.14)',
+  amber: 'rgba(217,119,6,0.14)',
+  rose:  'rgba(190,18,60,0.14)',
+};
+---
+
+<div class="ls-wrap">
+  {layers.map((layer, i) => {
+    const c = (layer.color ?? 'teal') as keyof typeof fgColors;
+    const fg = fgColors[c];
+    const bg = bgColors[c];
+    const chipBgColor = chipBg[c];
+
+    return (
+      <div>
+        <div class="ls-layer" style={`border-left: 3px solid ${fg}; background: ${bg};`}>
+          <div class="ls-layer-header">
+            <span class="ls-tag" style={`color: ${fg}; background: ${chipBgColor};`}>{layer.tag}</span>
+            <span class="ls-title" style={`color: ${fg};`}>{layer.title}</span>
+            {layer.note && <span class="ls-note">{layer.note}</span>}
+          </div>
+          <div class="ls-chips">
+            {layer.items.map((item) => (
+              <span class="ls-chip" style={`color: ${fg}; background: ${chipBgColor}; border: 1px solid ${fg}26;`}>
+                {item}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        {i < layers.length - 1 && (
+          <div class="ls-connector">
+            <div class="ls-connector-line" />
+            <div class="ls-connector-arrow">↓</div>
+            {arrows[i] && <span class="ls-connector-label">{arrows[i]}</span>}
+          </div>
+        )}
+      </div>
+    );
+  })}
+
+  {caption && <div class="ls-caption">{caption}</div>}
+</div>
+
+<style>
+  .ls-wrap {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    margin: 1.25rem 0;
+    overflow: hidden;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .ls-layer {
+    padding: 0.65rem 1rem;
+    border: 1px solid var(--color-border);
+    border-left-width: 3px;
+  }
+
+  .ls-layer-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .ls-tag {
+    font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+    font-size: 0.6rem;
+    font-weight: 700;
+    padding: 0.1rem 0.4rem;
+    letter-spacing: 0.06em;
+    flex-shrink: 0;
+  }
+
+  .ls-title {
+    font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+    font-size: 0.82rem;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+
+  .ls-note {
+    font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+    font-size: 0.62rem;
+    color: var(--color-text-dim);
+    margin-left: auto;
+  }
+
+  .ls-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+
+  .ls-chip {
+    font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+    font-size: 0.65rem;
+    padding: 0.15rem 0.5rem;
+    white-space: nowrap;
+  }
+
+  /* Connector between layers */
+  .ls-connector {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    padding: 0.1rem 0;
+    position: relative;
+  }
+
+  .ls-connector-line {
+    width: 1px;
+    height: 0.65rem;
+    background: var(--color-border);
+  }
+
+  .ls-connector-arrow {
+    font-size: 0.75rem;
+    color: var(--color-text-dim);
+    opacity: 0.5;
+    line-height: 1;
+  }
+
+  .ls-connector-label {
+    font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+    font-size: 0.58rem;
+    color: var(--color-text-dim);
+    opacity: 0.6;
+    margin-top: 0.1rem;
+    background: var(--color-surface);
+    padding: 0 0.35rem;
+  }
+
+  .ls-caption {
+    margin-top: 0.75rem;
+    padding-top: 0.6rem;
+    border-top: 1px solid var(--color-border);
+    font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+    font-size: 0.65rem;
+    color: var(--color-text-dim);
+    line-height: 1.5;
+  }
+</style>

@@ -394,3 +394,106 @@ interface Props {
 />
 ```
 **When to use:** Baseline → mutate → compare patterns: MCP session gates, CI quality regressions, before/after refactoring comparisons, A/B scoring. Pass renders green; fail renders red.
+
+### LayerStack
+**Pattern:** Vertical architecture layer stack with colored band, tag badge, title, and chip list per layer. Optional connector arrows between layers and a caption footer.
+**Props:**
+```ts
+interface Layer {
+  tag: string;          // short badge, e.g. "L3"
+  color?: 'teal' | 'green' | 'amber' | 'rose';
+  title: string;
+  items: string[];
+  note?: string;        // right-aligned dim annotation
+}
+interface Props {
+  layers: Layer[];      // rendered top → bottom
+  arrows?: string[];    // connector labels between layers (length = layers.length - 1)
+  caption?: string;
+}
+```
+**Usage:**
+```mdx
+<LayerStack
+  layers={[
+    { tag: "L3", color: "teal",  title: "MCP Tools", items: ["codebase_search", "codebase_impact"], note: "src/tools/" },
+    { tag: "L2", color: "amber", title: "Services",  items: ["indexer", "embeddings", "lock"],       note: "src/services/" },
+    { tag: "L1", color: "green", title: "Storage",   items: ["Qdrant: dense", "Qdrant: BM25"],       note: "Docker" },
+  ]}
+  arrows={["tool call → service dispatch", "service → persist / query"]}
+  caption="Three-layer architecture. Tools call services; services own storage."
+/>
+```
+**When to use:** Multi-tier architecture diagrams where each layer is visually distinct and stacked vertically. Different from `ArchLayer` (horizontal lanes, no inter-layer arrows). Use `LayerStack` when vertical stacking and flow direction between layers matters.
+
+### CompareTable
+**Pattern:** Feature comparison matrix with product columns and ✅ / — / partial cell values. One column can be highlighted as "your product".
+**Props:**
+```ts
+interface Product {
+  name: string;
+  highlight?: boolean;  // renders with accent background
+}
+interface Feature {
+  label: string;
+  values: string[];     // one value per product column; use "yes", "no", or "partial"
+}
+interface Props {
+  products: Product[];
+  features: Feature[];
+  caption?: string;
+}
+```
+**Usage:**
+```mdx
+<CompareTable
+  products={[
+    { name: "Claude Code" },
+    { name: "Cursor" },
+    { name: "+ SocratiCode", highlight: true },
+  ]}
+  features={[
+    { label: "Semantic search",    values: ["no", "yes", "yes"] },
+    { label: "Hybrid search (RRF)", values: ["no", "no",  "yes"] },
+    { label: "Call graph",         values: ["no", "no",  "yes"] },
+  ]}
+  caption="Built-in tools vs SocratiCode."
+/>
+```
+**When to use:** Tool/product comparison matrices where the reader needs to see which features are present/absent at a glance. Use "yes", "no", or "partial" for values — rendered as ✅, —, and ◐ respectively. Prefer over `DataTable` when columns represent competing products.
+
+### BenchmarkBar
+**Pattern:** Paired before/after horizontal bars per metric, with reduction percentage badge and optional speedup badge. A totalRow renders with accent styling and heavier badges.
+**Props:**
+```ts
+interface BenchmarkRow {
+  label: string;
+  baseline: number;
+  optimized: number;
+  reduction: string;    // display text, e.g. "61.5%"
+  speedup?: string;     // optional, e.g. "37×"
+}
+interface Props {
+  baselineLabel?: string;   // default "Before"
+  optimizedLabel?: string;  // default "After"
+  unit?: string;            // suffix in legend, e.g. "bytes"
+  rows: BenchmarkRow[];
+  totalRow?: BenchmarkRow;  // rendered below a divider with accent styling
+  caption?: string;
+}
+```
+**Usage:**
+```mdx
+<BenchmarkBar
+  baselineLabel="grep"
+  optimizedLabel="SocratiCode"
+  unit="bytes"
+  rows={[
+    { label: "Workspace trust", baseline: 56383, optimized: 2068,  reduction: "96.3%", speedup: "37×" },
+    { label: "Auth provider",   baseline: 36392, optimized: 16930, reduction: "53.5%", speedup: "31×" },
+  ]}
+  totalRow={{ label: "Total", baseline: 250510, optimized: 96485, reduction: "61.5%", speedup: "37.2×" }}
+  caption="VS Code codebase (2.45M LOC). Claude Opus 4.6."
+/>
+```
+**When to use:** Before/after performance comparisons where you want to show both raw values (as bars) and the improvement delta (as badges). Bar widths are scaled globally across all rows so relative magnitude is visible. Use `totalRow` for aggregate results. Prefer over `DataTable` when visual magnitude matters.
