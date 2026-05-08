@@ -291,3 +291,106 @@ interface Props {
 ]} />
 ```
 **When to use:** Capability matrix for provider ecosystems or plugin support.
+
+### ControlLoop
+**Pattern:** Sensor → Spec → Actuator cyclic feedback diagram with labeled directional edges. Rendered as an SVG triangle with curved arrows; degrades to a vertical list on mobile.
+**Props:**
+```ts
+interface LoopNode {
+  id: string;
+  title: string;
+  subtitle: string;
+  color?: 'teal' | 'green' | 'amber' | 'rose';
+}
+interface LoopEdge {
+  from: string;   // matches a node id
+  to: string;
+  label: string;
+}
+interface Props {
+  nodes: LoopNode[];   // exactly 3 nodes recommended
+  edges?: LoopEdge[];
+  caption?: string;
+}
+```
+**Usage:**
+```mdx
+<ControlLoop
+  nodes={[
+    { id: "sensor",   title: "Sensor",   subtitle: "sentrux scan", color: "teal"  },
+    { id: "spec",     title: "Spec",     subtitle: "rules.toml",   color: "amber" },
+    { id: "actuator", title: "Actuator", subtitle: "AI agent",     color: "green" },
+  ]}
+  edges={[
+    { from: "sensor",   to: "actuator", label: "quality signal" },
+    { from: "actuator", to: "sensor",   label: "code change → rescan" },
+    { from: "spec",     to: "actuator", label: "constraints" },
+  ]}
+  caption="The architecture feedback loop."
+/>
+```
+**When to use:** Cyclic feedback loops (control systems, observe-decide-act agent cycles, sensor-spec-actuator patterns). Not for linear pipelines — use `Pipeline` for those.
+
+### ScoreGauge
+**Pattern:** Multi-metric quality breakdown — each metric rendered as a labeled bar with an optional formula annotation, followed by a combined-score summary row.
+**Props:**
+```ts
+interface Metric {
+  label: string;
+  formula?: string;      // e.g. "Newman Q (2004)"
+  value: number;         // normalised [0, 1]
+  color?: 'teal' | 'green' | 'amber' | 'rose';
+}
+interface Props {
+  metrics: Metric[];
+  combinedLabel?: string;   // default "Quality signal"
+  combinedValue?: number;   // raw combined score (e.g. 7342)
+  combinedMax?: number;     // default 10000
+  title?: string;
+}
+```
+**Usage:**
+```mdx
+<ScoreGauge
+  title="Quality signal breakdown"
+  metrics={[
+    { label: "Modularity", formula: "Newman Q (2004)", value: 0.72, color: "teal"  },
+    { label: "Acyclicity", formula: "1/(1+cycles)",    value: 1.00, color: "green" },
+    { label: "Depth",      formula: "1/(1+d/8)",       value: 0.82, color: "teal"  },
+    { label: "Equality",   formula: "1 − Gini",        value: 0.71, color: "amber" },
+    { label: "Redundancy", formula: "1 − waste ratio", value: 0.88, color: "green" },
+  ]}
+  combinedLabel="Quality signal"
+  combinedValue={7342}
+  combinedMax={10000}
+/>
+```
+**When to use:** Multi-dimensional scoring systems where each dimension has a named formula. Prefer over `MetricBar` when formula attribution matters. Use the combined-score row to show geometric/weighted aggregation.
+
+### SessionGate
+**Pattern:** Before/after session quality comparison with a pass/fail badge and delta indicator. Two side-by-side score panels with a bar, connected by an arrow showing the delta.
+**Props:**
+```ts
+interface Panel {
+  score: number;
+  label: string;
+  timestamp?: string;
+}
+interface Props {
+  before: Panel;
+  after: Panel;
+  pass: boolean;
+  bottleneck?: string;    // metric name shown in footer summary
+  maxScore?: number;      // default 10000
+}
+```
+**Usage:**
+```mdx
+<SessionGate
+  before={{ score: 7342, label: "session_start()", timestamp: "baseline saved" }}
+  after={{  score: 6891, label: "session_end()",   timestamp: "after 500 lines written" }}
+  pass={false}
+  bottleneck="modularity"
+/>
+```
+**When to use:** Baseline → mutate → compare patterns: MCP session gates, CI quality regressions, before/after refactoring comparisons, A/B scoring. Pass renders green; fail renders red.

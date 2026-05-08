@@ -1,0 +1,288 @@
+---
+/**
+ * SessionGate — Before/after session quality comparison with pass/fail gate.
+ *
+ * Shows two panels side-by-side: a "before" baseline and an "after" result,
+ * with a delta indicator and a prominent pass/fail badge. Designed specifically
+ * for illustrating the MCP session_start() → code change → session_end() pattern.
+ *
+ * Usage:
+ *   <SessionGate
+ *     before={{ score: 7342, label: "session_start()", timestamp: "baseline saved" }}
+ *     after={{ score: 6891, label: "session_end()", timestamp: "500 lines written" }}
+ *     pass={false}
+ *     bottleneck="modularity"
+ *   />
+ */
+interface Panel {
+  score: number;
+  label: string;
+  timestamp?: string;
+}
+
+interface Props {
+  before: Panel;
+  after: Panel;
+  /** Whether the session gate passed (score held or improved). */
+  pass: boolean;
+  /** The bottleneck metric name, shown in the summary line. */
+  bottleneck?: string;
+  /** Max score for the bar (default 10000). */
+  maxScore?: number;
+}
+
+const { before, after, pass, bottleneck, maxScore = 10000 } = Astro.props;
+
+const delta = after.score - before.score;
+const deltaSign = delta >= 0 ? '+' : '';
+const deltaColor = delta >= 0 ? '#059669' : '#be123c';
+const deltaLabel = `${deltaSign}${delta.toLocaleString()}`;
+
+const passColor = pass ? '#059669' : '#be123c';
+const passBg   = pass ? 'rgba(5,150,105,0.12)' : 'rgba(190,18,60,0.12)';
+const passBorder = pass ? 'rgba(5,150,105,0.4)' : 'rgba(190,18,60,0.4)';
+const passText = pass ? 'PASS' : 'FAIL';
+const passIcon = pass ? '✓' : '✗';
+
+function barPct(score: number): number {
+  return Math.min(100, Math.max(1, (score / maxScore) * 100));
+}
+---
+
+<div class="sg-wrap">
+  <div class="sg-header">
+    <span class="sg-header-label">session gate</span>
+    <span class="sg-badge" style={`color: ${passColor}; background: ${passBg}; border: 1px solid ${passBorder};`}>
+      {passIcon} {passText}
+    </span>
+  </div>
+
+  <div class="sg-panels">
+    <!-- Before panel -->
+    <div class="sg-panel sg-panel--before">
+      <div class="sg-panel-tag">BEFORE</div>
+      <div class="sg-panel-fn">{before.label}</div>
+      {before.timestamp && <div class="sg-panel-ts">{before.timestamp}</div>}
+      <div class="sg-score-row">
+        <div class="sg-score-num" style="color: var(--color-accent);">{before.score.toLocaleString()}</div>
+        <div class="sg-score-max">/ {maxScore.toLocaleString()}</div>
+      </div>
+      <div class="sg-bar-track">
+        <div class="sg-bar-fill sg-bar-fill--before" style={`width: ${barPct(before.score)}%;`} />
+      </div>
+    </div>
+
+    <!-- Arrow + delta -->
+    <div class="sg-middle">
+      <div class="sg-arrow">→</div>
+      <div class="sg-delta" style={`color: ${deltaColor};`}>{deltaLabel}</div>
+    </div>
+
+    <!-- After panel -->
+    <div class="sg-panel sg-panel--after" style={`border-color: ${passBorder};`}>
+      <div class="sg-panel-tag" style={`color: ${passColor};`}>AFTER</div>
+      <div class="sg-panel-fn">{after.label}</div>
+      {after.timestamp && <div class="sg-panel-ts">{after.timestamp}</div>}
+      <div class="sg-score-row">
+        <div class="sg-score-num" style={`color: ${passColor};`}>{after.score.toLocaleString()}</div>
+        <div class="sg-score-max">/ {maxScore.toLocaleString()}</div>
+      </div>
+      <div class="sg-bar-track" style={`border-color: ${passBorder};`}>
+        <div
+          class="sg-bar-fill sg-bar-fill--after"
+          style={`width: ${barPct(after.score)}%; background: ${passColor};`}
+        />
+      </div>
+    </div>
+  </div>
+
+  {bottleneck && (
+    <div class="sg-footer">
+      <span class="sg-footer-prompt">▶</span>
+      {pass
+        ? `Quality held. No regression detected.`
+        : `Quality degraded during session. Bottleneck: ${bottleneck}`
+      }
+    </div>
+  )}
+</div>
+
+<style>
+  .sg-wrap {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    margin: 1.25rem 0;
+    overflow: hidden;
+  }
+
+  /* Header bar */
+  .sg-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.4rem 1rem;
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-surface-2, var(--color-surface));
+  }
+
+  .sg-header-label {
+    font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: var(--color-text-muted, var(--color-text-dim));
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .sg-badge {
+    font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 0.15rem 0.6rem;
+    letter-spacing: 0.08em;
+  }
+
+  /* Two-column panels */
+  .sg-panels {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 0;
+    padding: 1rem;
+    align-items: center;
+  }
+
+  .sg-panel {
+    border: 1px solid var(--color-border);
+    background: var(--color-bg);
+    padding: 0.75rem 0.875rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+
+  .sg-panel-tag {
+    font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+    font-size: 0.6rem;
+    font-weight: 700;
+    color: var(--color-text-dim);
+    letter-spacing: 0.08em;
+    margin-bottom: 0.1rem;
+  }
+
+  .sg-panel--after .sg-panel-tag {
+    /* color set inline per pass/fail */
+  }
+
+  .sg-panel-fn {
+    font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--color-text);
+  }
+
+  .sg-panel-ts {
+    font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+    font-size: 0.62rem;
+    color: var(--color-text-dim);
+    opacity: 0.7;
+  }
+
+  .sg-score-row {
+    display: flex;
+    align-items: baseline;
+    gap: 0.2rem;
+    margin-top: 0.35rem;
+  }
+
+  .sg-score-num {
+    font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+    font-size: 1.4rem;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .sg-score-max {
+    font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+    font-size: 0.65rem;
+    color: var(--color-text-dim);
+    opacity: 0.6;
+  }
+
+  .sg-bar-track {
+    height: 4px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    margin-top: 0.35rem;
+    overflow: hidden;
+  }
+
+  .sg-bar-fill {
+    height: 100%;
+    transition: width 0.4s ease;
+  }
+
+  .sg-bar-fill--before {
+    background: var(--color-accent);
+    opacity: 0.6;
+  }
+
+  /* --after fill color set inline */
+
+  /* Center arrow + delta */
+  .sg-middle {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0 0.875rem;
+    flex-shrink: 0;
+  }
+
+  .sg-arrow {
+    font-size: 1.1rem;
+    color: var(--color-text-dim);
+    opacity: 0.5;
+  }
+
+  .sg-delta {
+    font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+    font-size: 0.72rem;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  /* Footer */
+  .sg-footer {
+    padding: 0.45rem 1rem;
+    border-top: 1px solid var(--color-border);
+    background: var(--color-bg);
+    font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+    font-size: 0.68rem;
+    color: var(--color-text-dim);
+    line-height: 1.5;
+  }
+
+  .sg-footer-prompt {
+    color: var(--color-accent);
+    font-weight: 700;
+    margin-right: 0.4rem;
+  }
+
+  /* Mobile: stack panels vertically */
+  @media (max-width: 520px) {
+    .sg-panels {
+      grid-template-columns: 1fr;
+      gap: 0.5rem;
+    }
+
+    .sg-middle {
+      flex-direction: row;
+      justify-content: center;
+      padding: 0;
+    }
+
+    .sg-arrow {
+      transform: rotate(90deg);
+    }
+  }
+</style>

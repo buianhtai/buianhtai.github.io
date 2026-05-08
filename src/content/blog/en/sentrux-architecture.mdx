@@ -1,0 +1,251 @@
+---
+title: "Sentrux: The Architectural Sensor Your AI Agent Is Missing"
+description: "How sentrux closes the architecture feedback loop for AI-assisted development — a technical breakdown of the scoring engine, parser layer, rules DSL, MCP session gate, and the design patterns behind them."
+pubDate: 2026-05-08
+tags: ["ai", "rust", "architecture", "static-analysis", "agents", "code-quality"]
+lang: "en"
+category: "architecture"
+series: "ai-agent-tools"
+seriesOrder: 7
+---
+
+import Card from '../../../components/mdx/Card.astro';
+import Label from '../../../components/mdx/Label.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import ArchLayer from '../../../components/mdx/ArchLayer.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import Mermaid from '../../../components/mdx/Mermaid.astro';
+import ControlLoop from '../../../components/mdx/ControlLoop.astro';
+import ScoreGauge from '../../../components/mdx/ScoreGauge.astro';
+import SessionGate from '../../../components/mdx/SessionGate.astro';
+
+AI agents write code faster than any human. They also degrade codebases faster than any human — silently, across dozens of files per session, with no structural feedback until the next session starts producing nonsense. The problem isn't the model getting worse. The codebase did. And nobody was watching.
+
+[Sentrux](https://github.com/sentrux/sentrux) is a real-time architectural sensor: a pure Rust binary that watches your codebase as an agent writes code, computes five structural quality scores, enforces architectural rules, and exposes a session gate via MCP so the agent can self-govern. MIT license, 2.2K stars.
+
+<HeroGrid items={[
+  { label: "Pure Rust",    sublabel: "Single binary, zero runtime deps", color: "#0891b2" },
+  { label: "5 metrics",   sublabel: "Geometric mean → 0–10000 signal",  color: "#059669" },
+  { label: "52 languages",sublabel: "tree-sitter query files, no hardcoding", color: "#d97706" },
+  { label: "MCP gate",    sublabel: "session_start / session_end / check_rules", color: "#7c3aed" },
+]} />
+
+## <Label color="teal">1</Label> The Problem, Precisely
+
+When you used an IDE, you had spatial awareness. You saw the file tree. You opened files. You built a mental model — which module does what, how they connect, where things belong. Every edit passed through your understanding of the whole.
+
+Terminal-based AI agents removed that loop. The agent modifies dozens of files per session. You see a stream of `Modified src/foo.rs`. You don't see that it just introduced a circular dependency. You don't see that three modules now depend on a file that was supposed to be internal. You don't see that the same function name now exists in four places with different semantics, and the agent will start picking the wrong one.
+
+**This is the root failure mode:** every AI session silently degrades architecture. Every degradation makes the next session produce worse output. The traditional answer — plan first, then let AI implement — misses the point entirely. It produces markdown. It has no feedback loop. No structural sensor. No way to detect when implementation drifted from intent.
+
+You don't need a better plan. You need a sensor.
+
+## <Label color="green">2</Label> The Core Insight: This Is a Control Systems Problem
+
+Every system that works at scale has the same three parts: a **sensor** that observes reality, a **spec** that defines "good," and an **actuator** that corrects drift. Compilers close a feedback loop on syntax. Test suites close a loop on behavior. Linters close a loop on style.
+
+Architecture — does this change fit the system? will this abstraction cause problems as the codebase grows? — had no sensor and no loop. Only humans could judge that. And humans cannot keep up with machine-speed code generation.
+
+<ControlLoop
+  nodes={[
+    { id: "sensor",   title: "Sensor",   subtitle: "sentrux scan",  color: "teal"  },
+    { id: "spec",     title: "Spec",     subtitle: "rules.toml",    color: "amber" },
+    { id: "actuator", title: "Actuator", subtitle: "AI agent",      color: "green" },
+  ]}
+  edges={[
+    { from: "sensor",   to: "actuator", label: "quality signal" },
+    { from: "actuator", to: "sensor",   label: "code change → rescan" },
+    { from: "spec",     to: "actuator", label: "constraints" },
+    { from: "sensor",   to: "spec",     label: "rule evaluation" },
+  ]}
+  caption="The architecture feedback loop. Sentrux is the sensor. rules.toml is the spec. The agent is the actuator. The loop closes."
+/>
+
+This framing is not metaphorical — it directly determines every design decision in sentrux. The score must be computed in milliseconds (sensor latency matters). The rules must be declarative TOML, not code (specs must be readable by humans and machines). The MCP interface must emit structured pass/fail, not prose (actuators need machine-readable signals, not reports).
+
+## <Label color="amber">3</Label> How It Works: The Technical Design
+
+### The Snapshot
+
+The unit of analysis is an immutable `Snapshot`:
+
+```rust
+pub struct Snapshot {
+    pub root: Arc<FileNode>,       // file tree — Arc-wrapped to avoid deep clone on rescan
+    pub total_files: u32,
+    pub import_graph: Vec<ImportEdge>,   // file → file dependency edges
+    pub call_graph:   Vec<CallEdge>,     // function → function call edges
+    pub inherit_graph: Vec<InheritEdge>, // class inheritance edges
+    pub entry_points: Vec<EntryPoint>,
+    pub exec_depth: HashMap<String, u32>, // BFS distance from entry points
+}
+```
+
+`Arc<Snapshot>` is shared across the scanner thread, layout engine, renderer, and MCP handler — no locking required because snapshots are never mutated. A file-system watcher detects changes and the scanner produces a new `Arc<Snapshot>`; the old one stays alive until the renderer releases it. This is immutable value semantics applied at the data boundary of a concurrent system.
+
+### The Scoring Engine
+
+Five root-cause metrics are computed from the snapshot's graphs. These are not proxy heuristics — each maps directly to a named mathematical property of the dependency graph:
+
+<ScoreGauge
+  title="Quality signal breakdown"
+  metrics={[
+    { label: "Modularity",  formula: "Newman Q (2004)",   value: 0.72, color: "teal"  },
+    { label: "Acyclicity",  formula: "1 / (1 + cycles)",  value: 1.00, color: "green" },
+    { label: "Depth",       formula: "1 / (1 + d/8)",     value: 0.82, color: "teal"  },
+    { label: "Equality",    formula: "1 − Gini (1912)",   value: 0.71, color: "amber" },
+    { label: "Redundancy",  formula: "1 − waste ratio",   value: 0.88, color: "green" },
+  ]}
+  combinedLabel="Quality signal"
+  combinedValue={7342}
+  combinedMax={10000}
+/>
+
+The raw computation (from `metrics/root_causes.rs`):
+
+```rust
+pub fn compute_root_cause_scores(raw: &RootCauseRaw) -> (RootCauseScores, f64) {
+    let modularity  = ((raw.modularity_q + 0.5) / 1.5).clamp(0.0, 1.0);
+    let acyclicity  = 1.0 / (1.0 + raw.cycle_count as f64);
+    let depth       = 1.0 / (1.0 + raw.max_depth as f64 / 8.0);
+    let equality    = (1.0 - raw.complexity_gini).clamp(0.0, 1.0);
+    let redundancy  = (1.0 - raw.redundancy_ratio).clamp(0.0, 1.0);
+
+    // Geometric mean — not weighted sum
+    let product: f64 = [modularity, acyclicity, depth, equality, redundancy]
+        .iter().map(|v| v.max(0.01)).product();
+    let quality_signal = product.powf(1.0 / 5.0);  // → [0, 1], scaled ×10000
+    ...
+}
+```
+
+**Why geometric mean instead of weighted sum?** A weighted sum lets one excellent metric mask a failing one — a codebase with zero circular dependencies but all code in one god file still scores high. The geometric mean penalizes any single dimension approaching zero. A score of 0 on any axis pulls the whole product toward zero regardless of other scores.
+
+### The Parser Layer
+
+Sentrux needs to extract import and call edges from 52 languages without encoding language-specific logic in the binary. The solution is tree-sitter: each language gets a `.scm` query file in `src/queries/{lang}/tags.scm` that captures imports, calls, and definitions. The binary never needs to know the difference between a Python `import` and a Rust `use` — the query file handles it:
+
+```
+; src/queries/rust/tags.scm
+(use_declaration
+  argument: (scoped_identifier) @import.path)
+
+(call_expression
+  function: (identifier) @call.name)
+```
+
+Adding a new language means writing a query file — no Rust code changes. This is the **plugin-over-hardcode** pattern: defer language knowledge to data files, keep the analysis engine language-agnostic. The 52 bundled languages are data, not code.
+
+### The Rules Engine
+
+Architectural decisions decay because they live in engineers' heads, not in the codebase. Sentrux's rules engine externalizes them as declarative TOML:
+
+```toml
+# .sentrux/rules.toml
+[constraints]
+max_cycles    = 0          # zero tolerance for circular deps
+max_coupling  = "B"        # Martin's instability coupling grade
+max_cc        = 25         # cyclomatic complexity ceiling
+no_god_files  = true
+
+[[layers]]
+name  = "core"
+paths = ["src/core/*"]
+order = 0
+
+[[layers]]
+name  = "app"
+paths = ["src/app/*"]
+order = 2
+
+[[boundaries]]
+from   = "src/app/*"
+to     = "src/core/internal/*"
+reason = "App must not depend on core internals"
+```
+
+`sentrux check .` evaluates all rules against the current snapshot and exits non-zero on violation — CI-ready with no additional scripting. The same rules file is consumed by the MCP `check_rules` tool, so an agent can query rule status before and after a change.
+
+<Callout color="amber">
+  Rules encode architectural decisions made by humans. The agent reads them as constraints. This is the spec leg of the control loop — machine-readable, version-controlled, and enforceable in CI without a human in the critical path.
+</Callout>
+
+## <Label color="rose">4</Label> The MCP Session Gate
+
+The most consequential interface in sentrux is the MCP session gate. Nine tools are exposed:
+
+<DataTable
+  caption="MCP tools"
+  accent="rose"
+  headers={["Tool", "What it does"]}
+  rows={[
+    { Tool: "scan",          "What it does": "Scan a directory, return quality_signal + bottleneck metric" },
+    { Tool: "session_start", "What it does": "Save a quality baseline for the current session" },
+    { Tool: "session_end",   "What it does": "Compare current score to baseline — return pass/fail + delta" },
+    { Tool: "rescan",        "What it does": "Rescan after code changes, update the live snapshot" },
+    { Tool: "check_rules",   "What it does": "Evaluate rules.toml constraints against current snapshot" },
+    { Tool: "health",        "What it does": "Full health report: god files, hotspots, unstable modules" },
+    { Tool: "evolution",     "What it does": "Git-backed trend: quality signal over commit history" },
+    { Tool: "dsm",           "What it does": "Design Structure Matrix — dependency visibility grid" },
+    { Tool: "test_gaps",     "What it does": "Find files with no associated test coverage" },
+  ]}
+/>
+
+The session gate pattern in practice:
+
+```
+Agent: scan("/Users/me/myproject")
+  → { quality_signal: 7342, files: 139, bottleneck: "modularity" }
+
+Agent: session_start()
+  → { status: "Baseline saved", quality_signal: 7342 }
+
+  ... agent writes 500 lines of code ...
+
+Agent: session_end()
+  → { pass: false, signal_before: 7342, signal_after: 6891,
+      summary: "Quality degraded during this session" }
+```
+
+<SessionGate
+  before={{ score: 7342, label: "session_start()", timestamp: "baseline saved" }}
+  after={{  score: 6891, label: "session_end()",   timestamp: "after 500 lines written" }}
+  pass={false}
+  bottleneck="modularity"
+/>
+
+The agent receives a structured object, not a string. It can inspect the delta, identify the bottleneck metric, and choose to refactor before continuing — closing the loop without human intervention. The `what_if` tool (available in the pro tier) lets the agent simulate proposed structural changes before committing them.
+
+## <Label color="teal">5</Label> Design Patterns Worth Stealing
+
+**1. Sensor / Spec / Actuator.** The control-systems model is applicable far beyond architecture tooling. Anywhere you have an automated process that can drift from intent, the pattern applies: define the sensor (what observable signal represents drift?), codify the spec (what is "good" in machine-readable form?), wire the actuator (what action corrects deviation?). Most developer tooling only has one or two legs. Sentrux has all three.
+
+**2. Immutable value semantics at concurrency boundaries.** `Arc<Snapshot>` is the right type for a value that multiple threads need to read simultaneously without coordination. The scanner produces new snapshots; readers keep old ones alive as long as they need them. No mutexes, no copy-on-write overhead, no callback coordination. This pattern scales: immutable + reference-counted is the default choice for shared analysis results.
+
+**3. Plugin-over-hardcode for language extensibility.** Sentrux encodes zero language-specific parsing logic in Rust. Every language is a `.scm` tree-sitter query file. The result: 52 languages with no increase in binary complexity, and new language support requires zero Rust changes. The lesson generalizes — if your code handles an explicit list of variants, ask whether the variants can be data instead.
+
+**4. Geometric mean for multi-dimensional scoring.** When all dimensions must be healthy for the system to be healthy, geometric mean is the right aggregation function. Weighted sum allows partial compensation. Geometric mean does not. Use it when you want a score of zero on any axis to be unacceptable regardless of other scores.
+
+**5. Session gate as a first-class primitive.** Baseline → mutate → compare is the fundamental unit of measurable change. Most CI systems apply this only to test counts and build time. Sentrux applies it to structural quality. The implementation is simple (save a value, compare later), but the effect is significant: the agent now has a machine-readable answer to "did I make this codebase better or worse?"
+
+## Use Cases
+
+**Solo dev with Claude Code or Cursor.** Run `sentrux` in the background. The treemap glows when the agent touches files. The score updates in real time. You see structural drift as it happens — not after a week of sessions has turned your codebase into spaghetti.
+
+**CI quality gate.** Add `sentrux check .` to your pipeline. Violations exit non-zero. Architectural rules (no cycles, no boundary crossings, coupling grade limits) are enforced the same way type errors are — automatically, before merge.
+
+**Team drift detection.** The `evolution` MCP tool queries quality signal over commit history. You can see exactly when and by how much architectural quality changed across a sprint — which commits introduced cycles, which sessions tangled the module graph.
+
+**What-if refactoring.** Before committing a large restructure, ask sentrux to model the proposed change. The structural delta is computed without touching the actual files, letting you validate the refactor's architectural impact before writing code.
+
+## What's Genuinely Interesting
+
+- **Architecture as a math problem.** Newman's Modularity Q, Gini coefficient, Shannon entropy, Kolmogorov-based redundancy — these are published, peer-reviewed metrics applied to the dependency graph. Sentrux didn't invent quality metrics; it applied the right existing ones to software structure.
+- **The governance shift.** The README's framing — "the human role is changing from writing code to governing code" — is accurate and underappreciated. Sentrux is built around the premise that verification is more valuable than generation: specifying what "correct" looks like and detecting when output misses it scales better than writing everything yourself.
+- **The missing loop for every vibe-coding workflow.** The project exists because the current generation of AI coding tools optimizes for generation speed with no architecture feedback loop. Sentrux is the missing second half of that system.
+
+---
+
+[GitHub: sentrux/sentrux](https://github.com/sentrux/sentrux) — 2.2K stars · 202 forks · MIT · Pure Rust
