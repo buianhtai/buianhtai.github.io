@@ -1,0 +1,276 @@
+---
+title: "CodeRLM: Tree-Sitter-Backed Codebase Navigation for LLM Agents"
+description: "A deep dive into CodeRLM's architecture — how a Rust server uses tree-sitter to index codebases at the symbol level, exposes a precise HTTP API, and gives LLM agents targeted context lookups instead of loading entire files."
+pubDate: 2026-05-08
+tags: ["ai", "architecture", "agents", "tree-sitter", "rust", "mcp", "code-navigation"]
+lang: "en"
+category: "architecture"
+series: "ai-agent-tools"
+seriesOrder: 10
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import Pipeline from '../../../components/mdx/Pipeline.astro';
+import LayerStack from '../../../components/mdx/LayerStack.astro';
+import CompareTable from '../../../components/mdx/CompareTable.astro';
+
+LLM agents exploring unfamiliar codebases face a brutal choice: read every relevant file and eat the context window, or blindly grep and miss the structure. Neither scales. CodeRLM applies the **Recursive Language Model** (RLM) paper from MIT CSAIL to solve this — a Rust server indexes a project's symbols once via tree-sitter, then exposes a precise JSON API so the agent asks for exactly what it needs, nothing more.
+
+273 stars, 37 forks, MIT, Rust. Produced by Reinforcement — a company built around the tool.
+
+<HeroGrid items={[
+  { label: "Tree-sitter",  sublabel: "AST-precise symbol extraction for 10+ languages",      color: "#0891b2" },
+  { label: "Live Watch",   sublabel: "notify_debouncer_mini re-indexes on every file save",   color: "#059669" },
+  { label: "RLM pattern",  sublabel: "Recursive Language Model from MIT CSAIL (arXiv:2512)",  color: "#d97706" },
+  { label: "Multi-tool",   sublabel: "Claude Code plugin + generate.py for 10+ AI platforms", color: "#7c3aed" },
+]} />
+
+## <Label color="teal">1</Label> The Problem: Context Window vs. Codebase Size
+
+An agent tasked with "how does authentication work?" in a 200-file TypeScript project has three options — and two of them are bad:
+
+1. **Glob everything**: Read all 200 files. 800 KB floods the context window before reasoning starts.
+2. **Grep by keyword**: `rg "auth"` returns 400 line hits across 30 files. No structure, no call graph.
+3. **Ask the index**: `search("authenticate") → impl("authenticate", "src/auth/jwt.ts") → callers("authenticate", "src/auth/jwt.ts")`. Three queries, ~3 KB, full call chain.
+
+CodeRLM makes option 3 available. The RLM paper (Zhang, Kraska, Khattab — MIT CSAIL 2025) frames the underlying idea formally: treat the codebase as external data that the model recursively decomposes rather than loading into context whole. CodeRLM applies that framing to real codebases by building the index that makes targeted queries possible.
+
+## <Label color="teal">2</Label> Architecture: Five Layers
+
+<LayerStack
+  layers={[
+    { tag: "L5", color: "teal",  title: "Agent Plugin Layer",     items: ["Claude Code skill", "Cursor .mdc", "Windsurf rule", "Copilot instructions", "10+ platforms via generate.py"], note: "plugin/" },
+    { tag: "L4", color: "amber", title: "Python CLI Wrapper",     items: ["coderlm_cli.py", "session state cache", "batch mode", "exec (REPL) mode"], note: "plugin/skills/coderlm/scripts/" },
+    { tag: "L3", color: "green", title: "HTTP API (axum)",        items: ["sessions", "symbols", "structure", "peek/grep", "buffers", "annotations", "subcalls"], note: "server/src/server/" },
+    { tag: "L2", color: "rose",  title: "Ops & Symbol Engine",   items: ["symbol_ops.rs", "content.rs", "buffers.rs", "annotations.rs", "variables.rs", "subcalls.rs"], note: "server/src/ops/" },
+    { tag: "L1", color: "teal",  title: "Index Core",             items: ["walker.rs (ignore crate)", "watcher.rs (notify debouncer)", "parser.rs (tree-sitter)", "SymbolTable (DashMap)"], note: "server/src/index/ + symbols/" },
+  ]}
+  arrows={["plugin calls CLI", "CLI calls HTTP", "HTTP routes to ops", "ops read/write index"]}
+  caption="Five layers from agent plugin to symbol index. The Rust server is the only built artifact."
+/>
+
+The server is a single Tokio binary. No database, no Docker requirement. State lives in `AppState` — a `DashMap<PathBuf, Arc<Project>>` keyed by canonical project path, wrapped in `Arc` for axum's `Clone`-required state.
+
+## <Label color="teal">3</Label> Index Core: Walker, Watcher, Parser
+
+### Walker
+
+`walker.rs` uses the **`ignore` crate** (the same crate that powers ripgrep) to walk the project directory. This gives gitignore support, hidden-file skipping, and nested ignore files for free:
+
+```rust
+let walker = WalkBuilder::new(root)
+    .hidden(true)       // skip dotfiles
+    .git_ignore(true)   // respect .gitignore
+    .git_global(true)
+    .git_exclude(true)
+    .build();
+```
+
+Custom skip lists layer on top via `config::should_ignore_dir()` and `config::should_ignore_extension()`. Files over `max_file_size` (default 1 MB) are dropped silently.
+
+### Watcher
+
+`watcher.rs` wraps `notify_debouncer_mini` with a 500ms debounce window. Every `DebouncedEventKind::Any` event on a real file triggers a re-index: the old symbols for that file are removed from the table (`symbol_table.remove_file(rel_path)`) and fresh ones are extracted synchronously on the watcher thread. File deletions call `remove_file` and clean the secondary indices.
+
+The watcher handle is stored as `Option<WatcherHandle>` on the `Project` struct. Dropping `Project` (on LRU eviction) drops the handle, which stops the OS watcher automatically.
+
+### Parser (tree-sitter)
+
+`parser.rs` is the core extraction engine. For each file with tree-sitter support, it:
+
+1. Creates a `tree_sitter::Parser`, sets the language grammar
+2. Calls `parser.parse(&source, None)` — fully incremental, returns a concrete syntax tree
+3. Runs a pre-compiled `symbols_query` (S-expression query) to capture named nodes
+4. Iterates captures, matching on capture names like `function.name`, `method.name`, `struct.def`, `impl.type`, etc.
+5. Deduplicates by `(file, name)` pair — keeps the larger byte range, preferring specific kinds over generic `Constant`/`Variable` catch-alls (needed because Zig's grammar emits both for the same node)
+6. For Python, runs a post-pass to assign `SymbolKind::Method` to functions whose byte range is contained within a class's byte range
+
+Each language has its own query file under `server/src/symbols/queries/`. Python is the only language needing the containment post-pass; Rust handles parent association via `impl.type` capture during the query phase.
+
+Extraction is fully sync and runs on a `tokio::task::spawn_blocking` thread pool — the `extract_all_symbols` function is `async` only at the outermost boundary so it can be spawned without blocking the axum thread pool.
+
+## <Label color="teal">4</Label> Symbol Table: Three DashMaps
+
+`SymbolTable` is three `DashMap`s that form a search index:
+
+```rust
+pub struct SymbolTable {
+    pub symbols: DashMap<String, Symbol>,         // "file::name" → Symbol
+    pub by_name: DashMap<String, HashSet<String>>, // symbol_name → {primary keys}
+    pub by_file: DashMap<String, HashSet<String>>, // rel_path → {primary keys}
+}
+```
+
+The primary key is `"src/auth/jwt.ts::authenticate"`. Secondary indices let `list_by_file` and `search` avoid full scans. `remove_file` cleans all three maps atomically — secondary entries are removed before the primary, so a concurrent `search` never returns a dangling key.
+
+`search` does a lowercase substring scan over `by_name` keys — not a full-text index. The caller in `symbol_ops.rs` supplements this with a signature-level fallback that scans `sym.signature.to_lowercase().contains(&query_lower)` when name-level search returns fewer than `limit` results.
+
+<Callout color="amber">
+  `search` is O(n) over all symbols. For large codebases this is the main performance concern. The table is only rebuilt on file change, not per-query, so in practice it's fast enough for typical projects.
+</Callout>
+
+## <Label color="teal">5</Label> Caller Detection: AST vs. Regex
+
+`find_callers` in `symbol_ops.rs` walks every file in the project to find call sites of a given symbol. It uses AST-aware detection when tree-sitter is available for a language, falling back to regex otherwise:
+
+**AST path:** Runs each language's `callers_query` (a different S-expression from the symbols query), looks for `@callee` captures that match `symbol_name`. Filters out the definition line by checking `is_definition_line()`, which has language-specific logic (Rust checks `fn `, Python checks `def `, etc.).
+
+**Regex fallback:** Simple `regex::escape(symbol_name)` pattern search with heuristic definition-line filtering.
+
+The result is a `Vec<CallerInfo>` — file, line number, and trimmed source text. The caller search is serial across files with an early-exit once `limit` is reached. No parallel search here; the bottleneck in practice is disk I/O, not computation.
+
+## <Label color="teal">6</Label> Sessions, Projects, and LRU Eviction
+
+`AppState::get_or_create_project()` is the entry point for everything:
+
+<Pipeline
+  nodes={[
+    { title: "POST /sessions", subtitle: "cwd in body" },
+    { title: "canonicalize()", subtitle: "real path lookup" },
+    { title: "DashMap lookup", subtitle: "existing project?" },
+    { title: "LRU evict", subtitle: "if at max_projects" },
+    { title: "walker::scan_directory", subtitle: "sync file walk" },
+    { title: "spawn symbol extraction", subtitle: "background task" },
+  ]}
+  arrows={[
+    { label: "", direction: "right" },
+    { label: "", direction: "right" },
+    { label: "miss →", direction: "right" },
+    { label: "", direction: "right" },
+    { label: "", direction: "right" },
+  ]}
+  footer="Session creation response includes the L1 file tree for free — agent can orient immediately."
+/>
+
+Sessions carry a `project_path` foreign key. If a project is evicted (LRU, `max_projects` default 5), requests against orphaned sessions return `410 Gone` — the error clears the client session cache, prompting a new `init`. The Python CLI handles this explicitly: `410` response → `_clear_state()` → exit with a message to re-run `init`.
+
+`touch_project` is called on every request to update `last_active`, keeping actively-used projects from being evicted while idle ones age out.
+
+## <Label color="teal">7</Label> Advanced Primitives: Buffers, Annotations, Subcalls
+
+Beyond symbol lookup, `AppState` carries three additional per-project maps:
+
+### Buffers
+
+Named code snippets stored in a `DashMap<String, Buffer>`. The agent can create buffers from files (`buffer_from_file`) or symbol byte ranges (`buffer_from_symbol`), then `peek_buffer` specific line ranges. This gives the agent a working memory — code snippets extracted once and referenced by name across multiple turns.
+
+### Annotations
+
+A persistence layer that survives session restart. `save_annotations` serializes file definitions, file marks (`documentation`, `ignore`, `test`, `config`, `generated`), and symbol definitions to `.coderlm/annotations.json` in the project root. `load_annotations` re-applies them after re-indexing. The file is human-editable and committed to the repo — annotations are first-class project artifacts, not ephemeral agent state.
+
+<Callout color="teal">
+  Annotations are loaded with a 500ms delay after session creation, letting symbol extraction start first. The timing comment in `routes.rs` is explicit: "Small delay to let symbol extraction start first."
+</Callout>
+
+### Subcall Results
+
+`subcall_results: Mutex<Vec<SubcallResult>>` stores findings from recursive sub-agents. The RLM pattern involves spawning sub-agents to explore subtrees, then merging their findings. Each `SubcallResult` carries `chunk_id`, `query`, `findings`, `suggested_queries`, an optional `answer_if_complete`, and `depth`. The parent agent retrieves results via `GET /subcall_results` and decides whether to recurse deeper or synthesize.
+
+## <Label color="teal">8</Label> The Python CLI: Three Execution Modes
+
+The `coderlm_cli.py` wrapper has no pip dependencies — stdlib only. Session state is cached in `.claude/coderlm_state/session.json` (platform-configurable via `CODERLM_STATE_DIR`).
+
+<DataTable
+  caption="CLI execution modes"
+  accent="teal"
+  headers={["Mode", "Command", "When to use"]}
+  rows={[
+    { Mode: "Individual", Command: "python3 $CLI search MyFunction", "When to use": "Single targeted lookup" },
+    { Mode: "Batch",      Command: "python3 $CLI batch --commands \"search X\\nimpl X --file Y\"", "When to use": "2–5 independent lookups in one call" },
+    { Mode: "Exec (REPL)", Command: "python3 $CLI exec --code \"hits = search('X'); impl_(...)\"", "When to use": "Multi-hop traversal where later queries depend on earlier results" },
+  ]}
+/>
+
+**Exec mode** is the most interesting: the `--code` string is `exec()`'d in a Python context that pre-binds helper functions (`search`, `impl_`, `callers`, `tests`, `grep`, `peek_file`, `structure`, `variables_list`). Each helper function makes an HTTP call and prints formatted JSON. The accumulated stdout from all helpers becomes the result — so a three-hop call chain runs in a single Bash tool call with no round-trips.
+
+## <Label color="teal">9</Label> Plugin Distribution: generate.py
+
+Rather than a separate install per platform, `generate.py` renders a universal instruction template with platform-specific paths. Ten platforms are supported:
+
+<DataTable
+  caption="Supported AI platforms"
+  accent="amber"
+  headers={["Platform", "Output path", "Format"]}
+  rows={[
+    { Platform: "Claude Code",      "Output path": ".claude/CLAUDE.md (appended)",          Format: "markdown (append)" },
+    { Platform: "Cursor",           "Output path": ".cursor/rules/coderlm.mdc",              Format: "mdc with frontmatter" },
+    { Platform: "Windsurf",         "Output path": ".windsurf/rules/coderlm.md",             Format: "markdown" },
+    { Platform: "GitHub Copilot",   "Output path": ".github/instructions/coderlm.instructions.md", Format: "markdown" },
+    { Platform: "Codex",            "Output path": "AGENTS.md (append with markers)",        Format: "markdown (append)" },
+    { Platform: "Roo Code",         "Output path": ".roo/rules/coderlm.md",                 Format: "markdown" },
+    { Platform: "Kilo Code",        "Output path": ".kilo/rules/coderlm.md",                Format: "markdown" },
+    { Platform: "Amp",              "Output path": ".amp/instructions.md",                  Format: "markdown" },
+    { Platform: "Zed",              "Output path": ".zed/assistant_instructions.md",        Format: "markdown" },
+    { Platform: "OpenDevin",        "Output path": ".opendevin/instructions.md",            Format: "markdown" },
+  ]}
+/>
+
+Append-mode platforms (Claude Code, Codex) use sentinel markers (`<!-- coderlm-start -->` / `<!-- coderlm-end -->`) so `--clean` can surgically remove the injected block without touching surrounding content.
+
+The CLI script is copied to the platform's state directory during generation — so the agent always finds the CLI at the path the instructions reference, regardless of where the repo lives.
+
+## <Label color="teal">10</Label> Claude Code Integration: Hooks
+
+The plugin installs four Claude Code hooks:
+
+<DataTable
+  caption="Claude Code hooks"
+  accent="green"
+  headers={["Hook", "What it does"]}
+  rows={[
+    { Hook: "SessionStart",      "What it does": "Checks if server is running, auto-creates session via session-init.sh" },
+    { Hook: "UserPromptSubmit",  "What it does": "Injects a routing reminder: use coderlm for supported languages, Read/Grep for config/markdown" },
+    { Hook: "SubagentStart",     "What it does": "Same routing reminder injected into sub-agent context via hookSpecificOutput JSON" },
+    { Hook: "Stop",              "What it does": "Calls session-stop.sh to clean up the session on close" },
+  ]}
+/>
+
+The `UserPromptSubmit` hook is the "take-rate" mechanism — every prompt gets a prepended reminder to use the index rather than raw shell tools. The commit history shows explicit iteration on this: `"trying to improve claude code take rate"` and `"improved claude code take-rate"` are two of the fourteen commits, suggesting the routing guidance needed tuning before agents would consistently use the server.
+
+The skill definition adds a second nudge at the operator level: it prefers **subcall agents** (`Agent(coderlm-subcall, ...)`) for full execution traces, reserving direct CLI calls for targeted single lookups. This is the RLM recursion in practice — the root agent spawns a sub-agent for deep exploration, keeps only the summary in its own context.
+
+## <Label color="teal">11</Label> What's Notably Absent
+
+**No test suite.** Zero test files in the repository. The symbol extraction, caller detection, deduplication logic, and LRU eviction have no automated coverage. Given the AST-query complexity (10 language grammars, deduplication heuristics, Python containment post-pass), this is the most significant quality gap.
+
+**No concurrent project indexing.** `extract_all_symbols` runs the per-file extractions sequentially in a single `spawn_blocking` task. For a 5,000-file project this is a noticeable pause. A rayon parallel iterator would cut this substantially.
+
+**Search is substring-only.** `SymbolTable::search` is a linear lowercase-contains scan. Fuzzy matching, prefix trees, or a real FTS index would help on large symbol tables.
+
+**SQL is regex-only.** The language matrix shows SQL uses regex fallbacks — tree-sitter-sql exists but is not integrated. Symbol extraction for SQL files produces no results.
+
+## <Label color="teal">12</Label> Design Decisions Worth Noting
+
+**`ignore` crate over custom walker.** Using ripgrep's ignore library means all the edge-case gitignore semantics (nested ignore files, negation patterns, global ignore) are handled correctly without any code.
+
+**Byte ranges over line ranges for symbol extraction.** `Symbol.byte_range` is the authoritative location; `line_range` is derived for display. `get_implementation` slices `source[start..end]` directly — no line-parsing overhead, exact bytes every time.
+
+**Deduplication by largest byte range.** When two captures produce the same `(file, name)` key, the larger byte range wins. This handles grammars that emit both a "declaration" and a "definition" capture for the same symbol — the definition is always larger.
+
+**`410 Gone` for evicted projects.** Rather than silently returning stale data or a generic 500, evicted projects return HTTP 410, which the CLI maps to "re-run init." This is the right semantic: the resource existed, was intentionally removed, and requires explicit re-creation.
+
+**Annotations as committed files.** `.coderlm/annotations.json` is written to the project root, not to a tmp directory or user home. This means symbol definitions and file marks survive machine reboots, team members can share them, and the file can be reviewed in code review.
+
+<CompareTable
+  products={[
+    { name: "Raw grep/glob" },
+    { name: "LSP (language server)" },
+    { name: "CodeRLM", highlight: true },
+  ]}
+  features={[
+    { label: "No editor required",       values: ["yes",     "no",      "yes"]     },
+    { label: "Symbol-level precision",   values: ["no",      "yes",     "yes"]     },
+    { label: "Caller graph",             values: ["partial", "yes",     "yes"]     },
+    { label: "Works offline",            values: ["yes",     "yes",     "yes"]     },
+    { label: "Multi-language (10+)",     values: ["yes",     "partial", "yes"]     },
+    { label: "Agent-friendly HTTP API",  values: ["no",      "no",      "yes"]     },
+    { label: "Persistent annotations",  values: ["no",      "no",      "yes"]     },
+    { label: "Test coverage",            values: ["n/a",     "n/a",     "no"]      },
+  ]}
+  caption="CodeRLM vs. alternatives from an agent's perspective."
+/>
+
+The project is at version 0.1.1 and fourteen commits deep — recent enough that the architecture is clean and opinionated, early enough that the test gap and performance limits are unsurprising. The core idea is solid: a symbol index that agents can query precisely is strictly better than a context window stuffed with raw files. The RLM framing gives the tool a principled foundation, and the multi-platform distribution story (one `generate.py` covers ten AI tools) shows the intent to be infrastructure rather than a single-tool add-on.
