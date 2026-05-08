@@ -7,23 +7,34 @@ interface Props {
   series: string;
   lang: string;
   seriesPosts: CollectionEntry<'blog'>[];
+  variant?: 'terminal' | 'foundations';
 }
 
-const { currentSlug, series, lang, seriesPosts } = Astro.props;
+const { currentSlug, series, lang, seriesPosts, variant = 'terminal' } = Astro.props;
 const meta = seriesMeta[series];
 const currentIndex = seriesPosts.findIndex((p) => getPostSlug(p) === currentSlug);
 const currentOrder = currentIndex + 1;
 const total = seriesPosts.length;
 const prevPost = currentIndex > 0 ? seriesPosts[currentIndex - 1] : null;
 const nextPost = currentIndex < seriesPosts.length - 1 ? seriesPosts[currentIndex + 1] : null;
+const isFoundations = variant === 'foundations';
 ---
 
-<nav class="series-nav">
+<nav class={`series-nav${isFoundations ? ' series-nav--foundations' : ''}`}>
   <!-- Header bar -->
   <div class="series-header">
-    <span class="series-prompt">$</span>
-    <span>series: <strong style="color: var(--color-accent);">{meta?.title ?? series}</strong></span>
-    <span class="series-progress">[{currentOrder}/{total}]</span>
+    {isFoundations ? (
+      <>
+        <span class="series-label">{meta?.title ?? series}</span>
+        <span class="series-progress">{currentOrder} of {total}</span>
+      </>
+    ) : (
+      <>
+        <span class="series-prompt">$</span>
+        <span>series: <strong style="color: var(--color-accent);">{meta?.title ?? series}</strong></span>
+        <span class="series-progress">[{currentOrder}/{total}]</span>
+      </>
+    )}
   </div>
 
   <!-- Prev / Next -->
@@ -45,7 +56,11 @@ const nextPost = currentIndex < seriesPosts.length - 1 ? seriesPosts[currentInde
   <!-- All posts toggle -->
   <details class="series-all">
     <summary class="series-all-toggle">
-      <span class="series-prompt">$</span> ls series/{series}/
+      {isFoundations ? (
+        <span>All chapters</span>
+      ) : (
+        <><span class="series-prompt">$</span> ls series/{series}/</>
+      )}
     </summary>
     <ol class="series-all-list">
       {seriesPosts.map((post, idx) => {
@@ -55,7 +70,7 @@ const nextPost = currentIndex < seriesPosts.length - 1 ? seriesPosts[currentInde
           <li class={`series-all-item${isCurrent ? ' series-all-current' : ''}`}>
             <span class="series-all-num">{String(idx + 1).padStart(2, '0')}.</span>
             {isCurrent ? (
-              <span class="series-all-title">{post.data.title} <span class="series-cursor">◀</span></span>
+              <span class="series-all-title">{post.data.title} {!isFoundations && <span class="series-cursor">◀</span>}{isFoundations && <span class="series-reading">← reading</span>}</span>
             ) : (
               <a href={`/${lang}/blog/${slug}`} class="series-all-title series-all-link">{post.data.title}</a>
             )}
@@ -175,5 +190,68 @@ const nextPost = currentIndex < seriesPosts.length - 1 ? seriesPosts[currentInde
   @keyframes blink-cur {
     0%, 100% { opacity: 1; }
     50% { opacity: 0; }
+  }
+
+  /* ── Foundations variant ── */
+  .series-nav--foundations .series-header {
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    font-size: 0.72rem;
+    font-weight: 400;
+    padding: 0.6rem 1.25rem;
+  }
+  .series-label {
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--color-text);
+    letter-spacing: 0;
+  }
+  .series-nav--foundations .series-progress {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.68rem;
+    color: var(--color-accent);
+  }
+  .series-nav--foundations .series-nav-link {
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    font-size: 0.78rem;
+    padding: 0.75rem 1.25rem;
+  }
+  .series-nav--foundations .series-all-toggle {
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: 0;
+    padding: 0.5rem 1.25rem;
+  }
+  .series-nav--foundations .series-all-list {
+    padding: 0.5rem 0 0.75rem;
+  }
+  .series-nav--foundations .series-all-item {
+    padding: 0.25rem 1.25rem;
+    font-size: 0.82rem;
+  }
+  .series-nav--foundations .series-all-num {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    width: 2rem;
+  }
+  .series-nav--foundations .series-all-title {
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    font-size: 0.82rem;
+    font-weight: 400;
+  }
+  .series-nav--foundations .series-all-current .series-all-title {
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--color-accent);
+  }
+  .series-reading {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.68rem;
+    color: var(--color-text-muted);
+    margin-left: 0.5rem;
+    font-style: italic;
   }
 </style>

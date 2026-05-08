@@ -1,22 +1,36 @@
 ---
-interface Props { headings: { depth: number; slug: string; text: string }[]; }
-const { headings } = Astro.props;
+interface Props {
+  headings: { depth: number; slug: string; text: string }[];
+  variant?: 'terminal' | 'foundations';
+}
+const { headings, variant = 'terminal' } = Astro.props;
 const filtered = headings.filter(h => h.depth >= 2 && h.depth <= 3);
+const isFoundations = variant === 'foundations';
 ---
 {filtered.length > 0 && (
-  <nav class="toc">
+  <nav class={`toc${isFoundations ? ' toc--foundations' : ''}`}>
     <div class="toc-header">
-      <span class="toc-prompt">$</span>
-      <span>cat TABLE_OF_CONTENTS</span>
+      {isFoundations ? (
+        <span class="toc-label">Contents</span>
+      ) : (
+        <>
+          <span class="toc-prompt">$</span>
+          <span>cat TABLE_OF_CONTENTS</span>
+        </>
+      )}
     </div>
-    <ul class="toc-list">
-      {filtered.map(h => (
-        <li class={`toc-item toc-depth-${h.depth}`}>
-          <span class="toc-bullet">{h.depth === 2 ? '▸' : '·'}</span>
+    <ol class={`toc-list${isFoundations ? ' toc-list--foundations' : ''}`}>
+      {filtered.map((h, i) => (
+        <li class={`toc-item toc-depth-${h.depth}${isFoundations ? ' toc-item--foundations' : ''}`}>
+          {isFoundations ? (
+            <span class="toc-num">{h.depth === 2 ? String(i + 1).padStart(2, '\u00a0') : '\u00a0\u00a0\u00a0'}</span>
+          ) : (
+            <span class="toc-bullet">{h.depth === 2 ? '▸' : '·'}</span>
+          )}
           <a href={`#${h.slug}`} class="toc-link">{h.text}</a>
         </li>
       ))}
-    </ul>
+    </ol>
   </nav>
 )}
 
@@ -65,4 +79,59 @@ const filtered = headings.filter(h => h.depth >= 2 && h.depth <= 3);
     line-height: 1.5;
   }
   .toc-link:hover { color: var(--color-accent); }
+
+  /* ── Foundations variant ── */
+  .toc--foundations {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+  }
+  .toc--foundations .toc-header {
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    font-size: 0.68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-text-muted);
+    background: var(--color-surface-2);
+    border-bottom: 1px solid var(--color-border);
+  }
+  .toc-label {
+    color: var(--color-text-muted);
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    font-size: 0.68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+  .toc-list--foundations {
+    padding: 0.6rem 0 0.75rem;
+    counter-reset: toc-h2;
+  }
+  .toc-item--foundations {
+    padding: 0.22rem 1.25rem;
+    gap: 0.6rem;
+  }
+  .toc-item--foundations.toc-depth-3 {
+    padding-left: 3rem;
+  }
+  .toc-num {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.68rem;
+    color: var(--color-text-muted);
+    flex-shrink: 0;
+    min-width: 1.5rem;
+  }
+  .toc--foundations .toc-link {
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    font-size: 0.82rem;
+    color: var(--color-text-dim);
+    font-weight: 400;
+  }
+  .toc--foundations .toc-depth-2 .toc-link {
+    font-weight: 500;
+    color: var(--color-text);
+  }
+  .toc--foundations .toc-link:hover {
+    color: var(--color-accent);
+  }
 </style>

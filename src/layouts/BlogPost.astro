@@ -15,46 +15,80 @@ interface Props {
 }
 
 const { post, headings, rawContent, seriesPosts = [] } = Astro.props;
-const { title, description, pubDate, updatedDate, tags, lang, heroImage, series } = post.data;
+const { title, description, pubDate, updatedDate, tags, lang, heroImage, series, category } = post.data;
 
 const dateFmt = (d: Date) =>
   d.toISOString().slice(0, 10);
+
+const isFoundations = category === 'foundations';
 ---
 
 <BaseLayout title={title} description={description} lang={lang} ogImage={heroImage}>
-  <article class="max-w-3xl mx-auto px-4 py-10">
+  <article class="max-w-3xl mx-auto px-4 py-10" data-category={category}>
 
-    <!-- Terminal window chrome header -->
-    <div class="post-chrome">
-      <div class="post-chrome-dots">
-        <span></span><span></span><span></span>
+    {isFoundations ? (
+      <!-- Foundations: breadcrumb bar (no macOS dots) -->
+      <div class="post-chrome post-chrome--foundations">
+        <span class="post-chrome-crumb">
+          <a href={`/${lang}/blog`}>{lang === 'vi' ? 'blog' : 'blog'}</a>
+          <span class="post-chrome-sep"> / </span>
+          <span>foundations</span>
+          {series && <><span class="post-chrome-sep"> / </span><span class="post-chrome-series">{series}</span></>}
+        </span>
       </div>
-      <span class="post-chrome-path">~/blog/{getPostSlug(post)}.mdx</span>
-    </div>
+    ) : (
+      <!-- Terminal window chrome header -->
+      <div class="post-chrome">
+        <div class="post-chrome-dots">
+          <span></span><span></span><span></span>
+        </div>
+        <span class="post-chrome-path">~/blog/{getPostSlug(post)}.mdx</span>
+      </div>
+    )}
 
     <!-- Post header -->
-    <header class="post-header">
-      <!-- Metadata line -->
-      <div class="post-meta">
-        <span class="post-meta-prompt">$</span>
-        <time datetime={pubDate.toISOString()}>{dateFmt(pubDate)}</time>
-        {updatedDate && <span class="post-meta-sep">·</span>}
-        {updatedDate && <span>upd {dateFmt(updatedDate)}</span>}
-        <span class="post-meta-sep">·</span>
-        <ReadingTime content={rawContent} lang={lang} />
-      </div>
-
-      <h1 class="post-title">{title}</h1>
-      <p class="post-desc">{description}</p>
-
-      {tags.length > 0 && (
-        <div class="post-tags">
-          {tags.map((tag: string) => (
-            <a href={`/${lang}/tags/${tag}`} class="post-tag">#{tag}</a>
-          ))}
+    {isFoundations ? (
+      <header class="post-header post-header--foundations">
+        <div class="post-meta post-meta--foundations">
+          <time datetime={pubDate.toISOString()}>{dateFmt(pubDate)}</time>
+          {updatedDate && <span class="post-meta-sep">·</span>}
+          {updatedDate && <span>upd {dateFmt(updatedDate)}</span>}
+          <span class="post-meta-sep">·</span>
+          <ReadingTime content={rawContent} lang={lang} />
+          {category && <><span class="post-meta-sep">·</span><span class="post-meta-category">{category}</span></>}
         </div>
-      )}
-    </header>
+        <h1 class="post-title post-title--foundations">{title}</h1>
+        <p class="post-desc">{description}</p>
+        {tags.length > 0 && (
+          <div class="post-tags">
+            {tags.map((tag: string) => (
+              <a href={`/${lang}/tags/${tag}`} class="post-tag post-tag--foundations">#{tag}</a>
+            ))}
+          </div>
+        )}
+      </header>
+    ) : (
+      <header class="post-header">
+        <!-- Metadata line -->
+        <div class="post-meta">
+          <span class="post-meta-prompt">$</span>
+          <time datetime={pubDate.toISOString()}>{dateFmt(pubDate)}</time>
+          {updatedDate && <span class="post-meta-sep">·</span>}
+          {updatedDate && <span>upd {dateFmt(updatedDate)}</span>}
+          <span class="post-meta-sep">·</span>
+          <ReadingTime content={rawContent} lang={lang} />
+        </div>
+        <h1 class="post-title">{title}</h1>
+        <p class="post-desc">{description}</p>
+        {tags.length > 0 && (
+          <div class="post-tags">
+            {tags.map((tag: string) => (
+              <a href={`/${lang}/tags/${tag}`} class="post-tag">#{tag}</a>
+            ))}
+          </div>
+        )}
+      </header>
+    )}
 
     {series && seriesPosts.length > 0 && (
       <SeriesNav
@@ -62,6 +96,7 @@ const dateFmt = (d: Date) =>
         series={series}
         lang={lang}
         seriesPosts={seriesPosts}
+        variant={isFoundations ? 'foundations' : 'terminal'}
       />
     )}
 
@@ -69,7 +104,7 @@ const dateFmt = (d: Date) =>
       <img src={heroImage} alt={title} class="w-full mb-10" loading="eager" style="border: 1px solid var(--color-border);" />
     )}
 
-    <TableOfContents headings={headings} />
+    <TableOfContents headings={headings} variant={isFoundations ? 'foundations' : 'terminal'} />
 
     <div class="prose prose-lg max-w-none">
       <slot />
@@ -210,6 +245,84 @@ const dateFmt = (d: Date) =>
     transition: color 0.15s;
   }
   .post-back:hover { color: var(--color-accent); }
+
+  /* ── Foundations variant: chrome breadcrumb ── */
+  .post-chrome--foundations {
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    font-size: 0.72rem;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-bottom: none;
+    padding: 0.45rem 1.25rem;
+  }
+  .post-chrome--foundations .post-chrome-crumb a {
+    color: var(--color-accent);
+    text-decoration: none;
+  }
+  .post-chrome--foundations .post-chrome-crumb a:hover {
+    text-decoration: underline;
+  }
+  .post-chrome-sep {
+    color: var(--color-border-bright);
+    margin: 0 0.15rem;
+  }
+  .post-chrome-series {
+    color: var(--color-text-dim);
+  }
+
+  /* ── Foundations variant: post header ── */
+  .post-header--foundations {
+    border: 1px solid var(--color-border);
+    border-top: none;
+    padding: 2rem 1.5rem 1.5rem;
+    background: var(--color-surface);
+    margin-bottom: 2rem;
+  }
+
+  /* ── Foundations variant: metadata ── */
+  .post-meta--foundations {
+    font-family: 'IBM Plex Mono', 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--color-text-muted);
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+  }
+  .post-meta-category {
+    color: var(--color-accent);
+    font-weight: 600;
+  }
+
+  /* ── Foundations variant: title ── */
+  .post-title--foundations {
+    font-family: 'IBM Plex Serif', Georgia, serif;
+    font-size: clamp(1.5rem, 4.5vw, 2.3rem);
+    font-weight: 300;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+    color: var(--color-text);
+    margin: 0.6rem 0 0.75rem;
+  }
+
+  /* ── Foundations variant: tags ── */
+  .post-tag--foundations {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--color-accent);
+    background: transparent;
+    border: 1px solid var(--color-border);
+    padding: 0.15rem 0.55rem;
+    text-decoration: none;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .post-tag--foundations:hover {
+    background: var(--color-accent-glow);
+    border-color: var(--color-accent-dim);
+  }
 </style>
 
 <script type="module">
