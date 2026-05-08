@@ -1,0 +1,178 @@
+---
+title: "Hermes Agent: Inside the Architecture of a 138K-Star AI Agent Runtime"
+description: "A deep dive into Hermes Agent's AIAgent loop, toolset dispatch, multi-platform messaging gateway, skills system, and RL trajectory pipeline — the engineering behind NousResearch's open-source agent."
+pubDate: 2026-05-08
+tags: ["ai", "python", "architecture", "agents", "llm", "tool-calling"]
+lang: "en"
+category: "architecture"
+series: "ai-agent-tools"
+seriesOrder: 6
+---
+
+import Card from '../../../components/mdx/Card.astro';
+import Label from '../../../components/mdx/Label.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import ArchLayer from '../../../components/mdx/ArchLayer.astro';
+import Pipeline from '../../../components/mdx/Pipeline.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import Mermaid from '../../../components/mdx/Mermaid.astro';
+import ProviderGrid from '../../../components/mdx/ProviderGrid.astro';
+
+Most AI coding agents are either too narrow (one CLI, one provider, one interface) or too shallow (a wrapper with no memory, no scheduling, no runtime story). Building a general-purpose agent that works across Telegram, Docker, a GPU cluster, and your local terminal — while remaining trainable — requires a fundamentally different architecture.
+
+[Hermes Agent](https://github.com/NousResearch/hermes-agent) from NousResearch is that architecture: an open-source Python agent runtime with 138K stars, 21K forks, MIT license, and a codebase that ships its own RL training pipeline alongside the interactive CLI.
+
+<HeroGrid items={[
+  { label: "138K stars", sublabel: "MIT · Python · NousResearch", color: "#0891b2" },
+  { label: "61 tools", sublabel: "52 toolsets, concurrent dispatch", color: "#059669" },
+  { label: "7 backends", sublabel: "local/Docker/SSH/Modal/Daytona/Vercel", color: "#d97706" },
+  { label: "20 platforms", sublabel: "Telegram/Discord/Slack/Signal/WhatsApp", color: "#7c3aed" },
+]} />
+
+## <Label color="teal">1</Label> WHY
+
+Every serious agent project eventually hits the same wall: the agent can reason well but it lives in a bubble. It doesn't remember across sessions, can't run unattended, won't work on a remote server, and can't be taught new workflows beyond the ones hardcoded into the system prompt. Fixing one of these problems is straightforward. Fixing all of them at once, without the architecture collapsing under its own complexity, is the engineering challenge Hermes Agent addresses.
+
+The second wall is research friction. NousResearch builds and fine-tunes tool-calling models (the Hermes model family). An agent that cannot generate ShareGPT-format training trajectories from real runs creates a gap between evaluation and training. Hermes Agent closes that gap by making trajectory generation a first-class feature of the same runtime you use in production.
+
+<Callout color="teal">
+  Hermes Agent is not a framework for building agents — it **is** the agent. The architecture decision is monolithic core (`run_agent.py` at ~13,700 lines) rather than a composable SDK, which gives it total control over turn lifecycle, compression timing, and memory flush ordering.
+</Callout>
+
+## <Label color="green">2</Label> HOW: The AIAgent Loop
+
+The heart of Hermes Agent is `AIAgent` in `run_agent.py`. Every conversation — whether initiated from the CLI, a Telegram message, a cron job, or an RPC call — flows through the same `run_conversation()` method. The entry point is intentionally simple:
+
+```python
+# Simple interface
+response = agent.chat("Fix the bug in main.py")
+
+# Full interface — returns dict with messages, metadata, usage stats
+result = agent.run_conversation(
+    user_message="Fix the bug in main.py",
+    system_message=None,        # auto-built from prompt_builder.py if omitted
+    conversation_history=None,  # auto-loaded from SQLite session if omitted
+    task_id="task_abc123"
+)
+```
+
+Each turn follows a precise sequence:
+
+<FlowStep step="1" color="teal" title="Prompt assembly">
+  `prompt_builder.py` assembles the effective system prompt from: personality (`SOUL.md`), persistent memory (`MEMORY.md`, `USER.md`), active skills, context files (`AGENTS.md`, `.hermes.md`), and tool-use guidance. Prompt caching breakpoints are applied for Anthropic prefix caching.
+</FlowStep>
+
+<FlowStep step="2" color="teal" title="Preflight compression check">
+  If the conversation exceeds 50% of the model's context window, `context_compressor.py` summarizes middle turns before the API call. The last 20 messages are always preserved intact. Tool call/result pairs are never split. A new session lineage ID is generated, creating a parent/child compression chain in SQLite.
+</FlowStep>
+
+<FlowStep step="3" color="teal" title="Provider resolution and API call">
+  `runtime_provider.py` resolves the `(provider, model)` tuple to `(api_mode, api_key, base_url)`. Three API modes are supported: `chat_completions` (OpenAI-compatible), `codex_responses` (OpenAI Responses API), and `anthropic_messages` (native Anthropic). All three converge on the same internal message format before and after the call.
+</FlowStep>
+
+<FlowStep step="4" color="teal" title="Tool call dispatch">
+  When the model returns tool calls: a single call runs in the main thread; multiple calls run concurrently via `ThreadPoolExecutor`, with results reinserted in the original order. Four tools (`todo`, `memory`, `session_search`, `delegate_task`) are intercepted by the agent loop itself before reaching the registry — they modify agent state directly.
+</FlowStep>
+
+<FlowStep step="5" color="teal" title="Persistence flush">
+  After each turn, messages are written to SQLite via `hermes_state.py` and memory changes are flushed to `MEMORY.md` / `USER.md`. The session can be resumed later with `hermes chat --resume`.
+</FlowStep>
+
+The message alternation rules are strict and enforced: after the system message the sequence is always `User → Assistant → User → Assistant`. During tool calling: `Assistant (with tool_calls) → Tool → Tool → ... → Assistant`. Providers validate these sequences and reject malformed histories — so the loop is the only place that can safely mutate conversation state.
+
+## <Label color="amber">3</Label> HOW: Tools, Toolsets, and Backends
+
+Hermes ships 61 built-in tools organized into 52 named toolsets. The toolset abstraction is the key design decision: rather than enabling tools one by one, the CLI and gateway operate on groupings that map to use cases and platforms.
+
+<DataTable
+  caption="Tool categories"
+  accent="amber"
+  headers={["Category", "Key Tools", "Notes"]}
+  rows={[
+    { Category: "Web", "Key Tools": "web_search, web_extract", Notes: "4 backend options" },
+    { Category: "Terminal & Files", "Key Tools": "terminal, process, read_file, patch", Notes: "7 execution backends" },
+    { Category: "Browser", "Key Tools": "browser_navigate, browser_snapshot, browser_vision", Notes: "5 browser backends" },
+    { Category: "Agent Orchestration", "Key Tools": "todo, clarify, execute_code, delegate_task", Notes: "Intercepted by agent loop" },
+    { Category: "Memory & Recall", "Key Tools": "memory, session_search", Notes: "SQLite + FTS5" },
+    { Category: "Automation", "Key Tools": "cronjob, send_message", Notes: "Cron with platform delivery" },
+    { Category: "RL / Training", "Key Tools": "rl_*", Notes: "Atropos environment integration" },
+  ]}
+/>
+
+The terminal tool is where the backend flexibility matters most. Rather than assuming local execution, Hermes routes terminal commands through a configured backend:
+
+<DataTable
+  caption="Terminal backends"
+  accent="teal"
+  headers={["Backend", "Use Case"]}
+  rows={[
+    { Backend: "local", "Use Case": "Development, trusted tasks (default)" },
+    { Backend: "docker", "Use Case": "Isolation, reproducibility" },
+    { Backend: "ssh", "Use Case": "Remote server, keep agent away from its own code" },
+    { Backend: "singularity", "Use Case": "HPC containers, rootless cluster computing" },
+    { Backend: "modal", "Use Case": "Serverless cloud execution" },
+    { Backend: "daytona", "Use Case": "Persistent remote dev environments, hibernates when idle" },
+    { Backend: "vercel_sandbox", "Use Case": "Cloud microVM with snapshot-backed filesystem persistence" },
+  ]}
+/>
+
+Backend selection is a single config key:
+
+```yaml
+# ~/.hermes/config.yaml
+terminal:
+  backend: daytona   # hibernates when idle, costs nearly nothing between sessions
+  timeout: 180
+```
+
+The `delegate_task` tool deserves special mention. It spawns an isolated subagent with its own context and its own `IterationBudget` (capped at 50 by default). The parent agent can dispatch multiple subagents and receive their results — this is how Hermes supports parallel workstreams without threading the tool results back through the parent's conversation history.
+
+## <Label color="rose">4</Label> HOW: Messaging Gateway and Skills
+
+**Gateway.** A long-running process (`gateway/run.py`) manages 20 platform adapters — Telegram, Discord, Slack, WhatsApp, Signal, and more. Unified session routing means a conversation started on Telegram can be resumed from the CLI. Security is enforced via allowlists and DM pairing: an unauthorized user DMing the bot cannot trigger agent actions. The gateway also owns the cron ticker: scheduled natural-language tasks are expressed as cron rules and delivered via any configured platform.
+
+**Skills.** The skills system (`agentskills.io` open standard) is procedural memory. A skill is a markdown file that teaches the agent a reusable workflow — how to do a staging deployment, how to write a daily status update, how to run a security audit. Skills are injected into the system prompt by `prompt_builder.py` at the start of each conversation. The [Skills Hub](https://agentskills.io) is a community registry for sharing them across agent runtimes.
+
+<Callout color="rose">
+  Skills are markdown, not code. They encode the **intent and sequence** of a workflow, not its implementation. The agent executes the workflow using its available tools — meaning the same skill can work across different tool configurations and terminal backends.
+</Callout>
+
+## <Label color="teal">5</Label> FLOW: A Request End-to-End
+
+<Pipeline
+  nodes={[
+    { title: "Entry Point", subtitle: "CLI / Gateway / Cron / ACP" },
+    { title: "AIAgent", subtitle: "run_conversation()" },
+    { title: "Prompt Builder", subtitle: "SOUL.md + memory + skills" },
+    { title: "Provider Resolver", subtitle: "18+ providers, 3 API modes" },
+    { title: "Tool Dispatch", subtitle: "ThreadPoolExecutor (concurrent)" },
+    { title: "Session Store", subtitle: "SQLite + FTS5 flush" },
+  ]}
+  arrows={[
+    { label: "message", direction: "right" },
+    { label: "prompt", direction: "right" },
+    { label: "api_mode + key", direction: "right" },
+    { label: "results", direction: "right" },
+    { label: "persist", direction: "right" },
+  ]}
+  footer="Every entry point converges on the same AIAgent.run_conversation() — no special-cased paths."
+/>
+
+**Context management** runs at two thresholds: at 50% capacity the agent compresses before the next API call; at 85% (gateway mode only) compression runs between turns. The compression model writes a compact summary of middle turns, flushes memory to disk first, and generates a new session lineage ID so the parent/child chain is auditable in SQLite.
+
+**RL pipeline.** For research and training use cases, Hermes ships a full environment framework (`environments/`) that integrates with [Atropos](https://github.com/NousResearch/Atropos). Real agent runs can be recorded as ShareGPT-format trajectories, compressed for training efficiency, and fed directly into fine-tuning pipelines — making the gap between production usage and model improvement as small as a config flag.
+
+## What Makes It Different
+
+- **Monolithic core with clean seams.** `run_agent.py` at 13,700 lines is a deliberate architectural choice: the agent loop owns turn lifecycle, memory flush ordering, and compression timing without delegation boundaries that could cause state drift.
+- **Three API modes, one internal format.** `chat_completions`, `codex_responses`, and `anthropic_messages` all converge on the same OpenAI-style `role`/`content`/`tool_calls` dict representation. Switching providers requires no prompt rewrites.
+- **Compression as a first-class feature, not an afterthought.** Two compression thresholds (50% preflight, 85% gateway), parent/child session lineage in SQLite, protected last-N messages, and memory flush before compression — all designed to make long-running sessions reliable.
+- **`delegate_task` with isolated budget.** Subagents get independent iteration budgets. The parent can spawn multiple subagents concurrently without their tool calls polluting the parent's conversation history.
+- **Skills as open standard.** The `agentskills.io` format means skills written for Hermes Agent can be shared with (and used by) other compatible runtimes — this is a deliberate ecosystem play, not a walled garden.
+- **Training loop in the same process.** The RL environment framework and Atropos integration mean the agent that runs in production is also the one that generates training data — no separate toolchain, no format translation.
+
+---
+
+[GitHub: NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent) — 138K stars · 21K forks · MIT · Python
