@@ -1,0 +1,149 @@
+---
+interface Props {
+  chapter: number | string;
+  title: string;
+  concepts?: string[];      // key concepts list
+  prerequisites?: string[]; // what to know first
+  tldr?: string;            // one-line takeaway
+}
+const { chapter, title, concepts = [], prerequisites = [], tldr } = Astro.props;
+---
+
+<div class="f-summary" role="note" aria-label="Chapter summary">
+  <div class="f-summary-header">
+    <span class="f-summary-chapter">Chapter {chapter}</span>
+    <span class="f-summary-sep">—</span>
+    <span class="f-summary-title">{title}</span>
+  </div>
+
+  {tldr && (
+    <div class="f-summary-tldr">
+      <span class="f-summary-tldr-label">TL;DR</span>
+      <span class="f-summary-tldr-text">{tldr}</span>
+    </div>
+  )}
+
+  <div class="f-summary-cols">
+    {concepts.length > 0 && (
+      <div class="f-summary-col">
+        <div class="f-summary-col-label">Key concepts</div>
+        <ul class="f-summary-list">
+          {concepts.map(c => <li class="f-summary-list-item">{c}</li>)}
+        </ul>
+      </div>
+    )}
+    {prerequisites.length > 0 && (
+      <div class="f-summary-col">
+        <div class="f-summary-col-label">Prerequisites</div>
+        <ul class="f-summary-list">
+          {prerequisites.map(p => <li class="f-summary-list-item">{p}</li>)}
+        </ul>
+      </div>
+    )}
+  </div>
+</div>
+
+<style>
+  .f-summary {
+    border: 1px solid var(--f-border);
+    border-left: 3px solid var(--f-accent);
+    background: color-mix(in srgb, var(--f-accent) 5%, var(--f-surface));
+    margin-bottom: 2.5rem;
+    overflow: hidden;
+  }
+
+  .f-summary-header {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    padding: 0.75rem 1.25rem 0.6rem;
+    border-bottom: 1px solid var(--f-border);
+    background: color-mix(in srgb, var(--f-accent) 8%, var(--f-surface));
+  }
+  .f-summary-chapter {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--f-accent);
+  }
+  .f-summary-sep {
+    color: var(--f-border-bright);
+  }
+  .f-summary-title {
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--f-text);
+  }
+
+  .f-summary-tldr {
+    display: flex;
+    gap: 0.75rem;
+    align-items: baseline;
+    padding: 0.65rem 1.25rem;
+    border-bottom: 1px solid var(--f-border);
+  }
+  .f-summary-tldr-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--f-accent);
+    flex-shrink: 0;
+  }
+  .f-summary-tldr-text {
+    font-family: 'IBM Plex Serif', Georgia, serif;
+    font-size: 0.88rem;
+    font-style: italic;
+    color: var(--f-text-dim);
+    line-height: 1.5;
+  }
+
+  .f-summary-cols {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+    gap: 0;
+  }
+  .f-summary-col {
+    padding: 0.75rem 1.25rem;
+  }
+  .f-summary-col + .f-summary-col {
+    border-left: 1px solid var(--f-border);
+  }
+  .f-summary-col-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--f-text-muted);
+    margin-bottom: 0.5rem;
+  }
+  .f-summary-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+  .f-summary-list-item {
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    font-size: 0.8rem;
+    color: var(--f-text-dim);
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    line-height: 1.4;
+  }
+  .f-summary-list-item::before {
+    content: '–';
+    color: var(--f-accent);
+    flex-shrink: 0;
+    font-size: 0.75rem;
+  }
+</style>

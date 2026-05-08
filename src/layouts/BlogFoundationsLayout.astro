@@ -1,0 +1,584 @@
+---
+import type { CollectionEntry } from 'astro:content';
+import BaseLayout from './BaseLayout.astro';
+import ReadingTime from '../components/ReadingTime.astro';
+import Giscus from '../components/Giscus.astro';
+import StickyToC from '../components/foundations/StickyToC.astro';
+import ChapterNav from '../components/foundations/ChapterNav.astro';
+import ProgressBar from '../components/foundations/ProgressBar.astro';
+import { getPostSlug, getSeriesPosts, seriesMeta } from '../lib/posts';
+
+interface Props {
+  post: CollectionEntry<'blog'>;
+  headings: { depth: number; slug: string; text: string }[];
+  rawContent: string;
+  seriesPosts?: CollectionEntry<'blog'>[];
+}
+
+const { post, headings, rawContent, seriesPosts = [] } = Astro.props;
+const {
+  title, description, pubDate, updatedDate,
+  tags, lang, heroImage, series, seriesOrder,
+} = post.data;
+
+const dateFmt = (d: Date) => d.toLocaleDateString(lang === 'vi' ? 'vi-VN' : 'en-US', {
+  year: 'numeric', month: 'long', day: 'numeric',
+});
+
+const chapterIndex = seriesPosts.findIndex(p => getPostSlug(p) === getPostSlug(post));
+const chapterNum = chapterIndex >= 0 ? chapterIndex + 1 : seriesOrder ?? 1;
+const seriesTitle = series ? (seriesMeta[series]?.title ?? series) : null;
+---
+
+<BaseLayout title={title} description={description} lang={lang} ogImage={heroImage}>
+  <!-- Global foundations CSS tokens scoped to <html> via a class added below -->
+  <div class="f-root">
+
+    <!-- ── Sticky top bar ── -->
+    <div class="f-topbar">
+      <div class="f-topbar-inner">
+        <!-- Breadcrumb -->
+        <nav class="f-topbar-crumb" aria-label="breadcrumb">
+          <a href={`/${lang}/blog`} class="f-crumb-link">blog</a>
+          <span class="f-crumb-sep">/</span>
+          <a href={`/${lang}/foundations`} class="f-crumb-link">foundations</a>
+          {seriesTitle && (
+            <>
+              <span class="f-crumb-sep">/</span>
+              <span class="f-crumb-current">{seriesTitle}</span>
+            </>
+          )}
+        </nav>
+
+        <!-- Progress bar (chapter N/M) -->
+        {seriesPosts.length > 0 && (
+          <div class="f-topbar-progress">
+            <ProgressBar chapterIndex={chapterIndex >= 0 ? chapterIndex : 0} total={seriesPosts.length} />
+          </div>
+        )}
+      </div>
+    </div>
+
+    <!-- ── 3-column layout ── -->
+    <div class="f-layout">
+
+      <!-- LEFT: Chapter navigator -->
+      {series && seriesPosts.length > 0 && (
+        <div class="f-col-left">
+          <ChapterNav
+            currentSlug={getPostSlug(post)}
+            series={series}
+            lang={lang}
+            seriesPosts={seriesPosts}
+          />
+        </div>
+      )}
+
+      <!-- CENTER: Prose -->
+      <main class="f-col-center" id="f-main">
+
+        <!-- Post header -->
+        <header class="f-post-header">
+          {chapterNum && (
+            <div class="f-post-chapter-badge">Chapter {chapterNum}</div>
+          )}
+          <h1 class="f-post-title">{title}</h1>
+          <p class="f-post-desc">{description}</p>
+
+          <div class="f-post-meta">
+            <time datetime={pubDate.toISOString()} class="f-meta-item">{dateFmt(pubDate)}</time>
+            {updatedDate && (
+              <span class="f-meta-item f-meta-updated">Updated {dateFmt(updatedDate)}</span>
+            )}
+            <span class="f-meta-item"><ReadingTime content={rawContent} lang={lang} /></span>
+            {tags.length > 0 && (
+              <span class="f-meta-tags">
+                {tags.map((tag: string) => (
+                  <a href={`/${lang}/tags/${tag}`} class="f-meta-tag">{tag}</a>
+                ))}
+              </span>
+            )}
+          </div>
+        </header>
+
+        <!-- Hero image if present -->
+        {heroImage && (
+          <img
+            src={heroImage}
+            alt={title}
+            class="f-hero-img"
+            loading="eager"
+          />
+        )}
+
+        <!-- Content -->
+        <article class="f-prose prose prose-lg max-w-none">
+          <slot />
+        </article>
+
+        <!-- Post footer -->
+        <footer class="f-post-footer">
+          <!-- Prev/Next chapter nav (full titles) -->
+          {seriesPosts.length > 0 && chapterIndex >= 0 && (
+            <div class="f-footer-chapters">
+              {chapterIndex > 0 && (
+                <a href={`/${lang}/blog/${getPostSlug(seriesPosts[chapterIndex - 1])}`} class="f-footer-chap f-footer-prev">
+                  <span class="f-footer-chap-dir">← Previous chapter</span>
+                  <span class="f-footer-chap-title">{seriesPosts[chapterIndex - 1].data.title}</span>
+                </a>
+              )}
+              {chapterIndex < seriesPosts.length - 1 && (
+                <a href={`/${lang}/blog/${getPostSlug(seriesPosts[chapterIndex + 1])}`} class="f-footer-chap f-footer-next">
+                  <span class="f-footer-chap-dir">Next chapter →</span>
+                  <span class="f-footer-chap-title">{seriesPosts[chapterIndex + 1].data.title}</span>
+                </a>
+              )}
+            </div>
+          )}
+
+          <div class="f-footer-back">
+            <a href={`/${lang}/foundations`} class="f-back-link">↑ Back to {seriesTitle ?? 'Foundations'}</a>
+          </div>
+        </footer>
+
+        <Giscus />
+      </main>
+
+      <!-- RIGHT: Sticky ToC -->
+      <div class="f-col-right">
+        <StickyToC headings={headings} />
+      </div>
+
+    </div>
+  </div>
+</BaseLayout>
+
+<style>
+  /* ── Foundations design tokens ── */
+  .f-root {
+    --f-bg:           #060d1f;
+    --f-surface:      #0a1628;
+    --f-surface-2:    #0f1f3d;
+    --f-border:       #1a3060;
+    --f-border-bright:#2a4e8a;
+    --f-text:         #e2eaf8;
+    --f-text-dim:     #8babd4;
+    --f-text-muted:   #3d5a8a;
+    --f-accent:       #4589ff;
+    --f-accent-dim:   #2d6ae0;
+    --f-accent-glow:  rgba(69, 137, 255, 0.12);
+
+    background: var(--f-bg);
+    color: var(--f-text);
+    min-height: 100vh;
+
+    /* propagate tokens outward so child components pick them up */
+    --color-bg:           var(--f-bg);
+    --color-surface:      var(--f-surface);
+    --color-surface-2:    var(--f-surface-2);
+    --color-border:       var(--f-border);
+    --color-border-bright:var(--f-border-bright);
+    --color-text:         var(--f-text);
+    --color-text-dim:     var(--f-text-dim);
+    --color-text-muted:   var(--f-text-muted);
+    --color-accent:       var(--f-accent);
+    --color-accent-dim:   var(--f-accent-dim);
+    --color-accent-glow:  var(--f-accent-glow);
+  }
+
+  /* ── Top bar ── */
+  .f-topbar {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    background: color-mix(in srgb, var(--f-bg) 90%, transparent);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--f-border);
+  }
+  .f-topbar-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    padding: 0.55rem 1.5rem;
+    max-width: 100%;
+  }
+
+  /* Breadcrumb */
+  .f-topbar-crumb {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.68rem;
+    min-width: 0;
+    flex-shrink: 1;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .f-crumb-link {
+    color: var(--f-text-muted);
+    text-decoration: none;
+    transition: color 0.15s;
+  }
+  .f-crumb-link:hover { color: var(--f-accent); }
+  .f-crumb-sep { color: var(--f-border-bright); }
+  .f-crumb-current {
+    color: var(--f-text-dim);
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .f-topbar-progress {
+    flex-shrink: 0;
+    min-width: 160px;
+    max-width: 240px;
+  }
+
+  /* ── 3-column grid ── */
+  .f-layout {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0;
+    max-width: 100%;
+    padding: 0 1rem;
+  }
+
+  @media (min-width: 1024px) {
+    .f-layout {
+      grid-template-columns: 220px 1fr 200px;
+      gap: 0;
+      padding: 0;
+      align-items: start;
+    }
+  }
+
+  @media (min-width: 1280px) {
+    .f-layout {
+      grid-template-columns: 240px 1fr 220px;
+    }
+  }
+
+  /* ── Left column ── */
+  .f-col-left {
+    display: none;
+    padding: 2rem 1.5rem 2rem 2rem;
+    border-right: 1px solid var(--f-border);
+  }
+  @media (min-width: 1024px) {
+    .f-col-left { display: block; }
+  }
+
+  /* ── Center column ── */
+  .f-col-center {
+    padding: 2rem 2rem 3rem;
+    min-width: 0;
+  }
+  @media (min-width: 1024px) {
+    .f-col-center {
+      padding: 2.5rem 3rem 4rem;
+      border-right: 1px solid var(--f-border);
+    }
+  }
+
+  /* ── Right column ── */
+  .f-col-right {
+    display: none;
+    padding: 2rem 2rem 2rem 1.5rem;
+  }
+  @media (min-width: 1024px) {
+    .f-col-right { display: block; }
+  }
+
+  /* ── Post header ── */
+  .f-post-header {
+    margin-bottom: 2.5rem;
+    padding-bottom: 2rem;
+    border-bottom: 1px solid var(--f-border);
+  }
+
+  .f-post-chapter-badge {
+    display: inline-block;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--f-accent);
+    background: color-mix(in srgb, var(--f-accent) 10%, var(--f-surface));
+    border: 1px solid color-mix(in srgb, var(--f-accent) 30%, transparent);
+    padding: 0.2rem 0.65rem;
+    margin-bottom: 1rem;
+  }
+
+  .f-post-title {
+    font-family: 'IBM Plex Serif', Georgia, serif;
+    font-size: clamp(1.75rem, 4vw, 2.75rem);
+    font-weight: 300;
+    line-height: 1.15;
+    letter-spacing: -0.025em;
+    color: var(--f-text);
+    margin: 0 0 0.875rem;
+  }
+
+  .f-post-desc {
+    font-family: 'IBM Plex Serif', Georgia, serif;
+    font-size: 1.05rem;
+    line-height: 1.65;
+    color: var(--f-text-dim);
+    font-style: italic;
+    margin: 0 0 1.25rem;
+    max-width: 60ch;
+  }
+
+  .f-post-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.68rem;
+    color: var(--f-text-muted);
+  }
+  .f-meta-item { color: var(--f-text-muted); }
+  .f-meta-updated { font-style: italic; }
+  .f-meta-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-left: 0.25rem;
+  }
+  .f-meta-tag {
+    color: var(--f-text-muted);
+    background: var(--f-surface-2);
+    border: 1px solid var(--f-border);
+    padding: 0.1rem 0.45rem;
+    text-decoration: none;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .f-meta-tag:hover {
+    color: var(--f-accent);
+    border-color: var(--f-accent-dim);
+  }
+
+  /* ── Hero image ── */
+  .f-hero-img {
+    width: 100%;
+    margin-bottom: 2rem;
+    border: 1px solid var(--f-border);
+  }
+
+  /* ── Prose overrides (foundations style) ── */
+  .f-prose {
+    --tw-prose-body:      var(--f-text);
+    --tw-prose-headings:  var(--f-text);
+    --tw-prose-links:     var(--f-accent);
+    --tw-prose-bold:      var(--f-text);
+    --tw-prose-code:      var(--f-accent);
+    --tw-prose-pre-bg:    var(--f-surface);
+    --tw-prose-hr:        var(--f-border);
+    --tw-prose-quotes:    var(--f-text-dim);
+    --tw-prose-bullets:   var(--f-accent);
+    --tw-prose-td-borders:var(--f-border);
+    --tw-prose-th-borders:var(--f-border-bright);
+
+    font-family: 'IBM Plex Serif', Georgia, serif;
+    font-size: 1.0rem;
+    line-height: 1.85;
+    color: var(--f-text);
+  }
+
+  /* Headings */
+  .f-prose :global(h2) {
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    font-size: 1.2rem;
+    font-weight: 600;
+    letter-spacing: 0;
+    text-transform: none;
+    border-left: none;
+    border-bottom: 1px solid var(--f-border);
+    padding-left: 0;
+    margin-left: 0;
+    padding-bottom: 0.4rem;
+    color: var(--f-text);
+    margin-top: 2.5rem;
+  }
+
+  .f-prose :global(h3) {
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    font-size: 1.0rem;
+    font-weight: 600;
+    border-left: none;
+    border-bottom: none;
+    padding-left: 0;
+    margin-left: 0;
+    color: var(--f-text-dim);
+    margin-top: 1.75rem;
+  }
+
+  .f-prose :global(h4) {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--f-text-muted);
+    margin-top: 1.5rem;
+  }
+
+  /* Links */
+  .f-prose :global(a) {
+    color: var(--f-accent);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    text-decoration-color: color-mix(in srgb, var(--f-accent) 40%, transparent);
+    transition: text-decoration-color 0.15s, color 0.15s;
+  }
+  .f-prose :global(a:hover) {
+    color: #a0c4ff;
+    text-decoration-color: #a0c4ff;
+  }
+
+  /* Inline code */
+  .f-prose :global(:not(pre) > code) {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.82em;
+    background: var(--f-surface-2);
+    border: 1px solid var(--f-border);
+    padding: 0.15em 0.4em;
+    color: var(--f-accent);
+    border-radius: 0;
+  }
+
+  /* Code blocks */
+  .f-prose :global(.astro-code) {
+    border-left: 3px solid var(--f-accent);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.82rem;
+    background: var(--f-surface) !important;
+    border-color: var(--f-border);
+    border-left-color: var(--f-accent);
+  }
+  /* Remove terminal $ prompt for foundations */
+  .f-prose :global(.astro-code::before) { content: none; }
+
+  /* Blockquotes */
+  .f-prose :global(blockquote) {
+    font-family: 'IBM Plex Serif', Georgia, serif;
+    font-style: italic;
+    border-left: 3px solid var(--f-accent);
+    background: color-mix(in srgb, var(--f-accent) 5%, var(--f-surface));
+    color: var(--f-text-dim);
+    padding: 0.875rem 1.25rem;
+    font-size: 0.97rem;
+    line-height: 1.7;
+  }
+  .f-prose :global(blockquote p) { margin: 0; }
+
+  /* Strong */
+  .f-prose :global(strong) {
+    color: var(--f-text);
+    font-weight: 700;
+  }
+
+  /* HR: clean, no deco */
+  .f-prose :global(hr) { border-color: var(--f-border); margin: 2.5rem 0; }
+  .f-prose :global(hr::after) { content: none; }
+
+  /* Tables */
+  .f-prose :global(table) {
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    font-size: 0.85rem;
+  }
+  .f-prose :global(th) {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--f-accent);
+    background: var(--f-surface-2);
+  }
+  .f-prose :global(td) {
+    color: var(--f-text-dim);
+  }
+
+  /* Lists */
+  .f-prose :global(li) {
+    font-family: 'IBM Plex Serif', Georgia, serif;
+  }
+
+  /* ── Post footer ── */
+  .f-post-footer {
+    margin-top: 3.5rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--f-border);
+  }
+
+  .f-footer-chapters {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--f-border);
+    border: 1px solid var(--f-border);
+    margin-bottom: 1.5rem;
+  }
+
+  .f-footer-chap {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    padding: 1rem 1.25rem;
+    background: var(--f-surface);
+    text-decoration: none;
+    transition: background 0.15s;
+  }
+  .f-footer-chap:hover {
+    background: color-mix(in srgb, var(--f-accent) 6%, var(--f-surface));
+  }
+  .f-footer-next { text-align: right; }
+
+  .f-footer-chap-dir {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--f-accent);
+  }
+  .f-footer-chap-title {
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    font-size: 0.85rem;
+    color: var(--f-text-dim);
+    line-height: 1.4;
+  }
+
+  .f-footer-back {
+    text-align: center;
+    margin-top: 1rem;
+  }
+  .f-back-link {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--f-text-muted);
+    text-decoration: none;
+    transition: color 0.15s;
+  }
+  .f-back-link:hover { color: var(--f-accent); }
+</style>
+
+<script>
+  // Mark chapter as read in localStorage when user scrolls to ~80% of the page
+  const postSlug = window.location.pathname.split('/').filter(Boolean).at(-1) ?? '';
+  if (postSlug) {
+    let marked = false;
+    window.addEventListener('scroll', () => {
+      if (marked) return;
+      const scrollPct = (window.scrollY + window.innerHeight) / document.documentElement.scrollHeight;
+      if (scrollPct > 0.8) {
+        marked = true;
+        const key = `f-read:${postSlug}`;
+        localStorage.setItem(key, '1');
+      }
+    }, { passive: true });
+  }
+</script>

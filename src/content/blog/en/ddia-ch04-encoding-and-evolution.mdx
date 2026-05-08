@@ -1,0 +1,188 @@
+---
+title: "DDIA Ch.4 — Encoding and Evolution"
+description: "Why schema evolution is a distributed systems problem, not just a data format problem — covering JSON, Thrift, Protocol Buffers, and Avro's compatibility guarantees, plus the three dataflow modes every service relies on."
+pubDate: 2026-05-08
+tags: ["distributed-systems", "serialization", "protobuf", "avro", "schema-evolution", "foundations"]
+lang: "en"
+category: "foundations"
+series: "software-foundations"
+seriesOrder: 4
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import Pipeline from '../../../components/mdx/Pipeline.astro';
+import CompareTable from '../../../components/mdx/CompareTable.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+
+Every production system changes. Features ship, schemas evolve, services get new fields. The naive assumption — deploy everything at once, flip a flag — breaks the moment you have more than one server. Rolling upgrades mean old code and new code run simultaneously, reading and writing the same data. Chapter 4 is Kleppmann's argument that **encoding format is not an implementation detail** — it is a contract between every component that touches your data, and breaking that contract is one of the most common sources of production incidents.
+
+<HeroGrid items={[
+  { label: "Backward Compat",    sublabel: "New code reads old data — usually easy",        color: "#0891b2" },
+  { label: "Forward Compat",     sublabel: "Old code reads new data — requires discipline",  color: "#059669" },
+  { label: "Schema Evolution",   sublabel: "Protobuf/Avro/Thrift — safe field add/remove",  color: "#d97706" },
+  { label: "3 Dataflow Modes",   sublabel: "Databases · Services · Message brokers",         color: "#7c3aed" },
+]} />
+
+## <Label color="teal">1</Label> The Encoding Problem
+
+Every program holds data in memory as objects, structs, or hash maps — pointer-rich, CPU-friendly, not portable across process boundaries. The moment you want to write to disk or send over a network, you need an encoding: a byte sequence that encodes the same information without pointers, interpretable by any process that understands the format.
+
+Kleppmann calls the transformation from in-memory to bytes **encoding** (also called serialisation or marshalling). The reverse is **decoding**. The choice of encoding format determines how easy it is to evolve your data schema without breaking existing readers.
+
+The simplest approach — language-specific serialisation (`java.io.Serializable`, Python's `pickle`, Ruby's `Marshal`) — should almost never be used for anything that crosses a process or service boundary. The problems are severe:
+
+- Tied to one language — other services can't read your data
+- Instantiates arbitrary classes during decoding — a vector for remote code execution
+- Versioning and schema evolution are afterthoughts
+- Performance and size efficiency are typically poor
+
+## <Label color="teal">2</Label> JSON, XML, CSV — Ubiquitous but Leaky
+
+JSON and XML are human-readable, language-independent, and universally supported. That's why they're everywhere. But they have subtle problems that cause real bugs:
+
+**Number precision.** JSON doesn't distinguish integers from floats. Numbers larger than 2⁵³ lose precision when parsed by JavaScript (which uses IEEE 754 doubles). Twitter's API returns every tweet ID as both a JSON number and a decimal string because 64-bit IDs exceed JavaScript's integer precision.
+
+**No binary support.** JSON and XML only handle Unicode text. Binary data (images, encrypted payloads, compressed blobs) must be Base64-encoded, bloating the payload by 33% and adding a decoding step.
+
+**Schema is optional and informal.** JSON Schema and XML Schema exist but are rarely enforced. Without enforcement, producers add new fields freely and consumers silently ignore them — until a field is removed or renamed, which silently breaks consumers.
+
+**No type precision.** JSON has string, number, boolean, null, array, and object. There is no integer type, no timestamp type, no UUID type. Interpretation is left to convention.
+
+<Callout color="amber">
+JSON is a fine transport format for systems you control end-to-end with a short lifetime. It is a poor choice for data that must survive schema evolution across multiple independent services over years.
+</Callout>
+
+**Binary JSON variants** (MessagePack, BSON, CBOR) reduce size and encoding overhead while keeping JSON's structural model. They don't solve schema evolution — they just compress the same leaky format.
+
+## <Label color="teal">3</Label> Thrift, Protocol Buffers, and Avro — Schema-First Encoding
+
+The three dominant schema-first binary formats are Thrift (Facebook), Protocol Buffers (Google), and Avro (Apache/Hadoop). All three encode data more compactly than JSON and provide formal schema evolution guarantees.
+
+<CompareTable
+  products={[
+    { name: "JSON" },
+    { name: "Protobuf" },
+    { name: "Thrift" },
+    { name: "Avro", highlight: true },
+  ]}
+  features={[
+    { label: "Schema required",           values: ["no",  "yes",     "yes",     "yes"] },
+    { label: "Field names in wire format", values: ["yes", "no",      "no",      "no"] },
+    { label: "Schema evolution safe",      values: ["no",  "yes",     "yes",     "yes"] },
+    { label: "Forward compatibility",      values: ["no",  "yes",     "yes",     "yes"] },
+    { label: "Backward compatibility",     values: ["no",  "yes",     "yes",     "yes"] },
+    { label: "Code generation required",   values: ["no",  "yes",     "yes",     "no"] },
+    { label: "Self-describing (no schema needed to read)", values: ["yes", "no", "no", "no"] },
+    { label: "Dynamic schema (schema resolved at runtime)", values: ["yes", "no", "no", "yes"] },
+    { label: "Compact binary encoding",    values: ["no",  "yes",     "yes",     "yes"] },
+  ]}
+  caption="Encoding format comparison. Avro's dynamic schema resolution makes it ideal for Hadoop and Kafka schemas stored in a registry."
+/>
+
+**Protocol Buffers and Thrift** use field tags (integer IDs) in the wire format instead of field names. This is key to evolution: when you add a new field, you assign it a new tag. Old code that doesn't know tag 15 simply skips it (forward compatibility). New code that expects tag 15 but doesn't see it uses the default value (backward compatibility). The rule: **you may add fields freely; you may never reuse an old tag number for a new field; you may only remove optional fields**.
+
+**Avro** takes a different approach: the wire format has no field names and no type information at all. It relies on the **writer's schema** and **reader's schema** being reconciled at decode time. When reading, the Avro decoder compares the writer schema (embedded in the file header or fetched from a schema registry) against the reader schema, and applies field-matching rules: fields in writer but not reader are ignored; fields in reader but not writer use default values. This makes Avro ideal for Hadoop files (embed schema once in the file header) and Kafka (fetch schema from a registry by ID embedded in each message).
+
+<Callout color="teal">
+The crucial insight is that forward compatibility and backward compatibility are properties of the encoding format contract, not of the application code. If you use JSON with no schema enforcement, no encoding format can save you — breaking changes will silently corrupt data. If you use Protobuf or Avro with discipline (never reuse tags, always provide defaults), schema evolution becomes safe.
+</Callout>
+
+## <Label color="teal">4</Label> The Merits of Schema
+
+Kleppmann makes a case for schema that goes beyond documentation:
+
+**Schema as compile-time safety net.** Generated code from Protobuf/Thrift/Avro schemas catches type mismatches at compile time, not at runtime in production. A field renamed in a schema produces a compile error in every service that uses it — the breakage is local, controlled, and immediate.
+
+**Schema as documentation that can't go stale.** Unlike comments or wikis, schemas are enforced by the encoder. The schema is always the ground truth about what the data contains.
+
+**Efficient encoding.** Because field names are not repeated in every record (they're in the schema, not the wire format), Protobuf-encoded data can be 3–10× smaller than equivalent JSON. At high volume, this is meaningful network and storage savings.
+
+**Schema registry as organisational contract.** In a system with many services, a centralised schema registry (Confluent Schema Registry for Kafka, AWS Glue for data lakes) makes schema compatibility visible and enforced before deployment — not discovered after.
+
+## <Label color="teal">5</Label> The Three Dataflow Modes
+
+Encoded data flows between processes in three ways, each with different implications for schema evolution:
+
+<DataTable
+  caption="Dataflow modes and their schema evolution constraints"
+  accent="green"
+  headers={["Mode", "Mechanism", "Evolution challenge", "Mitigation"]}
+  rows={[
+    { Mode: "Databases",        Mechanism: "Write now, read later (possibly years later)",          "Evolution challenge": "Data written by old code must be readable by new code, and vice versa — simultaneously", Mitigation: "Schema migration with defaults; never remove columns in use; Avro schema versioning" },
+    { Mode: "Services (REST/RPC)", Mechanism: "Client calls server; server responds synchronously", "Evolution challenge": "Client and server may be different versions; rolling deploys mean both versions run concurrently", Mitigation: "API versioning; backward-compatible additions only; deprecation periods before removal" },
+    { Mode: "Message brokers",  Mechanism: "Producer publishes; consumer reads later (async)",      "Evolution challenge": "Message in a queue may be processed by new or old consumer; producer and consumer deploy independently", Mitigation: "Schema registry; messages carry schema ID; never change field semantics, only add/remove" },
+  ]}
+/>
+
+### Databases as Dataflow
+
+The database is a long-lived record of encoded data written by potentially many past versions of your code. When you add a column with a default value, old code writing to the table omits that column — the database fills in the default. New code reading rows written by old code sees the default. This works. But if old code reads a row written by new code (which may have populated the new field), then writes it back, the old code's write should preserve the new field it didn't understand — not silently delete it. Not all ORMs and serialisation libraries get this right.
+
+### Services as Dataflow
+
+REST APIs and RPC calls are point-in-time contracts. The risk is **maintaining multiple API versions simultaneously** — v1, v2, v3, each with slightly different semantics, all of which need to be supported until every client upgrades. The pragmatic approach is to design APIs for backward-compatible evolution from the start: add fields, never remove them; add endpoints, never change the semantics of existing ones; use API versioning only when a semantic break is truly unavoidable.
+
+RPC has an additional illusion problem. Local function calls fail in predictable ways (type errors, null pointer exceptions). Remote calls fail in ways local calls never do: the network drops the packet, the server receives the request but crashes before responding (so the client doesn't know if the operation executed), and latency is orders of magnitude higher and highly variable. Good RPC libraries (gRPC, Thrift) expose these as explicit return types or errors, not transparent proxies.
+
+### Message-Passing as Dataflow
+
+<Pipeline
+  nodes={[
+    { title: "Producer",      subtitle: "encodes with schema v2" },
+    { title: "Message Broker", subtitle: "stores message + schema ID" },
+    { title: "Consumer v1",   subtitle: "decodes with schema v1 (old)" },
+    { title: "Consumer v2",   subtitle: "decodes with schema v2 (new)" },
+  ]}
+  arrows={[
+    { label: "publish (schema ID embedded)", direction: "right" },
+    { label: "deliver to subscribers", direction: "right" },
+    { label: "fetch schema, decode", direction: "right" },
+  ]}
+  footer="Both consumer versions can read the same message because the schema registry resolves writer schema → reader schema at decode time."
+/>
+
+Message brokers decouple producer and consumer in time: a message published now may be consumed minutes, hours, or days later by a consumer running a different code version. This makes schema evolution discipline non-negotiable. Kafka's common pattern — embed schema version ID in the first bytes of each message, fetch schema from a registry by ID, reconcile writer and reader schemas — handles this cleanly. The key invariant: **producers and consumers must be able to evolve independently without coordinated deploys**.
+
+## <Label color="teal">6</Label> Rolling Upgrades: The Reason All of This Matters
+
+The real-world scenario that makes Chapter 4 non-optional:
+
+<FlowStep step="1" color="teal" title="Deploy new code to node 1">
+Node 1 now runs new schema version. Nodes 2–N still run old version.
+</FlowStep>
+
+<FlowStep step="2" color="teal" title="Node 1 writes new-format records">
+New fields are populated. Old nodes reading these records must handle unknown fields gracefully (forward compatibility).
+</FlowStep>
+
+<FlowStep step="3" color="teal" title="Old nodes still write old-format records">
+New node reads old records. New fields are absent. New code must handle missing fields gracefully (backward compatibility).
+</FlowStep>
+
+<FlowStep step="4" color="amber" title="Both formats coexist in the database">
+For the entire duration of the rolling deploy — potentially hours — the data store contains records in both formats simultaneously. Migration scripts that assume a single schema version break.
+</FlowStep>
+
+<FlowStep step="5" color="green" title="Deploy completes — all nodes on new version">
+All new records have new fields. Old records are still on disk with old format and will remain there until overwritten or explicitly migrated.
+</FlowStep>
+
+This is why "just update the schema and redeploy" is not a safe strategy. The system must tolerate mixed-version data at all times. Encoding formats that enforce this — Protobuf, Avro, Thrift — make the system safer. Encoding formats that don't — raw JSON, language serialisation — let mixed-version data silently corrupt your system.
+
+## <Label color="teal">7</Label> Practical Rules for Schema Evolution
+
+1. **Add fields with defaults.** Optional fields with defaults can be added without breaking any existing reader or writer.
+2. **Never remove required fields.** Removing a required field breaks any producer that still sends it or any consumer that still expects it.
+3. **Never reuse a field tag or position.** In Protobuf/Thrift, the tag number is the identity of the field — reusing it silently corrupts data from old producers. In Avro, field position in the schema has the same role.
+4. **Deprecate before removing.** Mark fields deprecated, wait at least one full release cycle during which no producer writes them and no consumer reads them, then remove.
+5. **Version your schemas.** Store schemas in a registry with version numbers. Embed the schema version in every record or message. This allows automated compatibility checks before deployment.
+6. **Test with old and new schemas.** Your CI pipeline should verify that the new schema can read data encoded with the previous schema (backward compatibility) and that the previous schema can read data encoded with the new schema (forward compatibility).
+
+<Callout color="green">
+The cost of getting encoding and schema evolution right upfront is small. The cost of retrofitting compatibility onto a system that grew organically without it — migrating terabytes of JSON blobs, coordinating deploys across 40 services — is enormous. This is one of the cheapest architectural decisions to get right early.
+</Callout>
+
+Chapter 4 closes Part I. The next three parts of the book — distributed data, replication, partitioning, transactions, consensus — assume you already have a correct, evolvable data model and encoding format at the single-node level. The distributed systems problems that follow are hard enough without also fighting schema compatibility incidents.

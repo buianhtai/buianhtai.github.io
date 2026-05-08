@@ -1,0 +1,209 @@
+---
+title: "DDIA Ch.5 — Replication"
+description: "Single-leader, multi-leader, and leaderless replication — the consistency guarantees each provides, the anomalies each permits under lag, and the concrete techniques for read-your-writes, monotonic reads, and conflict resolution."
+pubDate: 2026-05-08
+tags: ["distributed-systems", "replication", "consistency", "databases", "foundations"]
+lang: "en"
+category: "foundations"
+series: "software-foundations"
+seriesOrder: 5
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import Pipeline from '../../../components/mdx/Pipeline.astro';
+import CompareTable from '../../../components/mdx/CompareTable.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+
+Replication sounds like copying data. It isn't. Copying data is trivial; what's hard is handling the changes to that data, because changes arrive continuously, nodes fail at inopportune moments, and networks drop packets between the leader and every follower. Chapter 5 is Kleppmann's systematic tour of what actually goes wrong in replicated systems and what the three main replication architectures — single-leader, multi-leader, leaderless — trade against each other.
+
+<HeroGrid items={[
+  { label: "Single-Leader",    sublabel: "All writes to one node, followers replicate",     color: "#0891b2" },
+  { label: "Replication Lag",  sublabel: "3 anomalies: stale reads, time reversal, causality", color: "#059669" },
+  { label: "Multi-Leader",     sublabel: "Conflict resolution — LWW, merge, CRDT",          color: "#d97706" },
+  { label: "Leaderless",       sublabel: "Dynamo-style quorums w+r>n, read repair",          color: "#7c3aed" },
+]} />
+
+## <Label color="teal">1</Label> Why Replicate?
+
+Three distinct motivations drive replication decisions, and they pull in different directions:
+
+**Latency** — keeping data geographically close to users. A replica in Singapore serving Southeast Asian reads is faster than routing every read to a US-based leader. This pushes toward asynchronous replication with multiple followers.
+
+**Availability** — surviving node failures without downtime. If the database is on one machine and that machine dies, every user is affected. With replication, a follower can take over. This pushes toward keeping replicas in sync.
+
+**Read scalability** — distributing read load across multiple machines. A single leader handles all writes; multiple read replicas share the read load. This is the dominant use case for read replicas in PostgreSQL, MySQL, and MongoDB.
+
+These motivations create tension. Maximum read scalability means many asynchronous followers, but asynchronous replication weakens consistency guarantees. Maximum availability means synchronous replication, but synchronous replication means a slow or failed follower blocks all writes.
+
+## <Label color="teal">2</Label> Single-Leader Replication
+
+The dominant architecture. One replica is the leader; all writes go to it. The leader streams every write to followers via a replication log. Followers apply changes in the same order they arrived at the leader.
+
+<Pipeline
+  nodes={[
+    { title: "Client",          subtitle: "sends write" },
+    { title: "Leader",          subtitle: "writes locally + sends to replication log" },
+    { title: "Follower 1",      subtitle: "applies log (sync — blocks leader ACK)" },
+    { title: "Follower 2",      subtitle: "applies log (async — leader doesn't wait)" },
+  ]}
+  arrows={[
+    { label: "write request", direction: "right" },
+    { label: "replication log entry", direction: "right" },
+    { label: "ACK required (sync)", direction: "right" },
+  ]}
+  footer="Semi-synchronous: one follower is synchronous (durability guarantee), the rest are asynchronous (write throughput). Common default in PostgreSQL."
+/>
+
+**Replication log formats** differ in safety and portability:
+
+<DataTable
+  caption="Replication log formats"
+  accent="teal"
+  headers={["Format", "What is sent", "Risk"]}
+  rows={[
+    { Format: "Statement-based", "What is sent": "Raw SQL statements (INSERT/UPDATE/DELETE)", Risk: "Non-determinism: NOW(), RAND(), triggers fire differently on each replica" },
+    { Format: "Write-ahead log (WAL) shipping", "What is sent": "Raw storage engine bytes (B-tree page changes)", Risk: "Tightly coupled to storage engine version — cannot replicate between versions" },
+    { Format: "Logical (row-based)", "What is sent": "Row-level changes: which rows were inserted/updated/deleted with their values", Risk: "More data volume, but safe across versions and usable for external consumers (CDC)" },
+    { Format: "Trigger-based", "What is sent": "Application-layer logic fires on change, writes to a replication table", Risk: "Highest overhead, most bugs — use only when flexibility is essential" },
+  ]}
+/>
+
+PostgreSQL and MySQL default to logical/row-based replication for exactly this reason: it is version-agnostic and safe across schema changes, and the row-level change stream is the same data that powers change data capture (CDC) pipelines.
+
+**Follower setup without downtime** follows a snapshot + catch-up pattern: take a consistent snapshot of the leader (without a full lock — PostgreSQL uses `pg_basebackup`, MySQL uses `innobackupex`), copy to the new follower, then replay the replication log from the snapshot's log sequence number (LSN) forward until caught up. This is how read replicas are added in production without maintenance windows.
+
+**Failover** is where single-leader replication gets dangerous:
+
+<FlowStep step="1" color="teal" title="Leader timeout exceeded">
+The system detects no heartbeat from the leader for N seconds. But: is the leader dead, or just slow? A false positive failover under load makes things worse.
+</FlowStep>
+
+<FlowStep step="2" color="teal" title="Elect new leader">
+The replica with the most up-to-date replication log position wins. Implemented via consensus (Raft, Paxos) in systems like etcd/Patroni. Without consensus, two nodes can both believe they are leader.
+</FlowStep>
+
+<FlowStep step="3" color="amber" title="Discard unreplicated writes">
+The new leader's log position may be behind the old leader's last write. Those writes are irrecoverably lost — even if the client received an acknowledgement. This surprises engineers who assume ACK = durable.
+</FlowStep>
+
+<FlowStep step="4" color="amber" title="Split-brain risk">
+Old leader comes back, doesn't know it was replaced. Two nodes accept writes simultaneously. Without a fencing mechanism (STONITH, epoch-based leader leases), data diverges silently.
+</FlowStep>
+
+<Callout color="amber">
+The GitHub MySQL incident: a promoted follower that was behind the leader reused autoincrement primary keys, causing MySQL and Redis to refer to different records under the same ID. Private data was disclosed to wrong users. Failover is not a safe operation — it requires careful coordination.
+</Callout>
+
+## <Label color="teal">3</Label> Problems with Replication Lag
+
+Asynchronous followers are always behind the leader by some amount — the **replication lag**. Under normal load this is sub-second. Under high load or network congestion it can be minutes. During that window, three classes of consistency anomaly can surface.
+
+<DataTable
+  caption="Replication lag anomalies"
+  accent="green"
+  headers={["Anomaly", "What the user sees", "Fix"]}
+  rows={[
+    { Anomaly: "Stale read (no read-your-writes)", "What the user sees": "User submits a form, reloads the page, their change is gone — it went to the leader but the read hit a lagging follower", Fix: "Read own writes from the leader; track user's last-write LSN and wait for follower to catch up" },
+    { Anomaly: "Monotonic reads violation", "What the user sees": "User reads a comment, refreshes, comment disappears (first read hit an up-to-date follower, second hit a lagging one)", Fix: "Pin each user to a single replica via consistent hashing on user ID" },
+    { Anomaly: "Consistent prefix reads violation", "What the user sees": "Observer sees Mrs. Cake's answer before Mr. Poons asked the question — causally related writes landed on different partitions with different lag", Fix: "Write causally related events to the same partition; or use vector clocks to track causal dependencies" },
+  ]}
+/>
+
+**Read-your-writes** (also called read-after-write consistency) is the most commonly needed guarantee. The standard implementation: after a write, the client records the LSN of that write. On subsequent reads, the client sends that LSN to the replica. If the replica's applied LSN is below the client's last-write LSN, either wait or redirect to the leader. PostgreSQL clients and most managed database proxies support this transparently.
+
+<Callout color="teal">
+Eventual consistency is not a specific guarantee — it is the absence of a specific guarantee. "Eventually consistent" tells you almost nothing about how stale reads can be and what anomalies are possible. Always ask which specific consistency properties (read-your-writes, monotonic reads, causal consistency) a system provides.
+</Callout>
+
+## <Label color="teal">4</Label> Multi-Leader Replication
+
+Multi-leader (active-active) replication allows writes at multiple nodes. Each leader accepts writes and also replicates to other leaders. The appeal: geographic distribution (accept writes in the nearest datacenter, replicate across continents asynchronously), better write availability.
+
+The cost: **write conflicts**. If two leaders simultaneously accept different values for the same key, which wins?
+
+**Conflict resolution strategies:**
+
+<DataTable
+  caption="Write conflict resolution approaches"
+  accent="amber"
+  headers={["Strategy", "Mechanism", "Tradeoff"]}
+  rows={[
+    { Strategy: "Last-Write-Wins (LWW)", Mechanism: "Each write gets a timestamp; highest timestamp wins", Tradeoff: "Data loss guaranteed if clocks aren't perfectly synchronised — and they never are" },
+    { Strategy: "Replica ID priority", Mechanism: "Writes from a higher-numbered replica always win", Tradeoff: "Deterministic but arbitrary — loses data based on topology, not application logic" },
+    { Strategy: "Merge",               Mechanism: "Application merges all concurrent values (e.g. set union)", Tradeoff: "Only works for data structures that support merge semantics" },
+    { Strategy: "CRDT",                Mechanism: "Conflict-free Replicated Data Types — grow-only sets, counters with provable convergence", Tradeoff: "Only certain data structures are representable as CRDTs" },
+    { Strategy: "Custom merge function", Mechanism: "Application code resolves conflicts on read or on write", Tradeoff: "Most flexible; requires application awareness of conflict semantics" },
+  ]}
+/>
+
+The safest rule: **avoid multi-leader replication if you don't need it**. Most applications that think they need multi-leader actually need a single leader with a read replica per region. Multi-leader is appropriate for: offline-capable clients that sync periodically (like a mobile app or Google Docs), and true active-active multi-datacenter deployments where the write latency to a single leader is unacceptable.
+
+**Multi-leader topologies** — how leaders replicate to each other — also matter:
+
+- **All-to-all**: every leader replicates to every other. Most resilient but can cause causal ordering problems (a write arrives at a follower leader before the write it causally depends on).
+- **Star/circular**: writes propagate through a chain. A single node failure can break the replication path.
+
+## <Label color="teal">5</Label> Leaderless Replication (Dynamo-Style)
+
+Pioneered by Amazon Dynamo and adopted by Cassandra, Riak, and Voldemort. No single leader; clients send writes to multiple replicas in parallel. A write is considered successful when w out of n replicas acknowledge it. Reads are sent to r replicas in parallel and the newest version wins.
+
+The quorum condition: **w + r > n** guarantees that the read set and write set overlap by at least one node, ensuring at least one read response has the most recent write.
+
+With n=3, w=2, r=2: tolerates 1 failed node for both reads and writes. With n=5, w=3, r=3: tolerates 2 failed nodes. Tuning w and r shifts the tradeoff:
+
+<DataTable
+  caption="Quorum tuning tradeoffs"
+  accent="teal"
+  headers={["Configuration", "Read latency", "Write latency", "Staleness risk", "Use case"]}
+  rows={[
+    { Configuration: "w=n, r=1", "Read latency": "Very fast", "Write latency": "Slow (all nodes)", "Staleness risk": "None (reads always fresh)", "Use case": "Read-heavy, tolerate slow writes" },
+    { Configuration: "w=1, r=n", "Read latency": "Slow (all nodes)", "Write latency": "Very fast", "Staleness risk": "None (reads check all)", "Use case": "Write-heavy, tolerate slow reads" },
+    { Configuration: "w=r=(n+1)/2", "Read latency": "Medium", "Write latency": "Medium", "Staleness risk": "Low", "Use case": "Balanced — standard Dynamo config" },
+    { Configuration: "w+r<=n", "Read latency": "Fast", "Write latency": "Fast", "Staleness risk": "High — stale reads possible", "Use case": "Eventual consistency only; high availability priority" },
+  ]}
+/>
+
+**Sloppy quorums and hinted handoff**: if fewer than w nodes are reachable from the w "home" nodes, writes can be accepted by any w reachable nodes (sloppy quorum). The accepting nodes store a hint that the data should be forwarded to its home node when connectivity is restored (hinted handoff). This maximises write availability at the cost of read consistency — w+r>n no longer guarantees overlap.
+
+**Stale replica recovery** uses two mechanisms:
+- **Read repair**: when a client reads from multiple replicas and detects a stale response, it writes the newer value back to the stale replica. Works for frequently-read values.
+- **Anti-entropy process**: a background daemon constantly compares replicas and copies missing data. Without anti-entropy, infrequently-read keys can remain stale indefinitely.
+
+<Callout color="amber">
+Even with w+r>n, leaderless systems have edge cases that return stale values: concurrent writes (which wins?), writes that partially succeed (w-1 nodes accepted, write is reported failed but some nodes have the value), and node failures mid-write. Leaderless systems provide availability and partition tolerance; they are not strongly consistent by default.
+</Callout>
+
+## <Label color="teal">6</Label> Detecting Concurrent Writes
+
+When two clients write to the same key at the same time on different nodes, both writes are concurrent — neither causally depends on the other. The database must detect this and resolve it.
+
+**Last-Write-Wins (LWW)** attaches a timestamp to each write. When a replica receives two writes for the same key, the higher timestamp wins. Cassandra uses this by default. The problem: clocks drift between nodes (see Chapter 8). A write with a "later" timestamp might actually have happened earlier in wall-clock time. LWW **loses data silently** — it is only safe when you can afford to discard concurrent writes or when the key is written exactly once.
+
+**Version vectors** (vector clocks) track causal history without timestamps. Each replica maintains a version counter for each key. When a write is sent, the client includes the version it last read. If two versions have no causal relationship (neither is an ancestor of the other), they are concurrent — the database stores both values as siblings for the application to merge. Riak uses version vectors. The client receives both values and must reconcile them (e.g. a shopping cart stores both item lists and takes the union).
+
+## <Label color="teal">7</Label> Choosing a Replication Model
+
+<CompareTable
+  products={[
+    { name: "Single-Leader" },
+    { name: "Multi-Leader" },
+    { name: "Leaderless", highlight: true },
+  ]}
+  features={[
+    { label: "No write conflicts",             values: ["yes",     "no",      "no"] },
+    { label: "Write to any node (availability)", values: ["no",    "partial", "yes"] },
+    { label: "Multi-datacenter writes",        values: ["partial", "yes",     "yes"] },
+    { label: "Strong read consistency",        values: ["partial", "no",      "partial"] },
+    { label: "Read-your-writes (built-in)",    values: ["partial", "no",      "no"] },
+    { label: "Simple operational model",       values: ["yes",     "no",      "partial"] },
+    { label: "Good for offline clients",       values: ["no",      "yes",     "partial"] },
+  ]}
+  caption="Single-leader is the safe default. Multi-leader only when you have truly multi-datacenter write requirements. Leaderless when write availability > consistency."
+/>
+
+The practical hierarchy: **start with single-leader**. It gives you the simplest operational model, clear failover semantics, and strong enough consistency for most applications. Add read replicas to scale reads. Use multi-leader only when write latency to a single datacenter is a hard product requirement and you are prepared to implement conflict resolution logic. Use leaderless when you need maximum write availability and can tolerate eventual consistency (Cassandra for time-series, IoT, analytics).
+
+The replication chapter is the foundation for everything in Part II. Partitioning (Ch06), transactions (Ch07), distributed system failures (Ch08), and consensus (Ch09) all build on the replication primitives introduced here. Understanding that replication lag is a window of inconsistency — not a temporary glitch — is the mental model that makes the rest of the distributed systems material click.

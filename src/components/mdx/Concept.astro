@@ -1,0 +1,111 @@
+---
+interface Props {
+  term: string;
+  category?: string; // e.g. "definition" | "theorem" | "pattern" | "trade-off"
+}
+const { term, category = 'concept' } = Astro.props;
+const id = `concept-${term.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+---
+
+<details class="concept" id={id}>
+  <summary class="concept-summary">
+    <span class="concept-icon">▶</span>
+    <span class="concept-term">{term}</span>
+    <span class="concept-category">{category}</span>
+  </summary>
+  <div class="concept-body">
+    <slot />
+  </div>
+</details>
+
+<style>
+  .concept {
+    border: 1px solid var(--color-border);
+    border-left: 3px solid var(--color-accent);
+    background: var(--color-surface);
+    margin: 0.75rem 0;
+    overflow: hidden;
+  }
+
+  .concept-summary {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.65rem 1rem;
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+    transition: background 0.15s;
+  }
+  .concept-summary::-webkit-details-marker { display: none; }
+  .concept-summary:hover {
+    background: var(--color-accent-glow);
+  }
+
+  .concept-icon {
+    font-size: 0.55rem;
+    color: var(--color-accent);
+    flex-shrink: 0;
+    transition: transform 0.2s ease;
+  }
+  details[open] .concept-icon {
+    transform: rotate(90deg);
+  }
+
+  .concept-term {
+    font-family: 'IBM Plex Mono', 'JetBrains Mono', monospace;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--color-text);
+    flex: 1;
+  }
+
+  .concept-category {
+    font-family: 'IBM Plex Mono', 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    background: var(--color-surface-2);
+    border: 1px solid var(--color-border);
+    padding: 0.1rem 0.4rem;
+    flex-shrink: 0;
+  }
+
+  .concept-body {
+    padding: 0.875rem 1rem 1rem 1rem;
+    border-top: 1px solid var(--color-border);
+    font-family: 'IBM Plex Serif', Georgia, serif;
+    font-size: 0.9rem;
+    line-height: 1.75;
+    color: var(--color-text-dim);
+    animation: concept-open 0.15s ease;
+  }
+
+  @keyframes concept-open {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Nested prose resets */
+  .concept-body :global(p) { margin: 0 0 0.6rem; }
+  .concept-body :global(p:last-child) { margin-bottom: 0; }
+  .concept-body :global(code) {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.82em;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    padding: 0.1em 0.35em;
+    color: var(--color-accent);
+  }
+  .concept-body :global(strong) {
+    font-weight: 700;
+    color: var(--color-text);
+  }
+  .concept-body :global(ul), .concept-body :global(ol) {
+    padding-left: 1.25rem;
+    margin: 0.4rem 0;
+  }
+  .concept-body :global(li) { margin: 0.2rem 0; }
+</style>

@@ -1,0 +1,416 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import { getPostSlug, seriesMeta, getSeriesPosts } from '../../../lib/posts';
+
+export async function getStaticPaths() {
+  return [{ params: { lang: 'en' } }, { params: { lang: 'vi' } }];
+}
+
+const { lang } = Astro.params as { lang: string };
+
+const allPosts = await getCollection('blog', p =>
+  !p.data.draft && p.data.lang === lang && p.data.category === 'foundations'
+);
+
+// Group by series
+const seriesIds = [...new Set(allPosts.map(p => p.data.series).filter(Boolean))] as string[];
+const seriesGroups = seriesIds.map(id => ({
+  meta: seriesMeta[id],
+  id,
+  posts: getSeriesPosts(allPosts, id),
+}));
+
+// Stand-alone foundations posts (no series)
+const standalone = allPosts
+  .filter(p => !p.data.series)
+  .sort((a, b) => b.data.pubDate.getTime() - a.data.pubDate.getTime());
+
+const totalChapters = allPosts.length;
+---
+
+<BaseLayout
+  title="Foundations — Software from First Principles"
+  description="First-principles coverage of CS fundamentals, systems internals, distributed systems, design patterns, and engineering craft."
+  lang={lang}
+>
+  <div class="fl-root">
+
+    <!-- ── Hero ── -->
+    <section class="fl-hero">
+      <div class="fl-hero-inner">
+        <div class="fl-hero-badge">Software Foundations</div>
+        <h1 class="fl-hero-title">First principles.<br />Deep understanding.</h1>
+        <p class="fl-hero-desc">
+          A structured reading series covering CS fundamentals, distributed systems internals,
+          data-intensive application design, and the engineering craft beneath every framework
+          and tool. Written to be read — not skimmed.
+        </p>
+        <div class="fl-hero-stats">
+          <div class="fl-stat">
+            <span class="fl-stat-num">{totalChapters}</span>
+            <span class="fl-stat-label">chapters</span>
+          </div>
+          <div class="fl-stat">
+            <span class="fl-stat-num">{seriesGroups.length}</span>
+            <span class="fl-stat-label">{seriesGroups.length === 1 ? 'series' : 'series'}</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Series ── -->
+    <section class="fl-content">
+      {seriesGroups.map(({ id, meta, posts }) => (
+        <div class="fl-series" data-series-id={id}>
+          <!-- Series header -->
+          <div class="fl-series-header">
+            <div class="fl-series-title-row">
+              <span class="fl-series-icon">◈</span>
+              <div>
+                <h2 class="fl-series-title">{meta?.title ?? id}</h2>
+                {meta?.description && (
+                  <p class="fl-series-desc">{meta.description}</p>
+                )}
+              </div>
+              <div class="fl-series-meta">
+                <span class="fl-series-count">{posts.length} ch.</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Chapter list -->
+          <ol class="fl-chapters">
+            {posts.map((post, idx) => {
+              const slug = getPostSlug(post);
+              return (
+                <li class="fl-chapter" data-slug={slug}>
+                  <a href={`/${lang}/blog/${slug}`} class="fl-chapter-link">
+                    <div class="fl-chapter-left">
+                      <span class="fl-chapter-num">{String(idx + 1).padStart(2, '0')}</span>
+                    </div>
+                    <div class="fl-chapter-body">
+                      <div class="fl-chapter-title-row">
+                        <span class="fl-chapter-title">{post.data.title}</span>
+                        {post.data.draft && (
+                          <span class="fl-chapter-badge fl-badge-draft">draft</span>
+                        )}
+                        <span class="fl-chapter-badge fl-badge-read" style="display:none" data-read-badge>✓</span>
+                      </div>
+                      <p class="fl-chapter-desc">{post.data.description}</p>
+                    </div>
+                    <div class="fl-chapter-arrow">→</div>
+                  </a>
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+      ))}
+
+      {standalone.length > 0 && (
+        <div class="fl-series">
+          <div class="fl-series-header">
+            <div class="fl-series-title-row">
+              <span class="fl-series-icon">◇</span>
+              <h2 class="fl-series-title">Standalone articles</h2>
+            </div>
+          </div>
+          <ol class="fl-chapters">
+            {standalone.map((post, idx) => {
+              const slug = getPostSlug(post);
+              return (
+                <li class="fl-chapter" data-slug={slug}>
+                  <a href={`/${lang}/blog/${slug}`} class="fl-chapter-link">
+                    <div class="fl-chapter-left">
+                      <span class="fl-chapter-num">{String(idx + 1).padStart(2, '0')}</span>
+                    </div>
+                    <div class="fl-chapter-body">
+                      <div class="fl-chapter-title-row">
+                        <span class="fl-chapter-title">{post.data.title}</span>
+                        <span class="fl-chapter-badge fl-badge-read" style="display:none" data-read-badge>✓</span>
+                      </div>
+                      <p class="fl-chapter-desc">{post.data.description}</p>
+                    </div>
+                    <div class="fl-chapter-arrow">→</div>
+                  </a>
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+      )}
+    </section>
+
+  </div>
+</BaseLayout>
+
+<style>
+  /* ── Foundations tokens ── */
+  .fl-root {
+    --f-bg:            #060d1f;
+    --f-surface:       #0a1628;
+    --f-surface-2:     #0f1f3d;
+    --f-border:        #1a3060;
+    --f-border-bright: #2a4e8a;
+    --f-text:          #e2eaf8;
+    --f-text-dim:      #8babd4;
+    --f-text-muted:    #3d5a8a;
+    --f-accent:        #4589ff;
+    --f-accent-dim:    #2d6ae0;
+    --f-accent-glow:   rgba(69, 137, 255, 0.12);
+
+    background: var(--f-bg);
+    color: var(--f-text);
+    min-height: 100vh;
+    padding-bottom: 5rem;
+  }
+
+  /* ── Hero ── */
+  .fl-hero {
+    border-bottom: 1px solid var(--f-border);
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--f-accent) 6%, var(--f-bg)) 0%,
+      var(--f-bg) 100%
+    );
+    padding: 4rem 1.5rem 3.5rem;
+  }
+  .fl-hero-inner {
+    max-width: 720px;
+    margin: 0 auto;
+  }
+  .fl-hero-badge {
+    display: inline-block;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.63rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--f-accent);
+    background: color-mix(in srgb, var(--f-accent) 10%, var(--f-surface));
+    border: 1px solid color-mix(in srgb, var(--f-accent) 30%, transparent);
+    padding: 0.2rem 0.7rem;
+    margin-bottom: 1.25rem;
+  }
+  .fl-hero-title {
+    font-family: 'IBM Plex Serif', Georgia, serif;
+    font-size: clamp(2rem, 5vw, 3.25rem);
+    font-weight: 300;
+    line-height: 1.1;
+    letter-spacing: -0.03em;
+    color: var(--f-text);
+    margin: 0 0 1.125rem;
+  }
+  .fl-hero-desc {
+    font-family: 'IBM Plex Serif', Georgia, serif;
+    font-size: 1.05rem;
+    line-height: 1.7;
+    color: var(--f-text-dim);
+    margin: 0 0 2rem;
+    max-width: 56ch;
+  }
+  .fl-hero-stats {
+    display: flex;
+    gap: 2rem;
+    align-items: center;
+  }
+  .fl-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .fl-stat-num {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 1.75rem;
+    font-weight: 600;
+    color: var(--f-accent);
+    line-height: 1;
+  }
+  .fl-stat-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.62rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--f-text-muted);
+    margin-top: 0.2rem;
+  }
+
+  /* ── Content area ── */
+  .fl-content {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 3rem 1.5rem 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3.5rem;
+  }
+
+  /* ── Series ── */
+  .fl-series {}
+
+  .fl-series-header {
+    margin-bottom: 0;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--f-border);
+  }
+  .fl-series-title-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+  .fl-series-icon {
+    font-size: 1rem;
+    color: var(--f-accent);
+    flex-shrink: 0;
+    margin-top: 0.15rem;
+  }
+  .fl-series-title {
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--f-text);
+    margin: 0 0 0.3rem;
+  }
+  .fl-series-desc {
+    font-family: 'IBM Plex Serif', Georgia, serif;
+    font-size: 0.88rem;
+    color: var(--f-text-muted);
+    line-height: 1.55;
+    margin: 0;
+  }
+  .fl-series-meta {
+    margin-left: auto;
+    flex-shrink: 0;
+    padding-top: 0.2rem;
+  }
+  .fl-series-count {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--f-text-muted);
+    background: var(--f-surface-2);
+    border: 1px solid var(--f-border);
+    padding: 0.15rem 0.5rem;
+  }
+
+  /* ── Chapter list ── */
+  .fl-chapters {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .fl-chapter {
+    border-bottom: 1px solid var(--f-border);
+  }
+  .fl-chapter:last-child { border-bottom: none; }
+
+  .fl-chapter-link {
+    display: grid;
+    grid-template-columns: 2.5rem 1fr auto;
+    gap: 0;
+    align-items: center;
+    text-decoration: none;
+    padding: 1rem 0.75rem 1rem 0;
+    transition: background 0.15s;
+    border-left: 2px solid transparent;
+    padding-left: 0.75rem;
+    color: inherit;
+  }
+  .fl-chapter-link:hover {
+    background: color-mix(in srgb, var(--f-accent) 5%, var(--f-bg));
+    border-left-color: color-mix(in srgb, var(--f-accent) 40%, transparent);
+  }
+
+  /* Chapter read state — set by JS */
+  .fl-chapter.is-read .fl-chapter-link {
+    border-left-color: color-mix(in srgb, var(--f-accent) 20%, transparent);
+  }
+  .fl-chapter.is-read [data-read-badge] {
+    display: inline-block !important;
+  }
+
+  .fl-chapter-left {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+  }
+  .fl-chapter-num {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--f-text-muted);
+    font-weight: 500;
+  }
+  .fl-chapter.is-read .fl-chapter-num {
+    color: var(--f-accent);
+  }
+
+  .fl-chapter-body {
+    min-width: 0;
+    padding-right: 1rem;
+  }
+  .fl-chapter-title-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.3rem;
+    flex-wrap: wrap;
+  }
+  .fl-chapter-title {
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    font-size: 0.92rem;
+    font-weight: 500;
+    color: var(--f-text);
+    line-height: 1.35;
+  }
+  .fl-chapter-link:hover .fl-chapter-title { color: var(--f-accent); }
+
+  .fl-chapter-desc {
+    font-family: 'IBM Plex Serif', Georgia, serif;
+    font-size: 0.82rem;
+    color: var(--f-text-muted);
+    line-height: 1.5;
+    margin: 0;
+  }
+
+  .fl-chapter-badge {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.6rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.1rem 0.4rem;
+    flex-shrink: 0;
+  }
+  .fl-badge-draft {
+    color: var(--f-text-muted);
+    border: 1px solid var(--f-border);
+    background: var(--f-surface-2);
+  }
+  .fl-badge-read {
+    color: var(--f-accent);
+    border: 1px solid color-mix(in srgb, var(--f-accent) 30%, transparent);
+    background: color-mix(in srgb, var(--f-accent) 8%, transparent);
+  }
+
+  .fl-chapter-arrow {
+    font-size: 0.78rem;
+    color: var(--f-text-muted);
+    flex-shrink: 0;
+    transition: color 0.15s, transform 0.15s;
+  }
+  .fl-chapter-link:hover .fl-chapter-arrow {
+    color: var(--f-accent);
+    transform: translateX(3px);
+  }
+</style>
+
+<script>
+  // Restore read state from localStorage and mark chapters
+  document.querySelectorAll<HTMLElement>('.fl-chapter[data-slug]').forEach(el => {
+    const slug = el.dataset.slug!;
+    if (localStorage.getItem(`f-read:${slug}`) === '1') {
+      el.classList.add('is-read');
+    }
+  });
+</script>

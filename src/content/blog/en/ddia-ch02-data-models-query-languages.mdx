@@ -1,0 +1,246 @@
+---
+title: "DDIA Ch.2 — Data Models and Query Languages"
+description: "Kleppmann's Chapter 2 dissects the trade-offs between relational, document, and graph data models — and why the choice between declarative and imperative query languages shapes everything from schema evolution to parallel execution."
+pubDate: 2026-05-08
+tags: ["distributed-systems", "data-models", "sql", "nosql", "graph-databases", "foundations"]
+lang: "en"
+category: "foundations"
+series: "software-foundations"
+seriesOrder: 2
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import Pipeline from '../../../components/mdx/Pipeline.astro';
+import CompareTable from '../../../components/mdx/CompareTable.astro';
+
+Every piece of software you write rests on a data model, and that model quietly dictates which operations are cheap, which are expensive, and which are effectively impossible. Kleppmann opens Chapter 2 with a Wittgenstein epigraph — "the limits of my language mean the limits of my world" — and the rest of the chapter proves the point: the data model you choose *is* the language your application thinks in. Pick the wrong one and you spend years fighting it; pick the right one and entire categories of problems dissolve.
+
+<HeroGrid items={[
+  { label: "3 Models", sublabel: "Relational, Document, Graph", color: "#0891b2" },
+  { label: "Declarative > Imperative", sublabel: "SQL, Cypher, SPARQL, Datalog", color: "#059669" },
+  { label: "Schema trade-off", sublabel: "On-read vs on-write", color: "#d97706" },
+  { label: "Polyglot persistence", sublabel: "No single model fits all", color: "#e11d48" },
+]} />
+
+## <Label color="teal">1</Label> Data Models Are Layered Abstractions
+
+Kleppmann frames the entire chapter around a deceptively simple observation: applications are built by stacking data models. Your application code thinks in objects and structs. The storage layer thinks in JSON documents, relational tables, or graph triples. The database engine thinks in bytes on disk. Hardware thinks in electrical signals. Each layer hides the complexity beneath it and exposes a clean interface upward.
+
+This layering is why data model choice matters so much. The model you pick at layer two — the general-purpose storage model — determines what is natural or awkward for every layer above it. A social network where every entity connects to every other entity fits a graph model naturally. An e-commerce product catalog with deeply nested variants fits the document model. An accounting ledger with rigid referential integrity fits relational tables. The mismatch cost isn't paid once at design time; it compounds on every query, every migration, every new feature for the lifetime of the system.
+
+<Callout color="teal">
+**The core insight:** each data model embodies assumptions about usage patterns. Some operations are fast, some are slow, some are unsupported. Choosing a model means accepting those trade-offs for the lifetime of the application — or paying the migration cost later.
+</Callout>
+
+## <Label color="teal">2</Label> Relational vs Document: The Oldest Modern Debate
+
+### The Relational Model's Staying Power
+
+Edgar Codd proposed the relational model in 1970. It was a theoretical abstraction that many doubted could be implemented efficiently. By the mid-1980s it had won. SQL and relational databases dominated business data processing and then generalized far beyond it — into web apps, SaaS platforms, social networks, and games. Every challenger (network model, object databases, XML databases) generated hype but never displaced it.
+
+The relational model's key innovation was separation of storage representation from query logic. Previous systems like IMS (IBM's hierarchical model) and CODASYL (the network model) forced developers to think in terms of *access paths* — you navigated to records by following pointer chains through nested structures. If you wanted to query data differently, you had to rewrite your traversal code. The relational model instead laid all data flat in tables and invented the query optimizer to figure out the access path automatically. Build the optimizer once; every application benefits.
+
+### The NoSQL Reaction
+
+The NoSQL movement (roughly 2009 onward) was driven by four forces: the need for horizontal scalability beyond what traditional RDBMSes offered easily; preference for open-source over commercial licenses; specialized query operations poorly served by the relational model; and frustration with rigid relational schemas when data structures evolved rapidly. The term "NoSQL" itself was just a Twitter hashtag for a meetup, but it stuck.
+
+Kleppmann is careful to note that this is not a winner-take-all contest. The likely outcome is *polyglot persistence* — different datastores for different parts of the same application, chosen by fit rather than ideology.
+
+### The Object-Relational Impedance Mismatch
+
+Most application code today is object-oriented. Storing objects in relational tables requires a translation layer — the so-called impedance mismatch. ORM frameworks like Hibernate or ActiveRecord reduce boilerplate but can't eliminate the conceptual gap. A LinkedIn profile, for example, has one-to-many relationships (a user has multiple positions, multiple education entries, multiple contact methods). In a relational schema you'd split these into separate tables with foreign keys. In a document model you'd store the entire profile as a single JSON document.
+
+The document representation has better *locality* — one read fetches the whole profile — and maps more directly to the application object. But this advantage erodes the moment you need many-to-many relationships: when organizations, schools, and recommendation authors become shared entities referenced from multiple profiles, the document model starts needing cross-document references and application-level joins that a relational database handles natively.
+
+<Callout color="amber">
+**Decision rule:** if your data naturally forms a tree of one-to-many relationships that you always load together, the document model reduces complexity. If entities are shared across multiple parents and you need referential integrity, start relational. Data tends to become more interconnected over time, so bias toward the model that handles joins well unless you have strong evidence otherwise.
+</Callout>
+
+### Many-to-One, Many-to-Many, and Normalization
+
+Kleppmann uses the example of storing region and industry as IDs vs plain-text strings. Using IDs means the human-readable name lives in one place (a lookup table) and everything else references it. This is normalization — removing duplication so that updates propagate cleanly. IDs never need to change because they carry no human meaning; names do.
+
+Document databases handle one-to-many trees well but struggle with many-to-one references because joins are weak or absent. If the database doesn't support joins, you emulate them in application code with multiple queries. This shifts complexity out of the database into your service layer, where it's harder to optimize and easier to get wrong.
+
+### Are Document Databases Repeating History?
+
+Kleppmann draws a direct line from 1970s IMS to modern document databases. IMS used a hierarchical model remarkably similar to JSON — nested records within records. It handled one-to-many relationships well but made many-to-many relationships painful. Developers had to choose between denormalization and manual reference resolution. The same trade-off surfaces in MongoDB and CouchDB today.
+
+The CODASYL network model tried to solve this by allowing records to have multiple parents, but it required developers to navigate pointer-based access paths — an approach so complex that even committee members described it as "navigating an n-dimensional data space." The relational model won by abstracting away the access path entirely.
+
+Modern document databases have not repeated CODASYL's mistake: they use document references (resolved at read time) rather than pointer-based navigation. But the fundamental tension between tree-shaped storage and graph-shaped queries remains.
+
+## <Label color="teal">3</Label> Relational vs Document vs Graph — A Comparison
+
+<CompareTable
+  products={[
+    { name: "Relational" },
+    { name: "Document" },
+    { name: "Graph" },
+  ]}
+  features={[
+    { label: "One-to-many relationships",       values: ["yes", "yes", "yes"] },
+    { label: "Many-to-many relationships",       values: ["yes", "partial", "yes"] },
+    { label: "Schema enforcement (write-time)",  values: ["yes", "no", "no"] },
+    { label: "Data locality for reads",          values: ["partial", "yes", "partial"] },
+    { label: "Joins (native)",                   values: ["yes", "partial", "yes"] },
+    { label: "Variable-depth traversal",         values: ["partial", "no", "yes"] },
+    { label: "Heterogeneous entity types",       values: ["partial", "yes", "yes"] },
+    { label: "Schema evolution ease",            values: ["partial", "yes", "yes"] },
+    { label: "Query optimizer maturity",         values: ["yes", "partial", "partial"] },
+  ]}
+  caption="Relational excels at structured joins and integrity. Document wins on locality for tree-shaped data. Graph handles deeply interconnected, variable-depth relationships."
+/>
+
+### Schema-on-Read vs Schema-on-Write
+
+Document databases are sometimes called "schemaless," but Kleppmann argues this is misleading. The code that reads the data always assumes some structure — there is an *implicit* schema. The real distinction is:
+
+- **Schema-on-write** (relational): the database enforces a schema at write time, like static type checking. Migrations require `ALTER TABLE`.
+- **Schema-on-read** (document): the schema is interpreted at read time, like dynamic type checking. You just start writing documents with new fields and handle old formats in application code.
+
+Schema-on-read shines when data is heterogeneous (many different object types, or structures determined by external systems you don't control). Schema-on-write protects consistency when all records should share the same shape. In practice, Kleppmann notes that `ALTER TABLE` is fast on most databases (MySQL being a notable exception for large tables), and both approaches converge when you realize that schema-on-read applications still need migration logic — it's just scattered across read paths instead of centralized in a migration file.
+
+### Data Locality and Convergence
+
+Document databases store each document as a contiguous byte string (JSON, BSON, etc.), giving a performance advantage when you always load the entire document. But this cuts both ways: updates that grow the document force a full rewrite, and reading a small field still loads the whole thing. Kleppmann recommends keeping documents small and avoiding writes that increase their encoded size.
+
+The chapter's most forward-looking point is convergence. PostgreSQL added JSON support (9.3+). MySQL followed (5.7+). RethinkDB supports relational-like joins. MongoDB added document references and then the aggregation pipeline — effectively reinventing SQL in JSON syntax. The boundaries between relational and document databases are blurring, and a hybrid approach is the pragmatic future.
+
+## <Label color="teal">4</Label> Query Languages: Declarative vs Imperative
+
+### Why Declarative Wins
+
+When SQL was introduced alongside the relational model, it brought a fundamental shift: instead of telling the database *how* to fetch data (imperative), you tell it *what* data you want (declarative). The database's query optimizer figures out the execution plan.
+
+Kleppmann illustrates with a simple example: filtering a list of animals for sharks. Imperative code loops through every element, checking conditions, and pushing matches into an array. The equivalent SQL is one line: `SELECT * FROM animals WHERE family = 'Sharks'`. The SQL version is not only shorter — it's *safer for the database to optimize*. The imperative version implicitly depends on ordering, iteration strategy, and memory layout. The declarative version specifies only the result shape, giving the database freedom to reorder, parallelize, or use indexes as it sees fit.
+
+<Callout color="green">
+**Why this matters in practice:** declarative queries can be parallelized across cores and machines without rewriting application code. Imperative traversals embed sequential assumptions that prevent automatic parallelization. As CPUs scale by adding cores rather than clock speed, this difference widens.
+</Callout>
+
+### Declarative Queries on the Web
+
+Kleppmann draws a memorable analogy to CSS vs imperative DOM manipulation. In CSS, `li.selected > p { background-color: blue; }` declares what should happen. The browser handles when and how. The imperative JavaScript equivalent is 12 lines of fragile DOM traversal that breaks when classes change and doesn't auto-update when the DOM mutates. The lesson: declarative specifications let the runtime optimize and adapt; imperative scripts couple you to a specific execution strategy.
+
+### MapReduce: The Middle Ground
+
+MongoDB's MapReduce sits between declarative and imperative — you write JavaScript `map` and `reduce` functions that the framework calls repeatedly. The functions must be pure (no side effects, no extra database queries), which enables distributed execution. But writing two coordinated functions for every query is harder than writing one SQL statement, and the framework has less room to optimize.
+
+This is exactly why MongoDB later introduced the aggregation pipeline — a declarative, JSON-syntax query language that resembles a subset of SQL. Kleppmann's verdict is pointed: "a NoSQL system may find itself accidentally reinventing SQL, albeit in disguise."
+
+<DataTable
+  caption="Query language spectrum"
+  accent="teal"
+  headers={["Language", "Paradigm", "Optimization", "Best For"]}
+  rows={[
+    { Language: "SQL", Paradigm: "Declarative", Optimization: "Full query optimizer", "Best For": "Relational data, analytics" },
+    { Language: "MongoDB Aggregation", Paradigm: "Declarative (JSON)", Optimization: "Pipeline optimizer", "Best For": "Document stores" },
+    { Language: "MapReduce", Paradigm: "Semi-imperative", Optimization: "Limited (user functions)", "Best For": "Batch processing, custom logic" },
+    { Language: "Cypher", Paradigm: "Declarative", Optimization: "Graph planner", "Best For": "Property graph traversals" },
+    { Language: "SPARQL", Paradigm: "Declarative", Optimization: "Triple-store planner", "Best For": "RDF / linked data" },
+    { Language: "Datalog", Paradigm: "Declarative (rule-based)", Optimization: "Rule engine", "Best For": "Recursive / composable queries" },
+    { Language: "Gremlin", Paradigm: "Imperative", Optimization: "Traversal engine", "Best For": "Step-by-step graph exploration" },
+  ]}
+/>
+
+## <Label color="teal">5</Label> Graph-Like Data Models
+
+### When Graphs Become Natural
+
+If your data has mostly one-to-many relationships, use documents. If many-to-many relationships are common but simple, relational databases handle them well. But when connections are *the point* — social graphs, knowledge graphs, road networks, fraud detection rings — the graph model becomes the natural fit.
+
+A graph consists of vertices (nodes/entities) and edges (relationships/arcs). The key insight is that graphs don't require homogeneous data. Facebook's social graph stores people, locations, events, checkins, and comments as vertices, with different edge types linking them. A single graph can model facts that would require dozens of relational tables with complex join paths.
+
+### Property Graphs and Cypher
+
+In the property graph model (Neo4j, Titan, InfiniteGraph), each vertex and edge has a unique identifier and a collection of key-value properties. Edges additionally carry a label describing the relationship type and have directional pointers (tail → head).
+
+Kleppmann shows that a property graph can be represented in a relational database with just two tables (`vertices` and `edges`), but querying it becomes painful. A Cypher query that finds people who emigrated from the US to Europe takes 4 lines:
+
+```
+MATCH
+  (person) -[:BORN_IN]->  () -[:WITHIN*0..]-> (us:Location {name:'United States'}),
+  (person) -[:LIVES_IN]-> () -[:WITHIN*0..]-> (eu:Location {name:'Europe'})
+RETURN person.name
+```
+
+The `[:WITHIN*0..]` syntax means "follow a chain of WITHIN edges zero or more times" — variable-depth traversal. The equivalent SQL using recursive common table expressions (`WITH RECURSIVE`) takes 29 lines. The difference isn't just verbosity; it's cognitive overhead. When your data is a graph, use a graph query language.
+
+### Triple-Stores and SPARQL
+
+The triple-store model represents everything as *(subject, predicate, object)* triples. If the object is a primitive value, the triple is a property. If the object is another vertex, the triple is an edge. This maps cleanly to RDF (Resource Description Framework), which was designed for internet-wide data interchange.
+
+SPARQL queries against triple-stores look similar to Cypher but use RDF's predicate-based syntax. The same emigration query becomes even more concise:
+
+```
+PREFIX : <urn:example:>
+SELECT ?personName WHERE {
+  ?person :name ?personName.
+  ?person :bornIn  / :within* / :name "United States".
+  ?person :livesIn / :within* / :name "Europe".
+}
+```
+
+Kleppmann notes that SPARQL predates Cypher and that Cypher borrowed its pattern-matching syntax from SPARQL. The semantic web that originally motivated RDF never materialized at scale, but the triple-store model and SPARQL remain useful tools for application-internal graph storage.
+
+### Datalog: The Foundation
+
+Datalog, studied since the 1980s and used by Datomic and Cascalog, takes a different approach. Instead of pattern-matching queries, you define *rules* that derive new predicates from existing data. Rules can compose and recurse, making complex queries buildable from small, reusable pieces. The trade-off: Datalog requires a different mental model (closer to Prolog) and is less convenient for simple one-off lookups, but it handles deeply recursive and composable queries more elegantly than Cypher or SPARQL.
+
+<Callout color="teal">
+**Graph databases vs CODASYL:** they are *not* the same thing. Graph databases let you address any vertex by ID or index (no mandatory access paths), place no restrictions on which vertices can connect, impose no ordering on edges, and support declarative query languages. CODASYL required imperative navigation through ordered pointer chains — a design that made schema changes brutally expensive.
+</Callout>
+
+## <Label color="teal">6</Label> Choosing a Data Model: A Decision Framework
+
+<FlowStep step="1" color="teal" title="Map your relationship types">
+Identify whether your domain is dominated by one-to-many trees (document), many-to-many with moderate join depth (relational), or deeply interconnected entities with variable-depth traversals (graph).
+</FlowStep>
+
+<FlowStep step="2" color="teal" title="Assess schema stability">
+If your schema changes frequently or data is heterogeneous (multiple object types, external sources), lean toward schema-on-read (document or graph). If all records share a stable structure with referential integrity requirements, lean toward schema-on-write (relational).
+</FlowStep>
+
+<FlowStep step="3" color="green" title="Evaluate query patterns">
+If you always load entire entities (e.g., user profiles, product pages), document locality is a win. If you need ad-hoc joins across entities, relational. If you need recursive traversals (friends-of-friends, shortest path, ancestry chains), graph.
+</FlowStep>
+
+<FlowStep step="4" color="green" title="Consider the convergence path">
+Modern PostgreSQL speaks JSON natively. MongoDB has an aggregation pipeline. Neo4j can do property lookups. Evaluate whether a hybrid approach (e.g., relational with JSON columns, or document with client-side joins for the few many-to-many cases) covers 90% of your needs before committing to a specialized store.
+</FlowStep>
+
+<FlowStep step="5" color="amber" title="Plan for evolution">
+Data has a tendency to become more interconnected as features are added. A document model that works today may need many-to-many references tomorrow. Build your initial schema with one eye on the join patterns your next three features will require, not just the current ones.
+</FlowStep>
+
+## <Label color="teal">7</Label> Key Takeaways
+
+<Pipeline
+  nodes={[
+    { title: "Document", subtitle: "Self-contained trees, schema-on-read, locality" },
+    { title: "Relational", subtitle: "Normalized joins, schema-on-write, optimizer" },
+    { title: "Graph", subtitle: "Interconnected entities, variable-depth traversal" },
+  ]}
+  arrows={[
+    { label: "add many-to-many", direction: "right" },
+    { label: "add deep traversals", direction: "right" },
+  ]}
+  footer="As data interconnectedness grows, the natural model shifts rightward."
+/>
+
+1. **Data models are trade-offs, not rankings.** Document, relational, and graph models each excel in their domain. One model can emulate another, but the result is always awkward.
+
+2. **Declarative beats imperative for data queries.** SQL, Cypher, SPARQL, and Datalog all specify *what* to retrieve, not *how*. This enables query optimization, parallel execution, and schema changes without rewriting queries.
+
+3. **Schema-on-read vs schema-on-write is the new static vs dynamic typing debate.** Neither is universally correct. Schema-on-read suits heterogeneous, externally-determined data. Schema-on-write suits stable, integrity-critical data. Most real systems end up with both.
+
+4. **Relational and document databases are converging.** JSON support in PostgreSQL and MySQL, joins in RethinkDB, aggregation pipelines in MongoDB — the boundaries blur. Pick the best default model for your data and lean on hybrid features for edge cases.
+
+5. **Data becomes more interconnected over time.** The feature you ship next quarter may introduce many-to-many relationships that your document model handles poorly. Design with one eye on evolution. When relationships are the core of the domain, start with a graph model — don't wait until your relational join queries become 29-line recursive CTEs.
+
+6. **The query optimizer is the relational model's secret weapon.** You build it once; every application benefits. Without one, every developer hand-codes access paths — the CODASYL lesson that history keeps re-teaching.

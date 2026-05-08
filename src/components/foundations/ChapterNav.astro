@@ -1,0 +1,180 @@
+---
+import type { CollectionEntry } from 'astro:content';
+import { getPostSlug, seriesMeta } from '../../lib/posts';
+
+interface Props {
+  currentSlug: string;
+  series: string;
+  lang: string;
+  seriesPosts: CollectionEntry<'blog'>[];
+}
+
+const { currentSlug, series, lang, seriesPosts } = Astro.props;
+const meta = seriesMeta[series];
+const currentIndex = seriesPosts.findIndex(p => getPostSlug(p) === currentSlug);
+---
+
+<aside class="f-chapnav" aria-label="Chapter navigation">
+  <div class="f-chapnav-series">
+    <a href={`/${lang}/foundations`} class="f-chapnav-series-link">
+      <span class="f-chapnav-series-icon">◈</span>
+      <span class="f-chapnav-series-title">{meta?.title ?? series}</span>
+    </a>
+  </div>
+
+  <nav>
+    <ol class="f-chapnav-list">
+      {seriesPosts.map((post, idx) => {
+        const slug = getPostSlug(post);
+        const isCurrent = slug === currentSlug;
+        return (
+          <li class={`f-chapnav-item${isCurrent ? ' is-current' : ''}`}>
+            {isCurrent ? (
+              <span class="f-chapnav-link f-chapnav-link--current" aria-current="page">
+                <span class="f-chapnav-num">{String(idx + 1).padStart(2, '0')}</span>
+                <span class="f-chapnav-title">{post.data.title}</span>
+              </span>
+            ) : (
+              <a href={`/${lang}/blog/${slug}`} class="f-chapnav-link">
+                <span class="f-chapnav-num">{String(idx + 1).padStart(2, '0')}</span>
+                <span class="f-chapnav-title">{post.data.title}</span>
+              </a>
+            )}
+          </li>
+        );
+      })}
+    </ol>
+  </nav>
+
+  {/* Prev / Next compact */}
+  <div class="f-chapnav-prevnext">
+    {currentIndex > 0 && (
+      <a href={`/${lang}/blog/${getPostSlug(seriesPosts[currentIndex - 1])}`} class="f-chapnav-pn f-chapnav-prev">
+        <span class="f-chapnav-pn-arrow">↑</span>
+        <span class="f-chapnav-pn-label">Previous</span>
+      </a>
+    )}
+    {currentIndex < seriesPosts.length - 1 && (
+      <a href={`/${lang}/blog/${getPostSlug(seriesPosts[currentIndex + 1])}`} class="f-chapnav-pn f-chapnav-next">
+        <span class="f-chapnav-pn-label">Next</span>
+        <span class="f-chapnav-pn-arrow">↓</span>
+      </a>
+    )}
+  </div>
+</aside>
+
+<style>
+  .f-chapnav {
+    position: sticky;
+    top: 5rem;
+    max-height: calc(100vh - 6rem);
+    overflow-y: auto;
+    padding-bottom: 2rem;
+    scrollbar-width: thin;
+    scrollbar-color: var(--f-border) transparent;
+  }
+  .f-chapnav::-webkit-scrollbar { width: 3px; }
+  .f-chapnav::-webkit-scrollbar-thumb { background: var(--f-border); }
+
+  /* Series header */
+  .f-chapnav-series {
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--f-border);
+  }
+  .f-chapnav-series-link {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    text-decoration: none;
+    color: var(--f-text-dim);
+    transition: color 0.15s;
+  }
+  .f-chapnav-series-link:hover { color: var(--f-accent); }
+  .f-chapnav-series-icon {
+    color: var(--f-accent);
+    font-size: 0.85rem;
+    flex-shrink: 0;
+  }
+  .f-chapnav-series-title {
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    line-height: 1.3;
+  }
+
+  /* Chapter list */
+  .f-chapnav-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .f-chapnav-item + .f-chapnav-item { margin-top: 1px; }
+
+  .f-chapnav-link {
+    display: flex;
+    gap: 0.5rem;
+    align-items: baseline;
+    padding: 0.3rem 0.5rem 0.3rem 0;
+    text-decoration: none;
+    color: var(--f-text-dim);
+    border-left: 2px solid transparent;
+    padding-left: 0.65rem;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+    border-radius: 0;
+  }
+  .f-chapnav-link:hover {
+    color: var(--f-accent);
+    background: color-mix(in srgb, var(--f-accent) 6%, transparent);
+    border-left-color: color-mix(in srgb, var(--f-accent) 40%, transparent);
+  }
+  .f-chapnav-link--current {
+    color: var(--f-accent);
+    border-left-color: var(--f-accent);
+    background: color-mix(in srgb, var(--f-accent) 8%, transparent);
+    font-weight: 500;
+  }
+
+  .f-chapnav-num {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--f-text-muted);
+    flex-shrink: 0;
+    width: 1.6rem;
+    padding-top: 0.1rem;
+  }
+  .f-chapnav-link--current .f-chapnav-num {
+    color: var(--f-accent);
+  }
+
+  .f-chapnav-title {
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    font-size: 0.76rem;
+    line-height: 1.4;
+  }
+
+  /* Prev / Next */
+  .f-chapnav-prevnext {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-top: 1.25rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--f-border);
+  }
+  .f-chapnav-pn {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--f-text-muted);
+    text-decoration: none;
+    transition: color 0.15s;
+  }
+  .f-chapnav-pn:hover { color: var(--f-accent); }
+  .f-chapnav-pn-arrow { color: var(--f-accent); }
+  .f-chapnav-next { margin-left: auto; }
+</style>

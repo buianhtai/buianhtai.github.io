@@ -1,0 +1,114 @@
+---
+interface Heading { depth: number; slug: string; text: string; }
+interface Props { headings: Heading[]; }
+const { headings } = Astro.props;
+const filtered = headings.filter(h => h.depth >= 2 && h.depth <= 3);
+---
+
+{filtered.length > 0 && (
+  <aside class="f-toc" id="f-toc" aria-label="Table of contents">
+    <div class="f-toc-label">On this page</div>
+    <nav>
+      <ul class="f-toc-list">
+        {filtered.map(h => (
+          <li class={`f-toc-item f-toc-d${h.depth}`} data-slug={h.slug}>
+            <a href={`#${h.slug}`} class="f-toc-link">{h.text}</a>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  </aside>
+)}
+
+<style>
+  .f-toc {
+    position: sticky;
+    top: 5rem;
+    max-height: calc(100vh - 6rem);
+    overflow-y: auto;
+    padding: 0 0 2rem;
+    scrollbar-width: thin;
+    scrollbar-color: var(--f-border) transparent;
+  }
+  .f-toc::-webkit-scrollbar { width: 3px; }
+  .f-toc::-webkit-scrollbar-thumb { background: var(--f-border); }
+
+  .f-toc-label {
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--f-text-muted);
+    font-family: 'IBM Plex Mono', monospace;
+    padding-bottom: 0.75rem;
+    margin-bottom: 0.25rem;
+    border-bottom: 1px solid var(--f-border);
+  }
+
+  .f-toc-list {
+    list-style: none;
+    margin: 0;
+    padding: 0.25rem 0 0;
+  }
+
+  .f-toc-item {
+    display: block;
+    line-height: 1.4;
+  }
+  .f-toc-item + .f-toc-item { margin-top: 0.05rem; }
+
+  .f-toc-link {
+    display: block;
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    font-size: 0.78rem;
+    color: var(--f-text-dim);
+    text-decoration: none;
+    padding: 0.28rem 0.5rem 0.28rem 0;
+    border-left: 2px solid transparent;
+    padding-left: 0.75rem;
+    transition: color 0.15s, border-color 0.15s;
+    line-height: 1.45;
+  }
+  .f-toc-d3 .f-toc-link {
+    padding-left: 1.5rem;
+    font-size: 0.74rem;
+    color: var(--f-text-muted);
+  }
+  .f-toc-link:hover {
+    color: var(--f-accent);
+  }
+
+  /* Active state — toggled by JS */
+  .f-toc-item.is-active > .f-toc-link {
+    color: var(--f-accent);
+    border-left-color: var(--f-accent);
+    font-weight: 500;
+  }
+</style>
+
+<script>
+  // IntersectionObserver: highlight the ToC entry for the heading currently in view
+  const toc = document.getElementById('f-toc');
+  if (toc) {
+    const items = Array.from(toc.querySelectorAll<HTMLElement>('.f-toc-item[data-slug]'));
+    const slugToItem = new Map(items.map(el => [el.dataset.slug!, el]));
+
+    let activeSlug = '';
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          const id = entry.target.id;
+          if (entry.isIntersecting) {
+            if (activeSlug) slugToItem.get(activeSlug)?.classList.remove('is-active');
+            activeSlug = id;
+            slugToItem.get(id)?.classList.add('is-active');
+          }
+        }
+      },
+      { rootMargin: '0px 0px -70% 0px', threshold: 0 }
+    );
+
+    document.querySelectorAll<HTMLElement>('h2[id], h3[id]').forEach(h => observer.observe(h));
+  }
+</script>

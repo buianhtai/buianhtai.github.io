@@ -1,6 +1,7 @@
 ---
 import { getCollection, render } from 'astro:content';
 import BlogPost from '../../../layouts/BlogPost.astro';
+import BlogFoundationsLayout from '../../../layouts/BlogFoundationsLayout.astro';
 import { getPostSlug, getPostLang, getSeriesPosts } from '../../../lib/posts';
 
 export async function getStaticPaths() {
@@ -23,8 +24,16 @@ if (post.data.series) {
   const allPosts = await getCollection('blog', (p) => p.data.lang === post.data.lang && !p.data.draft);
   seriesPosts = getSeriesPosts(allPosts, post.data.series);
 }
+
+const isFoundations = post.data.category === 'foundations';
 ---
 
-<BlogPost post={post} headings={headings} rawContent={rawContent} seriesPosts={seriesPosts}>
-  <Content />
-</BlogPost>
+{isFoundations ? (
+  <BlogFoundationsLayout post={post} headings={headings} rawContent={rawContent} seriesPosts={seriesPosts}>
+    <Content />
+  </BlogFoundationsLayout>
+) : (
+  <BlogPost post={post} headings={headings} rawContent={rawContent} seriesPosts={seriesPosts}>
+    <Content />
+  </BlogPost>
+)}

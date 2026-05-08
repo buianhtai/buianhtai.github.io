@@ -1,0 +1,81 @@
+---
+interface Props {
+  chapterIndex: number; // 0-based
+  total: number;
+}
+const { chapterIndex, total } = Astro.props;
+const pct = total > 1 ? Math.round((chapterIndex / (total - 1)) * 100) : 100;
+---
+
+<div class="f-progress-bar" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label="Series progress">
+  <div class="f-progress-track">
+    <div class="f-progress-fill" style={`width: ${pct}%`}></div>
+  </div>
+  <span class="f-progress-label">{chapterIndex + 1} / {total}</span>
+</div>
+
+<!-- Reading scroll progress (injected by JS) -->
+<div class="f-scroll-bar" id="f-scroll-bar" aria-hidden="true">
+  <div class="f-scroll-fill" id="f-scroll-fill"></div>
+</div>
+
+<style>
+  /* Chapter-in-series progress */
+  .f-progress-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+  .f-progress-track {
+    flex: 1;
+    height: 3px;
+    background: var(--f-border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .f-progress-fill {
+    height: 100%;
+    background: var(--f-accent);
+    border-radius: 2px;
+    transition: width 0.3s ease;
+  }
+  .f-progress-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--f-text-muted);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  /* Scroll-through-page progress bar (fixed top) */
+  .f-scroll-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    z-index: 9999;
+    background: transparent;
+    pointer-events: none;
+  }
+  .f-scroll-fill {
+    height: 100%;
+    width: 0%;
+    background: var(--f-accent);
+    transition: width 0.1s linear;
+  }
+</style>
+
+<script>
+  const fill = document.getElementById('f-scroll-fill');
+  if (fill) {
+    function updateScroll() {
+      const scrollTop = window.scrollY;
+      const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+      const pct = docHeight > 0 ? Math.min(100, (scrollTop / docHeight) * 100) : 0;
+      fill.style.width = pct + '%';
+    }
+    window.addEventListener('scroll', updateScroll, { passive: true });
+    updateScroll();
+  }
+</script>
