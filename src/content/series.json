@@ -19,5 +19,12 @@
     "description": "Building a learning layer for AI coding agents: task journals, failure classification, skill evolution, and cross-agent lesson injection.",
     "lang": "TypeScript",
     "link": null
+  },
+  {
+    "id": "software-foundations",
+    "title": "Software Foundations",
+    "description": "First-principles coverage of CS fundamentals, systems internals, distributed systems, design patterns, and engineering craft — the bedrock beneath every framework and tool.",
+    "lang": "multi",
+    "link": null
   }
 ]
