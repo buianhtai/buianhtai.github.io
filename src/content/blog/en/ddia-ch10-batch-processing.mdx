@@ -1,0 +1,191 @@
+---
+title: "DDIA Ch.10 — Batch Processing"
+description: "From Unix pipes to MapReduce to Spark — how batch processing works, what joins look like at scale, why immutable inputs plus deterministic functions are the key to fault tolerance, and when MapReduce is the wrong tool."
+pubDate: 2026-05-08
+tags: ["distributed-systems", "batch-processing", "mapreduce", "hadoop", "spark", "foundations"]
+lang: "en"
+category: "foundations"
+series: "software-foundations"
+seriesOrder: 10
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import Pipeline from '../../../components/mdx/Pipeline.astro';
+import CompareTable from '../../../components/mdx/CompareTable.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+
+Part III of DDIA shifts perspective. Parts I and II focused on how databases store, retrieve, and replicate data in response to real-time requests. Part III asks: what happens when the job is not to answer a query but to *transform* a large dataset — when the input is measured in terabytes and the output takes hours to compute?
+
+Chapter 10 covers **batch processing**: the paradigm where a job consumes a bounded input dataset, processes it, and produces an output. No one is waiting for the result in real time; throughput matters more than latency. The canonical modern example is MapReduce, but the deeper insight Kleppmann offers is that the Unix philosophy — and its emphasis on composability, immutability, and single-purpose programs — underlies all good batch processing design.
+
+<HeroGrid items={[
+  { label: "Unix Philosophy",   sublabel: "Pipes, composability, immutable inputs, file-based dataflow",          color: "#0891b2" },
+  { label: "MapReduce",         sublabel: "Distributed sort-by-key + function callbacks on commodity hardware",   color: "#059669" },
+  { label: "Joins at Scale",    sublabel: "Sort-merge, broadcast hash, partitioned hash — algorithm depends on dataset size", color: "#d97706" },
+  { label: "Beyond MapReduce",  sublabel: "Spark / Flink: in-memory dataflow graphs replace disk-materializing pipelines", color: "#7c3aed" },
+]} />
+
+## <Label color="teal">1</Label> Three Types of Data Processing Systems
+
+Before diving into batch processing, Kleppmann draws a useful taxonomy:
+
+<DataTable
+  caption="Three data processing paradigms"
+  accent="teal"
+  headers={["Paradigm", "Trigger", "Primary metric", "Latency", "Examples"]}
+  rows={[
+    { Paradigm: "Services (online)", Trigger: "User request", "Primary metric": "Response time", Latency: "Milliseconds to seconds", Examples: "Web servers, REST APIs, OLTP databases" },
+    { Paradigm: "Batch processing (offline)", Trigger: "Scheduled job / manual trigger", "Primary metric": "Throughput (time to process N GB)", Latency: "Minutes to days", Examples: "MapReduce, Hadoop, Spark batch, ETL jobs" },
+    { Paradigm: "Stream processing (near-real-time)", Trigger: "Event arrival", "Primary metric": "Throughput + latency per event", Latency: "Milliseconds to seconds after event", Examples: "Kafka Streams, Flink, Spark Streaming" },
+  ]}
+/>
+
+## <Label color="teal">2</Label> The Unix Philosophy as Batch Processing Blueprint
+
+Kleppmann opens with Unix tools as a first-principles lesson. A Unix pipeline processing an nginx log file:
+
+```bash
+cat /var/log/nginx/access.log |
+  awk '{print $7}' |
+  sort             |
+  uniq -c          |
+  sort -r -n       |
+  head -n 5
+```
+
+This produces the top 5 most-requested URLs. Each command does one thing; they're connected by pipes (streams of bytes). The same pipeline can be adapted — change the `awk` field, swap `head -n 5` with `tail -n 5` — without changing the other components.
+
+**Four Unix principles that carry over to distributed batch processing:**
+
+1. **Each program does one thing well.** Don't build monolithic jobs; compose single-purpose transformations.
+2. **Programs communicate via text streams.** Loose coupling — programs don't know who reads their output or who produces their input.
+3. **Inputs are immutable.** Unix commands read input without modifying it. Jobs can be rerun safely.
+4. **Outputs replace, not patch.** A command produces a new file; it doesn't partially mutate an existing one. If the job fails, rerun it from scratch.
+
+The limitation of Unix is single-machine: files are local, sort operates on what fits in memory or disk of one machine. MapReduce extends these principles to a distributed cluster.
+
+## <Label color="teal">3</Label> MapReduce: Distributed Sort-by-Key
+
+MapReduce was published by Google in 2004. Its insight: many large-scale data transformations can be expressed as a two-phase pipeline:
+
+1. **Map**: apply a function to each input record, emitting zero or more `(key, value)` pairs
+2. **Sort**: all pairs with the same key are grouped together (done transparently by the framework)
+3. **Reduce**: for each key, apply a function over all values for that key, emitting output records
+
+<Pipeline
+  nodes={[
+    { title: "HDFS input", subtitle: "files split into blocks across cluster" },
+    { title: "Mappers", subtitle: "one per input block; emit (key, value) pairs" },
+    { title: "Shuffle & Sort", subtitle: "framework groups all values by key; sorts; routes to reducers" },
+    { title: "Reducers", subtitle: "one per output partition; aggregate values per key" },
+    { title: "HDFS output", subtitle: "reducer output written to distributed filesystem" },
+  ]}
+  arrows={[
+    { label: "", direction: "right" },
+    { label: "", direction: "right" },
+    { label: "", direction: "right" },
+    { label: "", direction: "right" },
+  ]}
+  footer="The shuffle phase is the network-intensive heart of MapReduce: all mapper outputs are sorted and routed across the cluster by key."
+/>
+
+**What MapReduce provides:**
+- **Fault tolerance through retries**: if a mapper or reducer fails, the framework re-runs it. Because inputs are immutable and mappers are side-effect-free, re-execution is safe.
+- **Data locality**: the framework tries to run mappers on the same node that stores the input data, reducing network I/O.
+- **Exactly-once output**: MapReduce only makes the output visible atomically after all tasks complete successfully. Partial outputs from failed jobs are invisible.
+
+**The shuffle is the bottleneck**: moving all intermediate data across the network, sorted by key, is expensive. Combiner functions (a "mini-reducer" run locally on the mapper's output before network transfer) reduce shuffle volume when the aggregation is associative and commutative (e.g., counting, summing).
+
+## <Label color="teal">4</Label> Distributed Joins at Scale
+
+Joins in MapReduce require rethinking. You can't just issue a foreign key lookup for each record — that would require millions of network round trips to a separate database, destroying throughput.
+
+<DataTable
+  caption="Join strategies in distributed batch processing"
+  accent="amber"
+  headers={["Strategy", "How it works", "When to use", "Example"]}
+  rows={[
+    { Strategy: "Sort-merge join (reduce-side)", "How it works": "Map both sides with the join key as the map output key; shuffle routes same-key records to the same reducer; reducer receives records from both sides sorted together", "When to use": "Both sides large and not fitting in memory; general-purpose large join", Example: "Default join in Hadoop: activity events joined with user profile records by user_id" },
+    { Strategy: "Broadcast hash join (map-side)", "How it works": "Smaller side loaded entirely into a hash table in memory on each mapper; larger side streamed record-by-record through the hash table; no shuffle required", "When to use": "One side fits in mapper memory (typically <100MB); avoids entire shuffle phase", Example: "Enriching click events with a small product dimension table" },
+    { Strategy: "Partitioned hash join", "How it works": "Both sides partitioned by join key using the same hash function; each partition of the smaller side loaded into memory; matched against same partition of larger side", "When to use": "Neither side fits fully in memory, but each partition does; both sides similarly partitioned (bucket join)", Example: "Multi-way joins in Hive bucket joins" },
+  ]}
+/>
+
+**Handling skewed data (hot keys)**: if one join key appears millions of times (a celebrity user ID, a viral product), all records with that key land on one reducer — creating a hot spot. Solutions: replicate the small side to all reducers for that hot key; or split the hot key's records across multiple reducers and replicate the dimension data.
+
+<Callout color="teal">
+The fundamental insight of all batch joins: bring the data to the computation, not the computation to the data. Load the smaller side into memory; stream the larger side through it. Avoid individual record lookups across the network.
+</Callout>
+
+## <Label color="teal">5</Label> The Batch Processing Output Philosophy
+
+**Immutable inputs + deterministic functions = safe reruns.** This is the core of batch processing's fault tolerance model.
+
+Because mappers and reducers treat their inputs as immutable and produce new outputs (rather than mutating shared state), the framework can:
+- Retry any failed task by re-reading the input and re-running the function
+- Run speculative executions (launch duplicate copies of slow tasks; use the first result)
+- Provide all-or-nothing output: the output directory only appears after full job success
+
+This philosophy also enables human fault tolerance: if a bug produces wrong output, fix the bug, delete the output, and rerun. You can always reproduce any output from its inputs. Databases that accept writes can't offer this — rolling back code doesn't fix corrupted rows.
+
+**Batch job outputs are commonly:**
+- Search indexes (MapReduce was originally used by Google to build search indexes)
+- Key-value store files (Voldemort, ElephantDB) — written by the batch job, atomically swapped into production servers
+- Machine learning models (classifiers, recommendation systems) — trained on historical data, deployed as read-only artifacts
+- Aggregated reports / data warehouse tables
+
+**Why not write directly to a database from mappers/reducers?**
+- Network overhead: millions of individual writes to a remote database is orders of magnitude slower than sequential file I/O
+- Overload: concurrent writes from hundreds of mapper tasks can saturate a database
+- Partial output visibility: if a job fails halfway, some records are already written to the database, creating inconsistency
+
+The right approach: write output to immutable files in the distributed filesystem. Swap the files into production atomically when the job succeeds.
+
+## <Label color="teal">6</Label> Beyond MapReduce: Dataflow Engines
+
+MapReduce has two structural inefficiencies:
+1. **Every stage materializes to disk** — mapper output is written to disk before reducers read it; reducing network I/O by writing to disk actually adds disk I/O instead
+2. **No iteration** — iterative algorithms (graph algorithms, ML training) must chain multiple MapReduce jobs, with full disk I/O between each
+
+**Dataflow engines** (Spark, Tez, Flink) generalize the MapReduce model:
+- Operators can have any number of inputs and outputs (not just 2-stage map→reduce)
+- Intermediate results flow directly between operators in memory or over the network (no mandatory disk materialization)
+- A job's entire computation is represented as a **DAG** (directed acyclic graph) of operators; the scheduler optimizes the execution order
+
+<CompareTable
+  products={[
+    { name: "MapReduce" },
+    { name: "Spark / Flink", highlight: true },
+  ]}
+  features={[
+    { label: "Stage-to-stage state",      values: ["always written to HDFS",  "kept in memory (spills to disk if needed)"] },
+    { label: "Intermediate materialisation", values: ["mandatory",              "optional (controlled by programmer)"] },
+    { label: "Fault recovery",            values: ["re-run failed task from input file", "recompute from lineage graph (Spark RDD) or checkpoint"] },
+    { label: "Iterative algorithms",      values: ["chain multiple jobs + HDFS I/O each iteration", "loop within the same job; state in memory"] },
+    { label: "Latency for interactive use", values: ["minutes (startup overhead per job)", "seconds (JVM stays alive; data cached)"] },
+    { label: "Declarative API",           values: ["low-level mapper/reducer callbacks", "DataFrame/Dataset API with query optimizer"] },
+  ]}
+  caption="Dataflow engines trade the simplicity of MapReduce's two-stage model for much better performance on iterative and multi-stage workloads."
+/>
+
+**Spark's RDD lineage** provides fault tolerance without materializing to disk: every Spark dataset (RDD) knows which transformations created it. If a partition is lost, Spark recomputes it from the lineage. Recomputation is only needed if a partition is lost — much cheaper than re-reading HDFS for every stage.
+
+## <Label color="teal">7</Label> Hadoop Ecosystem vs. MPP Databases
+
+|  | Hadoop / MapReduce | MPP Database (Teradata, Redshift) |
+|--|---|---|
+| Schema required | No — reads arbitrary formats | Yes — schema on write |
+| Data diversity | Any format (logs, JSON, binary) | Structured tables only |
+| Scalability model | Add commodity nodes | Scale up expensive hardware |
+| Fault tolerance | Task retry; commodity node failure expected | Node failure rare; typically coordinated restart |
+| Access pattern | Sequential scan; not interactive | Interactive SQL queries |
+| Programmer model | Custom code (Java, Python) | SQL |
+
+Neither is categorically better. Hadoop excels at: diverse data formats, data exploration, custom transformations, very large datasets on commodity hardware. MPP databases excel at: structured analytics, SQL, fast interactive queries on curated data.
+
+The trend: Spark + DataFrame API + Parquet/ORC storage is converging toward MPP-like performance and SQL support, while remaining as flexible as MapReduce for custom code.
+
+Chapter 10 sets up Chapter 11: batch processing runs on bounded datasets, producing a complete output. Stream processing runs on an unbounded, continuously arriving stream — but uses many of the same operators (map, filter, join, aggregate). The question Chapter 11 asks is: how do you handle time correctly when the input never ends?

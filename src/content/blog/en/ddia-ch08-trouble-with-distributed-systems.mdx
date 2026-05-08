@@ -1,0 +1,168 @@
+---
+title: "DDIA Ch.8 — The Trouble with Distributed Systems"
+description: "Unreliable networks, unbounded clock drift, process pauses, and the epistemological impossibility of knowing the state of a remote node — a catalogue of everything a distributed system cannot assume."
+pubDate: 2026-05-08
+tags: ["distributed-systems", "networking", "clocks", "failure-modes", "foundations"]
+lang: "en"
+category: "foundations"
+series: "software-foundations"
+seriesOrder: 8
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import Pipeline from '../../../components/mdx/Pipeline.astro';
+import CompareTable from '../../../components/mdx/CompareTable.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+
+Chapter 8 is a deliberate exercise in pessimism. Kleppmann writes that experienced systems operators deal with "long-lived network partitions in a single data center, PDU failures, switch failures, accidental power cycles of whole racks, whole-DC backbone failures, whole-DC power failures, and a hypoglycemic driver smashing his Ford pickup truck into a DC's HVAC system." The point is not to terrify — it's to establish the actual failure model before Chapter 9 discusses how to build correct systems within it.
+
+The central insight: distributed systems are fundamentally different from single-computer programs because **partial failure** — where some components work and some don't, nondeterministically — is the normal operating environment, not an edge case.
+
+<HeroGrid items={[
+  { label: "Unreliable Network",  sublabel: "Messages lost, delayed, reordered — no delivery guarantees",          color: "#0891b2" },
+  { label: "Unreliable Clocks",   sublabel: "NTP drift, leap seconds, quartz oscillator variance",                  color: "#dc2626" },
+  { label: "Process Pauses",      sublabel: "GC stops, OS preemption, VM migration — threads freeze invisibly",     color: "#d97706" },
+  { label: "System Models",       sublabel: "Synchronous / partially synchronous / asynchronous + node fault models", color: "#7c3aed" },
+]} />
+
+## <Label color="teal">1</Label> Partial Failure: The Core Problem
+
+A single computer, when working correctly, is deterministic. If hardware fails, the usual response is total failure (kernel panic, blue screen) rather than subtle wrong results. Software on a single machine rarely fails silently in the middle.
+
+Distributed systems have no such luxury. The network between nodes means that partial failure is endemic: one node can be healthy while another is unreachable; a message can arrive at a node that has since crashed before it could respond; a network switch can drop packets selectively. Unlike a crashed single computer, the system is "sometimes working and sometimes unpredictably failing." You may not even know whether an operation succeeded — the message may have been delivered but the response lost.
+
+**This is not a solvable engineering problem** in the sense that you can eliminate it with better hardware. Network latency is fundamentally unbounded in the asynchronous model. The right response is to build software that handles partial failure gracefully, not software that assumes it won't happen.
+
+## <Label color="teal">2</Label> Unreliable Networks
+
+The internet (and most datacenter networks) are **asynchronous packet networks**: a node can send a packet, but the network gives no guarantees about when — or whether — it will arrive.
+
+When you send a request and don't receive a response, you cannot distinguish between:
+- The request was lost (network cable unplugged)
+- The request is queued (network or recipient overloaded)
+- The remote node crashed
+- The remote node is paused (GC, VM migration)
+- The remote node processed your request but the response was lost
+- The remote node processed your request but the response is delayed
+
+<Callout color="amber">
+A timeout tells you that you haven't received a response. It tells you nothing about whether the remote side received and processed your request. This asymmetry is the source of enormous complexity in distributed systems.
+</Callout>
+
+**Network failures in practice**: A study of medium-sized datacenters found ~12 network faults per month, half disconnecting a single machine and half disconnecting an entire rack. EC2 is well-known for transient network glitches. Even well-managed private datacenter networks experience routing reconfiguration events where packets are delayed for over a minute. Network links can work asymmetrically (inbound drops, outbound succeeds).
+
+**Choosing timeout values** is harder than it looks. Too long: slow failure detection, poor user experience during node failure. Too short: false positives that cause unnecessary failovers. Network round-trip times vary by orders of magnitude depending on load, network congestion, and VM scheduling. There is no single "right" timeout — it depends on the application's latency requirements and the acceptable rate of false positives.
+
+Phi Accrual failure detectors (used by Cassandra and Akka) address this by outputting a continuous "suspicion level" rather than a binary alive/dead judgment, letting the caller choose its own threshold.
+
+## <Label color="teal">3</Label> Unreliable Clocks
+
+Physical clocks in computers drift. A quartz oscillator drifts roughly 200ms per day. NTP synchronization corrects this but introduces its own problems:
+
+<DataTable
+  caption="Clock failure modes in distributed systems"
+  accent="teal"
+  headers={["Failure Mode", "Description", "Consequence"]}
+  rows={[
+    { "Failure Mode": "Clock drift", "Description": "Quartz oscillator runs faster or slower than real time; accumulates drift between NTP syncs", "Consequence": "Timestamps from two nodes are not comparable; 'happened before' judgments based on timestamps are unreliable" },
+    { "Failure Mode": "Clock jump (NTP correction)", "Description": "NTP forcibly advances or moves back the system clock to correct accumulated drift", "Consequence": "Time-of-day clock can go backwards; duration measured across a NTP correction is wrong" },
+    { "Failure Mode": "Leap second", "Description": "A second is added or removed from UTC to account for Earth rotation irregularity", "Consequence": "A minute has 61 or 59 seconds; programs that assume 60 seconds/minute can misbehave" },
+    { "Failure Mode": "Virtualization", "Description": "CPU time is shared between VMs; a VM may be paused while another runs, making elapsed time appear very different from wall clock time", "Consequence": "VM thinks 1ms elapsed; actually 100ms passed; all timing assumptions wrong" },
+    { "Failure Mode": "Network path to NTP server", "Description": "NTP synchronization latency is itself variable; synchronization accuracy is limited by network RTT", "Consequence": "Practical accuracy of synchronized clocks in datacenters: ~1ms; over WAN: ~100ms" },
+  ]}
+/>
+
+**Two types of clocks:**
+- **Time-of-day clock**: reports the current date and time (e.g. `System.currentTimeMillis()`). Can jump backward due to NTP corrections. Not suitable for measuring durations.
+- **Monotonic clock**: counts from some arbitrary starting point but only moves forward (e.g. `System.nanoTime()`). Suitable for measuring elapsed time. Not comparable across different machines.
+
+**Using timestamps for ordering events across nodes is dangerous**. Google's Spanner uses hardware atomic clocks and GPS receivers to provide bounded clock uncertainty (the "TrueTime" API), explicitly stating a confidence interval [earliest, latest] for the current time. Spanner waits out this uncertainty before committing a transaction to ensure causal ordering. This requires specialized hardware and is exceptional, not the norm.
+
+For most distributed systems, **logical clocks** (Lamport timestamps, vector clocks) are safer than physical timestamps for ordering events — they capture causal relationships without relying on synchronized physical time.
+
+## <Label color="teal">4</Label> Process Pauses
+
+A running process can be paused for extended, unpredictable durations without its knowledge:
+
+<DataTable
+  caption="Sources of process pauses in distributed systems"
+  accent="amber"
+  headers={["Cause", "Typical Duration", "Notes"]}
+  rows={[
+    { Cause: "Garbage collection (stop-the-world)", "Typical Duration": "Milliseconds to minutes", Notes: "JVM full GC; Go GC pauses; old-gen collection on large heaps" },
+    { Cause: "Virtual machine migration (live migration)", "Typical Duration": "10ms–100ms", Notes: "VM paused while memory state is transferred to another host; happens transparently to the VM" },
+    { Cause: "OS scheduling preemption", "Typical Duration": "Microseconds to milliseconds", Notes: "OS switches CPU to another process; current process doesn't run until rescheduled" },
+    { Cause: "Disk I/O wait", "Typical Duration": "Milliseconds to seconds", Notes: "Unexpected page fault or fsync forces thread to wait for disk" },
+    { Cause: "Swap / paging", "Typical Duration": "Milliseconds to seconds", Notes: "Memory pressure causes OS to page out memory to disk; next access causes page fault" },
+    { Cause: "SIGSTOP / debugger breakpoint", "Typical Duration": "Unbounded", Notes: "Process is externally suspended; can be hours" },
+  ]}
+/>
+
+The critical insight: **a thread that pauses cannot detect that it paused**. From its perspective, execution was continuous. It wakes up and continues exactly where it left off — but an arbitrary amount of real time may have passed.
+
+**The fencing token solution to the paused-lock-holder problem**: 
+
+Imagine a distributed lock with a lease. Client acquires the lease, then is paused for 90 seconds (GC). The lease expires at 60 seconds. Another client acquires the lease. The first client resumes, still believing it holds a valid lease, and attempts to write to the shared resource — corrupting it.
+
+The fix is a **fencing token**: each time a lock is granted, issue a monotonically increasing token. Every write to the resource must include the fencing token. The resource server rejects writes with tokens lower than the highest token it has seen. Even if the first paused client resumes and sends a write, the resource server rejects it because it's using a stale token.
+
+<Callout color="teal">
+The paused-lock-holder pattern is one of the most insidious bugs in distributed systems. It doesn't manifest in testing (GC pauses are short in development), it's hard to reproduce, and it causes data corruption rather than a clean failure.
+</Callout>
+
+## <Label color="teal">5</Label> Knowledge, Truth, and Lies
+
+A node in a distributed system cannot directly observe the state of other nodes — it can only observe the messages it receives (or doesn't receive). This has profound implications:
+
+**A node cannot trust its own judgment about being the leader.** It may have been the leader, but if other nodes haven't heard from it (due to a GC pause, network partition), they may have elected a new leader. The original node, unaware of this, might continue acting as leader — causing split-brain.
+
+**Truth is defined by majority.** Most distributed algorithms use quorums: a decision requires votes from more than half the nodes. A single node's self-assessment cannot override a quorum decision. If a quorum declares a node dead, that node must step down even if it "feels alive."
+
+**Fencing tokens** handle the case where a node wrongly believes it holds a resource. The resource enforces monotonic token ordering externally, so stale claims are rejected regardless of what the claiming node believes.
+
+## <Label color="teal">6</Label> Byzantine Faults
+
+All the failure modes discussed so far assume **non-Byzantine faults**: nodes may crash, pause, lose messages — but they follow the protocol correctly when they operate. A **Byzantine fault** is when a node sends incorrect or malicious messages that violate the protocol.
+
+Byzantine fault tolerance is necessary in:
+- Aerospace systems (radiation-corrupted CPU registers)
+- Blockchain/peer-to-peer networks (untrusted participants)
+
+For most enterprise distributed systems, Byzantine fault tolerance is impractical — protocols are complex, require ⅔ honest nodes, and the attack surfaces (network, code bugs) are better addressed with authentication, encryption, and checksums.
+
+## <Label color="teal">7</Label> System Models
+
+Distributed algorithms are analyzed relative to a **system model** — a set of assumptions about what failures can occur. Two axes:
+
+<CompareTable
+  products={[
+    { name: "Synchronous" },
+    { name: "Partially Sync", highlight: true },
+    { name: "Asynchronous" },
+  ]}
+  features={[
+    { label: "Network delay bounded",        values: ["yes (fixed max)", "usually yes",       "no"] },
+    { label: "Process pauses bounded",       values: ["yes (fixed max)", "usually yes",       "no"] },
+    { label: "Clock error bounded",          values: ["yes (fixed max)", "usually yes",       "no"] },
+    { label: "Realistic for datacenters",    values: ["no",              "yes",                "overly conservative"] },
+  ]}
+  caption="Timing assumptions. Most practical distributed systems algorithms assume the partially synchronous model — usually well-behaved, but with occasional unbounded delays."
+/>
+
+**Node fault models:**
+- **Crash-stop**: node fails by stopping permanently (never returns)
+- **Crash-recovery**: node may crash and restart; stable storage preserved across crashes, in-memory state lost
+- **Byzantine**: node may behave arbitrarily
+
+The **partially synchronous model with crash-recovery faults** is the most realistic for production distributed systems.
+
+**Safety vs. liveness**:
+- **Safety**: "nothing bad happens" — can always check a finite state; must hold in all executions including ones where the system is completely halted
+- **Liveness**: "something good eventually happens" — may require time; systems that hang forever satisfy safety but not liveness
+
+Distributed algorithm correctness is typically stated as: safety properties hold under all possible executions in the system model; liveness properties hold under the additional assumption that the system eventually recovers (partial synchrony eventually holds).
+
+Chapter 8 establishes why Chapter 9's consensus algorithms are hard: they must provide safety guarantees in a world where the network can partition, clocks can drift, and processes can pause arbitrarily — while still making progress when the system is healthy.

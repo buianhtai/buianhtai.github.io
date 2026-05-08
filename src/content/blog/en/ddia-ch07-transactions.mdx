@@ -1,0 +1,193 @@
+---
+title: "DDIA Ch.7 — Transactions"
+description: "What ACID actually means, why isolation levels are a spectrum not a binary, how MVCC implements snapshot isolation, and when serializability is the only correct answer — and when it isn't worth the cost."
+pubDate: 2026-05-08
+tags: ["distributed-systems", "transactions", "acid", "concurrency", "databases", "foundations"]
+lang: "en"
+category: "foundations"
+series: "software-foundations"
+seriesOrder: 7
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import Pipeline from '../../../components/mdx/Pipeline.astro';
+import CompareTable from '../../../components/mdx/CompareTable.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+
+A transaction is a deceptively simple idea: group several reads and writes into a logical unit that either fully succeeds (commit) or fully fails (abort, rollback). No partial application. No left-over garbage from a failed halfway state. If the application retries, it's safe to do so.
+
+That simplicity is load-bearing. Without transactions, applications must handle partial failures manually — checking which writes succeeded, rolling back compensating operations, guarding against concurrent modifications from other clients. Chapter 7 makes the case that transactions exist to move this burden from application code into the database.
+
+<HeroGrid items={[
+  { label: "ACID",              sublabel: "Atomicity · Consistency · Isolation · Durability",          color: "#0891b2" },
+  { label: "Isolation Levels",  sublabel: "Read committed → Snapshot → Serializable",                  color: "#059669" },
+  { label: "MVCC",              sublabel: "Multi-version concurrency: readers never block writers",     color: "#d97706" },
+  { label: "Serializability",   sublabel: "2PL, SSI, serial execution — the full correctness guarantee", color: "#7c3aed" },
+]} />
+
+## <Label color="teal">1</Label> What ACID Actually Means
+
+ACID is a marketing term that has lost precision through decades of overuse. Kleppmann dissects each letter.
+
+**Atomicity** is not about concurrency. It means: if a transaction contains multiple writes and a fault occurs partway through, the entire transaction is aborted and all writes are undone. The defining property is *abortability* — if something goes wrong, the database guarantees no partial state was persisted. "Atomic" is arguably a misleading name; "abortable" would be more precise.
+
+**Consistency** is the one letter that doesn't belong in ACID. The "C" was reportedly added to complete the acronym. In the ACID sense, consistency refers to application-defined invariants that must hold (e.g. "total credits == total debits in a bookkeeping system"). But enforcing application invariants is the *application's* responsibility, not the database's. The database offers atomicity and isolation to help the application achieve consistency — but it can't enforce invariants it doesn't know about. "C doesn't really belong in ACID," writes Kleppmann.
+
+**Isolation** is about concurrently executing transactions not interfering with each other. The classical definition is *serializability*: the result is the same as if transactions ran one at a time, sequentially. In practice, full serializability is rarely used due to performance cost — most databases offer weaker guarantees.
+
+**Durability** means that once a transaction commits, the data is not lost even if the hardware fails. In single-node databases this means writing to non-volatile storage and maintaining a write-ahead log. In distributed databases it means replicating to a quorum of nodes. Kleppmann notes: "perfect durability does not exist" — but durability is a spectrum of risk reduction, not a binary.
+
+<Callout color="teal">
+The "C" in ACID is application logic, not a database guarantee. The database provides A, I, and D. Whether your application's invariants hold is the application's problem.
+</Callout>
+
+## <Label color="teal">2</Label> The Isolation Level Spectrum
+
+Most databases don't offer full serializability by default. Instead they offer a spectrum of *weak isolation levels* that trade correctness guarantees for performance. Understanding what each level prevents — and what it doesn't — is essential for writing correct concurrent code.
+
+<DataTable
+  caption="Isolation levels and the anomalies they prevent"
+  accent="teal"
+  headers={["Isolation Level", "Dirty Read", "Dirty Write", "Read Skew", "Lost Update", "Write Skew", "Phantom"]}
+  rows={[
+    { "Isolation Level": "Read Uncommitted", "Dirty Read": "possible", "Dirty Write": "prevented", "Read Skew": "possible", "Lost Update": "possible", "Write Skew": "possible", "Phantom": "possible" },
+    { "Isolation Level": "Read Committed", "Dirty Read": "prevented", "Dirty Write": "prevented", "Read Skew": "possible", "Lost Update": "possible", "Write Skew": "possible", "Phantom": "possible" },
+    { "Isolation Level": "Snapshot Isolation (MVCC)", "Dirty Read": "prevented", "Dirty Write": "prevented", "Read Skew": "prevented", "Lost Update": "often prevented", "Write Skew": "possible", "Phantom": "possible" },
+    { "Isolation Level": "Serializable", "Dirty Read": "prevented", "Dirty Write": "prevented", "Read Skew": "prevented", "Lost Update": "prevented", "Write Skew": "prevented", "Phantom": "prevented" },
+  ]}
+/>
+
+**Dirty read**: reading another transaction's uncommitted writes. Read committed prevents this by holding the old value visible until the write commits.
+
+**Dirty write**: overwriting another transaction's uncommitted write. Prevented at read committed level using row-level locks.
+
+**Read skew** (nonrepeatable read): reading different values at two different points in the same transaction — caused by a concurrent write between the two reads. Alice reads account A ($500), a transfer moves $100 from A to B, Alice reads account B ($400 instead of $500) — she sees a total of $900 instead of $1,000. Snapshot isolation prevents this.
+
+**Lost update**: two transactions read a value, both modify it, one's change overwrites the other's. Classic increment-decrement race. Prevented by atomic compare-and-set or explicit locking.
+
+**Write skew**: each transaction reads something, makes a decision based on that read, writes based on the decision — but by the time the write happens, the premise of the decision is no longer true (another transaction changed what was read). Example: two doctors concurrently try to go off-call; both check "is there at least one other doctor on call?" and both see yes; both take themselves off call; now no doctors are on call. Neither write was a "lost update" — they wrote to different rows. Only serializability prevents this.
+
+**Phantom**: a write in one transaction changes the result of a search query in another. Related to write skew but involves a range condition rather than individual rows.
+
+## <Label color="teal">3</Label> Read Committed
+
+The default in PostgreSQL, Oracle 11g, SQL Server 2012, and many others.
+
+**No dirty reads**: Implemented using a "before image" — the database keeps the old committed value alongside the new uncommitted value. Readers see the old value until the writing transaction commits.
+
+**No dirty writes**: Implemented using row-level write locks. A transaction must acquire the lock before modifying a row and holds it until commit or abort. No read locks required for readers.
+
+Read committed does *not* prevent read skew. If a transaction reads two rows, another transaction may change one of them between the two reads. For most interactive use cases this is acceptable. For backups and analytical queries scanning a large dataset, it is not.
+
+## <Label color="teal">4</Label> Snapshot Isolation and MVCC
+
+Snapshot isolation solves read skew by giving each transaction a *consistent snapshot* of the database at the moment the transaction began. The transaction sees all data that was committed before it started, and nothing that commits afterward.
+
+**Multi-Version Concurrency Control (MVCC)** is the mechanism behind snapshot isolation. Instead of updating rows in-place, the database creates a new version of a row with each write, tagging it with the transaction ID. Old versions are retained. When a transaction reads a row, it selects the version that was current at the start of the transaction.
+
+<Pipeline
+  nodes={[
+    { title: "Transaction begins", subtitle: "assigned transaction ID (txid)" },
+    { title: "Read row", subtitle: "select the row version with highest txid ≤ this txid" },
+    { title: "Write row", subtitle: "create new version with this txid; old version retained" },
+    { title: "Commit", subtitle: "new version becomes visible to transactions starting after this txid" },
+    { title: "GC eventually", subtitle: "old versions with no readers are vacuumed" },
+  ]}
+  arrows={[
+    { label: "", direction: "right" },
+    { label: "", direction: "right" },
+    { label: "", direction: "right" },
+    { label: "", direction: "right" },
+  ]}
+  footer="MVCC: every read gets a snapshot; readers never block writers; writers never block readers."
+/>
+
+The key insight: **readers never block writers, and writers never block readers**. A long-running read query (backup, analytics scan) can run against a consistent snapshot while writes proceed normally. Lock contention between read-heavy and write-heavy workloads disappears.
+
+**Visibility rules in PostgreSQL MVCC:**
+1. At the start of each transaction, record all currently in-progress transaction IDs
+2. Ignore writes made by any currently in-progress transaction
+3. Ignore writes made by aborted transactions  
+4. Ignore writes with a higher transaction ID (started after this transaction)
+5. All other writes are visible
+
+Snapshot isolation is often marketed as "repeatable read" (Oracle, SQL Server, MySQL) or "serializable" (Oracle — misleadingly). The terminology is inconsistent across databases.
+
+## <Label color="teal">5</Label> Preventing Lost Updates
+
+Several strategies prevent the lost-update problem (two reads of the same row followed by two writes that collide):
+
+<DataTable
+  caption="Lost update prevention strategies"
+  accent="amber"
+  headers={["Strategy", "Mechanism", "Limitation", "Example"]}
+  rows={[
+    { Strategy: "Atomic write operations", Mechanism: "Database provides atomic read-modify-write: UPDATE ... SET x = x + 1", Limitation: "Only works for simple updates; not all databases support it", Example: "SQL UPDATE with expression, MongoDB $inc" },
+    { Strategy: "Explicit locking (SELECT FOR UPDATE)", Mechanism: "Application acquires a row lock before reading; holds it until commit", Limitation: "Risk of deadlocks; expensive", Example: "SELECT ... FOR UPDATE in SQL" },
+    { Strategy: "Automatically detect lost updates", Mechanism: "Database detects a lost update condition and aborts one transaction", Limitation: "Not all databases implement this; application must retry", Example: "PostgreSQL snapshot isolation auto-detects" },
+    { Strategy: "Compare-and-set (CAS)", Mechanism: "Update only if value hasn't changed since last read: UPDATE ... WHERE value = old_value", Limitation: "May operate against an old snapshot if DB allows reads from snapshot for CAS condition", Example: "Most SQL databases support CAS via WHERE clause" },
+    { Strategy: "Conflict resolution (multi-leader/leaderless)", Mechanism: "Allow concurrent writes, merge conflicts on read", Limitation: "Application must define a sensible merge; complex", Example: "CRDTs, last-write-wins in Dynamo-style systems" },
+  ]}
+/>
+
+## <Label color="teal">6</Label> Write Skew and Phantoms
+
+Write skew is the hardest anomaly to reason about under snapshot isolation. Each transaction individually sees a consistent snapshot and writes valid data — but the combination of the two writes violates an application invariant.
+
+**The on-call doctor example:**
+1. Both doctors read: "two doctors currently on-call"
+2. Both decide: "safe to go off-call since there's at least one other"
+3. Both write: "I'm off-call"
+4. Result: zero doctors on-call
+
+Neither write was a lost update — they wrote to different rows. Neither was a dirty write. Neither read stale data. The anomaly arose because the *premise* of the decision (at least one other doctor remains) became false after both decisions were made.
+
+The general pattern: **check-then-act**, where the "check" involves a read and the "act" involves a write that changes what the check would return. This is the phantom problem: one transaction's write changes the result of another transaction's search.
+
+Snapshot isolation doesn't prevent write skew involving phantoms. Only serializability does.
+
+<Callout color="amber">
+If your application has a "check then act" pattern spanning multiple rows or tables, snapshot isolation does not protect you. You need either explicit locking (SELECT FOR UPDATE on the checked rows) or full serializability.
+</Callout>
+
+## <Label color="teal">7</Label> Serializability: Three Implementations
+
+Serializability is the strongest isolation guarantee. It ensures that the result of concurrent transactions is equivalent to some serial execution. Three approaches exist:
+
+<DataTable
+  caption="Serializability implementations"
+  accent="green"
+  headers={["Approach", "Mechanism", "Pros", "Cons", "Used by"]}
+  rows={[
+    { Approach: "Serial execution", Mechanism: "Execute transactions one at a time on a single thread; no concurrency at all", Pros: "Simple; no race conditions possible; no deadlocks", Cons: "Throughput limited to one CPU; requires all data in memory; transactions must be short stored procedures", "Used by": "VoltDB, Redis, H-Store" },
+    { Approach: "Two-Phase Locking (2PL)", Mechanism: "Shared locks for reads, exclusive locks for writes; locks held until commit/abort; predicate locks for phantoms", Pros: "Strong correctness guarantee; has worked since the 1970s", Cons: "Writers block readers; high lock contention; deadlocks; poor tail latency under high contention", "Used by": "InnoDB SERIALIZABLE, SQL Server SERIALIZABLE, DB2" },
+    { Approach: "Serializable Snapshot Isolation (SSI)", Mechanism: "MVCC for reads (no read locks); detect and abort transactions that would have created serialization anomalies", Pros: "Readers never block writers; writers never block readers; good throughput", Cons: "Higher abort rate under high contention; optimistic — detects conflicts instead of preventing them", "Used by": "PostgreSQL (since 9.1), CockroachDB, FoundationDB" },
+  ]}
+/>
+
+**Two-Phase Locking (2PL):** Strict locking protocol where locks are acquired as needed during execution (phase 1) and all released at commit/abort (phase 2). Writers block readers; readers block writers. This is the key difference from snapshot isolation (where readers and writers don't block each other). 2PL prevents all anomalies but has high lock overhead and is prone to deadlock cascades under high contention. **Predicate locks** (locking all rows matching a WHERE condition) prevent phantoms but are expensive; most databases use **index-range locks** (a coarser approximation that locks a range in an index) instead.
+
+**Serializable Snapshot Isolation (SSI):** An optimistic approach introduced by Cahill et al. (2008). Transactions proceed with MVCC snapshot reads — no blocking. The database tracks "read-your-premise" dependencies between transactions. At commit time, if it detects that a transaction's premises have been violated (the data it read was changed by another concurrent transaction in a way that would cause a serialization anomaly), one of the conflicting transactions is aborted. SSI has much lower latency than 2PL under low-contention workloads and degrades gracefully under contention (more aborts, but no deadlocks).
+
+## <Label color="teal">8</Label> When Do You Actually Need Serializability?
+
+<FlowStep step="1" color="teal" title="If you have a check-then-act pattern across multiple rows">
+Write skew is impossible to prevent at snapshot isolation. You need explicit locking or SSI.
+</FlowStep>
+
+<FlowStep step="2" color="teal" title="If you have multi-step workflows with invariants">
+Example: airline seat booking (check availability, hold seat, issue ticket). Without serializability, two clients can both see one available seat and both book it. Either use SSI or serialize the booking flow explicitly.
+</FlowStep>
+
+<FlowStep step="3" color="amber" title="If performance is critical and anomalies are recoverable">
+Read committed + manual conflict handling is a valid tradeoff. Many high-throughput systems (e-commerce carts, ad impressions) tolerate occasional anomalies that can be detected and corrected asynchronously.
+</FlowStep>
+
+<FlowStep step="4" color="amber" title="For analytics / reporting queries">
+Snapshot isolation is sufficient. Read-heavy workloads with no write skew risk. Most OLAP databases use snapshot isolation or even lower isolation.
+</FlowStep>
+
+Chapter 7 is foundational before Chapter 8 (distributed failure modes) and Chapter 9 (consensus). Transactions solve the concurrency and partial-failure problems on a single node (or logically single node). The next two chapters explore what happens when the network between nodes becomes the source of failure — and why those problems resist the same transactional abstractions.

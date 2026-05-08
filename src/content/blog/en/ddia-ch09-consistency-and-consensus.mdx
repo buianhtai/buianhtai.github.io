@@ -1,0 +1,190 @@
+---
+title: "DDIA Ch.9 — Consistency and Consensus"
+description: "Linearizability, causal consistency, total order broadcast, two-phase commit, Raft/Paxos/Zab — the theoretical and practical foundations of getting distributed nodes to agree on anything."
+pubDate: 2026-05-08
+tags: ["distributed-systems", "consensus", "linearizability", "raft", "paxos", "foundations"]
+lang: "en"
+category: "foundations"
+series: "software-foundations"
+seriesOrder: 9
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import Pipeline from '../../../components/mdx/Pipeline.astro';
+import CompareTable from '../../../components/mdx/CompareTable.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+
+Chapter 8 catalogued everything that can go wrong. Chapter 9 asks: given all those failure modes, what can we actually guarantee, and how? The central topic is **consensus** — getting all nodes to agree on a single value despite node crashes and network failures. Consensus sounds like one problem but it turns out to underlie leader election, atomic commit, total order broadcast, and distributed locking. Solve consensus, and many other problems become tractable.
+
+<HeroGrid items={[
+  { label: "Linearizability",       sublabel: "Strongest recency guarantee — single-copy illusion",               color: "#0891b2" },
+  { label: "Causal Consistency",    sublabel: "Preserves cause-effect ordering without full linearizability",     color: "#059669" },
+  { label: "Total Order Broadcast", sublabel: "Exactly-once ordered delivery to all nodes — consensus in disguise", color: "#d97706" },
+  { label: "Raft / Paxos / Zab",   sublabel: "Fault-tolerant consensus via epoch/ballot + quorum voting",         color: "#7c3aed" },
+]} />
+
+## <Label color="teal">1</Label> The Consistency Guarantee Spectrum
+
+Distributed databases don't offer a binary choice between "consistent" and "inconsistent." They offer a spectrum of models, trading safety guarantees for performance and availability.
+
+**Eventual consistency** is the weakest practical guarantee: if writes stop, all replicas will eventually converge to the same value. It says nothing about *when* they converge. A read issued immediately after a write to a different replica may return a stale value. For many applications (social media timelines, shopping cart recommendations) this is acceptable.
+
+**Linearizability** is one of the strongest. The goal: make a distributed system appear as if there is a single copy of the data, and all operations on it are atomic. If one client writes a value and receives a successful response, all subsequent reads from any node must return that value (or a later one).
+
+## <Label color="teal">2</Label> Linearizability
+
+Linearizability is a **recency guarantee** on individual objects (registers). In a linearizable system, once a write completes, all reads — from any replica, by any client — must see that value or a later one. There is no going back.
+
+The canonical example: Alice tells Bob that the World Cup result has been announced. Bob hits reload on his phone. His request goes to a lagging replica that still shows "game in progress." This is a linearizability violation: Bob started his read *after* Alice successfully read the new value, so Bob's read must also return the new value.
+
+**How it differs from serializability:**
+- **Serializability** (Ch07) is about transactions operating on multiple objects — transactions may be reordered as long as the result is consistent with some serial execution
+- **Linearizability** is about single-object recency — every read must reflect the most recent write
+
+A database can be serializable but not linearizable (e.g., snapshot isolation with no recency guarantee). It can be linearizable but not serializable (single-register atomic operations, no multi-object transactions). Many databases (like Google Spanner) provide both — **strict serializability**.
+
+**When is linearizability required?**
+
+<DataTable
+  caption="Use cases requiring (or not requiring) linearizability"
+  accent="teal"
+  headers={["Use Case", "Linearizability Required?", "Reason"]}
+  rows={[
+    { "Use Case": "Leader election", "Linearizability Required?": "Yes", "Reason": "Only one leader must exist at a time; all nodes must agree on who it is" },
+    { "Use Case": "Distributed lock", "Linearizability Required?": "Yes", "Reason": "Acquiring a lock must see the current holder; stale reads cause split-lock" },
+    { "Use Case": "Unique username registration", "Linearizability Required?": "Yes", "Reason": "Must see current set of taken names; two concurrent registrations might both succeed if reading from stale replicas" },
+    { "Use Case": "User timeline (social media)", "Linearizability Required?": "No", "Reason": "Eventual consistency is acceptable; a few seconds of staleness does not matter" },
+    { "Use Case": "Shopping cart", "Linearizability Required?": "No", "Reason": "Add-to-cart operations can be merged; eventual consistency acceptable" },
+    { "Use Case": "Bank balance check", "Linearizability Required?": "Depends", "Reason": "Reading your own balance needs read-your-writes; checking whether funds are available before transfer needs linearizability" },
+  ]}
+/>
+
+**The cost of linearizability**: any system that provides linearizability must coordinate every read and write through a single leader or a consensus protocol. This coordination introduces latency proportional to network RTT and becomes unavailable when the network partitions (by the CAP theorem). Single-leader replication with synchronous reads from the leader is linearizable, but the leader becomes a bottleneck.
+
+## <Label color="teal">3</Label> CAP Theorem (and Why It's Usually Misunderstood)
+
+The CAP theorem says: a distributed system can provide at most two of:
+- **C**onsistency (linearizability)
+- **A**vailability (every request gets a response)
+- **P**artition tolerance (system continues operating when network partitions occur)
+
+Since network partitions are a reality (not optional), the meaningful choice is between consistency and availability *during a partition*. Most databases choose to sacrifice one or the other when a partition occurs.
+
+<Callout color="amber">
+CAP is a trilemma about behavior during a network partition, not a general system design tradeoff. "AP vs CP" is a shorthand that hides enormous complexity. The real question is: what does your system do when nodes cannot communicate?
+</Callout>
+
+In practice, most applications don't need full linearizability and can accept causal consistency — a weaker but still useful guarantee that preserves cause-effect ordering without the coordination cost of linearizability.
+
+## <Label color="teal">4</Label> Causal Consistency and Ordering
+
+**Causality** captures the "happened before" relationship. If operation A causally precedes B (A's result influences B), then any observer who sees B must also see A.
+
+Causal consistency is weaker than linearizability (it doesn't require a total ordering of *all* operations, only causally related ones) but stronger than eventual consistency (it does require that causally related operations are seen in order).
+
+**Capturing causality**:
+- **Single-leader replication** automatically provides causal consistency: the replication log defines a total order that is consistent with causality
+- **Lamport timestamps**: each node/client keeps a counter; every operation's timestamp is the max counter seen so far + 1. Operations from the same causal chain have increasing counters. Compact (a single integer) but can only provide total ordering after the fact — they cannot determine in real-time whether another operation has a causally-later value
+
+**Total order broadcast** extends causal ordering to a full sequence: every message is delivered to every node, exactly once, in the same order. This is equivalent to consensus (decide on each message in the sequence). Single-leader replication implements total order broadcast — the leader's write log is the total order.
+
+## <Label color="teal">5</Label> Two-Phase Commit (2PC) and Its Limitations
+
+Two-phase commit is the classic algorithm for atomically committing a transaction across multiple nodes (distributed transactions). It uses a **coordinator** (transaction manager) and **participants** (database nodes).
+
+<Pipeline
+  nodes={[
+    { title: "Coordinator", subtitle: "sends prepare to all participants" },
+    { title: "Participants", subtitle: "each votes yes/no; write intent to WAL" },
+    { title: "Coordinator", subtitle: "if all yes → sends commit; if any no → sends abort" },
+    { title: "Participants", subtitle: "apply commit or abort; release locks" },
+  ]}
+  arrows={[
+    { label: "Phase 1: prepare", direction: "right" },
+    { label: "vote", direction: "right" },
+    { label: "Phase 2: decision", direction: "right" },
+  ]}
+  footer="2PC guarantees atomicity across participants — but the coordinator is a single point of failure. If it crashes after collecting votes but before sending the decision, participants are blocked indefinitely."
+/>
+
+**The fatal flaw of 2PC**: once a participant votes "yes," it cannot unilaterally abort — it must wait for the coordinator's decision. If the coordinator crashes after collecting votes but before sending the decision, participants are **in doubt** — they hold locks and cannot commit or abort. The system is blocked until the coordinator recovers. This is why 2PC is said to be a **blocking protocol**.
+
+**Three-phase commit (3PC)** was proposed to avoid blocking, but it only works in synchronous networks (bounded delays) — in practice, it doesn't solve the problem in real distributed systems with network partitions.
+
+## <Label color="teal">6</Label> Consensus: The Formal Problem
+
+The consensus problem: one or more nodes propose values; the consensus algorithm must choose one. Requirements:
+
+<DataTable
+  caption="Consensus algorithm properties"
+  accent="teal"
+  headers={["Property", "Definition", "Type"]}
+  rows={[
+    { Property: "Uniform agreement", Definition: "No two nodes decide differently — once a decision is made, it is the same for all", Type: "Safety" },
+    { Property: "Integrity", Definition: "No node decides twice", Type: "Safety" },
+    { Property: "Validity", Definition: "If a node decides value v, then v was proposed by some node (not fabricated)", Type: "Safety" },
+    { Property: "Termination", Definition: "Every non-crashed node eventually decides some value", Type: "Liveness" },
+  ]}
+/>
+
+**Why termination is hard**: FLP impossibility theorem (Fischer, Lynch, Paterson, 1985) proves that no deterministic consensus algorithm can guarantee both termination and the safety properties in an asynchronous system where a single node can crash. In practice, systems use timeouts (partial synchrony assumption) to achieve termination — consensus succeeds when the network is behaving well, and may stall during severe partitions or cascading failures.
+
+## <Label color="teal">7</Label> Practical Consensus: Raft, Paxos, Zab
+
+Real consensus algorithms don't directly implement the single-value consensus formalization. They implement **total order broadcast** — agreeing on a sequence of values (each round of consensus decides one message in the log). This is what Raft, Paxos, and Zab do.
+
+**The key insight in all fault-tolerant consensus algorithms**: there cannot be two leaders simultaneously making conflicting decisions. But rather than guaranteeing uniqueness of leaders, these algorithms guarantee:
+- Leaders have **epoch numbers** (term numbers in Raft, ballot numbers in Paxos)
+- Higher epoch always wins
+- Before a leader can make a decision, it must collect a **quorum vote** (majority of nodes) for that epoch
+- This ensures: if a previous leader is still alive but partitioned, the new leader has a higher epoch — the old leader cannot commit anything that conflicts
+
+<DataTable
+  caption="Consensus algorithm comparison"
+  accent="purple"
+  headers={["Algorithm", "Epoch term", "Mechanism", "Notable use"]}
+  rows={[
+    { Algorithm: "Raft", "Epoch term": "term", Mechanism: "Log-based; leader replicates entries; follower truncates on conflict; strong leader model — all reads/writes through leader", "Notable use": "etcd, CockroachDB, TiKV, Consul" },
+    { Algorithm: "Paxos / Multi-Paxos", "Epoch term": "ballot number", Mechanism: "Two-phase: prepare (get highest ballot promise) + accept (propose value); Multi-Paxos optimizes by electing a stable proposer", "Notable use": "Google Chubby, Spanner (modified)" },
+    { Algorithm: "Zab", "Epoch term": "epoch", Mechanism: "Zookeeper Atomic Broadcast; similar to Paxos but optimized for primary-backup replication; supports recovery protocol", "Notable use": "Apache ZooKeeper" },
+    { Algorithm: "Viewstamped Replication", "Epoch term": "view number", Mechanism: "Replicated state machine; primary/backup; view change protocol for leader failure", "Notable use": "Foundation of many distributed systems research" },
+  ]}
+/>
+
+**Total order broadcast ↔ consensus equivalence:**
+- Total order broadcast requires: deliver each message exactly once, to all nodes, in the same order
+- This is equivalent to repeated consensus rounds: each round decides which message is next in the sequence
+- Raft/Zab implement total order broadcast directly (as replicated logs); single-leader replication is total order broadcast with human-in-the-loop leader election (not fault-tolerant consensus)
+
+## <Label color="teal">8</Label> ZooKeeper and Coordination Services
+
+ZooKeeper implements fault-tolerant total order broadcast (via Zab). Applications use ZooKeeper for:
+- **Leader election**: the node that creates a ZooKeeper ephemeral node "wins"; ZooKeeper's linearizability ensures only one node can create it
+- **Distributed locking**: acquire lock by creating ephemeral ZooKeeper node; lock released when node session expires
+- **Service discovery**: nodes register their availability; clients watch for changes
+- **Configuration distribution**: distribute config to all nodes with change notification
+
+ZooKeeper provides the consensus primitive so application developers don't have to implement Raft themselves — which is notoriously hard to get right.
+
+## <Label color="teal">9</Label> The Limits of Distributed Transactions
+
+<CompareTable
+  products={[
+    { name: "Single-node txn" },
+    { name: "2PC", highlight: true },
+    { name: "Consensus (Raft)" },
+  ]}
+  features={[
+    { label: "Atomicity across nodes", values: ["N/A (single node)", "yes", "yes"] },
+    { label: "Blocking on coordinator failure", values: ["N/A", "yes (blocks until recovery)", "no (quorum continues)"] },
+    { label: "Performance", values: ["fast", "slow (2 round trips + sync disk)", "moderate (quorum round trip)"] },
+    { label: "Heterogeneous backends", values: ["N/A", "yes (XA)", "no (homogeneous)"] },
+    { label: "Handles network partition", values: ["N/A", "blocks", "continues with quorum"] },
+  ]}
+  caption="2PC provides cross-system atomicity (useful for XA transactions across different databases) but blocks on coordinator failure. Consensus-based systems (Raft) continue operating with a quorum and don't block, but require homogeneous nodes."
+/>
+
+Chapter 9 closes Part II. Replication, partitioning, transactions, failure modes, and now consensus — these are the building blocks of every distributed data system. Part III shifts perspective: instead of asking how a database stores and retrieves data in real-time, it asks how large-scale batch and stream processing systems work when the job is to transform and analyze datasets at scale.

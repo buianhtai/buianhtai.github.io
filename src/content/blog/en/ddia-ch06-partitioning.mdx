@@ -1,0 +1,181 @@
+---
+title: "DDIA Ch.6 — Partitioning"
+description: "How databases split data across nodes — key-range vs hash partitioning, secondary index strategies, rebalancing approaches, and request routing — and why hot spots are almost always a design choice, not bad luck."
+pubDate: 2026-05-08
+tags: ["distributed-systems", "partitioning", "sharding", "databases", "foundations"]
+lang: "en"
+category: "foundations"
+series: "software-foundations"
+seriesOrder: 6
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import Pipeline from '../../../components/mdx/Pipeline.astro';
+import CompareTable from '../../../components/mdx/CompareTable.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+
+Replication gives you multiple copies of the same data on different machines. Partitioning gives you different data on different machines. When your dataset outgrows a single node — in storage, query throughput, or both — partitioning (also called sharding) is the only path to horizontal scalability. Chapter 6 is Kleppmann's analysis of the tradeoffs: any partitioning scheme that works well for one access pattern works poorly for another, and the most common mistake is choosing a partition key without thinking about which queries that choice makes fast and which it makes impossible.
+
+<HeroGrid items={[
+  { label: "Key-Range",       sublabel: "Range scans easy — timestamp keys → write hot spots",  color: "#0891b2" },
+  { label: "Hash Partition",  sublabel: "Even load distribution — range queries scatter/gather", color: "#059669" },
+  { label: "Rebalancing",     sublabel: "Fixed partitions vs dynamic splits vs proportional",    color: "#d97706" },
+  { label: "Request Routing", sublabel: "ZooKeeper gossip vs routing tier vs smart client",      color: "#7c3aed" },
+]} />
+
+## <Label color="teal">1</Label> The Goal: Even Distribution, No Hot Spots
+
+The purpose of partitioning is to spread data and query load evenly across nodes so that adding a tenth node gives you roughly a tenth of the work. A **skewed** partition defeats this: one partition receives disproportionate load (a **hot spot**), while others sit idle. You now have the operational complexity of a distributed system without the scalability benefit.
+
+Hot spots are almost always a consequence of the partition key choice, not bad luck. If your partition key is a timestamp and you insert data as events happen, every new write lands in the "current time" partition. If your partition key is a user ID and you have a celebrity with 100 million followers, every write related to that user hits one shard. Both are predictable from the access pattern.
+
+<Callout color="teal">
+The partition key is the most consequential schema decision in a distributed database. It determines which queries are fast (those that hit one partition), which are slow (those that scatter across many), and whether hot spots are structurally inevitable.
+</Callout>
+
+## <Label color="teal">2</Label> Partitioning by Key Range
+
+Assign each partition a contiguous range of keys. Like a paper encyclopedia: volume 1 covers A–B, volume 2 covers C–D, and so on. Each partition is independently responsible for its key range.
+
+**Advantages:**
+- Range scans are efficient — all keys in a range are on one node, readable in a sequential scan
+- Multi-key queries can be expressed as range queries on a concatenated key (e.g. `sensor_id + timestamp`)
+- Sort order within a partition is preserved (useful for time-series data)
+
+**The hot spot problem:** Any access pattern that concentrates writes to a narrow key range creates a hot spot. The canonical example is a timestamp-first key. If your IoT sensors write millions of measurements per second and the key is `YYYY-MM-DD-HH-MM-SS`, every write goes to the single partition covering the current timestamp. Nine out of ten partitions sit idle.
+
+The fix: **prefix the timestamp with the sensor name**. Key becomes `sensor_id + timestamp`. Writes distribute across sensors (many concurrent writers on different partitions). Range queries for a single sensor's history are still efficient. Range queries across all sensors for a time window now require parallel queries to each sensor's partition — a scatter/gather — but this tradeoff is usually acceptable.
+
+HBase, Bigtable, and early MongoDB use key-range partitioning. The partition boundaries are either set manually or adapted automatically as data grows.
+
+## <Label color="teal">3</Label> Partitioning by Hash of Key
+
+Apply a hash function to the key and assign each partition a range of hashes. Cassandra and MongoDB (after v2.4) use MD5; Voldemort uses FNV. The hash function distributes keys uniformly regardless of their structure.
+
+**Advantages:**
+- Eliminates hot spots caused by sequential or skewed keys
+- Predictable load distribution across nodes
+- No special knowledge of key distribution needed at setup time
+
+**The range query problem:** Hashing destroys sort order. A range query like "all events between timestamp T1 and T2" must be scattered to all partitions simultaneously — the data for any time range could be on any node. This is called a **scatter/gather** query and is significantly more expensive than a range scan on a key-range partition.
+
+Cassandra addresses this with **compound partition keys**: the first part of the key determines the partition (hashed); remaining columns define sort order within the partition. This lets you efficiently query `WHERE sensor_id = 'X' AND timestamp BETWEEN T1 AND T2` — the first column hashes to one partition, the timestamp range is a sorted scan within it. But `WHERE timestamp BETWEEN T1 AND T2` across all sensors still scatters.
+
+<CompareTable
+  products={[
+    { name: "Key-Range" },
+    { name: "Hash", highlight: true },
+  ]}
+  features={[
+    { label: "Even load distribution",    values: ["no",  "yes"] },
+    { label: "Avoids sequential hot spots", values: ["no", "yes"] },
+    { label: "Efficient range scans",     values: ["yes", "no"] },
+    { label: "Predictable partition assignment", values: ["yes", "yes"] },
+    { label: "Natural sort order preserved", values: ["yes", "no"] },
+    { label: "Compound key range within partition", values: ["yes", "partial"] },
+  ]}
+  caption="Key-range wins on range queries; hash wins on write distribution. Most real systems (Cassandra, DynamoDB) use hash partitioning with compound keys to recover some range-query ability."
+/>
+
+**Relieving hot spots on very popular keys:** Even with hash partitioning, a single very popular key (a celebrity's user ID, a viral post) will saturate one partition. The standard mitigation: add a random suffix to the key (e.g. append a random number 0–99, creating 100 sub-keys). Writes distribute across 100 partitions. Reads must be scattered to all 100 and merged. This trades read complexity for write availability — only worthwhile for genuinely extreme hot spots.
+
+## <Label color="teal">4</Label> Secondary Indexes and Partitioning
+
+Primary key lookups are the easy case: hash the key, route to the right partition. Secondary indexes (queries like `WHERE colour = 'red'`) don't map to a single partition.
+
+<DataTable
+  caption="Secondary index partitioning strategies"
+  accent="green"
+  headers={["Strategy", "How it works", "Read pattern", "Write pattern", "Example"]}
+  rows={[
+    { Strategy: "Document-partitioned (local index)", "How it works": "Each partition maintains its own secondary index covering only the documents in that partition", "Read pattern": "Scatter/gather — must query all partitions and merge results", "Write pattern": "Cheap — only the partition holding the document is updated", Example: "MongoDB, Cassandra, Riak, VoltDB" },
+    { Strategy: "Term-partitioned (global index)", "How it works": "A global secondary index is itself partitioned by the index term — all documents with colour=red in one partition", "Read pattern": "Efficient — single partition contains all values for a term", "Write pattern": "Expensive — one write to a document may update index partitions on multiple nodes", Example: "DynamoDB global secondary indexes, Riak search, Amazon CloudSearch" },
+  ]}
+/>
+
+The practical implication: **document-partitioned secondary indexes** are the default because they keep writes cheap (no cross-partition coordination). The cost is that queries on secondary indexes must scatter-gather across all partitions and merge — acceptable for many analytics queries but slow for latency-sensitive lookups. **Term-partitioned indexes** pay on write (a document write may touch multiple index partitions, requiring distributed transactions or asynchronous index updates) to make reads fast. DynamoDB GSIs are eventually consistent for exactly this reason — the index update is asynchronous.
+
+## <Label color="teal">5</Label> Rebalancing Partitions
+
+When nodes are added or removed — or when a node fails — data must move between nodes. **Rebalancing** requirements: load distributes fairly after rebalancing; reads and writes continue during rebalancing; minimal data movement.
+
+<DataTable
+  caption="Rebalancing strategies"
+  accent="teal"
+  headers={["Strategy", "Mechanism", "Pros", "Cons", "Used by"]}
+  rows={[
+    { Strategy: "Hash mod N (avoid this)", Mechanism: "Assign key to node = hash(key) % N", Pros: "Trivially simple", Cons: "Adding a node reshuffles almost every key — massive data movement", "Used by": "Early naive implementations" },
+    { Strategy: "Fixed number of partitions", Mechanism: "Pre-create far more partitions than nodes; assign ~k partitions per node; adding a node steals k partitions from each existing node", Pros: "Simple; only whole partitions move; can weight by node capacity", Cons: "Must pre-size partition count; partitions grow as data grows", "Used by": "Elasticsearch, Riak, CouchDB, Voldemort" },
+    { Strategy: "Dynamic partitioning", Mechanism: "Partitions split when they exceed a size threshold; merge when they shrink below a minimum; each partition always assigned to one node", Pros: "Partition count adapts to data volume; size per partition stays bounded", Cons: "Empty database has one partition (all writes to one node) until first split; pre-splitting needed", "Used by": "HBase, RethinkDB, MongoDB" },
+    { Strategy: "Proportional to nodes", Mechanism: "Fixed number of partitions per node; adding a node splits some existing partitions and claims halves", Pros: "Partition size is stable relative to dataset size per node", Cons: "Splitting must be randomised to achieve even distribution (Cassandra's virtual nodes)", "Used by": "Cassandra, Ketama" },
+  ]}
+/>
+
+**Automatic vs manual rebalancing**: Fully automatic rebalancing is convenient but dangerous under high load. A node that appears slow (due to a transient spike) may trigger rebalancing, which moves data across the network, increasing load further, potentially cascading. Couchbase, Riak, and Voldemort recommend operator approval for rebalancing for this reason.
+
+<Callout color="amber">
+Automatic rebalancing under load can cascade: slow node → system decides to rebalance → massive network I/O → other nodes slow down → more rebalancing triggered. Production databases often make rebalancing a manual or semi-automatic operation for exactly this reason.
+</Callout>
+
+## <Label color="teal">6</Label> Request Routing: Getting Queries to the Right Partition
+
+Once data is partitioned across nodes, how does a client know which node to send a request to?
+
+<DataTable
+  caption="Request routing approaches"
+  accent="amber"
+  headers={["Approach", "Who knows the routing?", "Pros", "Cons", "Example"]}
+  rows={[
+    { Approach: "Client-side routing", "Who knows the routing?": "Client maintains partition map, routes directly", Pros: "No intermediary hop; lowest latency", Cons: "Client must be kept updated on partition changes; complex client logic", Example: "Cassandra driver (gossip-based partition map)" },
+    { Approach: "Routing tier", "Who knows the routing?": "A stateless load balancer or routing layer maintains partition map, forwards requests", Pros: "Clients stay simple; routing centralised", Cons: "Extra network hop; routing tier is now a component to scale and maintain", Example: "MongoDB mongos router" },
+    { Approach: "Any-node routing", "Who knows the routing?": "Client sends to any node; that node forwards to the correct partition if needed", Pros: "Simple client; no separate routing tier", Cons: "Extra hop inside the cluster for requests that land on the wrong node", Example: "Riak, Cassandra (any node can proxy)" },
+  ]}
+/>
+
+All three approaches require nodes to be aware of partition assignments, which change during rebalancing. The standard solution is a coordination service: **ZooKeeper** (used by HBase, Kafka, SolrCloud) or **etcd** maintains the authoritative partition → node mapping. Routing components subscribe to ZooKeeper and update their local copy when changes occur. Cassandra and Riak use a **gossip protocol** instead — nodes broadcast partition assignment changes to each other, avoiding a centralised coordination dependency.
+
+## <Label color="teal">7</Label> Combining Partitioning with Replication
+
+Partitioning and replication are orthogonal and usually combined. Each partition has one leader node and multiple follower nodes. A single physical node may be the leader for some partitions and a follower for others — this distributes leadership load evenly.
+
+<Pipeline
+  nodes={[
+    { title: "Client", subtitle: "reads/writes" },
+    { title: "Routing tier", subtitle: "maps key → partition → leader node" },
+    { title: "Leader node", subtitle: "owns partition, accepts writes" },
+    { title: "Follower nodes", subtitle: "replicate from leader, serve reads" },
+  ]}
+  arrows={[
+    { label: "request", direction: "right" },
+    { label: "forward to leader", direction: "right" },
+    { label: "replication log", direction: "right" },
+  ]}
+  footer="Writes always go to the partition leader. Reads can go to any replica depending on consistency requirements."
+/>
+
+## <Label color="teal">8</Label> Partition Key Design Checklist
+
+<FlowStep step="1" color="teal" title="Identify your dominant query pattern">
+What is the most common query? If it's a point lookup by user ID, hash on user ID. If it's a time-range scan for a specific sensor, use sensor_id + timestamp as a compound key.
+</FlowStep>
+
+<FlowStep step="2" color="teal" title="Check for write hot spots">
+If your partition key is a timestamp, a monotonically increasing ID, or any other sequentially-increasing value, every new write goes to one partition. Change the key or add a prefix that distributes writes.
+</FlowStep>
+
+<FlowStep step="3" color="teal" title="Check for read hot spots on individual keys">
+If a small number of keys receive disproportionate traffic (celebrity accounts, viral content), hash partitioning doesn't help — those hashes still land on one partition. Shard the hot keys manually with a random suffix.
+</FlowStep>
+
+<FlowStep step="4" color="amber" title="Decide on secondary index strategy">
+If you need efficient secondary index reads, consider a term-partitioned global index (DynamoDB GSI pattern) — but accept that it will be eventually consistent. If you need cheap writes with acceptable scatter/gather reads, use document-partitioned local indexes.
+</FlowStep>
+
+<FlowStep step="5" color="amber" title="Choose a rebalancing strategy before you need it">
+Fixed partition count requires knowing your eventual data volume upfront. Dynamic partitioning requires pre-splitting an empty database. Proportional-to-nodes (Cassandra) is the most operationally smooth but requires virtual nodes for even distribution. Pick the strategy before your first production incident.
+</FlowStep>
+
+Chapter 6 closes Part II's first half. Replication (Ch05) gives you durability and read scalability on a single dataset. Partitioning (Ch06) gives you horizontal write scalability and storage beyond a single node. Together they form the substrate for every distributed database — the next three chapters (transactions, distributed failures, consensus) explain what happens when that substrate fails.

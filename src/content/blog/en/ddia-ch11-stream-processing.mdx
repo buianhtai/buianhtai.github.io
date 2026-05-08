@@ -1,0 +1,201 @@
+---
+title: "DDIA Ch.11 — Stream Processing"
+description: "Event logs, Kafka, change data capture, event sourcing, stream joins, time windows, exactly-once semantics — how to process an unbounded stream of events correctly when time itself is unreliable."
+pubDate: 2026-05-08
+tags: ["distributed-systems", "stream-processing", "kafka", "event-sourcing", "cdc", "foundations"]
+lang: "en"
+category: "foundations"
+series: "software-foundations"
+seriesOrder: 11
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import Pipeline from '../../../components/mdx/Pipeline.astro';
+import CompareTable from '../../../components/mdx/CompareTable.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+
+Batch processing (Ch10) assumes bounded input: a job reads a fixed dataset, transforms it, and terminates. But most real-world data is unbounded — it arrives continuously and never "finishes." Users generate events today, tomorrow, and indefinitely. Waiting until end-of-day to process them introduces latency that many applications can't tolerate.
+
+**Stream processing** eliminates the artificial batch boundary: process each event as it arrives. Chapter 11 explores how to build correct, fault-tolerant, and low-latency stream processing systems — and why "correct" is much harder than it sounds when time, event order, and consumer failures all conspire against you.
+
+<HeroGrid items={[
+  { label: "Message Logs",     sublabel: "Kafka: durable ordered log as the backbone of event-driven systems", color: "#0891b2" },
+  { label: "CDC / Event Source", sublabel: "Database changes as an event stream; event log as the source of truth", color: "#059669" },
+  { label: "Time & Windows",   sublabel: "Event time vs processing time; tumbling, hopping, session windows",   color: "#d97706" },
+  { label: "Exactly Once",     sublabel: "Idempotency, transactions, and why at-least-once is usually enough",   color: "#7c3aed" },
+]} />
+
+## <Label color="teal">1</Label> Events, Producers, Consumers, Topics
+
+A **stream** is a sequence of **events** — small, immutable, timestamped records describing something that happened (a user clicked a button, a temperature sensor read 23°C, a payment was submitted). Events flow from **producers** (publishers) to **consumers** (subscribers). Related events are grouped into **topics** or **streams**.
+
+The fundamental question: how do producers and consumers communicate reliably?
+
+<DataTable
+  caption="Messaging system approaches"
+  accent="teal"
+  headers={["Approach", "Durability", "Replay", "Fan-out", "Backpressure", "Examples"]}
+  rows={[
+    { Approach: "Direct messaging (UDP/ZeroMQ)", Durability: "No — messages lost if consumer is down", Replay: "No", "Fan-out": "Manual", Backpressure: "Yes (ZeroMQ)", Examples: "Financial market feeds (UDP multicast), ZeroMQ" },
+    { Approach: "Message broker (queue)", Durability: "Yes — persisted until consumer acknowledges", Replay: "No (consumed messages deleted)", "Fan-out": "One consumer per message (competing consumers)", Backpressure: "Yes", Examples: "RabbitMQ, ActiveMQ, SQS" },
+    { Approach: "Log-based message broker", Durability: "Yes — durable append-only log", Replay: "Yes — consumer rewinds offset", "Fan-out": "Multiple independent consumer groups at different offsets", Backpressure: "Consumer controls read rate", Examples: "Apache Kafka, Amazon Kinesis, Azure Event Hubs" },
+  ]}
+/>
+
+## <Label color="teal">2</Label> Log-Based Message Brokers (Kafka)
+
+Kafka's core insight: treat the message broker as a **durable, append-only log** rather than a queue that deletes messages after delivery.
+
+<Pipeline
+  nodes={[
+    { title: "Producers", subtitle: "append events to topic partition log" },
+    { title: "Partitioned log", subtitle: "totally ordered within partition; persisted to disk" },
+    { title: "Consumer Group A", subtitle: "reads at its own offset; checkpoint offset after processing" },
+    { title: "Consumer Group B", subtitle: "independent offset; can be hours behind; replay at will" },
+  ]}
+  arrows={[
+    { label: "", direction: "right" },
+    { label: "", direction: "right" },
+    { label: "", direction: "right" },
+  ]}
+  footer="Multiple consumer groups read the same log independently. Adding a new consumer doesn't affect existing consumers. Consumers can replay from any offset."
+/>
+
+**Key properties of log-based brokers:**
+- **Ordering within a partition**: events within a partition are totally ordered; events across partitions are not ordered relative to each other
+- **Consumer offset**: each consumer group tracks its position as an offset number; if a consumer crashes and restarts, it resumes from its last committed offset
+- **Replay**: because messages are never deleted (until retention window expires), a consumer can rewind its offset to reprocess historical events
+- **High throughput**: sequential disk writes (append) + sequential disk reads (scan) approach disk bandwidth limits; much faster than random-access storage
+
+**Throughput scaling**: a topic is split across multiple partitions; each partition is a separate append log on a separate node. Writing scales by writing to more partitions; reading scales by adding more consumer instances (one per partition).
+
+<Callout color="teal">
+The fundamental difference between a queue and a log: a queue deletes a message once it's been consumed; a log retains it. This makes the log replayable and decouples producer speed from consumer speed.
+</Callout>
+
+## <Label color="teal">3</Label> Databases and Streams: CDC and Event Sourcing
+
+Kleppmann argues that databases and event streams are two views of the same underlying concept. Every write to a database is an event — a record of a fact that happened at a point in time.
+
+**Change Data Capture (CDC)** makes this explicit: capture every row-level change (insert, update, delete) from a database's write-ahead log and publish it as a stream of events. Downstream consumers (search indexes, caches, analytics systems, other databases) subscribe and maintain their own derived state.
+
+<DataTable
+  caption="CDC vs. dual writes"
+  accent="amber"
+  headers={["Approach", "How it works", "Problem"]}
+  rows={[
+    { Approach: "Dual writes", "How it works": "Application writes to DB and also directly to search index / cache / other systems", Problem: "Race conditions: writes can arrive in different orders on different systems. If one write fails, systems are permanently inconsistent. No atomic guarantee." },
+    { Approach: "CDC", "How it works": "Application writes only to DB. CDC reads the WAL and publishes changes as a stream. Consumers derive their state from the stream.", Problem: "Downstream consumers are eventually consistent. Replication lag between DB write and consumer update." },
+  ]}
+/>
+
+CDC solves the dual-write consistency problem: there is one authoritative source of truth (the database WAL); all derived views are eventually consistent projections of the same event stream.
+
+**Event Sourcing** takes this further: instead of storing current state (mutable rows), store only the immutable log of events that led to the current state. Current state is *derived* by replaying the log.
+
+**Benefits of event sourcing:**
+- Full audit history — every change is recorded, not overwritten
+- Temporal queries — reconstruct the state at any past point in time by replaying to that offset
+- New projections — add new derived views by replaying the entire log from the beginning
+- Debugging — diagnose exactly what happened by reading the event sequence
+
+**Costs of event sourcing:**
+- Consumers are asynchronous — "read your own writes" consistency requires care
+- Log compaction required for long-lived topics (otherwise unbounded growth)
+- Deletion is hard — GDPR "right to be forgotten" conflicts with immutable event logs (requires cryptographic deletion or compaction that removes specific events)
+
+## <Label color="teal">4</Label> Processing Streams: Time, Windows, and Joins
+
+### Event Time vs. Processing Time
+
+An event has two timestamps:
+- **Event time**: when the event actually occurred (recorded in the event payload)
+- **Processing time**: when the stream processor processes the event
+
+These diverge in practice: a mobile client generates events offline and batches them; they arrive hours late. A network partition delays a batch of events by minutes. A slow consumer falls behind and processes old events.
+
+**Most interesting stream analytics are based on event time** (e.g., "clicks per minute during the promotion window"). But stream processors see events in processing order. An event with an old event time may arrive after a window based on that time has already "closed."
+
+<Callout color="amber">
+Correct event-time windowing requires deciding: how long do you wait for late events before closing a window? There is no universally correct answer. Kleppmann calls this the "straggler problem" — you must choose a point at which you declare the window closed and emit results, accepting that some late events will be missed or trigger corrections.
+</Callout>
+
+### Window Types
+
+<DataTable
+  caption="Time window types"
+  accent="teal"
+  headers={["Window Type", "Description", "Example", "Use case"]}
+  rows={[
+    { "Window Type": "Tumbling window", Description: "Fixed-size, non-overlapping time intervals. Each event belongs to exactly one window.", Example: "Click counts per 1-minute bucket: [0:00–1:00), [1:00–2:00), ...", "Use case": "Per-minute / per-hour metrics" },
+    { "Window Type": "Hopping window", Description: "Fixed-size windows that advance by a smaller step (overlap allowed). Each event may belong to multiple windows.", Example: "5-minute window every 1 minute: window [0:00–5:00) then [1:00–6:00) ...", "Use case": "Rolling averages, smoothed metrics" },
+    { "Window Type": "Sliding window", Description: "Window defined by the events themselves: all events within X time of each other.", Example: "All events within 5 minutes of any given event", "Use case": "Session analysis where sessions are defined by activity proximity" },
+    { "Window Type": "Session window", Description: "Group events from the same user/session with no inactivity gap exceeding a threshold.", Example: "All clicks from user A with no gap > 30 minutes", "Use case": "User session analytics" },
+  ]}
+/>
+
+### Stream Joins
+
+Stream joins are conceptually similar to batch joins but harder because one or both sides are unbounded:
+
+<DataTable
+  caption="Stream join strategies"
+  accent="amber"
+  headers={["Join Type", "How it works", "State requirement", "Example"]}
+  rows={[
+    { "Join Type": "Stream-stream join", "How it works": "Both sides are streams. Events from both sides buffered in a time-bounded state window. Match events that arrive within a time window of each other.", "State requirement": "Bounded window of both streams in memory", Example: "Join click events with search events that occurred within 1 hour before the click" },
+    { "Join Type": "Stream-table join (enrichment)", "How it works": "One side is a slowly-changing table (e.g., user profile). Each stream event is enriched by joining with the current table state.", "State requirement": "Full table cached in processor memory (or remote lookup)", Example: "Enrich click events with user profile attributes" },
+    { "Join Type": "Table-table join (dual-CDC)", "How it works": "Both sides are change streams from databases. Processor maintains current version of both tables and joins on key.", "State requirement": "Full current state of both tables", Example: "Materialized join view: orders joined with shipping status" },
+  ]}
+/>
+
+## <Label color="teal">5</Label> Fault Tolerance: Exactly-Once Processing
+
+Batch processing achieves fault tolerance by retrying failed tasks from immutable inputs — safe because mappers are deterministic and idempotent.
+
+Stream processing is harder: the stream is ongoing. If a consumer fails, it resumes from its last committed offset — but some events may have been processed without the offset being committed (at-least-once delivery). Or offsets may be committed before events are processed (at-most-once delivery).
+
+**Approaches to exactly-once semantics:**
+
+<DataTable
+  caption="Exactly-once strategies"
+  accent="green"
+  headers={["Approach", "Mechanism", "Used by"]}
+  rows={[
+    { Approach: "Idempotent writes", Mechanism: "Design operations so that reprocessing an event produces the same result as processing it once (e.g., upsert by unique event ID). Not always possible for all operations.", "Used by": "Most stream processors as a first line of defense" },
+    { Approach: "Atomic commit (2PC)", Mechanism: "Commit offset update and side-effect writes atomically inside a distributed transaction. If the transaction aborts, both are rolled back.", "Used by": "Kafka transactions + transactional producers; Flink with state checkpointing + Kafka transactions" },
+    { Approach: "Distributed checkpointing (Chandy-Lamport)", Mechanism: "Periodically snapshot the full state of all stream processors. On failure, restore from the most recent consistent checkpoint and replay events from the checkpoint offset.", "Used by": "Apache Flink; Google Dataflow (Apache Beam)" },
+    { Approach: "Microbatch", Mechanism: "Divide the stream into small time-based batches; apply batch semantics (at-least-once within batch + idempotent output). Latency ~ batch size.", "Used by": "Spark Structured Streaming" },
+  ]}
+/>
+
+In practice, **at-least-once delivery + idempotent consumers** is the most pragmatic approach for most applications. True exactly-once semantics requires distributed transactions or careful checkpointing and adds significant complexity. Choose based on whether duplicates are tolerable (usually yes for analytics; usually no for payment processing).
+
+## <Label color="teal">6</Label> The Log as the Database: Turning the Database Inside Out
+
+One of Kleppmann's most thought-provoking arguments: the traditional database model (mutable state + query interface) is actually derived from a more fundamental primitive — the **immutable event log**. He quotes Martin Fowler: "The truth is the log. The database is a cache of a subset of the log."
+
+The stream processing architecture inverts the traditional architecture:
+
+<CompareTable
+  products={[
+    { name: "Traditional DB" },
+    { name: "Log-centric", highlight: true },
+  ]}
+  features={[
+    { label: "Source of truth",       values: ["Current mutable state in tables",   "Immutable append-only event log"] },
+    { label: "Read-optimized state",  values: ["Queries against same tables",        "Derived views (indexes, caches, read replicas) from log"] },
+    { label: "Schema changes",        values: ["ALTER TABLE; migrate data in place", "New consumer projection; replay log into new schema"] },
+    { label: "New read patterns",     values: ["Add index to existing table",        "Add new consumer that projects log into optimized read model"] },
+    { label: "Recovery from bugs",    values: ["Hard: corrupted state persisted",    "Replay log from before the bug was deployed"] },
+    { label: "Audit trail",           values: ["Requires explicit audit tables",     "Implicit: event log is the audit trail"] },
+  ]}
+  caption="Log-centric architecture (CQRS/event sourcing) separates write-optimized event appends from read-optimized derived views. The log is immutable and universal; views are disposable and rebuildable."
+/>
+
+This is the essence of **CQRS** (Command Query Responsibility Segregation): separate the write model (commands → events appended to log) from the read model (events projected into optimized read structures). Each read model is optimized for its consumers; none is "the database" — they are all derived views.
+
+Chapter 11 closes Part III. Batch processing computes on bounded datasets; stream processing on unbounded ones. Chapter 12 synthesizes everything: how to compose batch and stream processing into complete data-intensive applications, and what the future of these systems looks like.
