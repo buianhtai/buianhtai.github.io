@@ -1,0 +1,175 @@
+---
+title: "DBI Ch.14 — Consensus: Paxos, Raft, and Byzantine Fault Tolerance"
+description: "Consensus is the pinnacle of distributed systems theory. Chapter 14 covers atomic broadcast, Paxos (and its variants), Raft's understandable approach, and Byzantine consensus with PBFT — the algorithms that make distributed databases reliable."
+pubDate: 2026-05-08
+tags: ["database-internals", "distributed-systems", "consensus", "paxos", "raft", "foundations"]
+lang: "en"
+category: "foundations"
+series: "database-internals"
+seriesOrder: 14
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import LayerStack from '../../../components/mdx/LayerStack.astro';
+
+Consensus is the problem that unifies everything in distributed systems: how do multiple processes agree on a single value, even when some may fail? This chapter is the culmination of Part II — consensus algorithms underpin leader election, replication, distributed transactions, and virtually every other strong guarantee in distributed databases.
+
+<HeroGrid items={[
+  { label: "Agreement", sublabel: "All correct processes decide on the same value", color: "#0891b2" },
+  { label: "Validity", sublabel: "The decided value was proposed by some process", color: "#059669" },
+  { label: "Termination", sublabel: "All correct processes eventually reach a decision", color: "#d97706" },
+  { label: "Fault tolerance", sublabel: "N/2+1 quorum needed; tolerates up to N/2 failures", color: "#7c3aed" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> Consensus: What and Why
+
+A consensus algorithm allows a group of processes to agree on a single value, even if some processes crash. The three properties:
+
+- **Agreement**: no two correct processes decide differently
+- **Validity**: the decided value was proposed by some process (not an arbitrary invented value)
+- **Termination**: every correct process eventually decides (no infinite waiting)
+
+In distributed databases, consensus is used for:
+- **Replicated state machines**: a log of operations is agreed upon by all replicas; applying the log in order produces identical state everywhere (etcd, ZooKeeper, Raft-based systems)
+- **Leader election**: choosing a single authoritative leader
+- **Distributed commit**: reaching agreement on whether a transaction commits or aborts
+
+FLP impossibility (Chapter 8) shows that deterministic consensus is impossible in a fully asynchronous system. Practical algorithms circumvent this by assuming partial synchrony (timeouts eventually work) and using randomization or leader election to drive progress.
+
+---
+
+## <Label color="teal">2</Label> Atomic Broadcast
+
+**Atomic broadcast** (total-order multicast) is closely related to consensus: it ensures all processes deliver the same messages in the same order. Consensus and atomic broadcast are **equivalent** in power — a solution to one gives a solution to the other.
+
+Atomic broadcast properties:
+- **Validity**: if a correct process broadcasts a message, all correct processes eventually deliver it
+- **Uniform agreement**: if any process delivers a message, all correct processes deliver it
+- **Integrity**: no message is delivered more than once
+- **Total order**: all processes deliver messages in the same order
+
+**ZooKeeper Atomic Broadcast (ZAB)**: the consensus protocol underlying Apache ZooKeeper. Similar to Paxos but with a distinct recovery phase. ZAB operates in two modes: leader-based broadcast (normal operation) and recovery (re-establishing consistency after a leader failure). ZooKeeper is used as a coordination service by Kafka, HBase, and many other distributed systems.
+
+---
+
+## <Label color="teal">3</Label> Paxos
+
+Paxos (Lamport, 1989) is the foundational consensus algorithm. Despite its theoretical importance, it is notoriously difficult to understand and implement correctly — Lamport wrote two papers introducing it, the second specifically because the first was considered unreadable.
+
+**Single-decree Paxos** (agreement on a single value) has two phases:
+
+**Phase 1 — Prepare**:
+1. A **proposer** picks a proposal number N (must be higher than any previously used)
+2. Proposer sends PREPARE(N) to a majority (quorum) of **acceptors**
+3. Each acceptor responds with PROMISE(N): "I will not accept any proposal numbered less than N"
+4. If an acceptor has already accepted a value with a lower proposal number, it includes that value in the PROMISE response
+
+**Phase 2 — Accept**:
+1. If the proposer receives PROMISE responses from a majority:
+   - If any acceptor returned a previously-accepted value, the proposer must use that value (preserving prior decisions)
+   - Otherwise, the proposer chooses its own proposed value
+2. Proposer sends ACCEPT(N, value) to acceptors
+3. Acceptors accept if N ≥ their highest-seen proposal number
+4. Once a majority accepts, the value is **chosen** (committed)
+
+**Multi-Paxos** extends single-decree Paxos to a log of decisions by optimizing away Phase 1 after a stable leader is established. The leader can skip Phase 1 for subsequent proposals, reducing two round-trips to one.
+
+<Callout color="teal">
+Paxos correctness proof: any two quorums overlap by at least one member. If a value V was chosen in Phase 2 of an earlier round, any subsequent Phase 1 that touches a quorum will see V from the overlapping acceptor and must re-propose V. This prevents two different values from being chosen in different rounds.
+</Callout>
+
+**Paxos variants**:
+- **Fast Paxos**: clients propose directly to acceptors (bypassing leader for first round), reducing latency by one round-trip in the common case
+- **Egalitarian Paxos (EPaxos)**: eliminates the single leader bottleneck by allowing any replica to act as leader for non-conflicting commands. Reduces cross-datacenter latency by letting the closest replica lead
+- **Flexible Paxos**: generalizes quorum requirements — Phase 1 and Phase 2 quorums don't need to be majorities, as long as every Phase 1 quorum overlaps with every Phase 2 quorum
+
+---
+
+## <Label color="teal">4</Label> Raft
+
+Raft (Ongaro and Ousterhout, 2014) was designed specifically for **understandability** — the paper's subtitle is "In Search of an Understandable Consensus Algorithm." Raft decomposes consensus into three relatively independent sub-problems: leader election, log replication, and safety.
+
+**Leader election**:
+- Each server maintains a **term** counter (monotonically increasing logical clock)
+- Servers start as followers, following the current term's leader
+- If no heartbeat is received from the leader within a random election timeout (150–300ms), a follower becomes a **candidate** and starts an election
+- A candidate votes for itself and requests votes from others (RequestVote RPC)
+- A server grants a vote if the candidate's term is at least as large as its own, and the candidate's log is at least as up-to-date as the voter's log
+- A candidate winning a majority becomes the new leader
+
+**Log replication**:
+1. Client sends command to leader
+2. Leader appends command to its log (uncommitted)
+3. Leader sends AppendEntries RPCs to all followers in parallel
+4. Followers append the entry to their local logs and acknowledge
+5. When a majority has acknowledged, the leader **commits** the entry (marks it as applied to the state machine)
+6. Leader notifies followers of the commit on the next AppendEntries; followers commit
+
+**Safety guarantee**: Raft's key safety invariant is the **Leader Completeness Property**: if an entry is committed in term T, it will be present in all leaders elected in subsequent terms. This is enforced by the vote restriction — a candidate cannot be elected unless its log is at least as up-to-date as a majority of voters.
+
+<LayerStack
+  layers={[
+    { tag: "L1", color: "teal",  title: "Leader (1 per term)",    items: ["Accepts all client requests", "Replicates log entries to followers", "Advances commit index when majority acknowledges", "Sends heartbeats to prevent new elections"] },
+    { tag: "L2", color: "green", title: "Followers (N-1)",         items: ["Append entries from leader", "Vote in elections", "Redirect client requests to leader", "Become candidates if no heartbeat received within timeout"] },
+    { tag: "L3", color: "amber", title: "Candidates (transient)",  items: ["State between follower and leader during election", "Request votes from all peers", "Return to follower if higher-term leader is discovered", "Become leader if majority vote received"] },
+  ]}
+  caption="Raft's three server states. Each server is always in exactly one state."
+/>
+
+---
+
+## <Label color="teal">5</Label> Paxos vs Raft
+
+<DataTable
+  caption="Paxos vs Raft comparison"
+  accent="teal"
+  headers={["Dimension", "Paxos", "Raft"]}
+  rows={[
+    { "Dimension": "Design goal",         "Paxos": "Theoretical correctness",          "Raft": "Understandability" },
+    { "Dimension": "Leader model",         "Paxos": "Implicit (any proposer can lead)", "Raft": "Explicit strong leader" },
+    { "Dimension": "Log entries",          "Paxos": "Can be filled in any order",       "Raft": "Sequential, no gaps" },
+    { "Dimension": "Membership changes",   "Paxos": "Ad hoc (varies by implementation)", "Raft": "Joint consensus protocol" },
+    { "Dimension": "Implementations",      "Paxos": "Google Chubby, etcd (originally)", "Raft": "etcd, TiKV, CockroachDB, RethinkDB, Consul" },
+    { "Dimension": "Latency optimization", "Paxos": "Fast Paxos, EPaxos available",     "Raft": "Pipelining, batching" },
+  ]}
+/>
+
+---
+
+## <Label color="teal">6</Label> Byzantine Consensus
+
+Standard consensus algorithms (Paxos, Raft) assume **crash-recovery faults** — processes fail by stopping. **Byzantine fault tolerance (BFT)** extends this to **arbitrary faults** — processes can send incorrect, contradictory, or malicious messages.
+
+The fundamental result: to tolerate F Byzantine faults, you need at least **3F + 1** total nodes (vs. 2F + 1 for crash faults). This significantly increases the infrastructure cost.
+
+**PBFT (Practical Byzantine Fault Tolerance, Castro and Liskov, 1999)** was the first practical BFT algorithm. It operates in three phases:
+1. **Pre-prepare**: leader sends the request to all replicas
+2. **Prepare**: each replica broadcasts that it received the pre-prepare (2F+1 matching prepares = "prepared")
+3. **Commit**: each replica broadcasts that it is ready to commit (2F+1 matching commits = "committed-local")
+
+PBFT requires O(N²) message complexity per consensus round — each of N nodes must send messages to all other N nodes. This limits practical use to small replica groups (typically N ≤ 7 for 2 Byzantine fault tolerance).
+
+**Recovery and checkpointing**: PBFT includes a checkpoint mechanism that proves the system state is consistent after every K decisions. Checkpoints allow the protocol log to be truncated and enable new nodes to join.
+
+**Applications**: PBFT is used in permissioned blockchain systems (Hyperledger Fabric). Permissionless blockchains (Bitcoin, Ethereum) use Nakamoto consensus (proof of work) or proof of stake — different approaches that tolerate a majority of hash power or stake being Byzantine.
+
+---
+
+## <Label color="teal">7</Label> Part II Conclusion
+
+The seven chapters of Part II form a progression:
+
+1. **Ch.8**: The fundamental challenges — concurrency, fallacies, failure models, FLP
+2. **Ch.9**: Failure detection — how processes detect when peers have failed
+3. **Ch.10**: Leader election — designating a coordinator to reduce coordination cost
+4. **Ch.11**: Consistency models — the spectrum from linearizability to eventual consistency
+5. **Ch.12**: Anti-entropy — mechanisms to repair diverged replicas
+6. **Ch.13**: Distributed transactions — atomic commitment across partitions (2PC, 3PC, Spanner, Calvin)
+7. **Ch.14**: Consensus — the core problem that ties everything together (Paxos, Raft, PBFT)
+
+Together, these chapters explain how modern distributed databases — Cassandra, CockroachDB, TiDB, Spanner, etcd — achieve the consistency and availability properties they advertise. Every production distributed database is a specific point in the trade-off space defined by these algorithms.

@@ -1,0 +1,94 @@
+---
+title: "CS Ch.5 — Change: The Law and the Three Flaws"
+description: "The longer a program exists, the more likely any piece of it will change. Chapter 5 derives this Law of Change from real data and identifies the three design mistakes that make change unnecessarily painful."
+pubDate: 2026-05-08
+tags: ["code-simplicity", "software-design", "change", "foundations"]
+lang: "en"
+category: "foundations"
+series: "code-simplicity"
+seriesOrder: 5
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+
+If the equation of software design tells you *what* to optimize, the Law of Change tells you *why* that optimization never stops. Change is not a failure mode — it is the defining property of live software. Every design decision you make is really a decision about how gracefully your code will handle the inevitable mutations it will face over its lifetime.
+
+<HeroGrid items={[
+  { label: "Law of Change", sublabel: "Longer program = higher probability any piece changes", color: "#0891b2" },
+  { label: "Real Data", sublabel: "4 files · up to 36× change ratio", color: "#059669" },
+  { label: "3 Flaws", sublabel: "Unneeded code · Rigid code · Over-generic code", color: "#d97706" },
+  { label: "Incremental", sublabel: "Design–code–redesign cycle as the cure", color: "#7c3aed" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> The Law of Change
+
+> **The longer your program exists, the more probable it is that any piece of it will have to change.**
+
+This is not an opinion about bad planning or bad architecture. It is an empirical observation: the environment around software changes — business requirements, user expectations, technology, regulations — and software must adapt. As you extend the time horizon to infinity, the probability that *any given line of code* will need modification approaches 100%.
+
+The implication is not "plan for every change" (which is impossible). The implication is: **write your software so that it is as flexible as reasonably possible**, and you will be able to adapt to whatever changes actually arrive.
+
+---
+
+## <Label color="teal">2</Label> Change in a Real-World Program
+
+The chapter includes actual file-change data from a production codebase:
+
+<DataTable
+  caption="Real file change data from a production program"
+  accent="teal"
+  headers={["File", "Period", "Original lines", "Unchanged lines", "Change ratio"]}
+  rows={[
+    { "File": "File 1", "Period": "5 years, 2 months", "Original lines": "423", "Unchanged lines": "271", "Change ratio": "1.6×" },
+    { "File": "File 2", "Period": "8 years, 3 months", "Original lines": "192", "Unchanged lines": "101", "Change ratio": "8.9×" },
+    { "File": "File 3", "Period": "13 years, 3 months", "Original lines": "227", "Unchanged lines": "4",   "Change ratio": "13×" },
+    { "File": "File 4", "Period": "13 years, 4 months", "Original lines": "309", "Unchanged lines": "8",   "Change ratio": "36×" },
+  ]}
+/>
+
+Key observations from this data:
+
+- The "change ratio" — total changes divided by original line count — is always much larger than 1. By 13 years, it's 13× to 36×. More work goes into changing a file than writing it originally.
+- The unchanged lines count is tiny compared to both the original and current line count. After 13 years, 4 unchanged lines remain in a file that started at 227.
+- A file can accumulate huge total changes while only growing modestly — File 3 grew by 161 lines but accumulated 3,047 total changes. Lines are changed over and over.
+
+The conclusion: you can't predict *what* will change, *when* it will change, or *how much*. You can only know that change will happen — a lot of it — and design accordingly.
+
+---
+
+## <Label color="teal">3</Label> The Three Flaws
+
+There are three broad mistakes designers make when coping with the Law of Change:
+
+<FlowStep steps={[
+  { title: "Flaw 1: Writing Code That Isn't Needed", body: "YAGNI ('You Ain't Gonna Need It') names this correctly. If you write code before you need it, you'll have to redesign it when you finally know what the real requirements are. Unused code also rots — it silently falls out of sync with the rest of the system and introduces bugs when finally used. The rule: don't write code until you need it, and remove any code that stops being used." },
+  { title: "Flaw 2: Not Making Code Easy to Change", body: "This is the most harmful flaw. Code that is hard to change makes every future modification expensive. Rigidity comes from: excessive coupling between components, missing tests, unclear structure, or long functions with many responsibilities. The rule: design so that changes to one part require minimal changes to other parts." },
+  { title: "Flaw 3: Being Too Generic", body: "Genericity is the opposite of Flaw 1 but equally problematic. Writing a system that handles every conceivable future case — when only one case is actually needed — adds complexity with no current value. Over-generic code is hard to understand because it solves a harder problem than the one at hand. The rule: be only as generic as you know you need to be right now." },
+]} />
+
+<Callout color="teal">
+The three flaws form a trap on both sides of a spectrum. Flaw 1 is adding code too early. Flaw 3 is making code too abstract too early. Flaw 2 is failing to maintain changeability as the system grows. The correct path is a narrow one: build exactly what's needed now, in a way that's easy to change, and keep it that way.
+</Callout>
+
+---
+
+## <Label color="teal">4</Label> Incremental Development and Design
+
+The cure for all three flaws is the same: **incremental development and design**. The cycle:
+
+1. Design only enough for the current feature
+2. Implement that feature
+3. **Redesign** — look at the new code and simplify before moving on
+4. Add the next feature — repeat from step 1
+
+The redesign step between features is the key. It's not optional cleanup — it's the mechanism by which complexity is actively held in check. Every new feature is an opportunity to review the surrounding code and make it simpler before the next feature arrives.
+
+This approach avoids Flaw 1 (you only build what the current feature needs), avoids Flaw 2 (the redesign step actively reduces rigidity), and avoids Flaw 3 (genericity only appears when a second concrete case actually arrives and reveals the pattern).
+
+The alternative — designing everything upfront, or designing nothing — both lead to the same outcome: a system that becomes progressively more expensive to change over time, until the change ratio matches or exceeds the data in the table above.

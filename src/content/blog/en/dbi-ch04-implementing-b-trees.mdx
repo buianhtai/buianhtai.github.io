@@ -1,0 +1,131 @@
+---
+title: "DBI Ch.4 — Implementing B-Trees: Headers, Splits, and Maintenance"
+description: "The implementation details that turn B-Tree theory into a working storage engine: page headers, sibling links, binary search with indirection pointers, breadcrumb-based split propagation, bulk loading, and vacuum."
+pubDate: 2026-05-08
+tags: ["database-internals", "b-tree", "storage-engines", "foundations"]
+lang: "en"
+category: "foundations"
+series: "database-internals"
+seriesOrder: 4
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+
+Chapter 3 gave us the page format. Chapter 2 gave us the B-Tree algorithm. Chapter 4 is where they meet — the implementation of a complete, production-quality B-Tree that handles page headers, sibling navigation, split propagation, concurrent access, and storage maintenance. This is the "how it's actually built" chapter.
+
+<HeroGrid items={[
+  { label: "Sibling Links", sublabel: "Left and right page pointers for range scans", color: "#0891b2" },
+  { label: "Breadcrumbs", sublabel: "Parent stack for bottom-up split propagation", color: "#059669" },
+  { label: "Bulk Loading", sublabel: "Fill leaves first, build index bottom-up", color: "#d97706" },
+  { label: "Vacuum", sublabel: "Reclaim space from deleted records", color: "#7c3aed" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> Page Header Fields in Detail
+
+Beyond the basic fields from Chapter 3, a B-Tree page header contains implementation-specific fields:
+
+<DataTable
+  caption="B-Tree-specific page header fields"
+  accent="teal"
+  headers={["Field", "Purpose"]}
+  rows={[
+    { "Field": "Magic number",      "Purpose": "File/format identifier; first check on open to detect wrong-type files" },
+    { "Field": "Sibling links",     "Purpose": "Left and right sibling page IDs; enable sequential scan without ascending to parent" },
+    { "Field": "Rightmost pointer", "Purpose": "Internal nodes only: the child page ID for keys greater than all separator keys in this node" },
+    { "Field": "Node high key",     "Purpose": "Maximum key for this node; used during concurrent access to detect if a search is on the right page" },
+    { "Field": "Overflow page ptr", "Purpose": "Pointer to overflow page for cells too large to fit in one page" },
+  ]}
+/>
+
+**Sibling links** are the key implementation detail for range scans. Once a range scan reaches the first matching leaf, it can traverse to the right sibling directly — without climbing up to the parent and back down. This turns a range scan over K results from O(K × log N) into O(K + log N).
+
+**Overflow pages** handle values or keys that are too large for one page. A cell stores a pointer to an overflow chain of pages; the actual data spans multiple pages. This is how databases store large TEXT or BLOB columns.
+
+---
+
+## <Label color="teal">2</Label> Binary Search with Indirection Pointers
+
+Within a page, finding the right cell for a given key requires a binary search. The naive approach — binary search directly over the sorted cells — is complicated by variable-length cells: you can't compute cell offsets by index without scanning from the start.
+
+The slotted page solves this: the **slot array** stores (offset, length) pairs in key-sorted order. Binary searching the slot array (fixed-size entries) is O(log(cells per page)) and always efficient. Once the right slot is found, jump to the cell's offset for the actual key comparison.
+
+```
+Binary search on slot array → slot index → cell offset → key comparison
+```
+
+This indirection is why deletion can mark a slot "empty" without compacting: the slot array stays sorted, and deleted slots are simply skipped. The binary search still works correctly on the remaining live slots.
+
+---
+
+## <Label color="teal">3</Label> Propagating Splits with Breadcrumbs
+
+When an insert causes a leaf to split, the split must propagate upward — the parent gains a new separator key and child pointer. But when a top-down lookup reaches the leaf, it doesn't have a reference to the parent.
+
+**Breadcrumbs** (also called the parent stack) solve this. During the top-down lookup phase, each visited node is recorded in a stack. When a split occurs at the leaf:
+
+<FlowStep steps={[
+  { title: "Split the leaf", body: "Divide keys at median. New sibling page allocated. Median key becomes the separator for the parent." },
+  { title: "Pop the parent from breadcrumb stack", body: "The stack contains the path from root to leaf. Pop the immediate parent." },
+  { title: "Insert separator key into parent", body: "Add the median key and the new sibling's page ID to the parent's slot array." },
+  { title: "Check parent for overflow", body: "If the parent is now full, split it too and continue popping the stack. Repeat until a non-full ancestor is found." },
+  { title: "Handle root split", body: "If the split reaches the root, allocate a new root with one separator key and two children. Tree height increases by 1." },
+]} />
+
+Without breadcrumbs, propagating splits would require re-traversing the tree from the root — doubling the I/O cost of split operations.
+
+---
+
+## <Label color="teal">4</Label> Rebalancing
+
+An alternative to immediate splitting: **rebalancing**. When a node fills up, instead of splitting, attempt to redistribute keys between siblings if a sibling has available space.
+
+```
+[leaf1: A B C D E full] [leaf2: F G _ _ _ has space]
+```
+
+If leaf2 has spare capacity and shares a parent, rotate one or more keys through the parent separator: move key E from leaf1 to leaf2, update the separator in the parent from E to F.
+
+Rebalancing delays splits (keeping tree height lower) and improves page fill rate (fewer wasted pages), but adds complexity: the engine must check siblings before splitting, and the logic for choosing which way to redistribute is non-trivial. PostgreSQL's B-Tree implementation does not rebalance; InnoDB does under certain conditions.
+
+---
+
+## <Label color="teal">5</Label> Right-Only Appends and Bulk Loading
+
+A common workload: insert records with monotonically increasing primary keys (autoincrement IDs, timestamps). Every insert goes to the rightmost leaf. All splits happen on the rightmost path. This is called **right-only append** mode.
+
+Many implementations detect this pattern and optimize: when the rightmost leaf fills, pre-split it in preparation for the next insert rather than waiting for an overflow. This avoids hot-page contention in write-heavy workloads.
+
+**Bulk loading** takes the extreme case: loading an entire sorted dataset into a new B-Tree. The naive approach (insert each record individually) causes O(N log N) splits and writes each page multiple times.
+
+Bulk loading builds the tree bottom-up:
+1. Sort all records by key
+2. Fill leaf pages to a target fill factor (e.g. 70%) from sorted input
+3. For each completed leaf, produce one separator key
+4. Build the level above by grouping separators and building internal nodes
+5. Repeat upward until a single root is produced
+
+This approach writes each page exactly once and produces a tree with predictable fill factor — ideal for read-heavy workloads that want maximum space utilization.
+
+---
+
+## <Label color="teal">6</Label> Vacuum and Storage Maintenance
+
+Deletions and updates in a B-Tree leave fragmentation:
+
+- Deleted cells leave gaps in their slotted page
+- Updated cells that grow may require moving the cell and leaving a gap
+- Obsolete version records (under MVCC) accumulate across pages
+
+**Page defragmentation** (vacuum at the page level): compact live cells within a page, eliminating internal gaps and restoring contiguous free space. The page is read, rewritten, and written back. Slot offsets in the header are updated to reflect new positions.
+
+**B-Tree vacuum** (vacuum at the tree level): merge underpopulated pages, reclaim freed pages back to the free page pool, update parent pointers after merges. This is more expensive — it involves structural changes to the tree — and typically runs during low-activity windows.
+
+<Callout color="teal">
+Write amplification is the enemy of B-Tree maintenance. Every split writes at least two pages (the original and the new sibling) plus the parent. Every merge writes at least one page. A high-write workload in a B-Tree with aggressive vacuum will write significantly more data than the actual payload — this is write amplification. LSM Trees (Chapter 7) take a different trade: defer all merging to compaction, writing data sequentially in bulk rather than randomly in place.
+</Callout>

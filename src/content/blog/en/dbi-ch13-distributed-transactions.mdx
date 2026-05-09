@@ -1,0 +1,132 @@
+---
+title: "DBI Ch.13 — Distributed Transactions"
+description: "Making multi-partition operations atomic requires distributed commit protocols. Chapter 13 covers two-phase commit (2PC), three-phase commit (3PC), Spanner's external consistency, Calvin's deterministic execution, Percolator, and consistent hashing."
+pubDate: 2026-05-08
+tags: ["database-internals", "distributed-systems", "distributed-transactions", "2pc", "foundations"]
+lang: "en"
+category: "foundations"
+series: "database-internals"
+seriesOrder: 13
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+
+Chapter 5 covered transactions on a single node. Chapter 13 extends this to the distributed case: how do you execute a transaction that spans multiple partitions or nodes, and ensure all-or-nothing atomicity even if nodes fail?
+
+<HeroGrid items={[
+  { label: "2PC", sublabel: "Prepare + commit in two phases; blocks on coordinator failure", color: "#0891b2" },
+  { label: "3PC", sublabel: "Adds pre-commit phase to enable progress without coordinator", color: "#059669" },
+  { label: "Spanner", sublabel: "External consistency via TrueTime and Paxos groups", color: "#d97706" },
+  { label: "Calvin", sublabel: "Pre-order transactions before execution to eliminate 2PC", color: "#7c3aed" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> The Problem: Atomic Commitment
+
+A distributed transaction spans multiple **cohorts** (participant nodes). The coordinator must ensure that either all cohorts commit or all cohorts abort. This is called **atomic commitment**.
+
+Key requirements:
+- **Unanimity**: a transaction commits only if ALL cohorts agree to commit
+- **Rollback on any disagreement**: if any cohort votes abort, all cohorts abort
+- **Recovery**: if a node fails during the protocol, the outcome must be deterministic and consistent with the decision made by the surviving nodes
+
+This is harder than single-node transactions because cohorts fail independently and messages can be lost.
+
+---
+
+## <Label color="teal">2</Label> Two-Phase Commit (2PC)
+
+2PC is the fundamental distributed commit protocol, used in MySQL (XA transactions), Kafka (producer-consumer coordination), and most distributed databases.
+
+**Phase 1 — Prepare**:
+1. Coordinator sends PREPARE to all cohorts
+2. Each cohort checks if it can commit (has all locks, no constraint violations)
+3. If yes: write PREPARE record to WAL, send VOTE-YES to coordinator
+4. If no: send VOTE-NO to coordinator (transaction will abort)
+
+**Phase 2 — Commit or Abort**:
+1. If all cohorts sent VOTE-YES: coordinator logs COMMIT, sends COMMIT to all cohorts
+2. If any cohort sent VOTE-NO: coordinator logs ABORT, sends ABORT to all cohorts
+3. Each cohort executes the commit or abort, releases locks, and acknowledges
+
+**Cohort failure in Phase 1**: if a cohort fails before voting, the coordinator detects a timeout and aborts the transaction. Safe.
+
+**Cohort failure in Phase 2**: if a cohort has already voted YES but fails before receiving the COMMIT/ABORT decision, it is in the **uncertainty period** — it has committed to a decision but doesn't know what it is. It must block, waiting for the coordinator to recover and retransmit.
+
+<Callout color="rose">
+**The 2PC blocking problem**: if the coordinator fails after cohorts have voted YES but before sending the final COMMIT/ABORT, cohorts are blocked indefinitely. They hold locks but cannot proceed without knowing the decision. This is 2PC's fundamental weakness: it is not fault-tolerant against coordinator failures.
+</Callout>
+
+---
+
+## <Label color="teal">3</Label> Three-Phase Commit (3PC)
+
+3PC adds a **pre-commit phase** to eliminate 2PC's blocking problem:
+
+**Phase 1 — CanCommit**: coordinator asks cohorts if they can commit (no state changes yet)
+**Phase 2 — PreCommit**: coordinator tells cohorts to prepare (write to WAL, acquire locks). Cohorts send ACKs.
+**Phase 3 — DoCommit**: coordinator sends final COMMIT decision. Cohorts commit.
+
+The key difference: after Phase 2, cohorts know that all other cohorts are also in the pre-commit state (have voted YES). If the coordinator fails at this point, cohorts can communicate with each other and safely commit — no blocking required.
+
+**Weakness**: 3PC assumes no network partitions. In a partitioned network, cohorts on different sides may make conflicting decisions (both sides have quorum to proceed, but they may decide differently). This makes 3PC unsafe in practice for systems with network partitions — it trades the blocking problem for a split-brain risk.
+
+<DataTable
+  caption="2PC vs 3PC trade-offs"
+  accent="amber"
+  headers={["Property", "2PC", "3PC"]}
+  rows={[
+    { "Property": "Coordinator fault tolerance",     "2PC": "No (blocks on coord failure)", "3PC": "Yes (cohorts can proceed)" },
+    { "Property": "Network partition tolerance",     "2PC": "Yes (blocks, doesn't split)",  "3PC": "No (may cause split-brain)" },
+    { "Property": "Message rounds",                  "2PC": "2 rounds (prepare + commit)",  "3PC": "3 rounds (canCommit + preCommit + doCommit)" },
+    { "Property": "Lock hold duration",              "2PC": "Phase 1 → completion",         "3PC": "Phase 2 → completion" },
+    { "Property": "Practical use",                   "2PC": "Widely used (MySQL XA, Kafka)", "3PC": "Rarely used in practice" },
+  ]}
+/>
+
+---
+
+## <Label color="teal">4</Label> Distributed Transactions with Calvin
+
+Calvin (Thomson et al., 2012) eliminates 2PC entirely by **pre-ordering transactions before execution**.
+
+The key insight: 2PC is necessary because cohorts may be executing concurrently and may conflict. If transactions are **deterministically ordered** before any execution begins, each cohort can execute its local portion independently, knowing that other cohorts are executing the same sequence.
+
+**Calvin protocol**:
+1. **Sequencer**: transactions arrive at a sequencer, which assigns them a global order and groups them into batches
+2. **Scheduler**: each node receives the batch, determines which transactions touch its local data, and executes them in the pre-determined order using strict 2PL (two-phase locking)
+3. **Result**: because all nodes execute the same sequence, coordination during execution is unnecessary — no 2PC needed
+
+**Trade-off**: read-your-writes transactions (where the read result determines what to write) require a second round-trip to the sequencer. Spanner handles this better. Calvin excels for write-heavy workloads with pre-known read and write sets (common in OLTP).
+
+---
+
+## <Label color="teal">5</Label> Distributed Transactions with Spanner
+
+Google Spanner achieves **external consistency** — the strongest possible consistency guarantee for a distributed database: if transaction T1 commits before T2 starts (in real time), then T1's commit timestamp is smaller than T2's.
+
+Spanner's key innovations:
+- **TrueTime API**: atomic clocks and GPS receivers in every datacenter provide time with a bounded uncertainty interval [earliest, latest]. Operations are delayed until TrueTime guarantees causality.
+- **Paxos groups**: each tablet (shard) is replicated across a Paxos group. The Paxos leader holds the lock table and transaction manager for that shard.
+- **2PC over Paxos groups**: cross-shard transactions use 2PC, but each cohort is a Paxos group (not a single node). This means 2PC can survive individual node failures within a shard's Paxos group.
+
+The combination of TrueTime (for timestamp ordering) and Paxos groups (for fault tolerance within shards) makes Spanner both externally consistent and fault tolerant — at the cost of significant infrastructure complexity and latency (must wait for TrueTime uncertainty to expire before committing).
+
+---
+
+## <Label color="teal">6</Label> Database Partitioning and Consistent Hashing
+
+Multi-partition transactions require knowing which partition holds each key. **Consistent hashing** is the standard technique for distributing keys across nodes with minimal reshuffling when nodes are added/removed.
+
+**Simple modulo hashing**: `node = hash(key) % N`. Problem: when N changes, most keys map to different nodes — nearly all data must move.
+
+**Consistent hashing**: hash values are mapped to a **ring** (wrap around after max). Each node is assigned a position on the ring. A key is served by the first node clockwise from the key's hash position.
+
+When a node is added or removed, only keys in the immediate range adjacent to the new/removed node need to move — O(K/N) keys rather than O(K) keys. This is the scheme used in Apache Cassandra and Riak.
+
+**Virtual nodes**: to improve load balance (physical nodes may have uneven data density), each physical node is assigned multiple positions on the ring (virtual nodes). Adding or removing a physical node redistributes its virtual nodes evenly, avoiding hotspots.

@@ -1,0 +1,129 @@
+---
+title: "DBI Ch.8 — Distributed Systems: Introduction and Overview"
+description: "Part II opens with the fundamental challenges of distributed computing: concurrency, shared state, the fallacies of distributed systems, failure models, FLP impossibility, and the spectrum from synchronous to asynchronous systems."
+pubDate: 2026-05-08
+tags: ["database-internals", "distributed-systems", "cap-theorem", "foundations"]
+lang: "en"
+category: "foundations"
+series: "database-internals"
+seriesOrder: 8
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import LayerStack from '../../../components/mdx/LayerStack.astro';
+
+Part II of Database Internals shifts from single-node storage engines to distributed systems. Chapter 8 lays the conceptual foundations: what makes distributed systems fundamentally harder than single-node systems, what can go wrong, and what theoretical results bound what's achievable.
+
+<HeroGrid items={[
+  { label: "Concurrency", sublabel: "Shared state between processes makes outcomes unpredictable", color: "#0891b2" },
+  { label: "Fallacies", sublabel: "8 wrong assumptions engineers make about networks", color: "#dc2626" },
+  { label: "Failure Models", sublabel: "Crash, omission, arbitrary — each needs different algorithms", color: "#d97706" },
+  { label: "FLP Impossibility", sublabel: "Consensus is impossible in a fully async system", color: "#7c3aed" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> Concurrent Execution
+
+The core problem of distributed systems emerges before you even cross a node boundary. Consider two threads reading and writing the same shared variable. Without synchronization, the same initial state can produce four different outcomes depending on the interleaving of operations. Distributed systems face this same problem at a larger scale, across processes that communicate only by passing messages.
+
+In a single-node system, shared memory allows threads to exchange state directly. In a distributed system, each process has only its local state — there is no shared memory. Coordination must happen through message passing, which introduces latency, message loss, and the possibility that a message was sent but never acknowledged.
+
+**Concurrent vs. parallel**: concurrent operations overlap in time but may not execute simultaneously (two queues, one coffee machine). Parallel operations truly execute simultaneously (two queues, two coffee machines). Most distributed systems literature uses "concurrent" to describe both.
+
+---
+
+## <Label color="teal">2</Label> The 8 Fallacies of Distributed Computing
+
+Peter Deutsch and colleagues at Sun Microsystems identified the most dangerous assumptions engineers make when designing distributed systems:
+
+<DataTable
+  caption="Fallacies of Distributed Computing"
+  accent="rose"
+  headers={["Fallacy", "Reality"]}
+  rows={[
+    { "Fallacy": "The network is reliable", "Reality": "Connections drop, packets get lost, links fail mid-message" },
+    { "Fallacy": "Latency is zero", "Reality": "Every network hop adds latency; cross-datacenter adds milliseconds" },
+    { "Fallacy": "Bandwidth is infinite", "Reality": "Large data transfers compete with other traffic" },
+    { "Fallacy": "The network is secure", "Reality": "Messages can be intercepted, modified, or replayed" },
+    { "Fallacy": "Topology doesn't change", "Reality": "IPs change, nodes move, clusters scale" },
+    { "Fallacy": "There is one administrator", "Reality": "Different teams own different parts of the network" },
+    { "Fallacy": "Transport cost is zero", "Reality": "Serialization, connection overhead, and bandwidth all cost" },
+    { "Fallacy": "The network is homogeneous", "Reality": "Mixed hardware, OS versions, and library versions coexist" },
+  ]}
+/>
+
+Each fallacy, when violated, can cause subtle bugs. A system that works perfectly in staging (fast LAN, reliable connections) can fail unpredictably in production (cross-datacenter WAN, congestion, partial failures).
+
+---
+
+## <Label color="teal">3</Label> Distributed Systems Abstractions
+
+The building block of distributed systems is the **link** — the communication channel between two processes. Links come in several varieties:
+
+**Fair-loss link**: every message sent infinitely often will eventually be delivered. Messages can be lost, but not systematically.
+
+**Message acknowledgments**: the receiver explicitly confirms each message. The sender retries until it receives an ACK. This guarantees delivery, but introduces the "exactly-once" problem.
+
+**Message retransmits**: sender-side deduplication ensures a retransmitted message is not processed twice. Requires idempotent operations or sequence numbers.
+
+**Exactly-once delivery**: the hardest guarantee to achieve. In practice, most systems settle for at-least-once delivery plus idempotent operations, which is semantically equivalent but easier to implement.
+
+---
+
+## <Label color="teal">4</Label> Two Generals' Problem
+
+Two armies must coordinate an attack simultaneously to succeed — if only one attacks, it loses. They communicate only by messenger, who may be captured. Neither general can ever be certain the other will attack, regardless of how many acknowledgment rounds are exchanged.
+
+This is not just a thought experiment — it is a proof that **reliable coordination over an unreliable channel is impossible**. No finite number of message exchanges can guarantee both generals act simultaneously. Every distributed commit protocol faces a variant of this problem.
+
+---
+
+## <Label color="teal">5</Label> FLP Impossibility
+
+The Fischer-Lynch-Paterson (FLP) impossibility result (1985) is one of the most important theoretical results in distributed systems:
+
+> **In a fully asynchronous system where even one process may crash, there is no deterministic algorithm that can guarantee consensus.**
+
+The key word is "asynchronous" — if there are no timing assumptions, a process that is slow is indistinguishable from a process that has crashed. A consensus algorithm waiting for a response cannot know whether to keep waiting or to proceed without the response.
+
+This does not mean consensus is impossible in practice. It means practical consensus algorithms must either:
+- Make timing assumptions (synchronous or partially synchronous models)
+- Accept that consensus may not terminate in adversarial scenarios (but terminates in practice)
+- Use randomization to break symmetry
+
+Paxos and Raft both circumvent FLP by operating in a partially synchronous model and using leader elections to drive progress.
+
+---
+
+## <Label color="teal">6</Label> System Synchrony
+
+Real distributed systems exist on a spectrum between two extremes:
+
+**Synchronous systems**: message delivery and process steps have strict time bounds. Every message arrives within a known maximum delay D. Every process takes at most T time per step. Failure detection is easy: if a response hasn't arrived within D + T, the process has failed.
+
+**Asynchronous systems**: no timing assumptions at all. Messages may be arbitrarily delayed. Process steps may take arbitrarily long. This is the FLP setting — failure detection is impossible.
+
+**Partially synchronous systems** (the practical model): the system is usually synchronous, but periods of asynchrony can occur. Timing bounds hold eventually, but not always. Paxos and Raft are designed for this model.
+
+---
+
+## <Label color="teal">7</Label> Failure Models
+
+Different types of failures require different algorithmic responses:
+
+<LayerStack
+  layers={[
+    { tag: "F1", color: "teal",  title: "Crash Faults (fail-stop)",  items: ["Process stops executing and does not restart", "Other processes eventually detect the absence of messages", "Simplest model — algorithm just waits for timeouts", "Most distributed databases assume crash-recovery (fail-recover) not fail-stop"] },
+    { tag: "F2", color: "amber", title: "Omission Faults",            items: ["Process selectively drops messages", "Can send but not receive, or receive but not send", "Harder than crash faults — the node appears partially alive", "Difficult to distinguish from network loss"] },
+    { tag: "F3", color: "rose",  title: "Arbitrary / Byzantine Faults", items: ["Process sends incorrect, misleading, or malicious messages", "Can actively lie about its state or the state of others", "Hardest to handle — requires Byzantine Fault Tolerant (BFT) algorithms", "3f+1 total nodes needed to tolerate f Byzantine nodes"] },
+  ]}
+  caption="Failure model hierarchy: each level is strictly harder than the one above."
+/>
+
+<Callout color="amber">
+Most database internals texts (and most practical distributed databases) assume crash-recovery faults only: processes may crash but eventually restart and recover from a durable log. Byzantine fault tolerance is reserved for systems where participants are not mutually trusted — blockchain consensus algorithms are the prominent example. The overhead of BFT (requires 3× more replicas) is too high for most datacenter deployments.
+</Callout>

@@ -1,0 +1,151 @@
+---
+title: "DBI Ch.3 — File Formats: Binary Encoding and Page Layout"
+description: "On-disk structures require explicit binary encoding, page layouts, and slotted page management. Chapter 3 shows how to serialize primitives, encode variable-length data, and build the slotted page format that underlies most B-Tree implementations."
+pubDate: 2026-05-08
+tags: ["database-internals", "file-formats", "storage-engines", "foundations"]
+lang: "en"
+category: "foundations"
+series: "database-internals"
+seriesOrder: 3
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+
+Moving from "B-Trees conceptually" to "B-Trees on disk" requires confronting a gap that application developers rarely see: memory accesses are transparent and pointer-based; disk accesses require explicit byte offsets, binary encoding, and page management. Chapter 3 builds the toolbox for on-disk data structure implementation from first principles.
+
+<HeroGrid items={[
+  { label: "Endianness", sublabel: "Byte order is a contract between writer and reader", color: "#0891b2" },
+  { label: "Slotted Pages", sublabel: "The standard on-disk record layout", color: "#059669" },
+  { label: "Variable-Length", sublabel: "Strings need length prefix + pointer indirection", color: "#d97706" },
+  { label: "Checksums", sublabel: "Data integrity across crash + power loss", color: "#7c3aed" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> Why Binary Encoding Matters
+
+In memory, we use malloc/free, pointers, and garbage collection. On disk, we have only `read` and `write` at byte offsets. There is no dynamic allocation — we manage our own "heap" within fixed-size pages.
+
+The consequences:
+- All data must be serialized to bytes before writing; deserialized after reading
+- Variable-size data (strings, arrays) requires explicit length tracking
+- Pointers become byte offsets within files (or page IDs + offsets within pages)
+- Fragmentation must be handled explicitly; the OS won't compact our pages
+
+---
+
+## <Label color="teal">2</Label> Primitive Type Encoding
+
+Numeric types are straightforward — each has a fixed byte size:
+
+```
+byte:   1 byte  (8 bits)
+short:  2 bytes (16 bits)
+int:    4 bytes (32 bits)
+long:   8 bytes (64 bits)
+float:  4 bytes (IEEE 754)
+double: 8 bytes (IEEE 754)
+```
+
+The critical decision for multibyte types: **endianness**. The same 32-bit integer `0xAABBCCDD` is stored differently depending on the platform:
+
+- **Big-endian**: `AA BB CC DD` (most significant byte first, lowest address)
+- **Little-endian**: `DD CC BB AA` (least significant byte first, lowest address)
+
+Storage formats must commit to one byte order and use it consistently. Most network protocols (TCP/IP) use big-endian ("network byte order"). Most x86 platforms are little-endian. Databases typically pick one and document it — readers must know the format to decode correctly.
+
+<Callout color="amber">
+RocksDB has platform-specific definitions (`EncodeFixed64WithEndian`, `kLittleEndian`) to detect host endianness and reverse bytes when needed. This allows the on-disk format to be always little-endian regardless of the running platform. The cost: one byte-reversal per value on big-endian machines.
+</Callout>
+
+---
+
+## <Label color="teal">3</Label> Variable-Length Data Encoding
+
+Fixed-size types are trivial — offsets are predictable. Variable-length types (strings, BLOBs, variable-length arrays) require explicit length encoding:
+
+**Length-prefixed string**: store the length as a fixed-size integer before the string bytes.
+```
+| 4-byte length | string bytes... |
+```
+
+**Null-terminated string**: append a zero byte after the string content. Simple but requires a scan to find the end — bad for seeking.
+
+**Offset arrays**: for a record with multiple variable-length fields, store an array of offsets at the front of the record. Each offset points to the start of its field within the record body. This allows O(1) access to any field by index without scanning through preceding variable-length fields.
+
+```
+| offset[0] | offset[1] | ... | field_0_data | field_1_data | ... |
+```
+
+---
+
+## <Label color="teal">4</Label> Page Structure
+
+All on-disk B-Tree implementations organize storage into fixed-size **pages** (commonly 4KB, 8KB, or 16KB). A page is the unit of I/O — reads and writes always transfer complete pages.
+
+A typical page has two regions:
+1. **Header**: page ID, type (leaf/internal/overflow), free space offset, cell count, flags, checksum
+2. **Body**: the actual data cells (key-value pairs or separator keys + child pointers)
+
+The fundamental challenge: cells within a page may have different sizes (keys and values vary in length), but the page itself is fixed size. Managing allocation and deallocation of variable-size cells within a fixed-size page without external fragmentation is the purpose of the **slotted page** format.
+
+---
+
+## <Label color="teal">5</Label> Slotted Pages
+
+The slotted page format is the standard solution to variable-size cell management within a fixed-size page:
+
+```
++----------------------------------+
+| Page Header                       |
++----------------------------------+
+| Slot 1 offset | Slot 2 offset | ...|  ← slot array grows →
+|                                   |
+|          free space               |
+|                                   |
+| ← grows ← Cell 2 | Cell 1 |     |  ← cells grow backwards
++----------------------------------+
+```
+
+<FlowStep steps={[
+  { title: "Slot array at page start", body: "A fixed-size array of (offset, length) pairs grows forward from the page header. Each slot corresponds to one cell." },
+  { title: "Cells grow backward from page end", body: "New cells are appended from the end of the page backward. The gap between the slot array and the last cell is free space." },
+  { title: "Deletion marks a slot as free", body: "Deleting a record marks its slot as empty and reclaims its space, but doesn't compact the page immediately." },
+  { title: "Compaction on demand", body: "When a new cell doesn't fit despite sufficient total free space (due to fragmentation), the page is compacted — live cells are moved to eliminate gaps, slot offsets are updated." },
+]} />
+
+The key insight: the slot array gives stable O(1) access to any cell by slot index, even as cells are deleted and the page becomes fragmented. The physical position of a cell changes during compaction, but its slot index does not.
+
+---
+
+## <Label color="teal">6</Label> Checksums and Versioning
+
+Two correctness mechanisms every on-disk format needs:
+
+**Checksums**: A CRC or similar checksum stored in the page header over the page body. On read, recompute the checksum and compare. If they differ, the page was corrupted (partial write, bit flip, hardware failure). Allows the engine to detect and refuse to serve corrupt data rather than silently returning garbage.
+
+**Versioning**: A format version field in the file header (not per-page). When the on-disk format changes between software versions, the engine checks the version on open and either:
+- Migrates the format on write (copy-on-modify migration)
+- Refuses to open an incompatible version
+- Applies compatibility shims for reading old versions
+
+Without versioning, a database that upgrades its on-disk format silently renders all existing data files unreadable. Versioning makes format evolution manageable.
+
+<DataTable
+  caption="Page layout field reference"
+  accent="teal"
+  headers={["Field", "Location", "Purpose"]}
+  rows={[
+    { "Field": "Magic number",       "Location": "File header",   "Purpose": "Identify file type; detect corruption or misidentification" },
+    { "Field": "Format version",     "Location": "File header",   "Purpose": "Enable migration and compatibility checks" },
+    { "Field": "Page ID",            "Location": "Page header",   "Purpose": "Identify this page; used in sibling links and overflow chains" },
+    { "Field": "Cell count",         "Location": "Page header",   "Purpose": "Number of live cells in this page" },
+    { "Field": "Free space offset",  "Location": "Page header",   "Purpose": "Where the next cell should be written (grows backward)" },
+    { "Field": "Checksum",           "Location": "Page header",   "Purpose": "Detect corruption: recomputed on read; mismatch = corrupt page" },
+    { "Field": "Slot array",         "Location": "After header",  "Purpose": "Offsets + lengths of all cells; stable indices despite compaction" },
+  ]}
+/>
