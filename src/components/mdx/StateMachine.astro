@@ -1,9 +1,9 @@
 ---
 /**
- * StateMachine — Directed state transition diagram.
+ * StateMachine — Directed state transition diagram with real SVG arrows.
  *
- * Renders states as rounded boxes arranged in a grid, with labeled
- * transition arrows between them. Supports initial/final/error state marking.
+ * Renders states as rounded boxes in a grid, with SVG arrows drawn between
+ * them for each transition. Arrows are labeled and have directional arrowheads.
  *
  * Usage:
  *   <StateMachine
@@ -21,7 +21,7 @@
  *     caption="Raft consensus node state machine"
  *   />
  *
- * state.color: 'blue'|'teal'|'amber'|'rose'|'violet'|'green' (default: accent)
+ * state.color: 'blue'|'teal'|'amber'|'rose'|'violet'|'green'|'red' (default: blue/accent)
  * transition.type: 'forward'|'back'|'self'|'error' (default: forward)
  */
 
@@ -32,8 +32,8 @@ interface State {
   initial?: boolean;
   final?: boolean;
   color?: string;
-  row?: number; // explicit row placement (1-based)
-  col?: number; // explicit column placement (1-based)
+  row?: number;
+  col?: number;
 }
 
 interface Transition {
@@ -48,18 +48,19 @@ interface Props {
   transitions: Transition[];
   caption?: string;
   title?: string;
-  cols?: number; // grid columns (default: auto)
+  cols?: number;
 }
 
 const { states, transitions, caption, title, cols } = Astro.props;
 
 const COLORS: Record<string, { border: string; bg: string; text: string }> = {
-  blue:   { border: 'var(--color-accent)',  bg: 'rgba(69,137,255,0.08)',   text: 'var(--color-accent)' },
-  teal:   { border: '#0ea5e9',              bg: 'rgba(14,165,233,0.08)',   text: '#0ea5e9' },
-  amber:  { border: '#f59e0b',              bg: 'rgba(245,158,11,0.08)',   text: '#f59e0b' },
-  rose:   { border: '#f43f5e',              bg: 'rgba(244,63,94,0.08)',    text: '#f43f5e' },
-  violet: { border: '#8b5cf6',              bg: 'rgba(139,92,246,0.08)',   text: '#8b5cf6' },
-  green:  { border: '#16a34a',              bg: 'rgba(22,163,74,0.08)',    text: '#16a34a' },
+  blue:   { border: 'var(--color-accent)',  bg: 'rgba(69,137,255,0.10)',   text: 'var(--color-accent)' },
+  teal:   { border: '#0ea5e9',              bg: 'rgba(14,165,233,0.10)',   text: '#0ea5e9' },
+  amber:  { border: '#f59e0b',              bg: 'rgba(245,158,11,0.10)',   text: '#f59e0b' },
+  rose:   { border: '#f43f5e',              bg: 'rgba(244,63,94,0.10)',    text: '#f43f5e' },
+  red:    { border: '#ef4444',              bg: 'rgba(239,68,68,0.10)',    text: '#ef4444' },
+  violet: { border: '#8b5cf6',              bg: 'rgba(139,92,246,0.10)',   text: '#8b5cf6' },
+  green:  { border: '#16a34a',              bg: 'rgba(22,163,74,0.10)',    text: '#16a34a' },
 };
 
 function stateColor(s: State) {
@@ -74,59 +75,271 @@ states.forEach((s, i) => {
   if (!s.col) s.col = (i % gridCols) + 1;
 });
 const gridRows = Math.max(...states.map((s) => s.row!));
+
+// Layout constants (px) — SVG is rendered at these dimensions, CSS scales it
+const BOX_W = 140;
+const BOX_H = 56;
+const COL_GAP = 80;
+const ROW_GAP = 70;
+const PAD_X = 20;
+const PAD_Y = 24;
+
+const svgW = PAD_X * 2 + gridCols * BOX_W + (gridCols - 1) * COL_GAP;
+const svgH = PAD_Y * 2 + gridRows * BOX_H + (gridRows - 1) * ROW_GAP;
+
+// Centre of each state box
+function boxCx(s: State) {
+  return PAD_X + (s.col! - 1) * (BOX_W + COL_GAP) + BOX_W / 2;
+}
+function boxCy(s: State) {
+  return PAD_Y + (s.row! - 1) * (BOX_H + ROW_GAP) + BOX_H / 2;
+}
+
+// Intersection of line from (cx,cy) through (tx,ty) with box edge
+function edgePoint(cx: number, cy: number, tx: number, ty: number, margin = 6): [number, number] {
+  const dx = tx - cx;
+  const dy = ty - cy;
+  const hw = BOX_W / 2 + margin;
+  const hh = BOX_H / 2 + margin;
+  if (Math.abs(dx) < 0.01 && Math.abs(dy) < 0.01) return [cx, cy];
+  // Scale to whichever box wall is hit first
+  const sx = dx !== 0 ? hw / Math.abs(dx) : Infinity;
+  const sy = dy !== 0 ? hh / Math.abs(dy) : Infinity;
+  const s = Math.min(sx, sy);
+  return [cx + dx * s, cy + dy * s];
+}
+
+// Build arrow path data for each transition
+interface ArrowData {
+  d: string;
+  lx: number;
+  ly: number;
+  label?: string;
+  color: string;
+  id: string;
+}
+
+const arrows: ArrowData[] = [];
+// Track pairs to offset parallel edges slightly
+const pairCount: Record<string, number> = {};
+
+transitions.forEach((t) => {
+  const fromS = states.find((s) => s.id === t.from);
+  const toS   = states.find((s) => s.id === t.to);
+  if (!fromS || !toS) return;
+
+  const color =
+    t.type === 'back'  ? '#94a3b8' :
+    t.type === 'error' ? '#f43f5e' :
+    t.type === 'self'  ? '#8b5cf6' :
+    'var(--color-accent)';
+
+  const arrowId = `arr-${t.from}-${t.to}`;
+
+  if (t.type === 'self' || t.from === t.to) {
+    // Self-loop: small arc above the box
+    const cx = boxCx(fromS);
+    const cy = boxCy(fromS);
+    const lx = cx;
+    const ly = cy - BOX_H / 2 - 28;
+    const r = 22;
+    const sx = cx - r * 0.6;
+    const ex = cx + r * 0.6;
+    const sy = cy - BOX_H / 2 - 2;
+    const ey = cy - BOX_H / 2 - 2;
+    arrows.push({
+      d: `M ${sx} ${sy} Q ${lx} ${ly - 16} ${ex} ${ey}`,
+      lx, ly: ly + 8,
+      label: t.label,
+      color,
+      id: arrowId,
+    });
+    return;
+  }
+
+  const fcx = boxCx(fromS);
+  const fcy = boxCy(fromS);
+  const tcx = boxCx(toS);
+  const tcy = boxCy(toS);
+
+  // Offset parallel (A→B and B→A) edges by curving them
+  const pairKey = [fromS.id, toS.id].sort().join('|');
+  pairCount[pairKey] = (pairCount[pairKey] ?? 0) + 1;
+  const pairIdx = pairCount[pairKey];
+
+  const [sx, sy] = edgePoint(fcx, fcy, tcx, tcy, 4);
+  const [ex, ey] = edgePoint(tcx, tcy, fcx, fcy, 4);
+
+  // Determine control point for quadratic bezier
+  // Alternate curve direction for parallel edges
+  const dx = ex - sx;
+  const dy = ey - sy;
+  const len = Math.sqrt(dx * dx + dy * dy);
+  // Perpendicular offset: 0 for first edge, 40px for second
+  const perpX = -dy / len;
+  const perpY =  dx / len;
+  const offset = pairIdx === 1 ? 0 : (pairIdx % 2 === 0 ? 36 : -36);
+
+  const mx = (sx + ex) / 2 + perpX * offset;
+  const my = (sy + ey) / 2 + perpY * offset;
+
+  // Label position: midpoint of bezier at t=0.5
+  const lx = 0.25 * sx + 0.5 * mx + 0.25 * ex;
+  const ly = 0.25 * sy + 0.5 * my + 0.25 * ey;
+
+  const d = offset === 0
+    ? `M ${sx} ${sy} L ${ex} ${ey}`
+    : `M ${sx} ${sy} Q ${mx} ${my} ${ex} ${ey}`;
+
+  arrows.push({ d, lx, ly, label: t.label, color, id: arrowId });
+});
 ---
 
 <div class="sm-wrap">
   {title && <div class="sm-titlebar"><span class="sm-prompt">$</span> {title}</div>}
 
   <div class="sm-body">
-    <!-- State grid -->
-    <div
-      class="sm-grid"
-      style={`grid-template-columns: repeat(${gridCols}, 1fr); grid-template-rows: repeat(${gridRows}, auto)`}
-    >
-      {states.map((s) => {
-        const c = stateColor(s);
-        return (
-          <div
-            class={`sm-state${s.initial ? ' sm-initial' : ''}${s.final ? ' sm-final' : ''}`}
-            id={`sm-s-${s.id}`}
-            style={`grid-row: ${s.row}; grid-column: ${s.col}; --sc-border: ${c.border}; --sc-bg: ${c.bg}; --sc-text: ${c.text}`}
-          >
-            {s.initial && <span class="sm-badge sm-badge-init">start</span>}
-            {s.final && <span class="sm-badge sm-badge-final">end</span>}
-            <div class="sm-state-label">{s.label}</div>
-            {s.sub && <div class="sm-state-sub">{s.sub}</div>}
-          </div>
-        );
-      })}
-    </div>
+    <div class="sm-diagram" style={`max-width: ${svgW}px`}>
+      <svg
+        viewBox={`0 0 ${svgW} ${svgH}`}
+        width="100%"
+        style={`display:block; overflow:visible`}
+        aria-label={title ?? 'State machine diagram'}
+      >
+        <defs>
+          <!-- Arrowhead markers for each color -->
+          <marker id="arr-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3 z" fill="var(--color-accent)" />
+          </marker>
+          <marker id="arr-back" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3 z" fill="#94a3b8" />
+          </marker>
+          <marker id="arr-error" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3 z" fill="#f43f5e" />
+          </marker>
+          <marker id="arr-self" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3 z" fill="#8b5cf6" />
+          </marker>
+        </defs>
 
-    <!-- Transitions table below the grid -->
-    {transitions.length > 0 && (
-      <div class="sm-trans-section">
-        <div class="sm-trans-header">transitions</div>
-        <div class="sm-trans-list">
-          {transitions.map((t) => {
-            const fromState = states.find((s) => s.id === t.from);
-            const toState   = states.find((s) => s.id === t.to);
-            const typeClass = `sm-trans-${t.type ?? 'forward'}`;
-            return (
-              <div class={`sm-trans-row ${typeClass}`}>
-                <span class="sm-trans-from">{fromState?.label ?? t.from}</span>
-                <span class="sm-trans-arrow">
-                  {t.type === 'back'  ? '←' :
-                   t.type === 'self'  ? '↺' :
-                   t.type === 'error' ? '✕' : '→'}
-                </span>
-                <span class="sm-trans-to">{toState?.label ?? t.to}</span>
-                {t.label && <span class="sm-trans-label">{t.label}</span>}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    )}
+        <!-- Draw arrows first (behind boxes) -->
+        {arrows.map((a) => {
+          const markerId =
+            a.color === '#94a3b8' ? 'arr-back' :
+            a.color === '#f43f5e' ? 'arr-error' :
+            a.color === '#8b5cf6' ? 'arr-self'  : 'arr-accent';
+          return (
+            <>
+              <path
+                d={a.d}
+                fill="none"
+                stroke={a.color}
+                stroke-width="1.5"
+                stroke-dasharray={a.color === '#94a3b8' ? '5 3' : undefined}
+                marker-end={`url(#${markerId})`}
+              />
+              {a.label && (
+                <>
+                  <rect
+                    x={a.lx - 2}
+                    y={a.ly - 8}
+                    width={a.label.length * 5.4 + 4}
+                    height="11"
+                    rx="2"
+                    fill="var(--color-surface)"
+                    opacity="0.88"
+                  />
+                  <text
+                    x={a.lx}
+                    y={a.ly}
+                    font-size="9"
+                    font-family="var(--font-mono, monospace)"
+                    fill="var(--color-text-muted)"
+                    text-anchor="start"
+                  >{a.label}</text>
+                </>
+              )}
+            </>
+          );
+        })}
+
+        <!-- Draw state boxes on top -->
+        {states.map((s) => {
+          const c = stateColor(s);
+          const cx = boxCx(s);
+          const cy = boxCy(s);
+          const x = cx - BOX_W / 2;
+          const y = cy - BOX_H / 2;
+          return (
+            <>
+              {/* Initial state indicator: small filled circle → arrow */}
+              {s.initial && (
+                <>
+                  <circle cx={x - 14} cy={cy} r="5" fill="var(--color-accent)" />
+                  <line
+                    x1={x - 9} y1={cy} x2={x - 1} y2={cy}
+                    stroke="var(--color-accent)" stroke-width="1.5"
+                    marker-end="url(#arr-accent)"
+                  />
+                </>
+              )}
+
+              {/* Box */}
+              <rect
+                x={x} y={y}
+                width={BOX_W} height={BOX_H}
+                rx="6"
+                fill={c.bg}
+                stroke={c.border}
+                stroke-width={s.final ? '2.5' : '1.5'}
+                stroke-dasharray={s.final ? '6 2' : undefined}
+              />
+
+              {/* "start" badge */}
+              {s.initial && (
+                <rect x={cx - 13} y={y - 8} width="26" height="10" rx="2" fill="var(--color-accent)" />
+              )}
+              {s.initial && (
+                <text x={cx} y={y - 1} font-size="7" font-family="var(--font-mono,monospace)"
+                  fill="var(--color-bg)" text-anchor="middle" letter-spacing="0.04em">START</text>
+              )}
+
+              {/* "end" badge */}
+              {s.final && (
+                <rect x={cx - 10} y={y + BOX_H - 2} width="20" height="10" rx="2" fill="#16a34a" />
+              )}
+              {s.final && (
+                <text x={cx} y={y + BOX_H + 7} font-size="7" font-family="var(--font-mono,monospace)"
+                  fill="#fff" text-anchor="middle" letter-spacing="0.04em">END</text>
+              )}
+
+              {/* State label */}
+              <text
+                x={cx} y={s.sub ? cy - 6 : cy + 4}
+                font-size="11.5"
+                font-weight="700"
+                font-family="var(--font-mono, monospace)"
+                fill={c.text}
+                text-anchor="middle"
+                dominant-baseline="middle"
+              >{s.label}</text>
+
+              {/* Sub text */}
+              {s.sub && (
+                <text
+                  x={cx} y={cy + 11}
+                  font-size="8.5"
+                  font-family="var(--font-mono, monospace)"
+                  fill="var(--color-text-muted)"
+                  text-anchor="middle"
+                  dominant-baseline="middle"
+                >{s.sub}</text>
+              )}
+            </>
+          );
+        })}
+      </svg>
+    </div>
   </div>
 
   {caption && <div class="sm-caption"><span class="sm-prompt">▶</span> {caption}</div>}
@@ -152,106 +365,12 @@ const gridRows = Math.max(...states.map((s) => s.row!));
 
   .sm-body { padding: 1.25rem; }
 
-  /* ── State grid ── */
-  .sm-grid {
-    display: grid;
-    gap: 1.5rem 2rem;
-    margin-bottom: 1rem;
+  .sm-diagram {
+    margin: 0 auto;
+    width: 100%;
   }
 
-  .sm-state {
-    position: relative;
-    padding: 0.65rem 0.875rem 0.6rem;
-    border: 1.5px solid var(--sc-border);
-    border-radius: 6px;
-    background: var(--sc-bg);
-    text-align: center;
-  }
-
-  .sm-initial { border-style: solid; }
-  .sm-final   { border-style: double; border-width: 3px; }
-
-  .sm-badge {
-    position: absolute;
-    top: -0.55rem;
-    left: 50%;
-    transform: translateX(-50%);
-    font-size: 0.5rem;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    padding: 0.05rem 0.3rem;
-    border-radius: 2px;
-    white-space: nowrap;
-  }
-  .sm-badge-init  { background: var(--color-accent);  color: var(--color-bg); }
-  .sm-badge-final { background: #16a34a; color: #fff; }
-
-  .sm-state-label {
-    font-size: 0.78rem;
-    font-weight: 700;
-    color: var(--sc-text);
-    letter-spacing: 0.01em;
-  }
-
-  .sm-state-sub {
-    font-size: 0.6rem;
-    color: var(--color-text-muted);
-    margin-top: 0.2rem;
-    line-height: 1.3;
-  }
-
-  /* ── Transitions list ── */
-  .sm-trans-section {
-    border-top: 1px solid var(--color-border);
-    padding-top: 0.75rem;
-    margin-top: 0.5rem;
-  }
-
-  .sm-trans-header {
-    font-size: 0.58rem;
-    color: var(--color-text-muted);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    margin-bottom: 0.4rem;
-  }
-
-  .sm-trans-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-  }
-
-  .sm-trans-row {
-    display: grid;
-    grid-template-columns: 1fr auto 1fr 2fr;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.25rem 0.5rem;
-    font-size: 0.67rem;
-    border-radius: 2px;
-  }
-
-  .sm-trans-row:hover { background: var(--color-surface-2); }
-
-  .sm-trans-from { color: var(--color-text-dim); text-align: right; }
-  .sm-trans-to   { color: var(--color-text-dim); }
-
-  .sm-trans-arrow {
-    font-size: 0.8rem;
-    color: var(--color-accent);
-    text-align: center;
-  }
-  .sm-trans-back  .sm-trans-arrow { color: var(--color-text-muted); }
-  .sm-trans-error .sm-trans-arrow { color: #f43f5e; }
-  .sm-trans-self  .sm-trans-arrow { color: #8b5cf6; }
-
-  .sm-trans-label {
-    color: var(--color-text-muted);
-    font-size: 0.6rem;
-    font-style: italic;
-  }
-
-  /* ── Caption ── */
+  /* Caption */
   .sm-caption {
     padding: 0.45rem 0.875rem;
     border-top: 1px solid var(--color-border);
