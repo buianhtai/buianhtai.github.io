@@ -69,13 +69,25 @@ interface Props {
 
 const { zones = [], nodes, edges, caption, title, annotations } = Astro.props;
 
-const NODE_W = 96;
-const NODE_H = 48;
+const NODE_W = 120;
+const NODE_H_BASE = 44;    // height when no sub
+const NODE_H_SUB_LINE = 13; // extra px per sub line
 const PAD_X  = 28;
 const PAD_Y  = 28;
 const ZONE_PAD = 18;
-const COL_GAP  = 32;
-const ROW_GAP  = 28;
+const COL_GAP  = 36;
+const ROW_GAP  = 32;
+
+// Compute per-node height based on sub-line count
+function nodeHeight(n: Node): number {
+  if (!n.sub) return NODE_H_BASE;
+  const lines = n.sub.split('\n').length;
+  return NODE_H_BASE + lines * NODE_H_SUB_LINE;
+}
+// Max height for a zone row
+function rowHeight(zoneNodes: Node[]): number {
+  return Math.max(...zoneNodes.map(nodeHeight), NODE_H_BASE);
+}
 
 const COLORS: Record<string, string> = {
   blue:   'var(--color-accent)',
@@ -100,34 +112,59 @@ let layoutZones: LayoutZone[] = [];
 let svgW = 0, svgH = 0;
 
 if (zones.length === 0) {
-  // Simple grid
+  // Simple grid — compute per-row max height
   const cols = Math.ceil(Math.sqrt(nodes.length));
+  const numRows = Math.ceil(nodes.length / cols);
+
+  // row Y offsets
+  const rowYs: number[] = [];
+  let curY = PAD_Y;
+  for (let r = 0; r < numRows; r++) {
+    rowYs.push(curY);
+    const rowNodes = nodes.filter((_, i) => Math.floor(i / cols) === r);
+    curY += Math.max(...rowNodes.map(nodeHeight), NODE_H_BASE) + ROW_GAP;
+  }
+
   nodes.forEach((n, i) => {
     const col = i % cols;
     const row = Math.floor(i / cols);
     layoutNodes.push({
       ...n,
       x: PAD_X + col * (NODE_W + COL_GAP),
-      y: PAD_Y + row * (NODE_H + ROW_GAP),
+      y: rowYs[row],
     });
   });
   const maxCol = Math.min(nodes.length, cols);
-  const maxRow = Math.ceil(nodes.length / cols);
   svgW = PAD_X * 2 + maxCol * NODE_W + (maxCol - 1) * COL_GAP;
-  svgH = PAD_Y * 2 + maxRow * NODE_H + (maxRow - 1) * ROW_GAP;
+  svgH = curY - ROW_GAP + PAD_Y;
 } else {
   // Zone-grouped layout
   let cursorX = PAD_X;
 
   zones.forEach((z) => {
     const zoneNodes = nodes.filter((n) => n.zone === z.id);
-    // determine zone grid dimensions
-    const maxRow = Math.max(...zoneNodes.map((n) => n.row ?? 1));
-    const maxCol = Math.max(...zoneNodes.map((n) => n.col ?? 1));
+    const maxRowIdx = Math.max(...zoneNodes.map((n) => n.row ?? 1));
+    const maxCol    = Math.max(...zoneNodes.map((n) => n.col ?? 1));
+
+    // Compute row heights within zone
+    const zRowHeights: number[] = [];
+    for (let r = 1; r <= maxRowIdx; r++) {
+      const rNodes = zoneNodes.filter((n) => (n.row ?? 1) === r);
+      zRowHeights.push(Math.max(...rNodes.map(nodeHeight), NODE_H_BASE));
+    }
     const zW = ZONE_PAD * 2 + maxCol * NODE_W + (maxCol - 1) * COL_GAP;
-    const zH = ZONE_PAD * 2 + 20 /* label */ + maxRow * NODE_H + (maxRow - 1) * ROW_GAP;
+    const totalRowH = zRowHeights.reduce((a, b) => a + b, 0) + (maxRowIdx - 1) * ROW_GAP;
+    const zH = ZONE_PAD * 2 + 20 /* label */ + totalRowH;
 
     layoutZones.push({ ...z, x: cursorX, y: PAD_Y, w: zW, h: zH });
+
+    // Compute cumulative Y for each row within zone
+    const rowOffsets: number[] = [];
+    let cumY = 0;
+    for (let r = 0; r < zRowHeights.length; r++) {
+      rowOffsets.push(cumY);
+      cumY += zRowHeights[r] + ROW_GAP;
+    }
 
     zoneNodes.forEach((n) => {
       const col = (n.col ?? 1) - 1;
@@ -135,7 +172,7 @@ if (zones.length === 0) {
       layoutNodes.push({
         ...n,
         x: cursorX + ZONE_PAD + col * (NODE_W + COL_GAP),
-        y: PAD_Y + ZONE_PAD + 20 + row * (NODE_H + ROW_GAP),
+        y: PAD_Y + ZONE_PAD + 20 + rowOffsets[row],
       });
     });
 
@@ -146,9 +183,9 @@ if (zones.length === 0) {
   svgH = PAD_Y * 2 + Math.max(...layoutZones.map((z) => z.h));
 }
 
-// Nodecentre lookup
+// Nodecentre lookup — use per-node height
 const centres = Object.fromEntries(
-  layoutNodes.map((n) => [n.id, { x: n.x + NODE_W / 2, y: n.y + NODE_H / 2 }])
+  layoutNodes.map((n) => [n.id, { x: n.x + NODE_W / 2, y: n.y + nodeHeight(n) / 2 }])
 );
 ---
 
@@ -227,17 +264,17 @@ const centres = Object.fromEntries(
             {e.label && (
               <>
                 <rect
-                  x={mx - 24} y={my - 9}
-                  width="48" height="12"
+                  x={mx - 44} y={my - 9}
+                  width="88" height="13"
                   rx="2"
                   fill="var(--color-surface)"
-                  opacity="0.9"
+                  opacity="0.95"
                 />
                 <text
                   x={mx} y={my + 1}
                   text-anchor="middle"
                   font-family="var(--font-mono,'IBM Plex Mono',monospace)"
-                  font-size="8.5"
+                  font-size="9"
                   fill={edgeColor}
                 >{e.label}</text>
               </>
@@ -251,29 +288,36 @@ const centres = Object.fromEntries(
         const color = c(n.color);
         const opacity = n.faded ? '0.45' : '1';
         const shape = n.shape ?? 'rect';
+        const nh = nodeHeight(n);
+        const subLines = n.sub ? n.sub.split('\n') : [];
+        const cx = n.x + NODE_W / 2;
+        // label Y: if sub exists, position label in upper portion; else center
+        const labelY = subLines.length > 0 ? n.y + 16 : n.y + nh / 2 + 4;
+        // first sub line starts below label
+        const subStartY = labelY + 13;
 
         return (
           <g opacity={opacity}>
             {shape === 'cylinder' ? (
               <>
-                <rect x={n.x} y={n.y + 6} width={NODE_W} height={NODE_H - 6} rx="3" fill="var(--color-surface-2)" stroke={color} stroke-width="1.5" />
-                <ellipse cx={n.x + NODE_W/2} cy={n.y + 6} rx={NODE_W/2} ry="6" fill="var(--color-surface-2)" stroke={color} stroke-width="1.5" />
-                <ellipse cx={n.x + NODE_W/2} cy={n.y + 6} rx={NODE_W/2} ry="6" fill="none" stroke={color} stroke-width="1.5" />
+                <rect x={n.x} y={n.y + 6} width={NODE_W} height={nh - 6} rx="3" fill="var(--color-surface-2)" stroke={color} stroke-width="1.5" />
+                <ellipse cx={cx} cy={n.y + 6} rx={NODE_W/2} ry="6" fill="var(--color-surface-2)" stroke={color} stroke-width="1.5" />
+                <ellipse cx={cx} cy={n.y + 6} rx={NODE_W/2} ry="6" fill="none" stroke={color} stroke-width="1.5" />
               </>
             ) : shape === 'diamond' ? (
               <polygon
-                points={`${n.x + NODE_W/2},${n.y}  ${n.x + NODE_W},${n.y + NODE_H/2}  ${n.x + NODE_W/2},${n.y + NODE_H}  ${n.x},${n.y + NODE_H/2}`}
+                points={`${cx},${n.y}  ${n.x + NODE_W},${n.y + nh/2}  ${cx},${n.y + nh}  ${n.x},${n.y + nh/2}`}
                 fill="var(--color-surface-2)" stroke={color} stroke-width="1.5"
               />
             ) : shape === 'circle' ? (
-              <ellipse cx={n.x + NODE_W/2} cy={n.y + NODE_H/2} rx={NODE_W/2} ry={NODE_H/2} fill="var(--color-surface-2)" stroke={color} stroke-width="1.5" />
+              <ellipse cx={cx} cy={n.y + nh/2} rx={NODE_W/2} ry={nh/2} fill="var(--color-surface-2)" stroke={color} stroke-width="1.5" />
             ) : (
-              <rect x={n.x} y={n.y} width={NODE_W} height={NODE_H} rx="4" fill="var(--color-surface-2)" stroke={color} stroke-width="1.5" />
+              <rect x={n.x} y={n.y} width={NODE_W} height={nh} rx="4" fill="var(--color-surface-2)" stroke={color} stroke-width="1.5" />
             )}
 
             <text
-              x={n.x + NODE_W / 2}
-              y={n.sub ? n.y + NODE_H / 2 - 5 : n.y + NODE_H / 2 + 4}
+              x={cx}
+              y={labelY}
               text-anchor="middle"
               font-family="var(--font-mono,'IBM Plex Mono',monospace)"
               font-size="11"
@@ -281,16 +325,16 @@ const centres = Object.fromEntries(
               fill={color}
             >{n.label}</text>
 
-            {n.sub && (
+            {subLines.map((line, li) => (
               <text
-                x={n.x + NODE_W / 2}
-                y={n.y + NODE_H / 2 + 10}
+                x={cx}
+                y={subStartY + li * 12}
                 text-anchor="middle"
                 font-family="var(--font-mono,'IBM Plex Mono',monospace)"
-                font-size="8"
+                font-size="9"
                 fill="var(--color-text-muted)"
-              >{n.sub}</text>
-            )}
+              >{line}</text>
+            ))}
           </g>
         );
       })}
