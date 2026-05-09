@@ -13,6 +13,7 @@ seriesSection: "Engineering Craft"
 import Label from '../../../components/mdx/Label.astro';
 import HeroGrid from '../../../components/mdx/HeroGrid.astro';
 import Callout from '../../../components/mdx/Callout.astro';
+import ArchDiagram from '../../../components/mdx/ArchDiagram.astro';
 
 Here's the honest truth about testing: every engineer has at some point been certain that a piece of code was correct, only to discover it wasn't. No amount of code review, no amount of mathematical reasoning, no amount of experience changes this. The only thing that actually tells you code works is running it — and the only thing that keeps telling you is running it repeatedly, automatically, after every change.
 
@@ -55,6 +56,28 @@ The "degree" of testing is multi-dimensional:
 1. **Completeness** — how many distinct behaviors are covered
 2. **Recency** — how recently was this code path verified to work
 3. **Environment breadth** — how many different environments has it been verified in
+
+<ArchDiagram
+  title="Three dimensions of testing degree-of-knowledge"
+  zones={[
+    { id: "dims",   label: "Dimensions of coverage", color: "teal" },
+    { id: "events", label: "Events that reset knowledge to zero", color: "rose" },
+  ]}
+  nodes={[
+    { id: "complete",  label: "Completeness",       sub: "behaviors exercised\nvs behaviors possible",     zone: "dims",   row: 1, col: 1, color: "teal" },
+    { id: "recency",   label: "Recency",             sub: "time since last\nverification run",              zone: "dims",   row: 1, col: 2, color: "teal" },
+    { id: "envbreadth",label: "Env breadth",         sub: "OSes / runtimes /\nconfigs verified",            zone: "dims",   row: 1, col: 3, color: "teal" },
+    { id: "code_chg",  label: "Code change",         sub: "degree → 0\nfor changed piece",                 zone: "events", row: 1, col: 1, color: "rose" },
+    { id: "dep_chg",   label: "Dependency change",   sub: "degree → 0\nfor all callers",                   zone: "events", row: 1, col: 2, color: "rose" },
+    { id: "env_chg",   label: "Env change",          sub: "degree → 0\nfor affected envs",                 zone: "events", row: 1, col: 3, color: "rose" },
+  ]}
+  edges={[
+    { from: "code_chg",  to: "complete",   label: "resets", type: "dashed" },
+    { from: "dep_chg",   to: "recency",    label: "resets", type: "dashed" },
+    { from: "env_chg",   to: "envbreadth", label: "resets", type: "dashed" },
+  ]}
+  caption="Degree-of-knowledge is a product of all three dimensions — a test suite that is complete but stale, or recent but narrow, still leaves gaps. Any change event resets the affected dimension to zero until tests are re-run."
+/>
 
 Every time you change a piece of code, the degree-of-knowledge goes to zero for that piece. The change may have introduced a bug. Every connected piece is also now uncertain, because the piece they depend on has changed.
 

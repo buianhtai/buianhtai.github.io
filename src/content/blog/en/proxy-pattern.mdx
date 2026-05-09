@@ -16,6 +16,7 @@ import Callout from '../../../components/mdx/Callout.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
 import SequenceDiagram from '../../../components/mdx/SequenceDiagram.astro';
+import StateMachine from '../../../components/mdx/StateMachine.astro';
 
 The Proxy pattern puts an intermediary between a client and a real object. The intermediary implements the same interface, so the client can't tell whether it's talking to the real object or a surrogate. What the proxy does with that position — forward across a network, defer construction, enforce permissions — defines which flavor of proxy it is.
 
@@ -83,6 +84,23 @@ public class ImageProxy implements Icon {
 ```
 
 The proxy shows a loading message until the download completes. The client never changed — it always holds an `Icon` reference.
+
+<StateMachine
+  title="Virtual Proxy — ImageProxy state transitions"
+  cols={3}
+  states={[
+    { id: "uninit",   label: "Uninitialized", sub: "realImage == null",         color: "amber", row: 1, col: 1, initial: true },
+    { id: "loading",  label: "Loading",       sub: "background thread running", color: "teal",  row: 1, col: 2 },
+    { id: "loaded",   label: "Loaded",        sub: "realImage ready",           color: "green", row: 1, col: 3, final: true },
+  ]}
+  transitions={[
+    { from: "uninit",  to: "loading", label: "paintIcon() called" },
+    { from: "loading", to: "loading", label: "paintIcon() → show placeholder", type: "self" },
+    { from: "loading", to: "loaded",  label: "ImageIcon download complete" },
+    { from: "loaded",  to: "loaded",  label: "paintIcon() → delegate to real", type: "self" },
+  ]}
+  caption="The proxy holds state internally. Until the real image is ready it paints a placeholder text; once the background download completes and c.repaint() fires, all future paintIcon() calls delegate directly to the real ImageIcon."
+/>
 
 ---
 

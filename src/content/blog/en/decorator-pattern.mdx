@@ -16,6 +16,7 @@ import Callout from '../../../components/mdx/Callout.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
 import LayerStack from '../../../components/mdx/LayerStack.astro';
+import SequenceDiagram from '../../../components/mdx/SequenceDiagram.astro';
 
 Inheritance is a blunt tool for feature combination. If you have three beverage bases and five condiment add-ons, inheritance leads to 3×2⁵ = 96 subclasses. The Decorator pattern composes features at runtime instead, keeping the class count at 3 + 5 = 8.
 
@@ -86,6 +87,21 @@ The wrapping stack is a chain. Each layer calls the layer beneath it. The final 
 />
 
 How `cost()` chains back — from outermost to innermost then back:
+
+<SequenceDiagram
+  title="cost() call chain — unwinding through the wrapper stack"
+  actors={["caller", "Whip", "Mocha (2nd)", "Mocha (1st)", "DarkRoast"]}
+  messages={[
+    { from: "caller",      to: "Whip",        label: "cost()" },
+    { from: "Whip",        to: "Mocha (2nd)", label: "beverage.cost()" },
+    { from: "Mocha (2nd)", to: "Mocha (1st)", label: "beverage.cost()" },
+    { from: "Mocha (1st)", to: "DarkRoast",   label: "beverage.cost()" },
+    { from: "DarkRoast",   to: "Mocha (1st)", label: "return $0.99" },
+    { from: "Mocha (1st)", to: "Mocha (2nd)", label: "return $0.99 + $0.20 = $1.19" },
+    { from: "Mocha (2nd)", to: "Whip",        label: "return $1.19 + $0.20 = $1.39" },
+    { from: "Whip",        to: "caller",      label: "return $1.39 + $0.10 = $1.49" },
+  ]}
+/>
 
 <FlowStep steps={[
   { title: "Whip.cost() is called", body: "Whip does not know its own base cost independently. It calls beverage.cost() — where beverage is the second Mocha — then adds $0.10. Execution passes inward." },

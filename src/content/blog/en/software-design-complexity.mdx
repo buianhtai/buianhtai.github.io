@@ -15,6 +15,7 @@ import HeroGrid from '../../../components/mdx/HeroGrid.astro';
 import Callout from '../../../components/mdx/Callout.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
+import ArchDiagram from '../../../components/mdx/ArchDiagram.astro';
 
 The horror stories in software are almost always the same: "we've been working on this for five years and it's still not done," "we can't ship fast enough to keep up." These aren't caused by bad luck or difficult requirements. They're caused by complexity building on complexity, compounding non-linearly until forward progress becomes nearly impossible. I've seen it happen. The strange thing is how predictable it is once you understand the mechanism.
 
@@ -32,6 +33,35 @@ The horror stories in software are almost always the same: "we've been working o
 Adding one new feature to a system with 10 features doesn't cost 10% more. It costs *interacting* with all 10 existing features. If the feature takes 10 hours to implement, it may take another 10 hours to ensure it interacts correctly with everything else. The more features already present, the higher the cost of the next one.
 
 This is why complexity is not linear. A simple project that takes one month becomes a three-month project when you add complexity, and a nine-month project when you make each piece of that more complex. The compound effect of complexity is the mechanism behind "The Never-Shipping Product" pattern that kills so many software efforts.
+
+<ArchDiagram
+  title="Complexity compounds non-linearly — cost of adding feature N"
+  zones={[
+    { id: "simple", label: "Simple system (3 features)", color: "teal" },
+    { id: "complex", label: "Complex system (6 features)", color: "rose" },
+  ]}
+  nodes={[
+    { id: "f1", label: "Feature 1", sub: "1 interaction",   zone: "simple",  row: 1, col: 1, color: "teal" },
+    { id: "f2", label: "Feature 2", sub: "2 interactions",  zone: "simple",  row: 1, col: 2, color: "teal" },
+    { id: "f3", label: "Feature 3", sub: "3 interactions",  zone: "simple",  row: 1, col: 3, color: "teal" },
+    { id: "g1", label: "Feature 1", sub: "1 interaction",   zone: "complex", row: 1, col: 1, color: "rose" },
+    { id: "g2", label: "Feature 2", sub: "2 interactions",  zone: "complex", row: 1, col: 2, color: "rose" },
+    { id: "g3", label: "Feature 3", sub: "3 interactions",  zone: "complex", row: 1, col: 3, color: "rose" },
+    { id: "g4", label: "Feature 4", sub: "4 interactions",  zone: "complex", row: 2, col: 1, color: "rose" },
+    { id: "g5", label: "Feature 5", sub: "5 interactions",  zone: "complex", row: 2, col: 2, color: "rose" },
+    { id: "g6", label: "Feature +1", sub: "6 interactions\nto validate",     zone: "complex", row: 2, col: 3, color: "rose" },
+  ]}
+  edges={[
+    { from: "f1", to: "f2", label: "interact", type: "dashed" },
+    { from: "f2", to: "f3", label: "interact", type: "dashed" },
+    { from: "g1", to: "g2", label: "", type: "dashed" },
+    { from: "g2", to: "g3", label: "", type: "dashed" },
+    { from: "g3", to: "g4", label: "", type: "dashed" },
+    { from: "g4", to: "g5", label: "", type: "dashed" },
+    { from: "g5", to: "g6", label: "must verify\nall N pairs", type: "solid" },
+  ]}
+  caption="In a 3-feature system, adding feature 4 costs 3 interaction checks. In a 6-feature system, adding feature 7 costs 6 checks. Each new feature must be validated against every existing one — O(N) interaction cost per addition, compounding as the system grows."
+/>
 
 <Callout color="amber">
 Some projects start so complex that they never get a first version out. If you're in that situation: trim features. A first version that ships and helps users is worth infinitely more than a theoretically complete version that never ships.

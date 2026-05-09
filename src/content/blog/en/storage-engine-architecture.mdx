@@ -15,6 +15,7 @@ import HeroGrid from '../../../components/mdx/HeroGrid.astro';
 import Callout from '../../../components/mdx/Callout.astro';
 import LayerStack from '../../../components/mdx/LayerStack.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
+import ArchDiagram from '../../../components/mdx/ArchDiagram.astro';
 
 Here is a question most developers never ask: when you write `SELECT * FROM users WHERE id = 42`, what actually happens? Not the SQL semantics — those are easy. What happens in the machine?
 
@@ -93,6 +94,25 @@ id column:   [1, 2, 3, 4, ...]
 name column: ["Alice", "Bob", "Carol", ...]
 age column:  [30, 25, 28, ...]
 ```
+
+<ArchDiagram
+  title="Row-oriented vs Column-oriented physical layout"
+  zones={[
+    { id: "row-layout",  label: "Row-Oriented (OLTP)", color: "teal" },
+    { id: "col-layout",  label: "Column-Oriented (OLAP)", color: "amber" },
+  ]}
+  nodes={[
+    { id: "row-p1", label: "Page 1",    sub: "[id=1, Alice, 30]\n[id=2, Bob, 25]\n[id=3, Carol, 28]",  zone: "row-layout", row: 1, col: 1, color: "teal" },
+    { id: "row-p2", label: "Page 2",    sub: "[id=4, Dave, 34]\n[id=5, Eve, 22]\n...",                 zone: "row-layout", row: 1, col: 2, color: "teal" },
+    { id: "col-id", label: "id.col",    sub: "[1, 2, 3, 4, 5 ...]",           zone: "col-layout", row: 1, col: 1, color: "amber" },
+    { id: "col-nm", label: "name.col",  sub: "[Alice, Bob, Carol ...]",        zone: "col-layout", row: 1, col: 2, color: "amber" },
+    { id: "col-ag", label: "age.col",   sub: "[30, 25, 28, 34, 22 ...]",       zone: "col-layout", row: 1, col: 3, color: "amber" },
+  ]}
+  edges={[
+    { from: "row-p1", to: "row-p2", label: "next page", type: "dashed" },
+  ]}
+  caption="Row layout packs every field for one record into a single page — ideal for full-record reads and point writes. Column layout stores all values for one attribute together — ideal for analytics that scan a single column across millions of rows, and for compression (homogeneous values compress far better than mixed-type rows)."
+/>
 
 <DataTable
   caption="Row vs column layout trade-offs"

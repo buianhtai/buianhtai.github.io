@@ -15,6 +15,7 @@ import HeroGrid from '../../../components/mdx/HeroGrid.astro';
 import Callout from '../../../components/mdx/Callout.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
+import StateMachine from '../../../components/mdx/StateMachine.astro';
 
 Some objects should only ever exist once — a thread pool, a logging service, a device driver, a configuration store. The Singleton pattern enforces that uniqueness at the class level and provides a single access point. The implementation is deceptively simple; the multithreading correctness is not.
 
@@ -51,6 +52,28 @@ This works perfectly — in a single-threaded world. Two threads entering `getIn
 ---
 
 ## <Label color="teal">2</Label> Three Solutions for Thread Safety
+
+<StateMachine
+  title="Naive getInstance() — race condition with two threads"
+  cols={3}
+  states={[
+    { id: "t1_check",   label: "Thread 1",     sub: "sees instance==null",   color: "teal",  row: 1, col: 1 },
+    { id: "t2_check",   label: "Thread 2",     sub: "sees instance==null",   color: "amber", row: 1, col: 2 },
+    { id: "t1_create",  label: "Thread 1",     sub: "calls new Singleton()", color: "teal",  row: 2, col: 1 },
+    { id: "t2_create",  label: "Thread 2",     sub: "calls new Singleton()", color: "amber", row: 2, col: 2 },
+    { id: "two_insts",  label: "Two instances!", sub: "violates the pattern", color: "rose",  row: 3, col: 1 },
+    { id: "dcl_ok",     label: "DCL + volatile", sub: "second check inside lock", color: "green", row: 3, col: 2 },
+  ]}
+  transitions={[
+    { from: "t1_check",  to: "t1_create", label: "unsynchronised", type: "forward" },
+    { from: "t2_check",  to: "t2_create", label: "unsynchronised", type: "forward" },
+    { from: "t1_create", to: "two_insts", label: "both create",    type: "error" },
+    { from: "t2_create", to: "two_insts", label: "both create",    type: "error" },
+    { from: "t1_check",  to: "dcl_ok",   label: "DCL path",       type: "forward" },
+    { from: "t2_check",  to: "dcl_ok",   label: "second check blocks", type: "back" },
+  ]}
+  caption="Naive lazy init: both threads see null simultaneously and each constructs an instance. DCL with volatile prevents this — the second check inside the synchronized block ensures only one construction proceeds."
+/>
 
 <FlowStep steps={[
   { title: "Option 1: Synchronized getInstance()", body: "Add `synchronized` to `getInstance()`. Correct, but carries a lock acquisition on every call — even when the instance already exists. Fine if getInstance() is not called in a tight loop; expensive if it is." },

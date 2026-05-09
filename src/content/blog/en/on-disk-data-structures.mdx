@@ -85,6 +85,31 @@ Fixed-size types are trivial — offsets are predictable. Variable-length types 
 | offset[0] | offset[1] | ... | field_0_data | field_1_data | ... |
 ```
 
+<ArchDiagram
+  title="Variable-length encoding schemes — byte layout comparison"
+  zones={[
+    { id: "lp",  label: "Length-prefixed string", color: "teal" },
+    { id: "nt",  label: "Null-terminated string",  color: "amber" },
+    { id: "oa",  label: "Offset array record",     color: "green" },
+  ]}
+  nodes={[
+    { id: "lp-len",  label: "4-byte length",  sub: "value = 5",          zone: "lp",  row: 1, col: 1, color: "teal" },
+    { id: "lp-data", label: "string bytes",   sub: "\"Alice\"",          zone: "lp",  row: 1, col: 2, color: "teal" },
+    { id: "nt-data", label: "string bytes",   sub: "\"Alice\"",          zone: "nt",  row: 1, col: 1, color: "amber" },
+    { id: "nt-null", label: "null byte 0x00", sub: "scan to find end",   zone: "nt",  row: 1, col: 2, color: "amber" },
+    { id: "oa-offs", label: "offset[0,1,2]",  sub: "O(1) field access",  zone: "oa",  row: 1, col: 1, color: "green" },
+    { id: "oa-f0",   label: "field 0 data",   sub: "var length",         zone: "oa",  row: 1, col: 2, color: "green" },
+    { id: "oa-f1",   label: "field 1 data",   sub: "var length",         zone: "oa",  row: 1, col: 3, color: "green" },
+  ]}
+  edges={[
+    { from: "lp-len",  to: "lp-data",  label: "length → skip N bytes", type: "solid" },
+    { from: "nt-data", to: "nt-null",  label: "scan required",          type: "dashed" },
+    { from: "oa-offs", to: "oa-f0",    label: "offset[0] ptr",          type: "solid" },
+    { from: "oa-offs", to: "oa-f1",    label: "offset[1] ptr",          type: "solid" },
+  ]}
+  caption="Length-prefix: O(1) seek — read the 4-byte header, skip exactly that many bytes. Null-termination: O(n) scan required to find end. Offset array: O(1) random field access in a multi-field record — jump directly to any field by indexing the offset table, no scan through preceding variable-length fields."
+/>
+
 ---
 
 ## <Label color="teal">4</Label> Page Structure

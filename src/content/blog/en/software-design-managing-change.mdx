@@ -15,6 +15,7 @@ import HeroGrid from '../../../components/mdx/HeroGrid.astro';
 import Callout from '../../../components/mdx/Callout.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
+import StateMachine from '../../../components/mdx/StateMachine.astro';
 
 The first time I saw change data from a real long-lived codebase, I found it unsettling. A file written 13 years earlier had accumulated 36 times more changes than the number of lines it started with. Not 36% more — 36×. Four original lines remained unchanged. Everything else had been rewritten, sometimes multiple times. That file didn't exist to be written. It existed to be changed.
 
@@ -88,6 +89,22 @@ The cure for all three flaws is the same: **incremental development and design**
 2. Implement that feature
 3. **Redesign** — look at the new code and simplify before moving on
 4. Add the next feature — repeat from step 1
+
+<StateMachine
+  title="Incremental development cycle"
+  cols={3}
+  states={[
+    { id: "design",    label: "Design",    sub: "just enough for\ncurrent feature", color: "teal",  row: 1, col: 1, initial: true },
+    { id: "implement", label: "Implement", sub: "build the feature",                color: "amber", row: 1, col: 2 },
+    { id: "redesign",  label: "Redesign",  sub: "simplify — reduce\ncomplexity",    color: "green", row: 1, col: 3 },
+  ]}
+  transitions={[
+    { from: "design",    to: "implement", label: "start coding" },
+    { from: "implement", to: "redesign",  label: "feature done" },
+    { from: "redesign",  to: "design",    label: "next feature", type: "back" },
+  ]}
+  caption="The redesign step is not optional cleanup — it is the mechanism that holds complexity in check. Skipping it allows complexity to compound with every new feature. The cycle repeats for every feature shipped."
+/>
 
 The redesign step between features is the key. It's not optional cleanup — it's the mechanism by which complexity is actively held in check. Every new feature is an opportunity to review the surrounding code and make it simpler before the next feature arrives.
 
