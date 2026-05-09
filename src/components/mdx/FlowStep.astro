@@ -1,10 +1,20 @@
 ---
-interface Props {
-  step: string | number;
-  color?: 'teal' | 'green' | 'amber' | 'rose';
+interface StepItem {
   title: string;
+  body: string;
+  color?: 'teal' | 'green' | 'amber' | 'rose';
 }
-const { step, color = 'teal', title } = Astro.props;
+
+interface Props {
+  // Multi-step array API (primary usage)
+  steps?: StepItem[];
+  // Single-step API (legacy)
+  step?: string | number;
+  color?: 'teal' | 'green' | 'amber' | 'rose';
+  title?: string;
+}
+
+const { steps, step, color = 'teal', title } = Astro.props;
 
 const cssVars = {
   teal:  '--color-accent',
@@ -12,23 +22,50 @@ const cssVars = {
   amber: '--color-amber',
   rose:  '--color-rose',
 };
-const cssVar = cssVars[color];
 ---
 
-<div class="flow-step" style={`--step-color: var(${cssVar});`}>
-  <div class="flow-step-num">{step}</div>
-  <div class="flow-step-body">
-    <strong class="flow-step-title">{title}</strong>
-    <div class="flow-step-content"><slot /></div>
+{steps ? (
+  <!-- Multi-step array mode -->
+  <div class="flow-steps-wrap">
+    {steps.map((s, i) => {
+      const itemColor = s.color ?? color;
+      const cssVar = cssVars[itemColor];
+      return (
+        <div class="flow-step" style={`--step-color: var(${cssVar});`}>
+          <div class="flow-step-num">{i + 1}</div>
+          <div class="flow-step-body">
+            <strong class="flow-step-title">{s.title}</strong>
+            <div class="flow-step-content">{s.body}</div>
+          </div>
+        </div>
+      );
+    })}
   </div>
-</div>
+) : (
+  <!-- Single-step slot mode (legacy) -->
+  <div class="flow-step" style={`--step-color: var(${cssVars[color]});`}>
+    <div class="flow-step-num">{step}</div>
+    <div class="flow-step-body">
+      <strong class="flow-step-title">{title}</strong>
+      <div class="flow-step-content"><slot /></div>
+    </div>
+  </div>
+)}
 
 <style>
+  .flow-steps-wrap {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    margin: 1.5rem 0;
+    overflow: hidden;
+    font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+  }
+
   .flow-step {
     display: flex;
     gap: 0.875rem;
     align-items: flex-start;
-    padding: 0.75rem 0;
+    padding: 0.75rem 1rem;
     border-bottom: 1px solid var(--color-border);
     font-family: var(--font-mono);
   }
