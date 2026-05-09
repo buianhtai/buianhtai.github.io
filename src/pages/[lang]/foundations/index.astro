@@ -27,6 +27,9 @@ const standalone = allPosts
   .sort((a, b) => b.data.pubDate.getTime() - a.data.pubDate.getTime());
 
 const totalChapters = allPosts.length;
+
+// All slides: 1 hero + 1 per series + 1 for standalone (if any)
+const totalSlides = 1 + seriesGroups.length + (standalone.length > 0 ? 1 : 0);
 ---
 
 <BaseLayout
@@ -34,119 +37,184 @@ const totalChapters = allPosts.length;
   description="First-principles coverage of CS fundamentals, systems internals, distributed systems, design patterns, and engineering craft."
   lang={lang}
 >
-  <div class="fl-root">
+  <div class="fl-root" id="fl-root">
 
-    <!-- ── Hero ── -->
-    <section class="fl-hero">
-      <div class="fl-hero-inner">
-        <div class="fl-hero-badge">Software Foundations</div>
-        <h1 class="fl-hero-title">First principles.<br />Deep understanding.</h1>
-        <p class="fl-hero-desc">
-          A structured reading series covering CS fundamentals, distributed systems internals,
-          data-intensive application design, and the engineering craft beneath every framework
-          and tool. Written to be read — not skimmed.
-        </p>
-        <div class="fl-hero-stats">
-          <div class="fl-stat">
-            <span class="fl-stat-num">{totalChapters}</span>
-            <span class="fl-stat-label">chapters</span>
-          </div>
-          <div class="fl-stat">
-            <span class="fl-stat-num">{seriesGroups.length}</span>
-            <span class="fl-stat-label">{seriesGroups.length === 1 ? 'series' : 'series'}</span>
-          </div>
-        </div>
-      </div>
-    </section>
+    <!-- ── Slide container ── -->
+    <div class="fl-deck" id="fl-deck">
 
-    <!-- ── Series ── -->
-    <section class="fl-content">
-      {seriesGroups.map(({ id, meta, posts }) => (
-        <div class="fl-series" data-series-id={id}>
-          <!-- Series header -->
-          <div class="fl-series-header">
-            <div class="fl-series-title-row">
-              <span class="fl-series-icon">◈</span>
-              <div>
-                <h2 class="fl-series-title">{meta?.title ?? id}</h2>
-                {meta?.description && (
-                  <p class="fl-series-desc">{meta.description}</p>
-                )}
-              </div>
-              <div class="fl-series-meta">
-                <span class="fl-series-count">{posts.length} ch.</span>
-              </div>
+      <!-- ── Slide 0: Hero ── -->
+      <section class="fl-slide fl-slide-hero" data-slide="0">
+        <div class="fl-slide-bg-num">00</div>
+
+        <div class="fl-slide-inner">
+          <div class="fl-hero-badge">Software Foundations</div>
+          <h1 class="fl-hero-title">First principles.<br />Deep understanding.</h1>
+          <p class="fl-hero-desc">
+            A structured reading series covering CS fundamentals, distributed systems internals,
+            data-intensive application design, and the engineering craft beneath every framework
+            and tool. Written to be read — not skimmed.
+          </p>
+
+          <div class="fl-hero-stats">
+            <div class="fl-stat">
+              <span class="fl-stat-num">{totalChapters}</span>
+              <span class="fl-stat-label">chapters</span>
+            </div>
+            <div class="fl-stat">
+              <span class="fl-stat-num">{seriesGroups.length}</span>
+              <span class="fl-stat-label">{seriesGroups.length === 1 ? 'series' : 'series'}</span>
             </div>
           </div>
 
-          <!-- Chapter list -->
-          <ol class="fl-chapters">
-            {posts.map((post, idx) => {
-              const slug = getPostSlug(post);
-              return (
-                <li class="fl-chapter" data-slug={slug}>
-                  <a href={`/${lang}/blog/${slug}`} class="fl-chapter-link">
-                    <div class="fl-chapter-left">
-                      <span class="fl-chapter-num">{String(idx + 1).padStart(2, '0')}</span>
-                    </div>
-                    <div class="fl-chapter-body">
-                      <div class="fl-chapter-title-row">
-                        <span class="fl-chapter-title">{post.data.title}</span>
-                        {post.data.draft && (
-                          <span class="fl-chapter-badge fl-badge-draft">draft</span>
-                        )}
-                        <span class="fl-chapter-badge fl-badge-read" style="display:none" data-read-badge>✓</span>
-                      </div>
-                      <p class="fl-chapter-desc">{post.data.description}</p>
-                    </div>
-                    <div class="fl-chapter-arrow">→</div>
-                  </a>
-                </li>
-              );
-            })}
-          </ol>
+          <button class="fl-hero-cta" id="fl-start-btn">
+            Start reading <span class="fl-cta-arrow">↓</span>
+          </button>
         </div>
+
+        <div class="fl-slide-hint">scroll or press ↓</div>
+      </section>
+
+      <!-- ── Slides: one per series ── -->
+      {seriesGroups.map(({ id, meta, posts }, si) => (
+        <section class="fl-slide fl-slide-series" data-slide={si + 1} data-series-id={id}>
+          <div class="fl-slide-bg-num">{String(si + 1).padStart(2, '0')}</div>
+
+          <div class="fl-slide-inner">
+            <!-- Left: series info + chapter list -->
+            <div class="fl-series-left">
+              <div class="fl-series-eyebrow">
+                <span class="fl-series-icon">◈</span>
+                <span class="fl-series-ordinal">Series {si + 1} of {seriesGroups.length}</span>
+              </div>
+
+              <h2 class="fl-series-title">{meta?.title ?? id}</h2>
+
+              {meta?.description && (
+                <p class="fl-series-desc">{meta.description}</p>
+              )}
+
+              <!-- Chapter list — compact, scrollable if many -->
+              <ol class="fl-ch-list">
+                {posts.map((post, idx) => {
+                  const slug = getPostSlug(post);
+                  return (
+                    <li class="fl-ch-item" data-slug={slug}>
+                      <a href={`/${lang}/blog/${slug}`} class="fl-ch-link">
+                        <span class="fl-ch-num">{String(idx + 1).padStart(2, '0')}</span>
+                        <span class="fl-ch-title">{post.data.title}</span>
+                        <span class="fl-ch-arrow">→</span>
+                      </a>
+                    </li>
+                  );
+                })}
+              </ol>
+
+              <!-- CTA: enter first chapter -->
+              <a
+                href={`/${lang}/blog/${getPostSlug(posts[0])}`}
+                class="fl-series-cta"
+              >
+                Enter series →
+              </a>
+            </div>
+
+            <!-- Right: chapter count badge + progress ring -->
+            <div class="fl-series-right">
+              <div class="fl-series-badge">
+                <span class="fl-badge-num">{posts.length}</span>
+                <span class="fl-badge-label">chapters</span>
+              </div>
+              <div class="fl-series-ring" data-series-id={id}>
+                <!-- SVG progress ring — filled by JS from localStorage -->
+                <svg viewBox="0 0 80 80" class="fl-ring-svg" aria-hidden="true">
+                  <circle class="fl-ring-track" cx="40" cy="40" r="34" />
+                  <circle
+                    class="fl-ring-fill"
+                    cx="40" cy="40" r="34"
+                    stroke-dasharray="213.6"
+                    stroke-dashoffset="213.6"
+                    data-total={posts.length}
+                    data-slugs={posts.map(p => getPostSlug(p)).join(',')}
+                  />
+                </svg>
+                <span class="fl-ring-label" data-series-id={id}>0%</span>
+              </div>
+            </div>
+          </div>
+        </section>
       ))}
 
+      <!-- ── Standalone articles slide (if any) ── -->
       {standalone.length > 0 && (
-        <div class="fl-series">
-          <div class="fl-series-header">
-            <div class="fl-series-title-row">
-              <span class="fl-series-icon">◇</span>
-              <h2 class="fl-series-title">Standalone articles</h2>
+        <section class="fl-slide fl-slide-series" data-slide={seriesGroups.length + 1}>
+          <div class="fl-slide-bg-num">{String(seriesGroups.length + 1).padStart(2, '0')}</div>
+          <div class="fl-slide-inner">
+            <div class="fl-series-left">
+              <div class="fl-series-eyebrow">
+                <span class="fl-series-icon">◇</span>
+                <span class="fl-series-ordinal">Standalone articles</span>
+              </div>
+              <h2 class="fl-series-title">Individual Deep Dives</h2>
+              <p class="fl-series-desc">Focused articles that stand on their own.</p>
+              <ol class="fl-ch-list">
+                {standalone.map((post, idx) => {
+                  const slug = getPostSlug(post);
+                  return (
+                    <li class="fl-ch-item" data-slug={slug}>
+                      <a href={`/${lang}/blog/${slug}`} class="fl-ch-link">
+                        <span class="fl-ch-num">{String(idx + 1).padStart(2, '0')}</span>
+                        <span class="fl-ch-title">{post.data.title}</span>
+                        <span class="fl-ch-arrow">→</span>
+                      </a>
+                    </li>
+                  );
+                })}
+              </ol>
+            </div>
+            <div class="fl-series-right">
+              <div class="fl-series-badge">
+                <span class="fl-badge-num">{standalone.length}</span>
+                <span class="fl-badge-label">articles</span>
+              </div>
             </div>
           </div>
-          <ol class="fl-chapters">
-            {standalone.map((post, idx) => {
-              const slug = getPostSlug(post);
-              return (
-                <li class="fl-chapter" data-slug={slug}>
-                  <a href={`/${lang}/blog/${slug}`} class="fl-chapter-link">
-                    <div class="fl-chapter-left">
-                      <span class="fl-chapter-num">{String(idx + 1).padStart(2, '0')}</span>
-                    </div>
-                    <div class="fl-chapter-body">
-                      <div class="fl-chapter-title-row">
-                        <span class="fl-chapter-title">{post.data.title}</span>
-                        <span class="fl-chapter-badge fl-badge-read" style="display:none" data-read-badge>✓</span>
-                      </div>
-                      <p class="fl-chapter-desc">{post.data.description}</p>
-                    </div>
-                    <div class="fl-chapter-arrow">→</div>
-                  </a>
-                </li>
-              );
-            })}
-          </ol>
-        </div>
+        </section>
       )}
-    </section>
 
-  </div>
+    </div><!-- /fl-deck -->
+
+    <!-- ── Side dot navigation ── -->
+    <nav class="fl-dots" id="fl-dots" aria-label="Slide navigation">
+      {Array.from({ length: totalSlides }).map((_, i) => (
+        <button
+          class={`fl-dot${i === 0 ? ' is-active' : ''}`}
+          data-goto={i}
+          aria-label={i === 0 ? 'Intro' : `Series ${i}`}
+          title={i === 0 ? 'Intro' : (seriesGroups[i - 1]?.meta?.title ?? `Series ${i}`)}
+        />
+      ))}
+    </nav>
+
+    <!-- ── Slide counter ── -->
+    <div class="fl-counter" id="fl-counter" aria-live="polite">
+      <span id="fl-counter-cur">01</span>
+      <span class="fl-counter-sep">/</span>
+      <span id="fl-counter-tot">{String(totalSlides).padStart(2, '0')}</span>
+    </div>
+
+  </div><!-- /fl-root -->
 </BaseLayout>
 
+<!-- Hide global footer — foundations page is full-viewport, no footer needed -->
+<style is:global>
+  body:has(.fl-root) footer,
+  body:has(.fl-root) .site-footer {
+    display: none !important;
+  }
+</style>
+
 <style>
-  /* ── Foundations tokens ── */
+  /* ── Reset & tokens ── */
   .fl-root {
     --f-bg:            #060d1f;
     --f-surface:       #0a1628;
@@ -160,257 +228,562 @@ const totalChapters = allPosts.length;
     --f-accent-dim:    #2d6ae0;
     --f-accent-glow:   rgba(69, 137, 255, 0.12);
 
+    position: fixed;
+    inset: 0;
+    top: 0;
     background: var(--f-bg);
-    color: var(--f-text);
-    min-height: 100vh;
-    padding-bottom: 5rem;
+    overflow: hidden;
   }
 
-  /* ── Hero ── */
-  .fl-hero {
+  /* ── Deck: vertical scroll-snap container ── */
+  .fl-deck {
+    width: 100%;
+    height: 100%;
+    overflow-y: scroll;
+    scroll-snap-type: y mandatory;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .fl-deck::-webkit-scrollbar { display: none; }
+
+  /* ── Each slide ── */
+  .fl-slide {
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+    width: 100%;
+    height: 100%;
+    position: relative;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
     border-bottom: 1px solid var(--f-border);
-    background: linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--f-accent) 6%, var(--f-bg)) 0%,
-      var(--f-bg) 100%
-    );
-    padding: 4rem 1.5rem 3.5rem;
   }
-  .fl-hero-inner {
-    max-width: 720px;
+
+  /* Left accent line */
+  .fl-slide::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+    width: 3px;
+    background: linear-gradient(180deg, var(--f-accent) 0%, transparent 100%);
+    opacity: 0;
+    transition: opacity 0.4s;
+  }
+  .fl-slide.is-active::before { opacity: 1; }
+
+  /* Large ghosted chapter/slide number in background */
+  .fl-slide-bg-num {
+    position: absolute;
+    right: -0.05em;
+    bottom: -0.1em;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: clamp(8rem, 22vw, 18rem);
+    font-weight: 700;
+    color: var(--f-accent);
+    opacity: 0.04;
+    line-height: 1;
+    pointer-events: none;
+    user-select: none;
+    letter-spacing: -0.04em;
+  }
+
+  /* ── Inner content wrapper ── */
+  .fl-slide-inner {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 1000px;
     margin: 0 auto;
+    padding: 3rem 2.5rem 3rem 4rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 3rem;
   }
+
+  /* Hero slide: single column, no row layout */
+  .fl-slide-hero .fl-slide-inner {
+    flex-direction: column;
+    max-width: 680px;
+    padding-left: clamp(2rem, 8vw, 6rem);
+  }
+
+  @media (max-width: 768px) {
+    .fl-slide-inner {
+      padding: 2rem 1.5rem;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+  }
+
+  /* ────────────────────── HERO SLIDE ── */
+  .fl-slide-hero {
+    background: linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--f-accent) 5%, var(--f-bg)) 0%,
+      var(--f-bg) 60%
+    );
+  }
+
   .fl-hero-badge {
     display: inline-block;
     font-family: 'IBM Plex Mono', monospace;
-    font-size: 0.63rem;
+    font-size: 0.6rem;
     font-weight: 600;
-    letter-spacing: 0.14em;
+    letter-spacing: 0.18em;
     text-transform: uppercase;
     color: var(--f-accent);
     background: color-mix(in srgb, var(--f-accent) 10%, var(--f-surface));
     border: 1px solid color-mix(in srgb, var(--f-accent) 30%, transparent);
-    padding: 0.2rem 0.7rem;
-    margin-bottom: 1.25rem;
+    padding: 0.22rem 0.75rem;
+    margin-bottom: 1.5rem;
   }
+
   .fl-hero-title {
     font-family: 'IBM Plex Serif', Georgia, serif;
-    font-size: clamp(2rem, 5vw, 3.25rem);
+    font-size: clamp(2.25rem, 5vw, 3.75rem);
     font-weight: 300;
     line-height: 1.1;
     letter-spacing: -0.03em;
     color: var(--f-text);
-    margin: 0 0 1.125rem;
+    margin: 0 0 1.25rem;
   }
+
   .fl-hero-desc {
     font-family: 'IBM Plex Serif', Georgia, serif;
-    font-size: 1.05rem;
-    line-height: 1.7;
+    font-size: 1rem;
+    line-height: 1.75;
     color: var(--f-text-dim);
-    margin: 0 0 2rem;
-    max-width: 56ch;
+    margin: 0 0 2.25rem;
+    max-width: 52ch;
   }
+
   .fl-hero-stats {
     display: flex;
-    gap: 2rem;
-    align-items: center;
+    gap: 2.5rem;
+    margin-bottom: 2.5rem;
   }
   .fl-stat {
     display: flex;
     flex-direction: column;
-    align-items: flex-start;
   }
   .fl-stat-num {
     font-family: 'IBM Plex Mono', monospace;
-    font-size: 1.75rem;
-    font-weight: 600;
+    font-size: 2rem;
+    font-weight: 700;
     color: var(--f-accent);
     line-height: 1;
   }
   .fl-stat-label {
     font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--f-text-muted);
+    margin-top: 0.3rem;
+  }
+
+  .fl-hero-cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--f-accent);
+    background: transparent;
+    border: 1px solid color-mix(in srgb, var(--f-accent) 40%, transparent);
+    padding: 0.55rem 1.1rem;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+  }
+  .fl-hero-cta:hover {
+    background: color-mix(in srgb, var(--f-accent) 10%, transparent);
+    border-color: var(--f-accent);
+  }
+  .fl-cta-arrow {
+    display: inline-block;
+    transition: transform 0.2s;
+  }
+  .fl-hero-cta:hover .fl-cta-arrow { transform: translateY(3px); }
+
+  /* "scroll or press ↓" hint at bottom center */
+  .fl-slide-hint {
+    position: absolute;
+    bottom: 1.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.58rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--f-text-muted);
+    animation: hint-pulse 2.4s ease-in-out infinite;
+    white-space: nowrap;
+  }
+  @keyframes hint-pulse {
+    0%, 100% { opacity: 0.4; }
+    50%       { opacity: 1; }
+  }
+
+  /* ────────────────────── SERIES SLIDE ── */
+  .fl-series-left {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .fl-series-eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 0.9rem;
+  }
+  .fl-series-icon {
+    font-size: 0.9rem;
+    color: var(--f-accent);
+    flex-shrink: 0;
+  }
+  .fl-series-ordinal {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--f-text-muted);
+  }
+
+  .fl-series-title {
+    font-family: 'IBM Plex Serif', Georgia, serif;
+    font-size: clamp(1.5rem, 3.5vw, 2.5rem);
+    font-weight: 300;
+    line-height: 1.15;
+    letter-spacing: -0.025em;
+    color: var(--f-text);
+    margin: 0 0 0.875rem;
+  }
+
+  .fl-series-desc {
+    font-family: 'IBM Plex Serif', Georgia, serif;
+    font-size: 0.9rem;
+    line-height: 1.65;
+    color: var(--f-text-dim);
+    margin: 0 0 1.5rem;
+    max-width: 52ch;
+    font-style: italic;
+  }
+
+  /* Chapter list */
+  .fl-ch-list {
+    list-style: none;
+    margin: 0 0 1.5rem;
+    padding: 0;
+    border-top: 1px solid var(--f-border);
+    max-height: 260px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--f-border) transparent;
+  }
+
+  .fl-ch-item {
+    border-bottom: 1px solid color-mix(in srgb, var(--f-border) 60%, transparent);
+  }
+  .fl-ch-item:last-child { border-bottom: none; }
+
+  .fl-ch-link {
+    display: grid;
+    grid-template-columns: 2rem 1fr auto;
+    align-items: center;
+    gap: 0;
+    padding: 0.55rem 0.5rem 0.55rem 0;
+    text-decoration: none;
+    color: inherit;
+    transition: background 0.12s;
+  }
+  .fl-ch-link:hover {
+    background: color-mix(in srgb, var(--f-accent) 5%, transparent);
+  }
+  .fl-ch-item.is-read .fl-ch-link {
+    border-left: 2px solid color-mix(in srgb, var(--f-accent) 35%, transparent);
+    padding-left: 0.35rem;
+  }
+
+  .fl-ch-num {
+    font-family: 'IBM Plex Mono', monospace;
     font-size: 0.62rem;
+    color: var(--f-text-muted);
+    flex-shrink: 0;
+  }
+  .fl-ch-item.is-read .fl-ch-num { color: var(--f-accent); }
+
+  .fl-ch-title {
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    font-size: 0.82rem;
+    color: var(--f-text-dim);
+    line-height: 1.35;
+    transition: color 0.12s;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .fl-ch-link:hover .fl-ch-title { color: var(--f-accent); }
+
+  .fl-ch-arrow {
+    font-size: 0.7rem;
+    color: var(--f-text-muted);
+    flex-shrink: 0;
+    padding-left: 0.5rem;
+    opacity: 0;
+    transition: opacity 0.12s, transform 0.12s;
+  }
+  .fl-ch-link:hover .fl-ch-arrow {
+    opacity: 1;
+    transform: translateX(2px);
+  }
+
+  /* Enter series CTA */
+  .fl-series-cta {
+    display: inline-flex;
+    align-items: center;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--f-accent);
+    text-decoration: none;
+    border-bottom: 1px solid color-mix(in srgb, var(--f-accent) 35%, transparent);
+    padding-bottom: 1px;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .fl-series-cta:hover {
+    color: #a0c4ff;
+    border-color: #a0c4ff;
+  }
+
+  /* Right: badge + ring */
+  .fl-series-right {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.25rem;
+    padding-top: 0.5rem;
+  }
+
+  @media (max-width: 768px) {
+    .fl-series-right { flex-direction: row; align-items: center; }
+  }
+
+  .fl-series-badge {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: var(--f-surface);
+    border: 1px solid var(--f-border);
+    padding: 0.75rem 1.25rem;
+    min-width: 80px;
+  }
+  .fl-badge-num {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--f-accent);
+    line-height: 1;
+  }
+  .fl-badge-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.58rem;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--f-text-muted);
-    margin-top: 0.2rem;
+    margin-top: 0.3rem;
   }
 
-  /* ── Content area ── */
-  .fl-content {
-    max-width: 860px;
-    margin: 0 auto;
-    padding: 3rem 1.5rem 0;
+  /* Progress ring */
+  .fl-series-ring {
+    position: relative;
+    width: 80px;
+    height: 80px;
+  }
+  .fl-ring-svg {
+    width: 80px;
+    height: 80px;
+    transform: rotate(-90deg);
+  }
+  .fl-ring-track {
+    fill: none;
+    stroke: var(--f-surface-2);
+    stroke-width: 5;
+  }
+  .fl-ring-fill {
+    fill: none;
+    stroke: var(--f-accent);
+    stroke-width: 5;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 0.6s ease;
+  }
+  .fl-ring-label {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--f-text-dim);
+  }
+
+  /* ────────────────────── DOT NAV ── */
+  .fl-dots {
+    position: fixed;
+    right: 1.25rem;
+    top: 50%;
+    transform: translateY(-50%);
     display: flex;
     flex-direction: column;
-    gap: 3.5rem;
+    gap: 0.55rem;
+    z-index: 50;
   }
 
-  /* ── Series ── */
-  .fl-series {}
-
-  .fl-series-header {
-    margin-bottom: 0;
-    padding-bottom: 1rem;
-    border-bottom: 1px solid var(--f-border);
-  }
-  .fl-series-title-row {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.75rem;
-  }
-  .fl-series-icon {
-    font-size: 1rem;
-    color: var(--f-accent);
-    flex-shrink: 0;
-    margin-top: 0.15rem;
-  }
-  .fl-series-title {
-    font-family: 'IBM Plex Sans', system-ui, sans-serif;
-    font-size: 1.1rem;
-    font-weight: 600;
-    color: var(--f-text);
-    margin: 0 0 0.3rem;
-  }
-  .fl-series-desc {
-    font-family: 'IBM Plex Serif', Georgia, serif;
-    font-size: 0.88rem;
-    color: var(--f-text-muted);
-    line-height: 1.55;
-    margin: 0;
-  }
-  .fl-series-meta {
-    margin-left: auto;
-    flex-shrink: 0;
-    padding-top: 0.2rem;
-  }
-  .fl-series-count {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 0.65rem;
-    color: var(--f-text-muted);
-    background: var(--f-surface-2);
-    border: 1px solid var(--f-border);
-    padding: 0.15rem 0.5rem;
-  }
-
-  /* ── Chapter list ── */
-  .fl-chapters {
-    list-style: none;
-    margin: 0;
+  .fl-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--f-border-bright);
+    border: none;
+    cursor: pointer;
     padding: 0;
+    transition: background 0.2s, transform 0.2s;
+  }
+  .fl-dot:hover { background: var(--f-text-dim); transform: scale(1.3); }
+  .fl-dot.is-active {
+    background: var(--f-accent);
+    transform: scale(1.25);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--f-accent) 25%, transparent);
   }
 
-  .fl-chapter {
-    border-bottom: 1px solid var(--f-border);
-  }
-  .fl-chapter:last-child { border-bottom: none; }
-
-  .fl-chapter-link {
-    display: grid;
-    grid-template-columns: 2.5rem 1fr auto;
-    gap: 0;
-    align-items: center;
-    text-decoration: none;
-    padding: 1rem 0.75rem 1rem 0;
-    transition: background 0.15s;
-    border-left: 2px solid transparent;
-    padding-left: 0.75rem;
-    color: inherit;
-  }
-  .fl-chapter-link:hover {
-    background: color-mix(in srgb, var(--f-accent) 5%, var(--f-bg));
-    border-left-color: color-mix(in srgb, var(--f-accent) 40%, transparent);
-  }
-
-  /* Chapter read state — set by JS */
-  .fl-chapter.is-read .fl-chapter-link {
-    border-left-color: color-mix(in srgb, var(--f-accent) 20%, transparent);
-  }
-  .fl-chapter.is-read [data-read-badge] {
-    display: inline-block !important;
-  }
-
-  .fl-chapter-left {
+  /* ────────────────────── COUNTER ── */
+  .fl-counter {
+    position: fixed;
+    bottom: 1.5rem;
+    left: 4rem;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.68rem;
+    color: var(--f-text-muted);
+    z-index: 50;
     display: flex;
     align-items: center;
-    justify-content: flex-start;
+    gap: 0.25rem;
+    letter-spacing: 0.04em;
   }
-  .fl-chapter-num {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 0.72rem;
-    color: var(--f-text-muted);
-    font-weight: 500;
-  }
-  .fl-chapter.is-read .fl-chapter-num {
-    color: var(--f-accent);
-  }
-
-  .fl-chapter-body {
-    min-width: 0;
-    padding-right: 1rem;
-  }
-  .fl-chapter-title-row {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin-bottom: 0.3rem;
-    flex-wrap: wrap;
-  }
-  .fl-chapter-title {
-    font-family: 'IBM Plex Sans', system-ui, sans-serif;
-    font-size: 0.92rem;
-    font-weight: 500;
-    color: var(--f-text);
-    line-height: 1.35;
-  }
-  .fl-chapter-link:hover .fl-chapter-title { color: var(--f-accent); }
-
-  .fl-chapter-desc {
-    font-family: 'IBM Plex Serif', Georgia, serif;
-    font-size: 0.82rem;
-    color: var(--f-text-muted);
-    line-height: 1.5;
-    margin: 0;
-  }
-
-  .fl-chapter-badge {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 0.6rem;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    padding: 0.1rem 0.4rem;
-    flex-shrink: 0;
-  }
-  .fl-badge-draft {
-    color: var(--f-text-muted);
-    border: 1px solid var(--f-border);
-    background: var(--f-surface-2);
-  }
-  .fl-badge-read {
-    color: var(--f-accent);
-    border: 1px solid color-mix(in srgb, var(--f-accent) 30%, transparent);
-    background: color-mix(in srgb, var(--f-accent) 8%, transparent);
-  }
-
-  .fl-chapter-arrow {
-    font-size: 0.78rem;
-    color: var(--f-text-muted);
-    flex-shrink: 0;
-    transition: color 0.15s, transform 0.15s;
-  }
-  .fl-chapter-link:hover .fl-chapter-arrow {
-    color: var(--f-accent);
-    transform: translateX(3px);
-  }
+  #fl-counter-cur { color: var(--f-accent); font-weight: 600; }
+  .fl-counter-sep { color: var(--f-border-bright); }
 </style>
 
 <script>
-  // Restore read state from localStorage and mark chapters
-  document.querySelectorAll<HTMLElement>('.fl-chapter[data-slug]').forEach(el => {
-    const slug = el.dataset.slug!;
-    if (localStorage.getItem(`f-read:${slug}`) === '1') {
+  const deck     = document.getElementById('fl-deck')!;
+  const dots     = document.querySelectorAll<HTMLElement>('.fl-dot');
+  const slides   = document.querySelectorAll<HTMLElement>('.fl-slide');
+  const counterCur = document.getElementById('fl-counter-cur')!;
+
+  let current = 0;
+  const total = slides.length;
+
+  // ── Restore read state from localStorage ──
+  document.querySelectorAll<HTMLElement>('.fl-ch-item[data-slug]').forEach(el => {
+    if (localStorage.getItem(`f-read:${el.dataset.slug}`) === '1') {
       el.classList.add('is-read');
     }
   });
+
+  // ── Progress rings ──
+  document.querySelectorAll<SVGCircleElement>('.fl-ring-fill').forEach(circle => {
+    const slugs   = (circle.dataset.slugs ?? '').split(',').filter(Boolean);
+    const total   = parseInt(circle.dataset.total ?? '0', 10);
+    const read    = slugs.filter(s => localStorage.getItem(`f-read:${s}`) === '1').length;
+    const pct     = total > 0 ? read / total : 0;
+    const circum  = 2 * Math.PI * 34; // r=34 → ~213.6
+    circle.style.strokeDashoffset = String(circum * (1 - pct));
+
+    // Update text label
+    const seriesEl = circle.closest('[data-series-id]');
+    if (seriesEl) {
+      const label = seriesEl.querySelector<HTMLElement>('.fl-ring-label');
+      if (label) label.textContent = `${Math.round(pct * 100)}%`;
+    }
+  });
+
+  // ── Sync active slide state ──
+  function setSlide(idx: number, smooth = true) {
+    current = Math.max(0, Math.min(idx, total - 1));
+
+    slides.forEach((s, i) => s.classList.toggle('is-active', i === current));
+    dots.forEach((d, i) => d.classList.toggle('is-active', i === current));
+    counterCur.textContent = String(current + 1).padStart(2, '0');
+
+    // Scroll deck
+    const target = slides[current];
+    if (target) {
+      target.scrollIntoView({ behavior: smooth ? 'smooth' : 'instant', block: 'start' });
+    }
+  }
+
+  // ── Dot clicks ──
+  dots.forEach(dot => {
+    dot.addEventListener('click', () => {
+      const idx = parseInt(dot.dataset.goto ?? '0', 10);
+      setSlide(idx);
+    });
+  });
+
+  // ── Hero CTA ──
+  document.getElementById('fl-start-btn')?.addEventListener('click', () => setSlide(1));
+
+  // ── Keyboard navigation ──
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown' || e.key === 'PageDown' || e.key === ' ') {
+      e.preventDefault();
+      setSlide(current + 1);
+    } else if (e.key === 'ArrowUp' || e.key === 'PageUp') {
+      e.preventDefault();
+      setSlide(current - 1);
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      setSlide(0);
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      setSlide(total - 1);
+    }
+  });
+
+  // ── Sync dots on native scroll ──
+  let scrollTimer: ReturnType<typeof setTimeout>;
+  deck.addEventListener('scroll', () => {
+    clearTimeout(scrollTimer);
+    scrollTimer = setTimeout(() => {
+      const scrolled = deck.scrollTop;
+      const height   = deck.clientHeight;
+      const idx = Math.round(scrolled / height);
+      if (idx !== current) {
+        current = idx;
+        slides.forEach((s, i) => s.classList.toggle('is-active', i === current));
+        dots.forEach((d, i) => d.classList.toggle('is-active', i === current));
+        counterCur.textContent = String(current + 1).padStart(2, '0');
+      }
+    }, 60);
+  }, { passive: true });
+
+  // ── Offset fl-root below the sticky navbar ──
+  function offsetBelowNav() {
+    const nav = document.querySelector<HTMLElement>('header.sticky, header[class*="sticky"]');
+    if (nav) {
+      const h = nav.getBoundingClientRect().height;
+      const root = document.getElementById('fl-root');
+      if (root) root.style.top = `${h}px`;
+    }
+  }
+  offsetBelowNav();
+  window.addEventListener('resize', offsetBelowNav);
+
+  // ── Init first slide ──
+  setSlide(0, false);
 </script>
