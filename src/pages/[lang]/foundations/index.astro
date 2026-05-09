@@ -1,7 +1,7 @@
 ---
 import { getCollection } from 'astro:content';
 import BaseLayout from '../../../layouts/BaseLayout.astro';
-import { getPostSlug, seriesMeta, getSeriesPosts } from '../../../lib/posts';
+import { getPostSlug } from '../../../lib/posts';
 
 export async function getStaticPaths() {
   return [{ params: { lang: 'en' } }, { params: { lang: 'vi' } }];
@@ -13,32 +13,40 @@ const allPosts = await getCollection('blog', p =>
   !p.data.draft && p.data.lang === lang && p.data.category === 'foundations'
 );
 
-// Group by series
-const seriesIds = [...new Set(allPosts.map(p => p.data.series).filter(Boolean))] as string[];
-const seriesGroups = seriesIds.map(id => {
-  const posts = getSeriesPosts(allPosts, id);
-  // Derive the track from the first post's seriesSection
-  const section = posts[0]?.data.seriesSection ?? null;
-  return { meta: seriesMeta[id], id, posts, section };
-});
+// Track order and accent colours (stable)
+const TRACK_ORDER = ['Systems Design', 'Storage & Databases', 'Design Patterns', 'Engineering Craft'];
 
-// Track accent colours (stable mapping)
-const trackColors: Record<string, { bg: string; text: string; border: string }> = {
-  'Systems Design':      { bg: 'rgba(69,137,255,0.12)',  text: '#4589ff', border: 'rgba(69,137,255,0.35)' },
-  'Storage & Databases': { bg: 'rgba(52,211,153,0.10)',  text: '#34d399', border: 'rgba(52,211,153,0.30)' },
-  'Design Patterns':     { bg: 'rgba(251,191,36,0.10)',  text: '#fbbf24', border: 'rgba(251,191,36,0.30)' },
-  'Engineering Craft':   { bg: 'rgba(167,139,250,0.10)', text: '#a78bfa', border: 'rgba(167,139,250,0.30)' },
+const trackColors: Record<string, { bg: string; text: string; border: string; solid: string }> = {
+  'Systems Design':      { bg: 'rgba(69,137,255,0.12)',  text: '#4589ff', border: 'rgba(69,137,255,0.35)',  solid: '#4589ff' },
+  'Storage & Databases': { bg: 'rgba(52,211,153,0.10)',  text: '#34d399', border: 'rgba(52,211,153,0.30)',  solid: '#34d399' },
+  'Design Patterns':     { bg: 'rgba(251,191,36,0.10)',  text: '#fbbf24', border: 'rgba(251,191,36,0.30)',  solid: '#fbbf24' },
+  'Engineering Craft':   { bg: 'rgba(167,139,250,0.10)', text: '#a78bfa', border: 'rgba(167,139,250,0.30)', solid: '#a78bfa' },
 };
 
-// Stand-alone foundations posts (no series)
+const trackDescriptions: Record<string, string> = {
+  'Systems Design':      'How data-intensive systems are built, scaled, and kept reliable — from storage engines to distributed consensus.',
+  'Storage & Databases': 'Deep internals: B-trees, LSM-trees, WAL recovery, replication, partitioning, and distributed transactions.',
+  'Design Patterns':     'The 23 GoF patterns from first principles — when to reach for each one, and how they compose.',
+  'Engineering Craft':   'The laws, forces, and trade-offs that separate good software design from code that merely works.',
+};
+
+// Group posts by seriesSection track, sorted by seriesOrder
+const trackGroups = TRACK_ORDER.map(track => {
+  const posts = allPosts
+    .filter(p => p.data.seriesSection === track)
+    .sort((a, b) => (a.data.seriesOrder ?? 0) - (b.data.seriesOrder ?? 0));
+  return { track, posts, tc: trackColors[track], desc: trackDescriptions[track] };
+}).filter(g => g.posts.length > 0);
+
+// Stand-alone foundations posts (no seriesSection)
 const standalone = allPosts
-  .filter(p => !p.data.series)
+  .filter(p => !p.data.seriesSection)
   .sort((a, b) => b.data.pubDate.getTime() - a.data.pubDate.getTime());
 
 const totalChapters = allPosts.length;
 
-// Rows: 0 = hero, 1..N = series, last = standalone (if any)
-const totalRows = 1 + seriesGroups.length + (standalone.length > 0 ? 1 : 0);
+// Rows: 0 = hero, 1..4 = tracks, last = standalone (if any)
+const totalRows = 1 + trackGroups.length + (standalone.length > 0 ? 1 : 0);
 ---
 
 <BaseLayout
@@ -71,8 +79,8 @@ const totalRows = 1 + seriesGroups.length + (standalone.length > 0 ? 1 : 0);
                 <span class="fl-stat-label">chapters</span>
               </div>
               <div class="fl-stat">
-                <span class="fl-stat-num">{seriesGroups.length}</span>
-                <span class="fl-stat-label">{seriesGroups.length === 1 ? 'series' : 'series'}</span>
+                <span class="fl-stat-num">{trackGroups.length}</span>
+                <span class="fl-stat-label">tracks</span>
               </div>
             </div>
 
@@ -85,49 +93,44 @@ const totalRows = 1 + seriesGroups.length + (standalone.length > 0 ? 1 : 0);
         </section>
       </div>
 
-      <!-- ── Rows: one per series ── -->
-      {seriesGroups.map(({ id, meta, posts, section }, si) => {
-        const tc = section ? trackColors[section] : null;
-        return (
-        <div class="fl-row" data-row={si + 1}>
+      <!-- ── Rows: one per track ── -->
+      {trackGroups.map(({ track, posts, tc, desc }, ti) => (
+        <div class="fl-row" data-row={ti + 1}>
 
-          <!-- Col 0: Series overview -->
+          <!-- Col 0: Track overview -->
           <section
             class="fl-slide fl-slide-series"
-            data-row={si + 1}
+            data-row={ti + 1}
             data-col="0"
-            data-series-id={id}
+            data-track={track}
           >
-            <div class="fl-slide-bg-num">{String(si + 1).padStart(2, '0')}</div>
+            <div class="fl-slide-bg-num">{String(ti + 1).padStart(2, '0')}</div>
 
             <div class="fl-slide-inner">
-              <!-- Left: series info -->
+              <!-- Left: track info -->
               <div class="fl-series-left">
-                {section && tc && (
-                  <div
-                    class="fl-track-badge"
-                    style={`background:${tc.bg};color:${tc.text};border-color:${tc.border}`}
-                  >
-                    {section}
-                  </div>
-                )}
-                <div class="fl-series-eyebrow">
-                  <span class="fl-series-icon">◈</span>
-                  <span class="fl-series-ordinal">Series {si + 1} of {seriesGroups.length}</span>
+                <div
+                  class="fl-track-badge"
+                  style={`background:${tc.bg};color:${tc.text};border-color:${tc.border}`}
+                >
+                  {track}
                 </div>
 
-                <h2 class="fl-series-title">{meta?.title ?? id}</h2>
+                <div class="fl-series-eyebrow">
+                  <span class="fl-series-icon" style={`color:${tc.solid}`}>◈</span>
+                  <span class="fl-series-ordinal">Track {ti + 1} of {trackGroups.length}</span>
+                </div>
 
-                {meta?.description && (
-                  <p class="fl-series-desc">{meta.description}</p>
-                )}
+                <h2 class="fl-series-title">{track}</h2>
+
+                <p class="fl-series-desc">{desc}</p>
 
                 <div class="fl-series-ch-preview">
                   {posts.slice(0, 4).map((post, idx) => {
                     const slug = getPostSlug(post);
                     return (
                       <div class="fl-preview-item" data-slug={slug}>
-                        <span class="fl-preview-num">{String(idx + 1).padStart(2, '0')}</span>
+                        <span class="fl-preview-num" style={`color:${tc.text}`}>{String(idx + 1).padStart(2, '0')}</span>
                         <span class="fl-preview-title">{post.data.title}</span>
                       </div>
                     );
@@ -138,22 +141,22 @@ const totalRows = 1 + seriesGroups.length + (standalone.length > 0 ? 1 : 0);
                 </div>
 
                 <div class="fl-series-actions">
-                  <button class="fl-series-enter-btn" data-row={si + 1}>
+                  <button class="fl-series-enter-btn" data-row={ti + 1}>
                     Browse chapters <span>→</span>
                   </button>
-                  <a href={`/${lang}/blog/${getPostSlug(posts[0])}`} class="fl-series-cta">
+                  <a href={`/${lang}/blog/${getPostSlug(posts[0])}`} class="fl-series-cta" style={`color:${tc.text}`}>
                     Start reading ↗
                   </a>
                 </div>
               </div>
 
-              <!-- Right: badge + progress ring -->
+              <!-- Right: chapter count + progress ring -->
               <div class="fl-series-right">
                 <div class="fl-series-badge">
-                  <span class="fl-badge-num">{posts.length}</span>
+                  <span class="fl-badge-num" style={`color:${tc.text}`}>{posts.length}</span>
                   <span class="fl-badge-label">chapters</span>
                 </div>
-                <div class="fl-series-ring" data-series-id={id}>
+                <div class="fl-series-ring" data-track={track}>
                   <svg viewBox="0 0 80 80" class="fl-ring-svg" aria-hidden="true">
                     <circle class="fl-ring-track" cx="40" cy="40" r="34" />
                     <circle
@@ -161,11 +164,12 @@ const totalRows = 1 + seriesGroups.length + (standalone.length > 0 ? 1 : 0);
                       cx="40" cy="40" r="34"
                       stroke-dasharray="213.6"
                       stroke-dashoffset="213.6"
+                      style={`stroke:${tc.solid}`}
                       data-total={posts.length}
                       data-slugs={posts.map(p => getPostSlug(p)).join(',')}
                     />
                   </svg>
-                  <span class="fl-ring-label" data-series-id={id}>0%</span>
+                  <span class="fl-ring-label" data-track={track} style={`color:${tc.text}`}>0%</span>
                 </div>
               </div>
             </div>
@@ -173,22 +177,22 @@ const totalRows = 1 + seriesGroups.length + (standalone.length > 0 ? 1 : 0);
             <div class="fl-slide-hint-h">press → or swipe left to browse chapters</div>
           </section>
 
-          <!-- Cols 1..N: One slide per chapter -->
+          <!-- Cols 1..N: One slide per chapter in this track -->
           {posts.map((post, idx) => {
             const slug = getPostSlug(post);
             return (
               <section
                 class="fl-slide fl-slide-chapter"
-                data-row={si + 1}
+                data-row={ti + 1}
                 data-col={idx + 1}
-                data-series-id={id}
+                data-track={track}
                 data-slug={slug}
               >
                 <div class="fl-slide-bg-num">{String(idx + 1).padStart(2, '0')}</div>
 
                 <div class="fl-slide-inner fl-ch-slide-inner">
                   <div class="fl-ch-slide-eyebrow">
-                    <span class="fl-ch-series-label">{meta?.title ?? id}</span>
+                    <span class="fl-ch-series-label" style={`color:${tc.text}`}>{track}</span>
                     <span class="fl-ch-sep">·</span>
                     <span class="fl-ch-pos">Chapter {idx + 1} of {posts.length}</span>
                   </div>
@@ -214,18 +218,17 @@ const totalRows = 1 + seriesGroups.length + (standalone.length > 0 ? 1 : 0);
             );
           })}
         </div>
-        );
-      })}
+      ))}
 
       <!-- ── Standalone articles row (if any) ── -->
       {standalone.length > 0 && (
-        <div class="fl-row" data-row={seriesGroups.length + 1}>
+        <div class="fl-row" data-row={trackGroups.length + 1}>
           <section
             class="fl-slide fl-slide-series"
-            data-row={seriesGroups.length + 1}
+            data-row={trackGroups.length + 1}
             data-col="0"
           >
-            <div class="fl-slide-bg-num">{String(seriesGroups.length + 1).padStart(2, '0')}</div>
+            <div class="fl-slide-bg-num">{String(trackGroups.length + 1).padStart(2, '0')}</div>
             <div class="fl-slide-inner">
               <div class="fl-series-left">
                 <div class="fl-series-eyebrow">
@@ -263,7 +266,7 @@ const totalRows = 1 + seriesGroups.length + (standalone.length > 0 ? 1 : 0);
             return (
               <section
                 class="fl-slide fl-slide-chapter"
-                data-row={seriesGroups.length + 1}
+                data-row={trackGroups.length + 1}
                 data-col={idx + 1}
                 data-slug={slug}
               >
@@ -296,8 +299,8 @@ const totalRows = 1 + seriesGroups.length + (standalone.length > 0 ? 1 : 0);
         <button
           class={`fl-dot${i === 0 ? ' is-active' : ''}`}
           data-goto-row={i}
-          aria-label={i === 0 ? 'Intro' : `Series ${i}`}
-          title={i === 0 ? 'Intro' : (seriesGroups[i - 1]?.meta?.title ?? `Series ${i}`)}
+          aria-label={i === 0 ? 'Intro' : `Track ${i}`}
+          title={i === 0 ? 'Intro' : (trackGroups[i - 1]?.track ?? `Track ${i}`)}
         />
       ))}
     </nav>
