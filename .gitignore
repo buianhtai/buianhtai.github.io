@@ -20,3 +20,11 @@ node-compile-cache/
 .dolt/
 *.db
 .beads-credential-key
+
+# Tool state / temp files
+tsx-501/
+.omc/state/
+.sisyphus/
+keycloak/
+docs/keycloak-research.md
+skills-lock.json
