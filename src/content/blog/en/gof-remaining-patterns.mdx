@@ -15,6 +15,9 @@ import HeroGrid from '../../../components/mdx/HeroGrid.astro';
 import Callout from '../../../components/mdx/Callout.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
 import LayerStack from '../../../components/mdx/LayerStack.astro';
+import ArchDiagram from '../../../components/mdx/ArchDiagram.astro';
+import SequenceDiagram from '../../../components/mdx/SequenceDiagram.astro';
+import StateMachine from '../../../components/mdx/StateMachine.astro';
 
 The GoF catalog has 23 patterns. The preceding posts in this series cover 14 in depth — the ones you'll encounter most often. The remaining 9 are less universally applicable, but each one is the right tool for a specific situation. Understanding them is how you avoid either reinventing them or reaching for a heavier pattern when a simpler one fits.
 
@@ -49,6 +52,30 @@ public abstract class RemoteControl {
 
 You can add new remote types and new TV brands independently — no subclass matrix. **Use when** two dimensions of variation exist and both change at their own pace.
 
+<ArchDiagram
+  title="Bridge — abstraction and implementation vary independently"
+  zones={[
+    { id: "abs",  label: "Abstraction hierarchy",     color: "teal"  },
+    { id: "impl", label: "Implementation hierarchy",  color: "amber" },
+  ]}
+  nodes={[
+    { id: "rc",      label: "RemoteControl",     sub: "tv: TV\non() / off()\nsetChannel(n)",  zone: "abs",  row: 1, col: 1, color: "teal" },
+    { id: "basic",   label: "BasicRemote",       sub: "extends RemoteControl\nsetChannel()",  zone: "abs",  row: 2, col: 1 },
+    { id: "fancy",   label: "FancyRemote",       sub: "extends RemoteControl\n+ mute()",      zone: "abs",  row: 2, col: 2 },
+    { id: "tv",      label: "«interface» TV",    sub: "on() / off()\ntuneChannel(n)",          zone: "impl", row: 1, col: 1, color: "amber" },
+    { id: "sony",    label: "SonyTV",            sub: "implements TV",                         zone: "impl", row: 2, col: 1 },
+    { id: "lg",      label: "LgTV",              sub: "implements TV",                         zone: "impl", row: 2, col: 2 },
+  ]}
+  edges={[
+    { from: "rc",    to: "tv",    label: "has-a (bridge)", type: "solid" },
+    { from: "basic", to: "rc",    label: "extends",        type: "dashed" },
+    { from: "fancy", to: "rc",    label: "extends",        type: "dashed" },
+    { from: "sony",  to: "tv",    label: "implements",     type: "dashed" },
+    { from: "lg",    to: "tv",    label: "implements",     type: "dashed" },
+  ]}
+  caption="Adding a new remote type (FancyRemote) or a new TV brand (LgTV) requires one new class in its own hierarchy — no M×N subclass matrix."
+/>
+
 ---
 
 ## <Label color="teal">2</Label> Builder
@@ -76,6 +103,19 @@ Person person = new Person.Builder("Alice")
 
 **Use when** construction involves many optional parts or steps that must happen in a specific order.
 
+<SequenceDiagram
+  title="Builder — Director drives construction; client gets finished product"
+  actors={["Client", "Director", "MealBuilder", "Meal"]}
+  messages={[
+    { from: "Client",   to: "Director",    label: "construct(builder)" },
+    { from: "Director", to: "MealBuilder", label: "buildBurger()" },
+    { from: "Director", to: "MealBuilder", label: "buildDrink()" },
+    { from: "Director", to: "MealBuilder", label: "buildDessert()" },
+    { from: "Client",   to: "MealBuilder", label: "getMeal()" },
+    { from: "MealBuilder", to: "Meal",     label: "return assembled Meal" },
+  ]}
+/>
+
 ---
 
 ## <Label color="teal">3</Label> Chain of Responsibility
@@ -99,6 +139,25 @@ Client → AuthHandler → RateLimitHandler → LoggingHandler → BusinessHandl
 
 **Use when**: help desks with escalation tiers; middleware pipelines; event bubbling in UI; logging with level thresholds.
 
+<StateMachine
+  title="Chain of Responsibility — request travels until handled or dropped"
+  cols={4}
+  states={[
+    { id: "client",   label: "Client",        sub: "sends Request",       color: "teal",   row: 1, col: 1, initial: true },
+    { id: "auth",     label: "AuthHandler",   sub: "auth check",          color: "amber",  row: 1, col: 2 },
+    { id: "rate",     label: "RateLimit",     sub: "quota check",         color: "amber",  row: 1, col: 3 },
+    { id: "business", label: "BusinessLogic", sub: "handles request",     color: "green",  row: 1, col: 4, final: true },
+  ]}
+  transitions={[
+    { from: "client",   to: "auth",     label: "request" },
+    { from: "auth",     to: "rate",     label: "pass →" },
+    { from: "auth",     to: "client",   label: "401 reject", type: "error" },
+    { from: "rate",     to: "business", label: "pass →" },
+    { from: "rate",     to: "client",   label: "429 reject", type: "error" },
+  ]}
+  caption="Each handler either handles (short-circuits) or passes to the next. Error transitions return directly to the client."
+/>
+
 ---
 
 ## <Label color="teal">4</Label> Flyweight
@@ -116,6 +175,31 @@ shared.render(canvas, x, y, fontSize, color);
 ```
 
 A document with 100,000 character objects becomes 94 flyweight objects (one per unique character) plus 100,000 lightweight position records. **Use when** you have millions of objects whose shared portions dominate memory.
+
+<ArchDiagram
+  title="Flyweight — intrinsic state shared, extrinsic state passed at call time"
+  zones={[
+    { id: "factory", label: "FlyweightFactory (cache)",  color: "teal"  },
+    { id: "shared",  label: "Shared flyweights (94 obj)", color: "green" },
+    { id: "context", label: "Extrinsic context (100k)",   color: "amber" },
+  ]}
+  nodes={[
+    { id: "fac",    label: "CharFactory",  sub: "getChar(c): Flyweight\ncache: Map<Char,Flyweight>", zone: "factory", row: 1, col: 1, color: "teal" },
+    { id: "fw_a",   label: "Flyweight 'A'",sub: "glyph bitmap\nfont metrics\n(immutable)",           zone: "shared",  row: 1, col: 1, color: "green" },
+    { id: "fw_b",   label: "Flyweight 'B'",sub: "glyph bitmap\nfont metrics\n(immutable)",           zone: "shared",  row: 1, col: 2, color: "green" },
+    { id: "pos1",   label: "Position rec", sub: "char='A'\nx=12, y=40\nsize=12, color=black",        zone: "context", row: 1, col: 1 },
+    { id: "pos2",   label: "Position rec", sub: "char='A'\nx=19, y=40\nsize=12, color=black",        zone: "context", row: 1, col: 2 },
+    { id: "pos3",   label: "Position rec", sub: "char='B'\nx=26, y=40\nsize=14, color=red",          zone: "context", row: 1, col: 3 },
+  ]}
+  edges={[
+    { from: "fac",  to: "fw_a",  label: "returns",        type: "solid" },
+    { from: "fac",  to: "fw_b",  label: "returns",        type: "solid" },
+    { from: "pos1", to: "fw_a",  label: "render(x,y,...)", type: "dashed" },
+    { from: "pos2", to: "fw_a",  label: "render(x,y,...)", type: "dashed" },
+    { from: "pos3", to: "fw_b",  label: "render(x,y,...)", type: "dashed" },
+  ]}
+  caption="Two Flyweight objects serve all three position records. Each call to render() passes the extrinsic state (x, y, size, color) — none of it is stored in the flyweight."
+/>
 
 ---
 
@@ -146,6 +230,20 @@ class And implements Expression {
 
 **Use when**: the grammar is simple, performance is not critical, and the language changes often enough that updating a class is easier than updating a generated parser. Avoid for complex grammars — parser generators are better.
 
+<ArchDiagram
+  title="Interpreter — parse tree for expression: (isStudent AND hasCoupon)"
+  nodes={[
+    { id: "and",     label: "And",         sub: "interpret(ctx)\n= left && right",   row: 1, col: 2, color: "teal" },
+    { id: "student", label: "Variable",    sub: "'isStudent'\nctx.get(name)",        row: 2, col: 1, color: "amber" },
+    { id: "coupon",  label: "Variable",    sub: "'hasCoupon'\nctx.get(name)",        row: 2, col: 3, color: "amber" },
+  ]}
+  edges={[
+    { from: "and", to: "student", label: "left",  type: "solid" },
+    { from: "and", to: "coupon",  label: "right", type: "solid" },
+  ]}
+  caption="Each grammar rule is a class. The root And node calls interpret() on both children recursively. Adding a new operator (Or, Not) means adding a new class."
+/>
+
 ---
 
 ## <Label color="teal">6</Label> Mediator
@@ -164,6 +262,29 @@ public interface ATCMediator {
 ```
 
 **Use when**: a set of objects communicate in complex, hard-to-understand ways; you want to reuse objects independently; tight coupling makes the system hard to test. GUI dialog boxes (one mediator coordinates all widget interactions) are a classic example.
+
+<ArchDiagram
+  title="Mediator — all aircraft talk to the tower, never to each other"
+  zones={[
+    { id: "planes", label: "Aircraft (colleagues)", color: "amber" },
+    { id: "med",    label: "Mediator",              color: "teal"  },
+  ]}
+  nodes={[
+    { id: "a1", label: "Flight AA1", sub: "requestLanding(this)", zone: "planes", row: 1, col: 1 },
+    { id: "a2", label: "Flight UA2", sub: "requestLanding(this)", zone: "planes", row: 1, col: 2 },
+    { id: "a3", label: "Flight BA3", sub: "requestLanding(this)", zone: "planes", row: 2, col: 1 },
+    { id: "a4", label: "Flight SQ4", sub: "requestLanding(this)", zone: "planes", row: 2, col: 2 },
+    { id: "atc", label: "ATCMediator", sub: "requestLanding(a)\nnotifyLandingClear(a)\nsequences all landings", zone: "med", row: 1, col: 1, color: "teal" },
+  ]}
+  edges={[
+    { from: "a1",  to: "atc", label: "requestLanding()", type: "solid" },
+    { from: "a2",  to: "atc", label: "requestLanding()", type: "solid" },
+    { from: "a3",  to: "atc", label: "requestLanding()", type: "solid" },
+    { from: "a4",  to: "atc", label: "requestLanding()", type: "solid" },
+    { from: "atc", to: "a1",  label: "clearToLand()",    type: "dashed" },
+  ]}
+  caption="Without a mediator, N aircraft would need N×(N-1) peer connections. With ATCMediator, each aircraft has exactly one dependency: the tower."
+/>
 
 ---
 
@@ -187,6 +308,22 @@ public class TextEditor {
 
 The caretaker (e.g., an undo manager) stores a stack of mementos and pops the top on Ctrl+Z. It never sees inside the memento — encapsulation is preserved. **Use when** you need undo/redo, checkpoints, or rollback without exposing the object's internals.
 
+<SequenceDiagram
+  title="Memento — save and restore state via opaque snapshot"
+  actors={["User", "UndoManager (Caretaker)", "TextEditor (Originator)", "Memento"]}
+  messages={[
+    { from: "User",        to: "TextEditor (Originator)", label: "type 'Hello'" },
+    { from: "User",        to: "UndoManager (Caretaker)", label: "Ctrl+S (checkpoint)" },
+    { from: "UndoManager (Caretaker)", to: "TextEditor (Originator)", label: "save()" },
+    { from: "TextEditor (Originator)", to: "Memento",                 label: "new Memento(content)" },
+    { from: "UndoManager (Caretaker)", to: "Memento",                 label: "push to stack" },
+    { from: "User",        to: "TextEditor (Originator)", label: "type more, delete all" },
+    { from: "User",        to: "UndoManager (Caretaker)", label: "Ctrl+Z (undo)" },
+    { from: "UndoManager (Caretaker)", to: "Memento",                 label: "pop()" },
+    { from: "UndoManager (Caretaker)", to: "TextEditor (Originator)", label: "restore(memento)" },
+  ]}
+/>
+
 ---
 
 ## <Label color="teal">8</Label> Prototype
@@ -205,6 +342,30 @@ public abstract class Shape implements Cloneable {
 ```
 
 A prototype registry stores pre-built templates; callers clone from the registry instead of constructing from scratch. **Use when** initialization cost dominates and you need many objects that differ only slightly from a known-good base.
+
+<ArchDiagram
+  title="Prototype — registry of pre-built templates; callers clone, not construct"
+  zones={[
+    { id: "registry", label: "PrototypeRegistry",   color: "teal"  },
+    { id: "clones",   label: "Cloned instances",     color: "green" },
+  ]}
+  nodes={[
+    { id: "reg",     label: "ShapeRegistry",  sub: "get(key): Shape\nmap: Map<String,Shape>",    zone: "registry", row: 1, col: 1, color: "teal" },
+    { id: "proto_c", label: "Circle (proto)", sub: "radius=10\ncolor=red\n[pre-initialized]",     zone: "registry", row: 1, col: 2, color: "amber" },
+    { id: "proto_r", label: "Rect (proto)",   sub: "w=50, h=30\ncolor=blue\n[pre-initialized]",   zone: "registry", row: 1, col: 3, color: "amber" },
+    { id: "c1",      label: "Circle copy",    sub: "clone of proto_c\nradius=10, color=red",      zone: "clones",   row: 1, col: 1 },
+    { id: "c2",      label: "Circle copy",    sub: "clone of proto_c\nradius=10, color=red",      zone: "clones",   row: 1, col: 2 },
+    { id: "r1",      label: "Rect copy",      sub: "clone of proto_r\nw=50, h=30",               zone: "clones",   row: 1, col: 3 },
+  ]}
+  edges={[
+    { from: "reg",     to: "proto_c", label: "stores",  type: "solid" },
+    { from: "reg",     to: "proto_r", label: "stores",  type: "solid" },
+    { from: "proto_c", to: "c1",      label: "clone()", type: "dashed" },
+    { from: "proto_c", to: "c2",      label: "clone()", type: "dashed" },
+    { from: "proto_r", to: "r1",      label: "clone()", type: "dashed" },
+  ]}
+  caption="Expensive initialization (DB queries, network calls) happens once for the prototype. Each clone() is a shallow copy — cheap regardless of how the prototype was built."
+/>
 
 ---
 
@@ -230,6 +391,28 @@ public class WordCountVisitor implements DocumentVisitor {
 ```
 
 **Use when** the element structure is stable but operations on it change frequently. Compilers use Visitor for AST analysis passes (type-checking, optimization, code generation). The trade-off: adding a new element type requires updating every Visitor.
+
+<ArchDiagram
+  title="Visitor — new operations without touching element classes"
+  zones={[
+    { id: "elements", label: "Stable element structure",   color: "teal"  },
+    { id: "visitors", label: "New operations (Visitors)",   color: "green" },
+  ]}
+  nodes={[
+    { id: "para",  label: "Paragraph",         sub: "accept(v)\n→ v.visit(this)",      zone: "elements", row: 1, col: 1, color: "teal" },
+    { id: "img",   label: "Image",             sub: "accept(v)\n→ v.visit(this)",      zone: "elements", row: 1, col: 2, color: "teal" },
+    { id: "table", label: "Table",             sub: "accept(v)\n→ v.visit(this)",      zone: "elements", row: 1, col: 3, color: "teal" },
+    { id: "wc",    label: "WordCountVisitor",  sub: "visit(Paragraph)\nvisit(Image)\nvisit(Table)", zone: "visitors", row: 1, col: 1, color: "green" },
+    { id: "ex",    label: "ExportVisitor",     sub: "visit(Paragraph)\nvisit(Image)\nvisit(Table)", zone: "visitors", row: 1, col: 2, color: "green" },
+  ]}
+  edges={[
+    { from: "para",  to: "wc", label: "accept(wc)", type: "dashed" },
+    { from: "img",   to: "wc", label: "accept(wc)", type: "dashed" },
+    { from: "table", to: "wc", label: "accept(wc)", type: "dashed" },
+    { from: "para",  to: "ex", label: "accept(ex)", type: "dashed" },
+  ]}
+  caption="Element classes never change. Each new operation (word count, export, render) is a new Visitor class. Double dispatch: accept() calls v.visit(this), selecting the right visit() overload by runtime type."
+/>
 
 ---
 
