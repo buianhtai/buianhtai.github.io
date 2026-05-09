@@ -26,6 +26,13 @@
     { id: 'solarized', label: 'solarized-dark', dot: '#268bd2' },
   ];
 
+  const F_PALETTES = [
+    { id: 'indigo', label: 'indigo',  dot: '#4589ff' },
+    { id: 'slate',  label: 'slate',   dot: '#a78bfa' },
+    { id: 'sage',   label: 'sage',    dot: '#5eead4' },
+    { id: 'amber',  label: 'amber',   dot: '#f59e0b' },
+  ];
+
   // Build the dropdown once and append to body (escapes any overflow:hidden ancestor)
   function buildDropdown() {
     const existing = document.getElementById('theme-dropdown');
@@ -36,6 +43,7 @@
     div.setAttribute('role', 'menu');
     div.style.display = 'none';
 
+    // ── Terminal theme section ──
     const header = document.createElement('div');
     header.style.cssText = 'padding:0.3rem 0.6rem;font-size:0.62rem;color:var(--color-text-muted);border-bottom:1px solid var(--color-border);letter-spacing:0.08em;text-transform:uppercase;';
     header.textContent = '$ select theme';
@@ -66,8 +74,66 @@
     });
 
     div.appendChild(ul);
+
+    // ── Foundations palette section (only visible on foundations pages) ──
+    const fSection = document.createElement('div');
+    fSection.id = 'f-palette-section';
+    fSection.style.display = 'none'; // shown dynamically
+
+    const fHeader = document.createElement('div');
+    fHeader.style.cssText = 'padding:0.3rem 0.6rem;font-size:0.62rem;color:var(--color-text-muted);border-top:1px solid var(--color-border);border-bottom:1px solid var(--color-border);letter-spacing:0.08em;text-transform:uppercase;margin-top:0.25rem;';
+    fHeader.textContent = '◈ foundations palette';
+    fSection.appendChild(fHeader);
+
+    const fUl = document.createElement('ul');
+    fUl.style.cssText = 'list-style:none;margin:0;padding:0.25rem 0;';
+
+    F_PALETTES.forEach(p => {
+      const li = document.createElement('li');
+      li.className = 'theme-option';
+      li.dataset.fPalette = p.id;
+      li.setAttribute('role', 'menuitem');
+
+      const dot = document.createElement('span');
+      dot.className = 'theme-dot';
+      dot.style.background = p.dot;
+      li.appendChild(dot);
+      li.appendChild(document.createTextNode(p.label));
+
+      li.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const fn = (window as any).__applyFPalette;
+        if (fn) fn(p.id);
+        // sync active state
+        document.querySelectorAll<HTMLElement>('[data-f-palette]').forEach(el => {
+          el.classList.toggle('is-active', el.dataset.fPalette === p.id);
+        });
+        closeDropdown();
+      });
+
+      fUl.appendChild(li);
+    });
+
+    fSection.appendChild(fUl);
+    div.appendChild(fSection);
+
     document.body.appendChild(div);
     return div;
+  }
+
+  // Show/hide foundations palette section based on whether we're on a foundations page
+  function syncFPaletteSection() {
+    const section = document.getElementById('f-palette-section');
+    if (!section) return;
+    const isFoundations = document.body.hasAttribute('data-f-page');
+    section.style.display = isFoundations ? 'block' : 'none';
+    if (isFoundations) {
+      // Mark active palette
+      const saved = localStorage.getItem('f-palette') ?? 'indigo';
+      section.querySelectorAll<HTMLElement>('[data-f-palette]').forEach(el => {
+        el.classList.toggle('is-active', el.dataset.fPalette === saved);
+      });
+    }
   }
 
   function applyTheme(theme: string) {
@@ -90,6 +156,8 @@
     const btn = document.getElementById('theme-toggle');
     const dropdown = buildDropdown();
     if (!btn) return;
+
+    syncFPaletteSection();
 
     // Position below the button using fixed coords
     const rect = btn.getBoundingClientRect();

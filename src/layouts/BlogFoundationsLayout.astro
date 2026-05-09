@@ -154,7 +154,7 @@ const seriesTitle = series ? (seriesMeta[series]?.title ?? series) : null;
 </BaseLayout>
 
 <style>
-  /* ── Foundations design tokens ── */
+  /* ── Foundations design tokens — default palette (indigo) ── */
   .f-root {
     --f-bg:           #060d1f;
     --f-surface:      #0a1628;
@@ -184,6 +184,53 @@ const seriesTitle = series ? (seriesMeta[series]?.title ?? series) : null;
     --color-accent:       var(--f-accent);
     --color-accent-dim:   var(--f-accent-dim);
     --color-accent-glow:  var(--f-accent-glow);
+  }
+
+  /* ── Foundations palettes ── */
+
+  /* Slate — soft purple / charcoal */
+  .f-root.f-palette-slate {
+    --f-bg:           #0c0c12;
+    --f-surface:      #111118;
+    --f-surface-2:    #18181f;
+    --f-border:       #2a2a3a;
+    --f-border-bright:#3d3d55;
+    --f-text:         #ede9fe;
+    --f-text-dim:     #a78bfa;
+    --f-text-muted:   #4c4c6a;
+    --f-accent:       #a78bfa;
+    --f-accent-dim:   #7c5ef5;
+    --f-accent-glow:  rgba(167, 139, 250, 0.12);
+  }
+
+  /* Sage — muted teal / forest */
+  .f-root.f-palette-sage {
+    --f-bg:           #060f0b;
+    --f-surface:      #091510;
+    --f-surface-2:    #0e1e16;
+    --f-border:       #1a3025;
+    --f-border-bright:#2a4a38;
+    --f-text:         #d1fae5;
+    --f-text-dim:     #6ee7b7;
+    --f-text-muted:   #2d5040;
+    --f-accent:       #5eead4;
+    --f-accent-dim:   #2dd4bf;
+    --f-accent-glow:  rgba(94, 234, 212, 0.10);
+  }
+
+  /* Amber — warm gold / dark walnut */
+  .f-root.f-palette-amber {
+    --f-bg:           #0f0a03;
+    --f-surface:      #160e05;
+    --f-surface-2:    #1f1408;
+    --f-border:       #3a2410;
+    --f-border-bright:#5a3a1a;
+    --f-text:         #fef3c7;
+    --f-text-dim:     #fbbf24;
+    --f-text-muted:   #78450a;
+    --f-accent:       #f59e0b;
+    --f-accent-dim:   #d97706;
+    --f-accent-glow:  rgba(245, 158, 11, 0.12);
   }
 
   /* ── Top bar ── */
@@ -567,7 +614,37 @@ const seriesTitle = series ? (seriesMeta[series]?.title ?? series) : null;
 </style>
 
 <script>
-  // Mark chapter as read in localStorage when user scrolls to ~80% of the page
+  // ── Foundations palette switcher ──────────────────────────────────
+
+  const F_PALETTES = ['indigo', 'slate', 'sage', 'amber'] as const;
+  type FPalette = typeof F_PALETTES[number];
+
+  function applyFPalette(palette: FPalette) {
+    const root = document.querySelector<HTMLElement>('.f-root');
+    if (!root) return;
+    // Remove all palette classes, then add the chosen one (indigo is the default — no extra class)
+    F_PALETTES.forEach(p => root.classList.remove(`f-palette-${p}`));
+    if (palette !== 'indigo') root.classList.add(`f-palette-${palette}`);
+    localStorage.setItem('f-palette', palette);
+    // Sync active state in dropdown if it's already open
+    document.querySelectorAll<HTMLElement>('[data-f-palette]').forEach(el => {
+      el.classList.toggle('is-active', el.dataset.fPalette === palette);
+    });
+    document.dispatchEvent(new CustomEvent('f-palette-change', { detail: { palette } }));
+  }
+
+  // Mark body so ThemeToggle knows to show foundations section
+  document.body.setAttribute('data-f-page', '1');
+
+  // Apply saved palette immediately
+  const savedPalette = (localStorage.getItem('f-palette') ?? 'indigo') as FPalette;
+  applyFPalette(savedPalette);
+
+  // Expose for ThemeToggle to call
+  (window as any).__applyFPalette = applyFPalette;
+
+  // ── Read progress tracking ────────────────────────────────────────
+
   const postSlug = window.location.pathname.split('/').filter(Boolean).at(-1) ?? '';
   if (postSlug) {
     let marked = false;
@@ -576,8 +653,7 @@ const seriesTitle = series ? (seriesMeta[series]?.title ?? series) : null;
       const scrollPct = (window.scrollY + window.innerHeight) / document.documentElement.scrollHeight;
       if (scrollPct > 0.8) {
         marked = true;
-        const key = `f-read:${postSlug}`;
-        localStorage.setItem(key, '1');
+        localStorage.setItem(`f-read:${postSlug}`, '1');
       }
     }, { passive: true });
   }
