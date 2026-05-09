@@ -86,8 +86,9 @@ const BOX_H = 56;
 const COL_GAP = 100;
 const ROW_GAP = 100;  // larger gap gives diagonal labels more room
 const PAD_X = 30;
-// Extra vertical padding so labels above top-row boxes have room
-const PAD_Y = 44;
+// Extra vertical padding so labels above top-row boxes (and self-loop arcs) have room
+// Self-loop arc peak = PAD_Y - 44; needs to be ≥ 8 for stroke clearance → PAD_Y ≥ 52
+const PAD_Y = 60;
 
 const svgW = PAD_X * 2 + gridCols * BOX_W + (gridCols - 1) * COL_GAP;
 const svgH = PAD_Y * 2 + gridRows * BOX_H + (gridRows - 1) * ROW_GAP;
