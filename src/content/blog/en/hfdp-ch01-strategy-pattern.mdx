@@ -1,0 +1,190 @@
+---
+title: "HFDP Ch.1 — The Strategy Pattern"
+description: "Head First's SimUDuck walkthrough shows how one naïve inheritance decision leads to cascading explosions, and how Strategy — encapsulating each behavior family and composing it in — severs that coupling permanently."
+pubDate: 2026-05-08
+tags: ["design-patterns", "strategy", "oo-design", "java", "foundations"]
+lang: "en"
+category: "foundations"
+series: "head-first-design-patterns"
+seriesOrder: 1
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import ArchDiagram from '../../../components/mdx/ArchDiagram.astro';
+import LayerStack from '../../../components/mdx/LayerStack.astro';
+
+Every developer hits the same wall. You have a working inheritance hierarchy, a new requirement arrives, and the cleanest way to satisfy it quietly plants a grenade in every subclass. Head First Design Patterns opens with exactly this scenario — the SimUDuck simulator — and uses it to derive not just one pattern but the three OO design principles that underpin a majority of the catalog. That derivation is what makes Chapter 1 worth more than its page count.
+
+<HeroGrid items={[
+  { label: "3 OO Principles", sublabel: "Encapsulate · Compose · Program to interface", color: "#0891b2" },
+  { label: "Strategy Pattern", sublabel: "Family of algorithms, interchangeable at runtime", color: "#059669" },
+  { label: "SimUDuck Problem", sublabel: "Inheritance cascade from one fly() override", color: "#d97706" },
+  { label: "HAS-A > IS-A", sublabel: "Composition beats inheritance for variable behavior", color: "#7c3aed" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> The Inheritance Trap — SimUDuck
+
+The duck simulator starts simply: a `Duck` base class with `quack()` and `display()`, a handful of subclasses (`MallardDuck`, `RedheadDuck`, etc.). Everything is clean until the product team asks for flying ducks. The obvious move is to add `fly()` to the base class.
+
+The obvious move is wrong.
+
+Adding `fly()` to `Duck` gives *all* subclasses a flying behavior — including `RubberDuck`, which now honks *and* flies. You `@Override` `fly()` in `RubberDuck` to do nothing. Then `DecoyDuck` needs to not fly *and* not quack. Another two overrides. A wooden `DecoyDuck3D` arrives. Then a `NuclearMissileDuck` that flies but shouldn't quack. Every new variant requires auditing every method in every subclass.
+
+The problem is not "you forgot to override." The problem is that the base class is making a promise — *I fly, I quack* — that some subclasses cannot honestly keep.
+
+<Callout color="amber">
+Interfaces seem to help: define `Flyable` and `Quackable`, implement only what applies. But now every flying duck duplicates the same `fly()` body. You've traded a fragile inheritance hierarchy for fragile copy-paste. Change how flying works and you hunt down 48 identical methods.
+</Callout>
+
+The real diagnosis: flying and quacking are *behaviors that vary*. Inheritance bakes them into the type. The fix is to pull them out entirely.
+
+---
+
+## <Label color="teal">2</Label> The Three Principles
+
+Before reaching the pattern definition, the book nails three OO principles that are worth memorising as axioms:
+
+<LayerStack
+  caption="Head First OO Design Principles"
+  layers={[
+    { tag: "P1", color: "teal",  title: "Encapsulate what varies", items: ["Identify aspects that change with each requirement", "Extract them so they can be altered without affecting the rest"] },
+    { tag: "P2", color: "green", title: "Program to an interface, not an implementation", items: ["Code to a supertype (interface or abstract class)", "The declared type of a variable should be a supertype", "Runtime objects can be any concrete implementation"] },
+    { tag: "P3", color: "amber", title: "Favor composition over inheritance", items: ["HAS-A can be better than IS-A", "Behaviors become composable first-class objects", "Enables runtime reconfiguration of object capabilities"] },
+  ]}
+  arrows={["grounds", "enables"]}
+/>
+
+These read like slogans until you see them applied together. Principle 1 identifies *what* to extract: `FlyBehavior` and `QuackBehavior`. Principle 2 says to reference them as interfaces so the concrete implementation can swap at runtime. Principle 3 says to put them in `Duck` as fields, not in a class hierarchy.
+
+---
+
+## <Label color="teal">3</Label> The Strategy Pattern Applied
+
+The refactored design:
+
+<ArchDiagram
+  title="SimUDuck — Strategy Pattern structure"
+  zones={[
+    { id: "duck",   label: "Duck hierarchy",       color: "blue" },
+    { id: "fly",    label: "Fly behavior family",  color: "teal" },
+    { id: "quack",  label: "Quack behavior family", color: "amber" },
+  ]}
+  nodes={[
+    { id: "duck",     label: "Duck",           sub: "flyBehavior, quackBehavior",           zone: "duck",  row: 1, col: 1, color: "blue" },
+    { id: "mallard",  label: "MallardDuck",    sub: "display()",                            zone: "duck",  row: 2, col: 1 },
+    { id: "rubber",   label: "RubberDuck",     sub: "display()",                            zone: "duck",  row: 2, col: 2 },
+    { id: "flyiface", label: "«interface» FlyBehavior",  sub: "fly()",                zone: "fly",   row: 1, col: 1, color: "teal" },
+    { id: "flywings", label: "FlyWithWings",   sub: "fly() → flaps wings",                 zone: "fly",   row: 2, col: 1 },
+    { id: "flynoway", label: "FlyNoWay",       sub: "fly() → does nothing",                zone: "fly",   row: 2, col: 2 },
+    { id: "flyjet",   label: "FlyRocketPowered", sub: "fly() → rockets",                   zone: "fly",   row: 2, col: 3 },
+    { id: "qiface",   label: "«interface» QuackBehavior", sub: "quack()",             zone: "quack", row: 1, col: 1, color: "amber" },
+    { id: "quack",    label: "Quack",          sub: "quack() → quacks",                    zone: "quack", row: 2, col: 1 },
+    { id: "squeak",   label: "Squeak",         sub: "quack() → squeaks",                   zone: "quack", row: 2, col: 2 },
+    { id: "mute",     label: "MuteQuack",      sub: "quack() → silence",                   zone: "quack", row: 2, col: 3 },
+  ]}
+  edges={[
+    { from: "duck",     to: "mallard",  label: "" },
+    { from: "duck",     to: "rubber",   label: "" },
+    { from: "duck",     to: "flyiface", label: "HAS-A", color: "teal" },
+    { from: "duck",     to: "qiface",   label: "HAS-A", color: "amber" },
+    { from: "flyiface", to: "flywings", label: "" },
+    { from: "flyiface", to: "flynoway", label: "" },
+    { from: "flyiface", to: "flyjet",   label: "" },
+    { from: "qiface",   to: "quack",   label: "" },
+    { from: "qiface",   to: "squeak",  label: "" },
+    { from: "qiface",   to: "mute",    label: "" },
+  ]}
+/>
+
+The `Duck` base class holds two fields — `FlyBehavior flyBehavior` and `QuackBehavior quackBehavior` — and delegates:
+
+```java
+public abstract class Duck {
+    FlyBehavior  flyBehavior;
+    QuackBehavior quackBehavior;
+
+    public void performFly()   { flyBehavior.fly(); }
+    public void performQuack() { quackBehavior.quack(); }
+
+    // Change behavior at runtime — impossible with inheritance
+    public void setFlyBehavior(FlyBehavior fb)    { flyBehavior = fb; }
+    public void setQuackBehavior(QuackBehavior qb) { quackBehavior = qb; }
+}
+```
+
+`MallardDuck` is initialised with `FlyWithWings` and `Quack`. `RubberDuck` gets `FlyNoWay` and `Squeak`. A `ModelDuck` that starts grounded can be upgraded mid-simulation:
+
+```java
+Duck model = new ModelDuck();          // FlyNoWay by default
+model.setFlyBehavior(new FlyRocketPowered()); // runtime swap
+model.performFly();                    // → I'm flying with a rocket!
+```
+
+No subclass touched. No override written. The behavior swapped at the call site.
+
+---
+
+## <Label color="teal">4</Label> The Formal Definition
+
+> **Strategy Pattern** — defines a family of algorithms, encapsulates each one, and makes them interchangeable. Strategy lets the algorithm vary independently from clients that use it.
+
+The three moving pieces:
+
+<FlowStep steps={[
+  { title: "Context", body: "The Duck. Holds a reference to a Strategy interface. Delegates the variable behavior to it. Does not care which concrete implementation runs." },
+  { title: "Strategy interface", body: "FlyBehavior / QuackBehavior. Declares the contract all concrete strategies must satisfy. The context programs to this, never to a concrete class." },
+  { title: "Concrete Strategy", body: "FlyWithWings, MuteQuack, etc. Implements the algorithm. Swappable at construction time or runtime via the setter. New variants add a class, change nothing else." },
+]} />
+
+---
+
+## <Label color="teal">5</Label> What the Pattern Actually Prevents
+
+<DataTable
+  caption="Inheritance vs. Strategy — change impact"
+  accent="teal"
+  headers={["Change", "With inheritance", "With Strategy"]}
+  rows={[
+    { "Change": "Add a new fly variant",             "With inheritance": "Add method + audit all subclasses",                  "With Strategy": "Add one FlyBehavior class" },
+    { "Change": "Fix a bug in fly logic",            "With inheritance": "Fix N overrides or base + verify no subclass breaks", "With Strategy": "Fix one FlyBehavior impl" },
+    { "Change": "Swap behavior at runtime",          "With inheritance": "Impossible without re-instantiation",                 "With Strategy": "Call setFlyBehavior() anywhere" },
+    { "Change": "Reuse FlyWithWings in a Bird class","With inheritance": "Extract to separate hierarchy or copy code",          "With Strategy": "Pass same FlyWithWings instance" },
+    { "Change": "Test fly logic in isolation",       "With inheritance": "Must instantiate a Duck subclass",                    "With Strategy": "Instantiate FlyBehavior directly" },
+  ]}
+/>
+
+The pattern is not just about flexibility — it makes the code *testable*. Each strategy is a standalone unit. You can test `FlyWithWings` without touching a single duck.
+
+---
+
+## <Label color="teal">6</Label> OO Toolbox After Chapter 1
+
+The book ends every chapter with an "OO Toolbox" summary. After Chapter 1 it reads:
+
+- **OO Basics:** Abstraction, Encapsulation, Polymorphism, Inheritance
+- **OO Principles:** Encapsulate what varies · Favor composition over inheritance · Program to interfaces, not implementations
+- **OO Patterns:** *Strategy* — defines a family of algorithms, encapsulates each one, makes them interchangeable
+
+That stacking — basics → principles → patterns — is the book's running thesis: patterns are not templates to memorize, they are *principles made concrete*. Understanding why SimUDuck breaks with inheritance, and precisely which principle is violated, is more durable knowledge than knowing the UML diagram.
+
+<Callout color="teal">
+"Instead of code reuse, with patterns you get experience reuse." The value is not the pattern itself but the design vocabulary it gives you — a shared shorthand for talking about why one structure is more resilient than another.
+</Callout>
+
+---
+
+## What Makes Strategy Different from Simple Polymorphism
+
+- **Behavior is a first-class object.** It can be stored, passed, returned, and swapped. Polymorphism via subclass cannot do that cleanly.
+- **The context and the algorithm are separately evolvable.** Adding a new duck variant does not touch the fly hierarchy. Adding a new fly style does not touch the duck hierarchy. The two axes of change are genuinely independent.
+- **Runtime reconfiguration.** An inheritance override is baked in at construction time. A Strategy setter fires at any point in the object lifecycle.
+- **Test isolation.** Each concrete Strategy is a pure unit. No test scaffolding needed to exercise `FlyRocketPowered` — just instantiate it and call `fly()`.
+- **Composition chains.** Strategies can wrap other strategies (a preview of Decorator and Chain of Responsibility). Inheritance depth cannot.
+
+The pattern is deceptively simple — two interfaces, a couple of fields — but it encodes a design philosophy that scales to every other pattern in the catalog. Every time the Gang of Four says "encapsulate what varies," this is what they mean.

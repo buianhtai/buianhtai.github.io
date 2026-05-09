@@ -26,5 +26,12 @@
     "description": "First-principles coverage of CS fundamentals, systems internals, distributed systems, design patterns, and engineering craft — the bedrock beneath every framework and tool.",
     "lang": "multi",
     "link": null
+  },
+  {
+    "id": "head-first-design-patterns",
+    "title": "Head First Design Patterns",
+    "description": "Chapter-by-chapter notes on the classic Freeman & Freeman text — Strategy, Observer, Decorator, Factory, Singleton, Command, Adapter, Template Method, Iterator, Composite, State, Proxy, and compound patterns.",
+    "lang": "Java",
+    "link": null
   }
 ]
