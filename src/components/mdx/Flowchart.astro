@@ -1,0 +1,328 @@
+---
+/**
+ * Flowchart — decision logic diagram with shapes-carry-meaning convention.
+ *
+ * Shapes:
+ *   oval    — start / end terminal
+ *   rect    — step / action (default)
+ *   diamond — decision (≤ 3 exits)
+ *   dot     — merge point
+ *
+ * Usage:
+ *   <Flowchart
+ *     title="Should we cache this?"
+ *     nodes={[
+ *       { id: "start",  label: "Start",           shape: "oval" },
+ *       { id: "check",  label: "Cache hit?",      shape: "diamond" },
+ *       { id: "serve",  label: "Serve from cache", shape: "rect", color: "teal" },
+ *       { id: "fetch",  label: "Fetch from DB",    shape: "rect" },
+ *       { id: "end",    label: "Return response",  shape: "oval" },
+ *     ]}
+ *     edges={[
+ *       { from: "start",  to: "check" },
+ *       { from: "check",  to: "serve", label: "Yes" },
+ *       { from: "check",  to: "fetch", label: "No" },
+ *       { from: "serve",  to: "end" },
+ *       { from: "fetch",  to: "end" },
+ *     ]}
+ *     caption="Cache lookup decision flow"
+ *   />
+ *
+ * node.shape:  'rect' | 'oval' | 'diamond' | 'dot'  (default: rect)
+ * node.color:  'teal' | 'amber' | 'green' | 'rose' | 'violet'  (default: accent)
+ * edge.label:  branch label (Yes / No / condition)
+ */
+
+interface FCNode {
+  id: string;
+  label: string;
+  shape?: 'rect' | 'oval' | 'diamond' | 'dot';
+  color?: string;
+  sub?: string;
+  col?: number; // explicit column for multi-branch layouts (1-based)
+  row?: number; // explicit row (1-based)
+}
+
+interface FCEdge {
+  from: string;
+  to: string;
+  label?: string;
+  type?: 'solid' | 'dashed';
+}
+
+interface Props {
+  nodes: FCNode[];
+  edges: FCEdge[];
+  title?: string;
+  caption?: string;
+}
+
+const { nodes, edges, title, caption } = Astro.props;
+
+const COLORS: Record<string, { stroke: string; fill: string; text: string }> = {
+  default: { stroke: 'var(--color-accent)',  fill: 'rgba(69,137,255,0.08)',  text: 'var(--color-accent)' },
+  teal:    { stroke: '#0ea5e9',              fill: 'rgba(14,165,233,0.08)',  text: '#0ea5e9' },
+  amber:   { stroke: '#f59e0b',              fill: 'rgba(245,158,11,0.08)', text: '#f59e0b' },
+  green:   { stroke: '#16a34a',              fill: 'rgba(22,163,74,0.08)',  text: '#16a34a' },
+  rose:    { stroke: '#f43f5e',              fill: 'rgba(244,63,94,0.08)',  text: '#f43f5e' },
+  violet:  { stroke: '#8b5cf6',              fill: 'rgba(139,92,246,0.08)', text: '#8b5cf6' },
+};
+function nc(n: FCNode) { return COLORS[n.color ?? 'default'] ?? COLORS['default']; }
+
+// Layout: auto-assign row/col if not explicit
+// Build row/col from edges (topological order) if not set
+const NODE_W  = 140;
+const NODE_H  = 52;
+const DIA_W   = 120; // diamond half-width (full = 2×)
+const DIA_H   = 48;
+const DOT_R   = 5;
+const COL_GAP = 80;
+const ROW_GAP = 64;
+const PAD_X   = 48;
+const PAD_Y   = 32;
+
+// Auto-layout: BFS from roots (nodes with no incoming edges)
+const hasIncoming = new Set(edges.map(e => e.to));
+const roots = nodes.filter(n => !hasIncoming.has(n.id));
+
+// Assign rows via BFS if not explicitly set
+const rowOf: Record<string, number> = {};
+const colOf: Record<string, number> = {};
+nodes.forEach(n => { if (n.row) rowOf[n.id] = n.row; if (n.col) colOf[n.id] = n.col; });
+
+const queue = [...roots.map(r => ({ id: r.id, row: 1 }))];
+const visited = new Set<string>();
+while (queue.length) {
+  const { id, row } = queue.shift()!;
+  if (visited.has(id)) continue;
+  visited.add(id);
+  if (!rowOf[id]) rowOf[id] = row;
+  edges.filter(e => e.from === id).forEach(e => {
+    if (!visited.has(e.to)) queue.push({ id: e.to, row: (rowOf[id] ?? row) + 1 });
+  });
+}
+// Any unvisited nodes get a row based on index
+nodes.forEach((n, i) => { if (!rowOf[n.id]) rowOf[n.id] = i + 1; });
+
+// Assign columns: group by row, spread horizontally
+const byRow: Record<number, string[]> = {};
+nodes.forEach(n => { const r = rowOf[n.id]; (byRow[r] = byRow[r] ?? []).push(n.id); });
+const maxRow = Math.max(...Object.keys(byRow).map(Number));
+const maxCols = Math.max(...Object.values(byRow).map(a => a.length));
+
+Object.entries(byRow).forEach(([rowStr, ids]) => {
+  ids.forEach((id, i) => { if (!colOf[id]) colOf[id] = i + 1; });
+});
+
+// Centre coordinates for each node
+function cx(n: FCNode): number {
+  const col = colOf[n.id] ?? 1;
+  const rowIds = byRow[rowOf[n.id]] ?? [n.id];
+  const rowCount = rowIds.length;
+  // centre the row within the full width
+  const totalW = rowCount * NODE_W + (rowCount - 1) * COL_GAP;
+  const canvasW = maxCols * NODE_W + (maxCols - 1) * COL_GAP;
+  const offsetX = (canvasW - totalW) / 2;
+  return PAD_X + offsetX + (col - 1) * (NODE_W + COL_GAP) + NODE_W / 2;
+}
+function cy(n: FCNode): number {
+  return PAD_Y + (rowOf[n.id] - 1) * (NODE_H + ROW_GAP) + NODE_H / 2;
+}
+
+const svgW = PAD_X * 2 + maxCols * NODE_W + (maxCols - 1) * COL_GAP;
+const svgH = PAD_Y * 2 + maxRow * NODE_H + (maxRow - 1) * ROW_GAP;
+
+// Edge routing: straight line from bottom of source to top of target
+function edgePoints(fromN: FCNode, toN: FCNode): { x1: number; y1: number; x2: number; y2: number } {
+  const fx = cx(fromN), fy = cy(fromN);
+  const tx = cx(toN),   ty = cy(toN);
+  // determine exit/entry points based on relative position
+  const dx = tx - fx, dy = ty - fy;
+  let x1 = fx, y1 = fy, x2 = tx, y2 = ty;
+  if (Math.abs(dy) > Math.abs(dx)) {
+    // primarily vertical
+    y1 = fy + (dy > 0 ? NODE_H / 2 : -NODE_H / 2);
+    y2 = ty + (dy > 0 ? -NODE_H / 2 : NODE_H / 2);
+  } else {
+    // primarily horizontal
+    x1 = fx + (dx > 0 ? NODE_W / 2 : -NODE_W / 2);
+    x2 = tx + (dx > 0 ? -NODE_W / 2 : NODE_W / 2);
+    y1 = fy; y2 = ty;
+  }
+  return { x1, y1, x2, y2 };
+}
+
+const nodeMap = Object.fromEntries(nodes.map(n => [n.id, n]));
+---
+
+<div class="fc-wrap">
+  {title && <div class="fc-titlebar"><span class="fc-prompt">$</span> {title}</div>}
+  <div class="fc-body">
+    <svg
+      width={svgW}
+      height={svgH}
+      viewBox={`0 0 ${svgW} ${svgH}`}
+      style="display:block; overflow:visible; max-width:100%; height:auto;"
+      aria-label={title ?? 'Flowchart'}
+    >
+      <defs>
+        <marker id="fc-arr" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="var(--color-text-muted)" />
+        </marker>
+        <marker id="fc-arr-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="var(--color-accent)" />
+        </marker>
+      </defs>
+
+      <!-- Edges first -->
+      {edges.map((e) => {
+        const fromN = nodeMap[e.from];
+        const toN   = nodeMap[e.to];
+        if (!fromN || !toN) return null;
+        const { x1, y1, x2, y2 } = edgePoints(fromN, toN);
+        const mx = (x1 + x2) / 2;
+        const my = (y1 + y2) / 2;
+        const dash = e.type === 'dashed' ? '6 4' : undefined;
+        return (
+          <>
+            <line
+              x1={x1} y1={y1} x2={x2} y2={y2}
+              stroke="var(--color-text-muted)"
+              stroke-width="1.5"
+              stroke-dasharray={dash}
+              marker-end="url(#fc-arr)"
+            />
+            {e.label && (
+              <>
+                <rect
+                  x={mx - 28} y={my - 9} width="56" height="13"
+                  rx="2" fill="var(--color-surface)" opacity="0.95"
+                />
+                <text
+                  x={mx} y={my + 1}
+                  text-anchor="middle"
+                  font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+                  font-size="9"
+                  fill="var(--color-text-muted)"
+                >{e.label}</text>
+              </>
+            )}
+          </>
+        );
+      })}
+
+      <!-- Nodes -->
+      {nodes.map((n) => {
+        const shape = n.shape ?? 'rect';
+        const col = nc(n);
+        const x = cx(n), y = cy(n);
+
+        if (shape === 'dot') {
+          return (
+            <circle cx={x} cy={y} r={DOT_R}
+              fill="var(--color-text-muted)" />
+          );
+        }
+
+        if (shape === 'oval') {
+          return (
+            <>
+              <ellipse
+                cx={x} cy={y}
+                rx={NODE_W / 2} ry={NODE_H / 2 - 4}
+                fill={col.fill} stroke={col.stroke} stroke-width="1.5"
+              />
+              <text x={x} y={y + 1}
+                text-anchor="middle" dominant-baseline="middle"
+                font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+                font-size="11" font-weight="700"
+                fill={col.text}
+              >{n.label}</text>
+            </>
+          );
+        }
+
+        if (shape === 'diamond') {
+          const hw = NODE_W / 2, hh = DIA_H / 2;
+          const pts = `${x},${y - hh} ${x + hw},${y} ${x},${y + hh} ${x - hw},${y}`;
+          return (
+            <>
+              <polygon
+                points={pts}
+                fill={col.fill} stroke={col.stroke} stroke-width="1.5"
+              />
+              <text x={x} y={y + 1}
+                text-anchor="middle" dominant-baseline="middle"
+                font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+                font-size="10" font-weight="700"
+                fill={col.text}
+              >{n.label}</text>
+            </>
+          );
+        }
+
+        // rect (default)
+        const subLines = n.sub ? n.sub.split('\n') : [];
+        const nh = NODE_H + subLines.length * 12;
+        const labelY = subLines.length > 0 ? y - nh / 2 + 18 : y + 1;
+        return (
+          <>
+            <rect
+              x={x - NODE_W / 2} y={y - nh / 2}
+              width={NODE_W} height={nh}
+              rx="6"
+              fill={col.fill} stroke={col.stroke} stroke-width="1.5"
+            />
+            <text x={x} y={labelY}
+              text-anchor="middle" dominant-baseline="middle"
+              font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+              font-size="11" font-weight="700"
+              fill={col.text}
+            >{n.label}</text>
+            {subLines.map((line, li) => (
+              <text x={x} y={labelY + 14 + li * 12}
+                text-anchor="middle" dominant-baseline="middle"
+                font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+                font-size="9"
+                fill="var(--color-text-muted)"
+              >{line}</text>
+            ))}
+          </>
+        );
+      })}
+    </svg>
+  </div>
+  {caption && <div class="fc-caption"><span class="fc-prompt">▶</span> {caption}</div>}
+</div>
+
+<style>
+  .fc-wrap {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    margin: 1.5rem 0;
+    overflow: hidden;
+    font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+  }
+  .fc-titlebar {
+    padding: 0.4rem 0.875rem;
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-surface-2);
+    font-size: 0.65rem;
+    color: var(--color-text-muted);
+  }
+  .fc-prompt { color: var(--color-accent); font-weight: 700; margin-right: 0.35rem; }
+  .fc-body {
+    padding: 1.25rem;
+    overflow-x: auto;
+    display: flex;
+    justify-content: center;
+  }
+  .fc-caption {
+    padding: 0.45rem 0.875rem;
+    border-top: 1px solid var(--color-border);
+    font-size: 0.62rem;
+    color: var(--color-text-dim);
+    background: var(--color-bg);
+    line-height: 1.5;
+  }
+</style>

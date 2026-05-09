@@ -17,6 +17,7 @@ import FlowStep from '../../../components/mdx/FlowStep.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
 import LayerStack from '../../../components/mdx/LayerStack.astro';
 import ArchDiagram from '../../../components/mdx/ArchDiagram.astro';
+import Venn from '../../../components/mdx/Venn.astro';
 
 `new` is the most common form of tight coupling. When a class says `new ChicagoPizza()` it is hardwired to that concrete type — it cannot be tested with a mock pizza or extended to add a new style without touching the original code. Factory patterns encapsulate the decision of *which concrete class to instantiate*, making that decision a seam you can vary independently.
 
@@ -165,6 +166,18 @@ Each `Pizza` receives a `PizzaIngredientFactory` at construction time and uses i
 ---
 
 ## <Label color="teal">5</Label> Factory Method vs. Abstract Factory
+
+<Venn
+  title="Factory Method vs Abstract Factory"
+  circles={[
+    { label: "Factory Method", color: "teal" },
+    { label: "Abstract Factory", color: "amber" },
+  ]}
+  intersections={[
+    { sets: [0, 1], label: "Encapsulate creation", sub: "decouple client from concretions", focal: true },
+  ]}
+  caption="Both patterns solve the coupling problem — but Factory Method uses inheritance (one product, subclass decides) while Abstract Factory uses composition (product families, interface injected)."
+/>
 
 <DataTable
   caption="Comparison"

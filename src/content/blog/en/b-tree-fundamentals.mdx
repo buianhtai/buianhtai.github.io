@@ -16,6 +16,7 @@ import Callout from '../../../components/mdx/Callout.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
 import ArchDiagram from '../../../components/mdx/ArchDiagram.astro';
+import Tree from '../../../components/mdx/Tree.astro';
 
 B-Trees are over 50 years old — introduced in 1971 — and remain the dominant storage structure in relational databases, key-value stores, and filesystems. To understand why, you need to understand what came before them and exactly where it broke down.
 
@@ -60,6 +61,20 @@ A B-Tree is an N-ary tree that maintains sorted key order. It has three node typ
 - **Root**: the topmost node, may have 2 to N children
 - **Internal nodes**: hold separator keys that partition the key space; have M children where ⌈N/2⌉ ≤ M ≤ N
 - **Leaf nodes**: hold actual data records (or pointers to them); no children
+
+<Tree
+  title="B-Tree node hierarchy"
+  nodes={[
+    { id: "root",   label: "Root",          sub: "separator keys\n+ child ptrs",  color: "teal" },
+    { id: "int1",   label: "Internal Node", sub: "keys: [15, 30]",  parent: "root", color: "amber" },
+    { id: "int2",   label: "Internal Node", sub: "keys: [60, 90]",  parent: "root", color: "amber" },
+    { id: "leaf1",  label: "Leaf Node",     sub: "records: 5, 10, 12", parent: "int1" },
+    { id: "leaf2",  label: "Leaf Node",     sub: "records: 17, 22, 25", parent: "int1" },
+    { id: "leaf3",  label: "Leaf Node",     sub: "records: 33, 45, 55", parent: "int2" },
+    { id: "leaf4",  label: "Leaf Node",     sub: "records: 62, 75, 88", parent: "int2" },
+  ]}
+  caption="B-Tree traversal: root → internal nodes (routing) → leaf nodes (data). 2 hops finds any record."
+/>
 
 **Separator keys** in internal nodes are *routing keys* — each separator key K means "all keys in the left subtree are < K; all keys in the right subtree are ≥ K." The separator key may or may not actually exist as a data record.
 

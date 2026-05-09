@@ -1,0 +1,194 @@
+---
+/**
+ * Quadrant — two-axis positioning / prioritization chart.
+ *
+ * Usage:
+ *   <Quadrant
+ *     title="Feature prioritization"
+ *     xAxis="EFFORT"
+ *     yAxis="IMPACT"
+ *     items={[
+ *       { label: "Dark mode",      x: 20, y: 80, focal: true },
+ *       { label: "CSV export",     x: 40, y: 70 },
+ *       { label: "AI assistant",   x: 85, y: 90 },
+ *       { label: "Custom themes",  x: 70, y: 30 },
+ *       { label: "Onboarding tour",x: 30, y: 50 },
+ *     ]}
+ *     quadrantLabels={["Quick wins", "Big bets", "Fill-ins", "Skip"]}
+ *     caption="Impact × Effort grid — top-left = do first"
+ *   />
+ *
+ * x, y: 0–100 (percentage position in quadrant space)
+ * focal: true — accent-colored dot (max 1–2)
+ * quadrantLabels: [top-left, top-right, bottom-left, bottom-right]
+ */
+
+interface QItem {
+  label: string;
+  x: number;   // 0–100
+  y: number;   // 0–100
+  focal?: boolean;
+  sub?: string;
+}
+
+interface Props {
+  items: QItem[];
+  xAxis: string;
+  yAxis: string;
+  title?: string;
+  caption?: string;
+  quadrantLabels?: [string, string, string, string]; // TL, TR, BL, BR
+}
+
+const { items, xAxis, yAxis, title, caption, quadrantLabels } = Astro.props;
+
+const SIZE    = 280;  // quadrant area
+const PAD     = 48;   // padding around quadrant for axis labels
+const CROSS_X = PAD + SIZE / 2;
+const CROSS_Y = PAD + SIZE / 2;
+const svgW    = PAD * 2 + SIZE;
+const svgH    = PAD * 2 + SIZE;
+
+// Map item x/y (0–100) to SVG coords within the quadrant area
+function itemSvgX(x: number) { return PAD + (x / 100) * SIZE; }
+function itemSvgY(y: number) { return PAD + SIZE - (y / 100) * SIZE; } // y=100 at top
+---
+
+<div class="qd-wrap">
+  {title && <div class="qd-titlebar"><span class="qd-prompt">$</span> {title}</div>}
+  <div class="qd-body">
+    <svg
+      width={svgW}
+      height={svgH}
+      viewBox={`0 0 ${svgW} ${svgH}`}
+      style="display:block; overflow:visible; max-width:100%; height:auto;"
+      aria-label={title ?? 'Quadrant chart'}
+    >
+      <defs>
+        <marker id="qd-arr" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto">
+          <polygon points="0 0, 7 2.5, 0 5" fill="var(--color-text-muted)" opacity="0.6" />
+        </marker>
+      </defs>
+
+      <!-- Quadrant corner labels -->
+      {quadrantLabels && (
+        <>
+          <text x={PAD + 8} y={PAD + 14}
+            font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+            font-size="8" fill="var(--color-text-muted)" opacity="0.5"
+            letter-spacing="0.08em"
+          >{quadrantLabels[0].toUpperCase()}</text>
+          <text x={PAD + SIZE - 8} y={PAD + 14}
+            font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+            font-size="8" fill="var(--color-text-muted)" opacity="0.5"
+            text-anchor="end" letter-spacing="0.08em"
+          >{quadrantLabels[1].toUpperCase()}</text>
+          <text x={PAD + 8} y={PAD + SIZE - 6}
+            font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+            font-size="8" fill="var(--color-text-muted)" opacity="0.5"
+            letter-spacing="0.08em"
+          >{quadrantLabels[2].toUpperCase()}</text>
+          <text x={PAD + SIZE - 8} y={PAD + SIZE - 6}
+            font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+            font-size="8" fill="var(--color-text-muted)" opacity="0.5"
+            text-anchor="end" letter-spacing="0.08em"
+          >{quadrantLabels[3].toUpperCase()}</text>
+        </>
+      )}
+
+      <!-- Y axis -->
+      <line
+        x1={CROSS_X} y1={PAD + SIZE + 12}
+        x2={CROSS_X} y2={PAD - 12}
+        stroke="var(--color-text-muted)" stroke-width="1" opacity="0.4"
+        marker-end="url(#qd-arr)"
+      />
+      <!-- X axis -->
+      <line
+        x1={PAD - 12} y1={CROSS_Y}
+        x2={PAD + SIZE + 12} y2={CROSS_Y}
+        stroke="var(--color-text-muted)" stroke-width="1" opacity="0.4"
+        marker-end="url(#qd-arr)"
+      />
+
+      <!-- Axis labels -->
+      <text x={CROSS_X} y={PAD - 16}
+        text-anchor="middle"
+        font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+        font-size="9" fill="var(--color-text-muted)"
+        letter-spacing="0.18em"
+      >{yAxis.toUpperCase()}</text>
+      <text x={PAD + SIZE + 16} y={CROSS_Y + 4}
+        text-anchor="start"
+        font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+        font-size="9" fill="var(--color-text-muted)"
+        letter-spacing="0.18em"
+      >{xAxis.toUpperCase()}</text>
+
+      <!-- Items -->
+      {items.map((item) => {
+        const sx = itemSvgX(item.x);
+        const sy = itemSvgY(item.y);
+        const dotColor = item.focal ? 'var(--color-accent)' : 'var(--color-text-muted)';
+        const dotR = item.focal ? 5 : 4;
+        // Place label to the right, but flip left if near right edge
+        const labelAnchor = sx > PAD + SIZE - 60 ? 'end' : 'start';
+        const labelX = labelAnchor === 'start' ? sx + 9 : sx - 9;
+
+        return (
+          <>
+            <circle cx={sx} cy={sy} r={dotR} fill={dotColor} opacity="0.9" />
+            <text
+              x={labelX} y={sy + 4}
+              text-anchor={labelAnchor}
+              font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+              font-size="10" font-weight={item.focal ? '700' : '500'}
+              fill={item.focal ? 'var(--color-accent)' : 'var(--color-text)'}
+            >{item.label}</text>
+            {item.sub && (
+              <text
+                x={labelX} y={sy + 15}
+                text-anchor={labelAnchor}
+                font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+                font-size="8" fill="var(--color-text-muted)"
+              >{item.sub}</text>
+            )}
+          </>
+        );
+      })}
+    </svg>
+  </div>
+  {caption && <div class="qd-caption"><span class="qd-prompt">▶</span> {caption}</div>}
+</div>
+
+<style>
+  .qd-wrap {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    margin: 1.5rem 0;
+    overflow: hidden;
+    font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+  }
+  .qd-titlebar {
+    padding: 0.4rem 0.875rem;
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-surface-2);
+    font-size: 0.65rem;
+    color: var(--color-text-muted);
+  }
+  .qd-prompt { color: var(--color-accent); font-weight: 700; margin-right: 0.35rem; }
+  .qd-body {
+    padding: 1rem;
+    overflow-x: auto;
+    display: flex;
+    justify-content: center;
+  }
+  .qd-caption {
+    padding: 0.45rem 0.875rem;
+    border-top: 1px solid var(--color-border);
+    font-size: 0.62rem;
+    color: var(--color-text-dim);
+    background: var(--color-bg);
+    line-height: 1.5;
+  }
+</style>

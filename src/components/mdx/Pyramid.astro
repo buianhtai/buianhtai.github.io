@@ -1,0 +1,179 @@
+---
+/**
+ * Pyramid / Funnel — ranked hierarchy or conversion drop-off.
+ *
+ * orientation: 'pyramid' (apex=top, most important/rarest)
+ *              'funnel'  (apex=bottom, narrowest conversion)
+ *
+ * Usage:
+ *   <Pyramid
+ *     title="Maslow's hierarchy — software edition"
+ *     orientation="pyramid"
+ *     layers={[
+ *       { label: "Self-actualisation", sub: "elegant, maintainable code", focal: true },
+ *       { label: "Esteem",             sub: "performance, reliability" },
+ *       { label: "Belonging",          sub: "clear APIs, good DX" },
+ *       { label: "Safety",             sub: "tests, error handling" },
+ *       { label: "Physiological",      sub: "it compiles and runs" },
+ *     ]}
+ *     caption="Layers ordered bottom (foundation) to top (rare / highest value)"
+ *   />
+ *
+ * layers[0] = apex (rendered at top for pyramid, bottom for funnel)
+ * focal: true — accent color on this layer (max 1)
+ * annotation: right-side note (e.g. drop-off % for funnels)
+ */
+
+interface PyramidLayer {
+  label: string;
+  sub?: string;
+  focal?: boolean;
+  annotation?: string;
+}
+
+interface Props {
+  layers: PyramidLayer[];
+  orientation?: 'pyramid' | 'funnel';
+  title?: string;
+  caption?: string;
+}
+
+const { layers, orientation = 'pyramid', title, caption } = Astro.props;
+
+const LAYER_H     = 52;
+const BASE_W      = 380;   // widest layer width
+const APEX_W      = 48;    // narrowest layer width
+const PAD_X       = 48;
+const PAD_Y       = 24;
+const ANNOTATION_X = PAD_X + BASE_W + 16;
+
+const n = layers.length;
+
+// For pyramid: layers[0] is apex (top, narrow), layers[n-1] is base (bottom, wide)
+// For funnel:  layers[0] is top (wide), layers[n-1] is bottom (narrow)
+function layerW(i: number): number {
+  const t = i / Math.max(n - 1, 1);
+  if (orientation === 'pyramid') {
+    // index 0 = apex (narrow), index n-1 = base (wide)
+    return APEX_W + (BASE_W - APEX_W) * t;
+  } else {
+    // index 0 = top (wide), index n-1 = bottom (narrow)
+    return BASE_W - (BASE_W - APEX_W) * t;
+  }
+}
+
+function layerY(i: number): number {
+  return PAD_Y + i * LAYER_H;
+}
+
+const svgW = PAD_X * 2 + BASE_W + 120; // extra for annotations
+const svgH = PAD_Y * 2 + n * LAYER_H;
+const centerX = PAD_X + BASE_W / 2;
+---
+
+<div class="py-wrap">
+  {title && <div class="py-titlebar"><span class="py-prompt">$</span> {title}</div>}
+  <div class="py-body">
+    <svg
+      width={svgW}
+      height={svgH}
+      viewBox={`0 0 ${svgW} ${svgH}`}
+      style="display:block; overflow:visible; max-width:100%; height:auto;"
+      aria-label={title ?? 'Pyramid diagram'}
+    >
+      {layers.map((layer, i) => {
+        const w  = layerW(i);
+        const y  = layerY(i);
+        const x  = centerX - w / 2;
+        const isFocal = layer.focal === true;
+        const fill   = isFocal ? 'rgba(var(--color-accent-rgb, 69,137,255),0.12)' : 'var(--color-surface-2)';
+        const stroke = isFocal ? 'var(--color-accent)' : 'var(--color-border)';
+        const textColor = isFocal ? 'var(--color-accent)' : 'var(--color-text)';
+
+        // trapezoid points for top/bottom edges slanting toward center
+        const nextW = i < n - 1 ? layerW(i + 1) : w;
+        const topW  = w;
+        const botW  = nextW;
+        const topX  = centerX - topW / 2;
+        const botX  = centerX - botW / 2;
+        const pts = `${topX},${y} ${topX + topW},${y} ${botX + botW},${y + LAYER_H} ${botX},${y + LAYER_H}`;
+
+        return (
+          <>
+            <polygon
+              points={pts}
+              fill={fill} stroke={stroke} stroke-width="1.2"
+            />
+            {/* Layer label */}
+            <text
+              x={centerX}
+              y={layer.sub ? y + LAYER_H / 2 - 5 : y + LAYER_H / 2 + 4}
+              text-anchor="middle" dominant-baseline="middle"
+              font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+              font-size="12" font-weight="700"
+              fill={textColor}
+            >{layer.label}</text>
+            {layer.sub && (
+              <text
+                x={centerX} y={y + LAYER_H / 2 + 9}
+                text-anchor="middle" dominant-baseline="middle"
+                font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+                font-size="8.5"
+                fill="var(--color-text-muted)"
+              >{layer.sub}</text>
+            )}
+            {/* Right annotation */}
+            {layer.annotation && (
+              <>
+                <line
+                  x1={centerX + w / 2 + 4} y1={y + LAYER_H / 2}
+                  x2={ANNOTATION_X - 4} y2={y + LAYER_H / 2}
+                  stroke="var(--color-border)" stroke-width="1" stroke-dasharray="3 3"
+                />
+                <text
+                  x={ANNOTATION_X} y={y + LAYER_H / 2 + 4}
+                  font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+                  font-size="9"
+                  fill="var(--color-text-muted)"
+                >{layer.annotation}</text>
+              </>
+            )}
+          </>
+        );
+      })}
+    </svg>
+  </div>
+  {caption && <div class="py-caption"><span class="py-prompt">▶</span> {caption}</div>}
+</div>
+
+<style>
+  .py-wrap {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    margin: 1.5rem 0;
+    overflow: hidden;
+    font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+  }
+  .py-titlebar {
+    padding: 0.4rem 0.875rem;
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-surface-2);
+    font-size: 0.65rem;
+    color: var(--color-text-muted);
+  }
+  .py-prompt { color: var(--color-accent); font-weight: 700; margin-right: 0.35rem; }
+  .py-body {
+    padding: 1.25rem;
+    overflow-x: auto;
+    display: flex;
+    justify-content: center;
+  }
+  .py-caption {
+    padding: 0.45rem 0.875rem;
+    border-top: 1px solid var(--color-border);
+    font-size: 0.62rem;
+    color: var(--color-text-dim);
+    background: var(--color-bg);
+    line-height: 1.5;
+  }
+</style>

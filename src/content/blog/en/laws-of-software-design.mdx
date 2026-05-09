@@ -14,6 +14,7 @@ import Label from '../../../components/mdx/Label.astro';
 import HeroGrid from '../../../components/mdx/HeroGrid.astro';
 import Callout from '../../../components/mdx/Callout.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
+import Pyramid from '../../../components/mdx/Pyramid.astro';
 
 After thinking about software design from first principles — purpose, trade-offs, change, defects, simplicity, testing — it's useful to have everything in one place. This post collects the core laws, rules, and definitions into a reference you can return to. The laws are not independent observations stitched together. They form a chain, and removing any one of them breaks it.
 
@@ -111,5 +112,19 @@ The entire body of software design knowledge — patterns, principles, practices
 </Callout>
 
 Software exists to help people (Law 1). The value of a change must exceed its effort, and maintenance effort dominates over time (Law 2). Things will change (Law 3). Changes introduce defects in proportion to their size (Law 4). Simplicity reduces maintenance effort (Law 5). Testing is how you verify behavior after change (Law 6).
+
+<Pyramid
+  title="The six laws — a dependency chain"
+  orientation="funnel"
+  layers={[
+    { label: "Law 1 — Purpose",     sub: "Software exists to help people" },
+    { label: "Law 2 — Equation",    sub: "D ≈ Vf / Em — maintenance effort dominates" },
+    { label: "Law 3 — Change",      sub: "Everything will eventually need to change" },
+    { label: "Law 4 — Defects",     sub: "Change size ∝ defect probability" },
+    { label: "Law 5 — Simplicity",  sub: "Simplicity reduces all maintenance cost", focal: true },
+    { label: "Law 6 — Testing",     sub: "Testing verifies behaviour after every change" },
+  ]}
+  caption="Read top-to-bottom: each law is only necessary because the law above it exists. Law 5 (Simplicity) is the lever — it is where the whole chain pays off or collapses."
+/>
 
 Remove any one and the chain breaks. All six are necessary. All six are sufficient.

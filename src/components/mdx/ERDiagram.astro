@@ -1,0 +1,315 @@
+---
+/**
+ * ERDiagram — entity-relationship diagram with cardinality.
+ *
+ * Usage:
+ *   <ERDiagram
+ *     title="Order domain model"
+ *     entities={[
+ *       {
+ *         id: "order",
+ *         name: "Order",
+ *         type: "aggregate",
+ *         focal: true,
+ *         fields: [
+ *           { name: "id", note: "# PK" },
+ *           { name: "customerId", note: "→ Customer" },
+ *           { name: "status", note: "enum" },
+ *           { name: "total", note: "Money" },
+ *         ],
+ *       },
+ *       {
+ *         id: "item",
+ *         name: "OrderItem",
+ *         type: "entity",
+ *         fields: [
+ *           { name: "orderId", note: "→ Order" },
+ *           { name: "sku",     note: "string" },
+ *           { name: "qty",     note: "int" },
+ *         ],
+ *       },
+ *     ]}
+ *     relations={[
+ *       { from: "order", to: "item", fromCard: "1", toCard: "N", label: "contains" },
+ *     ]}
+ *     caption="Order aggregate owns OrderItem collection"
+ *   />
+ *
+ * entity.type: 'aggregate' | 'entity' | 'value' | 'service' | 'event'
+ * entity.focal: true — accented header (the aggregate root)
+ * field.note: '#'=PK, '→'=FK prefix, or free text
+ */
+
+interface ERField {
+  name: string;
+  note?: string;
+}
+
+interface EREntity {
+  id: string;
+  name: string;
+  type?: string;
+  fields?: ERField[];
+  focal?: boolean;
+  col?: number; // manual column (0-based)
+  row?: number; // manual row (0-based)
+}
+
+interface ERRelation {
+  from: string;
+  to: string;
+  fromCard?: string;
+  toCard?: string;
+  label?: string;
+}
+
+interface Props {
+  entities: EREntity[];
+  relations?: ERRelation[];
+  title?: string;
+  caption?: string;
+}
+
+const { entities, relations = [], title, caption } = Astro.props;
+
+const TYPE_COLORS: Record<string, string> = {
+  aggregate: 'var(--color-accent)',
+  entity:    'var(--color-text-muted)',
+  value:     '#16a34a',
+  service:   '#8b5cf6',
+  event:     '#f59e0b',
+};
+
+const ENTITY_W    = 160;
+const HEADER_H    = 34;
+const FIELD_H     = 18;
+const MIN_ENTITY_H = HEADER_H + 8;
+const COL_GAP     = 60;
+const ROW_GAP     = 40;
+const PAD_X       = 32;
+const PAD_Y       = 32;
+
+function entityH(e: EREntity): number {
+  const fields = e.fields ?? [];
+  return HEADER_H + fields.length * FIELD_H + 8;
+}
+
+// Auto-layout: grid with manual col/row overrides
+const maxCol = Math.max(...entities.map((e, i) => e.col ?? (i % 3)), 0);
+const colCount = maxCol + 1;
+
+// Assign positions
+const posOf: Record<string, { x: number; y: number }> = {};
+const rowCount: Record<number, number> = {};
+entities.forEach((e, i) => {
+  const col = e.col ?? (i % 3);
+  const row = e.row ?? Math.floor(i / 3);
+  rowCount[row] = Math.max(rowCount[row] ?? 0, col + 1);
+  posOf[e.id] = {
+    x: PAD_X + col * (ENTITY_W + COL_GAP),
+    y: PAD_Y + row * (Math.max(...entities.map(entityH)) + ROW_GAP),
+  };
+});
+
+const maxRow = Math.max(...entities.map((e, i) => e.row ?? Math.floor(i / 3)), 0);
+const svgW = PAD_X * 2 + colCount * ENTITY_W + (colCount - 1) * COL_GAP;
+const maxEH = Math.max(...entities.map(entityH));
+const svgH = PAD_Y * 2 + (maxRow + 1) * maxEH + maxRow * ROW_GAP;
+
+// Build relation paths
+interface Line { path: string; label?: string; mx: number; my: number; fromCard?: string; toCard?: string; fcx: number; fcy: number; tcx: number; tcy: number; }
+const lines: Line[] = relations.map(rel => {
+  const fp = posOf[rel.from];
+  const tp = posOf[rel.to];
+  const feh = entityH(entities.find(e => e.id === rel.from)!);
+  const teh = entityH(entities.find(e => e.id === rel.to)!);
+  if (!fp || !tp) return null!;
+  const fcx = fp.x + ENTITY_W / 2;
+  const fcy = fp.y + HEADER_H / 2; // connect from header
+  const tcx = tp.x + ENTITY_W / 2;
+  const tcy = tp.y + HEADER_H / 2;
+
+  // Ortho path: leave from right/left edge of entities
+  let x1 = fp.x + ENTITY_W, y1 = fp.y + feh / 2;
+  let x2 = tp.x, y2 = tp.y + teh / 2;
+  if (fp.x > tp.x) { x1 = fp.x; x2 = tp.x + ENTITY_W; }
+  if (Math.abs(fp.x - tp.x) < 20) { x1 = fcx; y1 = fp.y + feh; x2 = tcx; y2 = tp.y; }
+  const mx = (x1 + x2) / 2;
+  const my = (y1 + y2) / 2;
+  const midX = (x1 + x2) / 2;
+  const path = `M ${x1} ${y1} L ${midX} ${y1} L ${midX} ${y2} L ${x2} ${y2}`;
+
+  return { path, label: rel.label, mx, my, fromCard: rel.fromCard, toCard: rel.toCard, fcx: x1, fcy: y1, tcx: x2, tcy: y2 };
+}).filter(Boolean);
+---
+
+<div class="er-wrap">
+  {title && <div class="er-titlebar"><span class="er-prompt">$</span> {title}</div>}
+  <div class="er-body">
+    <svg
+      width={svgW}
+      height={svgH}
+      viewBox={`0 0 ${svgW} ${svgH}`}
+      style="display:block; overflow:visible; max-width:100%; height:auto;"
+      aria-label={title ?? 'ER Diagram'}
+    >
+      <!-- Relation lines (below nodes) -->
+      {lines.map(line => (
+        <>
+          <path d={line.path} fill="none" stroke="var(--color-border)" stroke-width="1.5" />
+          {line.label && (
+            <text
+              x={line.mx} y={line.my - 6}
+              text-anchor="middle"
+              font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+              font-size="8.5"
+              fill="var(--color-text-muted)"
+            >{line.label}</text>
+          )}
+          {line.fromCard && (
+            <text
+              x={line.fcx + (line.fcx < line.tcx ? 6 : -6)} y={line.fcy - 4}
+              text-anchor={line.fcx < line.tcx ? 'start' : 'end'}
+              font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+              font-size="10" font-weight="700"
+              fill="var(--color-text-muted)"
+            >{line.fromCard}</text>
+          )}
+          {line.toCard && (
+            <text
+              x={line.tcx + (line.tcx > line.fcx ? -6 : 6)} y={line.tcy - 4}
+              text-anchor={line.tcx > line.fcx ? 'end' : 'start'}
+              font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+              font-size="10" font-weight="700"
+              fill="var(--color-text-muted)"
+            >{line.toCard}</text>
+          )}
+        </>
+      ))}
+
+      <!-- Entities -->
+      {entities.map(entity => {
+        const pos = posOf[entity.id];
+        if (!pos) return null;
+        const eh = entityH(entity);
+        const typeColor = TYPE_COLORS[entity.type ?? 'entity'] ?? TYPE_COLORS['entity'];
+        const headerBg = entity.focal ? 'rgba(var(--color-accent-rgb,69,137,255),0.12)' : 'var(--color-surface-2)';
+        const headerStroke = entity.focal ? 'var(--color-accent)' : typeColor;
+
+        return (
+          <>
+            {/* Entity card */}
+            <rect
+              x={pos.x} y={pos.y}
+              width={ENTITY_W} height={eh}
+              rx="6"
+              fill="var(--color-surface)"
+              stroke={entity.focal ? 'var(--color-accent)' : 'var(--color-border)'}
+              stroke-width={entity.focal ? '2' : '1.2'}
+            />
+            {/* Header */}
+            <rect
+              x={pos.x} y={pos.y}
+              width={ENTITY_W} height={HEADER_H}
+              rx="6" ry="6"
+              fill={headerBg}
+              stroke="none"
+            />
+            {/* Header bottom straight edge */}
+            <rect
+              x={pos.x} y={pos.y + HEADER_H - 6}
+              width={ENTITY_W} height={6}
+              fill={headerBg}
+              stroke="none"
+            />
+            {/* Header border bottom */}
+            <line
+              x1={pos.x} y1={pos.y + HEADER_H}
+              x2={pos.x + ENTITY_W} y2={pos.y + HEADER_H}
+              stroke={entity.focal ? 'var(--color-accent)' : 'var(--color-border)'}
+              stroke-width="1.2"
+            />
+            {/* Type tag */}
+            {entity.type && (
+              <text
+                x={pos.x + 8} y={pos.y + 11}
+                font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+                font-size="7" font-weight="600"
+                fill={headerStroke}
+                opacity="0.8"
+                letter-spacing="0.12em"
+              >{entity.type.toUpperCase()}</text>
+            )}
+            {/* Entity name */}
+            <text
+              x={pos.x + ENTITY_W / 2} y={pos.y + (entity.type ? 26 : HEADER_H / 2 + 4)}
+              text-anchor="middle"
+              font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+              font-size="12" font-weight="700"
+              fill={entity.focal ? 'var(--color-accent)' : 'var(--color-text)'}
+            >{entity.name}</text>
+
+            {/* Fields */}
+            {(entity.fields ?? []).map((field, fi) => {
+              const isPK = field.note?.startsWith('#');
+              const isFK = field.note?.startsWith('→');
+              const fy = pos.y + HEADER_H + 6 + fi * FIELD_H;
+              return (
+                <>
+                  <text
+                    x={pos.x + 10} y={fy + 11}
+                    font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+                    font-size="9.5" font-weight={isPK ? '700' : '400'}
+                    fill={isPK ? 'var(--color-accent)' : isFK ? '#0ea5e9' : 'var(--color-text)'}
+                  >{field.name}</text>
+                  {field.note && (
+                    <text
+                      x={pos.x + ENTITY_W - 8} y={fy + 11}
+                      text-anchor="end"
+                      font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+                      font-size="8"
+                      fill="var(--color-text-muted)"
+                    >{field.note}</text>
+                  )}
+                </>
+              );
+            })}
+          </>
+        );
+      })}
+    </svg>
+  </div>
+  {caption && <div class="er-caption"><span class="er-prompt">▶</span> {caption}</div>}
+</div>
+
+<style>
+  .er-wrap {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    margin: 1.5rem 0;
+    overflow: hidden;
+    font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+  }
+  .er-titlebar {
+    padding: 0.4rem 0.875rem;
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-surface-2);
+    font-size: 0.65rem;
+    color: var(--color-text-muted);
+  }
+  .er-prompt { color: var(--color-accent); font-weight: 700; margin-right: 0.35rem; }
+  .er-body {
+    padding: 1.25rem;
+    overflow-x: auto;
+    display: flex;
+    justify-content: center;
+  }
+  .er-caption {
+    padding: 0.45rem 0.875rem;
+    border-top: 1px solid var(--color-border);
+    font-size: 0.62rem;
+    color: var(--color-text-dim);
+    background: var(--color-bg);
+    line-height: 1.5;
+  }
+</style>

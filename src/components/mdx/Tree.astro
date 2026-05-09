@@ -1,0 +1,212 @@
+---
+/**
+ * Tree — parent→children hierarchy with orthogonal connectors.
+ *
+ * Usage:
+ *   <Tree
+ *     title="B-Tree node types"
+ *     nodes={[
+ *       { id: "root",   label: "BTreeNode",      sub: "root",     color: "teal" },
+ *       { id: "int",    label: "InternalNode",   sub: "keys + ptrs",  parent: "root" },
+ *       { id: "leaf",   label: "LeafNode",       sub: "key-value pairs", parent: "root" },
+ *       { id: "leaf2",  label: "LeafNode",       sub: "linked list →",  parent: "root" },
+ *       { id: "page",   label: "Page",           sub: "4 KB disk block", parent: "leaf" },
+ *     ]}
+ *     caption="B-Tree node hierarchy"
+ *   />
+ *
+ * node.parent: id of parent node (omit for root)
+ * node.color:  'teal'|'amber'|'green'|'rose'|'violet'
+ */
+
+interface TreeNode {
+  id: string;
+  label: string;
+  sub?: string;
+  parent?: string;
+  color?: string;
+}
+
+interface Props {
+  nodes: TreeNode[];
+  title?: string;
+  caption?: string;
+  direction?: 'top-down' | 'left-right';
+}
+
+const { nodes, title, caption, direction = 'top-down' } = Astro.props;
+
+const COLORS: Record<string, { stroke: string; fill: string; text: string }> = {
+  default: { stroke: 'var(--color-text-muted)', fill: 'var(--color-surface-2)', text: 'var(--color-text)' },
+  teal:    { stroke: '#0ea5e9', fill: 'rgba(14,165,233,0.08)',  text: '#0ea5e9' },
+  amber:   { stroke: '#f59e0b', fill: 'rgba(245,158,11,0.08)', text: '#f59e0b' },
+  green:   { stroke: '#16a34a', fill: 'rgba(22,163,74,0.08)',  text: '#16a34a' },
+  rose:    { stroke: '#f43f5e', fill: 'rgba(244,63,94,0.08)',  text: '#f43f5e' },
+  violet:  { stroke: '#8b5cf6', fill: 'rgba(139,92,246,0.08)', text: '#8b5cf6' },
+  accent:  { stroke: 'var(--color-accent)', fill: 'rgba(69,137,255,0.08)', text: 'var(--color-accent)' },
+};
+function nc(n: TreeNode) { return COLORS[n.color ?? 'default'] ?? COLORS['default']; }
+
+const NODE_W = 140;
+const NODE_H = 48;
+const COL_GAP = 24;
+const ROW_GAP = 56;
+const PAD_X = 32;
+const PAD_Y = 28;
+
+// Build tree structure
+const childrenOf: Record<string, string[]> = {};
+const nodeMap: Record<string, TreeNode> = {};
+nodes.forEach(n => {
+  nodeMap[n.id] = n;
+  if (n.parent) {
+    childrenOf[n.parent] = [...(childrenOf[n.parent] ?? []), n.id];
+  }
+});
+const roots = nodes.filter(n => !n.parent).map(n => n.id);
+
+// Assign depth (row) via BFS
+const depthOf: Record<string, number> = {};
+const queue: { id: string; depth: number }[] = roots.map(r => ({ id: r, depth: 0 }));
+while (queue.length) {
+  const { id, depth } = queue.shift()!;
+  depthOf[id] = depth;
+  (childrenOf[id] ?? []).forEach(cid => queue.push({ id: cid, depth: depth + 1 }));
+}
+
+// Group by depth
+const byDepth: Record<number, string[]> = {};
+nodes.forEach(n => {
+  const d = depthOf[n.id] ?? 0;
+  (byDepth[d] = byDepth[d] ?? []).push(n.id);
+});
+const maxDepth = Math.max(...Object.keys(byDepth).map(Number));
+const maxBreadth = Math.max(...Object.values(byDepth).map(a => a.length));
+
+// Assign x positions: centre each row
+const posOf: Record<string, { x: number; y: number }> = {};
+Object.entries(byDepth).forEach(([depthStr, ids]) => {
+  const d = Number(depthStr);
+  const totalW = ids.length * NODE_W + (ids.length - 1) * COL_GAP;
+  const canvasW = maxBreadth * NODE_W + (maxBreadth - 1) * COL_GAP;
+  const startX = PAD_X + (canvasW - totalW) / 2;
+  ids.forEach((id, i) => {
+    posOf[id] = {
+      x: startX + i * (NODE_W + COL_GAP),
+      y: PAD_Y + d * (NODE_H + ROW_GAP),
+    };
+  });
+});
+
+const svgW = PAD_X * 2 + maxBreadth * NODE_W + (maxBreadth - 1) * COL_GAP;
+const svgH = PAD_Y * 2 + (maxDepth + 1) * NODE_H + maxDepth * ROW_GAP;
+
+// Build orthogonal elbow connectors
+interface Connector { path: string }
+const connectors: Connector[] = [];
+nodes.forEach(n => {
+  if (!n.parent || !posOf[n.id] || !posOf[n.parent]) return;
+  const p = posOf[n.parent];
+  const c = posOf[n.id];
+  const px = p.x + NODE_W / 2;
+  const py = p.y + NODE_H;
+  const cx = c.x + NODE_W / 2;
+  const cy = c.y;
+  const midY = (py + cy) / 2;
+  // Elbow: down from parent, horizontal bus, down to child
+  connectors.push({ path: `M ${px} ${py} L ${px} ${midY} L ${cx} ${midY} L ${cx} ${cy}` });
+});
+---
+
+<div class="tr-wrap">
+  {title && <div class="tr-titlebar"><span class="tr-prompt">$</span> {title}</div>}
+  <div class="tr-body">
+    <svg
+      width={svgW}
+      height={svgH}
+      viewBox={`0 0 ${svgW} ${svgH}`}
+      style="display:block; overflow:visible; max-width:100%; height:auto;"
+      aria-label={title ?? 'Tree diagram'}
+    >
+      <!-- Connectors first (behind nodes) -->
+      {connectors.map(conn => (
+        <path
+          d={conn.path}
+          fill="none"
+          stroke="var(--color-border)"
+          stroke-width="1.5"
+        />
+      ))}
+
+      <!-- Nodes -->
+      {nodes.map(n => {
+        const pos = posOf[n.id];
+        if (!pos) return null;
+        const col = nc(n);
+        const subLines = n.sub ? n.sub.split('\n') : [];
+        const nh = NODE_H + subLines.length * 12;
+        const labelY = pos.y + (subLines.length > 0 ? 16 : nh / 2 + 4);
+
+        return (
+          <>
+            <rect
+              x={pos.x} y={pos.y}
+              width={NODE_W} height={nh}
+              rx="6"
+              fill={col.fill} stroke={col.stroke} stroke-width="1.5"
+            />
+            <text
+              x={pos.x + NODE_W / 2} y={labelY}
+              text-anchor="middle" dominant-baseline="middle"
+              font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+              font-size="11" font-weight="700"
+              fill={col.text}
+            >{n.label}</text>
+            {subLines.map((line, li) => (
+              <text
+                x={pos.x + NODE_W / 2} y={labelY + 13 + li * 12}
+                text-anchor="middle"
+                font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+                font-size="8.5"
+                fill="var(--color-text-muted)"
+              >{line}</text>
+            ))}
+          </>
+        );
+      })}
+    </svg>
+  </div>
+  {caption && <div class="tr-caption"><span class="tr-prompt">▶</span> {caption}</div>}
+</div>
+
+<style>
+  .tr-wrap {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    margin: 1.5rem 0;
+    overflow: hidden;
+    font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+  }
+  .tr-titlebar {
+    padding: 0.4rem 0.875rem;
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-surface-2);
+    font-size: 0.65rem;
+    color: var(--color-text-muted);
+  }
+  .tr-prompt { color: var(--color-accent); font-weight: 700; margin-right: 0.35rem; }
+  .tr-body {
+    padding: 1.25rem;
+    overflow-x: auto;
+    display: flex;
+    justify-content: center;
+  }
+  .tr-caption {
+    padding: 0.45rem 0.875rem;
+    border-top: 1px solid var(--color-border);
+    font-size: 0.62rem;
+    color: var(--color-text-dim);
+    background: var(--color-bg);
+    line-height: 1.5;
+  }
+</style>

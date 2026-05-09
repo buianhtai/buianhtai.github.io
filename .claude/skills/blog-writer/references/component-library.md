@@ -533,3 +533,294 @@ interface Props {
 />
 ```
 **When to use:** Lifecycle progressions where an item moves through ordered states, especially when there is a decay/regression path back to an earlier state (learning systems, certificate expiry, pattern maturity). Works for any finite-state sequence (2–5 stages recommended). For non-sequential flows, use `Pipeline`. For cyclic control loops, use `ControlLoop`.
+
+---
+
+### Flowchart
+**Pattern:** Decision-logic diagram with shape semantics: oval=start/end, rect=step, diamond=decision.
+**Props:**
+```ts
+interface FCNode {
+  id: string;
+  label: string;
+  shape?: 'rect' | 'oval' | 'diamond' | 'dot';
+  color?: string;   // 'teal' | 'amber' | 'green' | 'rose' | 'violet'
+  sub?: string;
+  col?: number;     // explicit column (1-based)
+  row?: number;     // explicit row (1-based)
+}
+interface FCEdge {
+  from: string;
+  to: string;
+  label?: string;   // branch label (Yes / No / condition)
+  type?: 'solid' | 'dashed';
+}
+interface Props {
+  nodes: FCNode[];
+  edges: FCEdge[];
+  title?: string;
+  caption?: string;
+}
+```
+**Usage:**
+```mdx
+<Flowchart
+  title="Cache lookup decision"
+  nodes={[
+    { id: "start", label: "Start",             shape: "oval" },
+    { id: "hit",   label: "Cache hit?",        shape: "diamond" },
+    { id: "serve", label: "Serve from cache",  shape: "rect", color: "teal" },
+    { id: "fetch", label: "Fetch from DB",     shape: "rect" },
+    { id: "end",   label: "Return response",   shape: "oval" },
+  ]}
+  edges={[
+    { from: "start", to: "hit" },
+    { from: "hit",   to: "serve", label: "yes" },
+    { from: "hit",   to: "fetch", label: "no" },
+    { from: "serve", to: "end" },
+    { from: "fetch", to: "end" },
+  ]}
+  caption="Happy path: cache hit → serve directly."
+/>
+```
+**When to use:** Decision flows, state machines, write/read paths with branch points. Default node is `rect`. Use `color` on the "happy path" or most important branch node. For purely linear steps without decisions, use `FlowStep` or `Pipeline` instead.
+
+---
+
+### Timeline
+**Pattern:** Horizontal time axis with events alternating above/below. Major events get accent dots.
+**Props:**
+```ts
+interface TimelineEvent {
+  label: string;
+  date: string;
+  sub?: string;
+  major?: boolean;  // true = larger accent dot + bold label
+  color?: string;   // 'teal' | 'amber' | 'green' | 'rose' | 'violet'
+}
+interface Props {
+  events: TimelineEvent[];
+  title?: string;
+  caption?: string;
+}
+```
+**Usage:**
+```mdx
+<Timeline
+  title="LSM-Tree evolution"
+  events={[
+    { label: "LevelDB",       date: "2011", sub: "Google" },
+    { label: "RocksDB",       date: "2012", sub: "Facebook fork", major: true },
+    { label: "Cassandra 2.0", date: "2013" },
+    { label: "WiscKey",       date: "2016", sub: "key-val separation", color: "teal" },
+  ]}
+  caption="Key milestones in LSM-tree adoption"
+/>
+```
+**When to use:** Historical progressions, version timelines, algorithm evolution. Events alternate above/below the axis automatically. Use `major: true` for the 1-2 most significant events. Use `color` for notable side events.
+
+---
+
+### Quadrant
+**Pattern:** Two-axis scatter chart for positioning items on a 2D trade-off grid.
+**Props:**
+```ts
+interface QItem {
+  label: string;
+  x: number;     // 0–100 (left → right)
+  y: number;     // 0–100 (bottom → top)
+  focal?: boolean;
+  sub?: string;
+}
+interface Props {
+  items: QItem[];
+  xAxis: string;
+  yAxis: string;
+  title?: string;
+  caption?: string;
+  quadrantLabels?: [string, string, string, string]; // [TL, TR, BL, BR]
+}
+```
+**Usage:**
+```mdx
+<Quadrant
+  title="Compaction strategy trade-off"
+  xAxis="READ AMPLIFICATION"
+  yAxis="WRITE AMPLIFICATION"
+  quadrantLabels={["High W, Low R", "High W, High R", "Low W, Low R", "Low W, High R"]}
+  items={[
+    { label: "Leveled",      x: 18, y: 82, focal: true, sub: "1 file/level" },
+    { label: "Size-Tiered",  x: 74, y: 22,              sub: "fewer rewrites" },
+  ]}
+  caption="No strategy occupies the ideal bottom-left corner — that's the RUM Conjecture."
+/>
+```
+**When to use:** Feature prioritization (effort × impact), algorithm trade-offs, design comparison on 2 dimensions. Use `focal: true` on 1-2 "hero" items to highlight in accent color. Use `quadrantLabels` to name the four zones.
+
+---
+
+### Tree
+**Pattern:** Parent-child hierarchy with orthogonal (elbow) connectors, auto-layouts by depth.
+**Props:**
+```ts
+interface TreeNode {
+  id: string;
+  label: string;
+  sub?: string;
+  parent?: string;  // id of parent node (omit for root)
+  color?: string;   // 'teal' | 'amber' | 'green' | 'rose' | 'violet' | 'accent'
+}
+interface Props {
+  nodes: TreeNode[];
+  title?: string;
+  caption?: string;
+}
+```
+**Usage:**
+```mdx
+<Tree
+  title="B-Tree node hierarchy"
+  nodes={[
+    { id: "root",  label: "Root",          sub: "separator keys + child ptrs", color: "teal" },
+    { id: "int1",  label: "Internal Node", sub: "keys: [15, 30]", parent: "root", color: "amber" },
+    { id: "leaf1", label: "Leaf Node",     sub: "records: 5, 10, 12", parent: "int1" },
+    { id: "leaf2", label: "Leaf Node",     sub: "records: 17, 22",    parent: "int1" },
+  ]}
+  caption="2 hops: root → internal → leaf."
+/>
+```
+**When to use:** Class hierarchies, node type taxonomies, inheritance trees, B-Tree node types. Nodes at the same depth are automatically spread horizontally and centered. Use `color` on the root or a critical node (not both).
+
+---
+
+### Pyramid
+**Pattern:** Stacked trapezoid layers — pyramid (apex up, rarest/most important at top) or funnel (apex down, narrowest conversion at bottom).
+**Props:**
+```ts
+interface PyramidLayer {
+  label: string;
+  sub?: string;
+  focal?: boolean;   // accent color on this layer (max 1)
+  annotation?: string; // right-side note (e.g. drop-off % for funnels)
+}
+interface Props {
+  layers: PyramidLayer[];
+  orientation?: 'pyramid' | 'funnel';  // default: 'pyramid'
+  title?: string;
+  caption?: string;
+}
+```
+**Usage:**
+```mdx
+<Pyramid
+  title="Distributed systems progression"
+  orientation="pyramid"
+  layers={[
+    { label: "Consensus",         sub: "Paxos, Raft", focal: true },
+    { label: "Distributed Txns",  sub: "2PC, Spanner" },
+    { label: "Consistency Models",sub: "linearizability → eventual" },
+    { label: "Fundamentals",      sub: "FLP impossibility, fallacies" },
+  ]}
+  caption="Apex = most advanced. Each layer depends on the one below it."
+/>
+```
+**When to use:** Knowledge hierarchies (foundational → advanced), Maslow-style priority pyramids, conversion funnels. `layers[0]` is always the apex (top for pyramid, bottom for funnel). Mark the one most important layer with `focal: true`.
+
+---
+
+### ERDiagram
+**Pattern:** Entity-relationship diagram with header type tags, field lists, and cardinality relations.
+**Props:**
+```ts
+interface ERField { name: string; note?: string; }
+interface EREntity {
+  id: string;
+  name: string;
+  type?: string;       // 'aggregate' | 'entity' | 'value' | 'service' | 'event'
+  fields?: ERField[];  // # = PK, → = FK prefix in note
+  focal?: boolean;     // accent header (aggregate root)
+  col?: number;        // manual column (0-based)
+  row?: number;        // manual row (0-based)
+}
+interface ERRelation {
+  from: string;
+  to: string;
+  fromCard?: string;   // cardinality label near 'from' end
+  toCard?: string;     // cardinality label near 'to' end
+  label?: string;      // relationship verb
+}
+interface Props {
+  entities: EREntity[];
+  relations?: ERRelation[];
+  title?: string;
+  caption?: string;
+}
+```
+**Usage:**
+```mdx
+<ERDiagram
+  title="Order domain model"
+  entities={[
+    {
+      id: "order", name: "Order", type: "aggregate", focal: true,
+      fields: [
+        { name: "id",         note: "# PK" },
+        { name: "customerId", note: "→ Customer" },
+        { name: "status",     note: "enum" },
+      ],
+    },
+    {
+      id: "item", name: "OrderItem", type: "entity", col: 1,
+      fields: [
+        { name: "orderId", note: "→ Order" },
+        { name: "sku",     note: "string" },
+      ],
+    },
+  ]}
+  relations={[
+    { from: "order", to: "item", fromCard: "1", toCard: "N", label: "contains" },
+  ]}
+  caption="Order aggregate root owns OrderItem collection."
+/>
+```
+**When to use:** Domain models, database schemas, DDD aggregate boundaries. Mark the aggregate root with `focal: true`. Use `type: 'aggregate' | 'entity' | 'value'` for DDD stereotypes. Use `# PK` and `→ FK` prefixes in field notes.
+
+---
+
+### Venn
+**Pattern:** 2 or 3 overlapping circles with labeled intersections.
+**Props:**
+```ts
+interface VennCircle { label: string; color?: string; }
+interface VennIntersection {
+  sets: number[];     // indices into circles[] — [0,1] for overlap between circles 0 and 1
+  label: string;
+  sub?: string;
+  focal?: boolean;    // accent color (max 1–2)
+}
+interface Props {
+  circles: VennCircle[];
+  intersections?: VennIntersection[];
+  title?: string;
+  caption?: string;
+}
+```
+**Usage:**
+```mdx
+<Venn
+  title="RUM Conjecture"
+  circles={[
+    { label: "Read-optimal",   color: "teal" },
+    { label: "Update-optimal", color: "amber" },
+    { label: "Memory-optimal", color: "violet" },
+  ]}
+  intersections={[
+    { sets: [0, 2],    label: "B-Trees",      sub: "sorted pages, in-place writes" },
+    { sets: [1, 2],    label: "LSM Trees",    sub: "sequential appends, compaction", focal: true },
+    { sets: [0, 1],    label: "Hash indexes", sub: "O(1) ops, all keys in memory" },
+    { sets: [0, 1, 2], label: "⚠ impossible", sub: "no structure achieves all three" },
+  ]}
+  caption="Any two can be optimised simultaneously — never all three."
+/>
+```
+**When to use:** Set membership overlaps, shared properties between 2-3 systems, CAP theorem, RUM Conjecture. Use `focal: true` on the most interesting intersection. Circle colors: `'blue' | 'green' | 'amber' | 'rose' | 'violet' | 'teal'`.

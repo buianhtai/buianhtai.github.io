@@ -186,33 +186,11 @@ That dramatically improves signal quality because teams only see actionable even
 Active hours are timezone-aware, so schedules and notifications can be aligned with local operating windows.
 
 <Timeline
-  direction="vertical"
   events={[
-    {
-      date: 'T0',
-      title: 'Cron WakeMode Trigger',
-      description: 'Scheduled heartbeat execution starts.',
-      color: 'teal'
-    },
-    {
-      date: 'T0+1',
-      title: 'Checklist Run',
-      description: 'Agent executes HEARTBEAT.md checks.',
-      color: 'green'
-    },
-    {
-      date: 'T0+2',
-      title: 'Suppress On OK',
-      description: 'Healthy checks produce no noisy update.',
-      color: 'amber'
-    },
-    {
-      date: 'T0+2',
-      title: 'Report On Failure',
-      description: 'Only failing conditions are emitted.',
-      color: 'rose',
-      highlight: true
-    }
+    { date: 'T0',   label: 'Cron WakeMode Trigger', sub: 'Scheduled heartbeat execution starts.', color: 'teal' },
+    { date: 'T0+1', label: 'Checklist Run',          sub: 'Agent executes HEARTBEAT.md checks.',  color: 'green' },
+    { date: 'T0+2', label: 'Suppress On OK',         sub: 'Healthy checks produce no noisy update.', color: 'amber' },
+    { date: 'T0+2', label: 'Report On Failure',      sub: 'Only failing conditions are emitted.', color: 'rose', major: true },
   ]}
 />
 

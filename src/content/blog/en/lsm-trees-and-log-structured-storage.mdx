@@ -18,6 +18,8 @@ import LayerStack from '../../../components/mdx/LayerStack.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
 import SequenceDiagram from '../../../components/mdx/SequenceDiagram.astro';
 import ArchDiagram from '../../../components/mdx/ArchDiagram.astro';
+import Quadrant from '../../../components/mdx/Quadrant.astro';
+import Venn from '../../../components/mdx/Venn.astro';
 
 The B-Tree is brilliant for reads. For high-throughput writes, it has a fundamental problem: in-place updates require seeking to the right page and rewriting it. Every write is a random write. Random writes are the slowest operation on any storage medium.
 
@@ -114,6 +116,19 @@ Compaction reads multiple SSTables, merges them (resolving duplicates and applyi
   ]}
 />
 
+<Quadrant
+  title="Compaction strategy trade-off space"
+  xAxis="READ AMPLIFICATION"
+  yAxis="WRITE AMPLIFICATION"
+  quadrantLabels={["High W, Low R", "High W, High R", "Low W, Low R", "Low W, High R"]}
+  items={[
+    { label: "Leveled (RocksDB)",      x: 18, y: 82, focal: true, sub: "1 file/level to check" },
+    { label: "Size-Tiered (Cassandra)", x: 74, y: 22,            sub: "fewer rewrites per byte" },
+    { label: "FIFO / Hybrid",          x: 48, y: 48,            sub: "workload-specific tuning" },
+  ]}
+  caption="Leveled compaction: low read amplification, high write cost. Size-tiered: fast writes, slower reads. No strategy sits in the ideal bottom-left corner — that's the RUM Conjecture."
+/>
+
 ---
 
 ## <Label color="teal">4</Label> The RUM Conjecture
@@ -125,6 +140,22 @@ The RUM Conjecture (2016) formalizes the trade-off space for storage structures:
 - **B-Trees**: optimize Read and Memory (sorted structure, no extra copies) at the cost of Update overhead (in-place writes require finding the record and rewriting the page)
 - **LSM Trees**: optimize Update (sequential appends) and Memory efficiency at the cost of Read overhead (must check multiple files)
 - **Hash indexes**: optimize Update and Read (O(1) operations) at the cost of Memory overhead (need to store all keys in memory for range scans)
+
+<Venn
+  title="RUM Conjecture — storage structure trade-off space"
+  circles={[
+    { label: "Read-optimal",   color: "teal" },
+    { label: "Update-optimal", color: "amber" },
+    { label: "Memory-optimal", color: "violet" },
+  ]}
+  intersections={[
+    { sets: [0, 2],    label: "B-Trees",      sub: "sorted pages, in-place writes" },
+    { sets: [1, 2],    label: "LSM Trees",    sub: "sequential appends, compaction", focal: true },
+    { sets: [0, 1],    label: "Hash indexes", sub: "O(1) ops, all keys in memory" },
+    { sets: [0, 1, 2], label: "⚠ impossible", sub: "no structure achieves all three" },
+  ]}
+  caption="Any two of the three can be optimised simultaneously — but never all three. B-Trees, LSM Trees, and Hash Indexes each occupy a different pair of the three dimensions."
+/>
 
 Every storage structure design is a point in this three-dimensional trade-off space. Understanding where your workload falls determines which direction to optimize.
 

@@ -1,0 +1,235 @@
+---
+/**
+ * Venn — 2 or 3 circle Venn diagram with labeled intersections.
+ *
+ * Usage (2 circles):
+ *   <Venn
+ *     title="CAP theorem trade-offs"
+ *     circles={[
+ *       { label: "Consistency",   color: "blue" },
+ *       { label: "Availability",  color: "green" },
+ *     ]}
+ *     intersections={[
+ *       { sets: [0, 1], label: "CA systems", sub: "RDBMS (no partition tolerance)", focal: true },
+ *     ]}
+ *     caption="Pick any two — you can't have all three under network partition"
+ *   />
+ *
+ * Usage (3 circles):
+ *   <Venn
+ *     circles={[
+ *       { label: "Consistency",   color: "blue" },
+ *       { label: "Availability",  color: "green" },
+ *       { label: "Partition tol.",color: "amber" },
+ *     ]}
+ *     intersections={[
+ *       { sets: [0, 1],    label: "CA", sub: "relational" },
+ *       { sets: [0, 2],    label: "CP", sub: "HBase, Zookeeper" },
+ *       { sets: [1, 2],    label: "AP", sub: "Cassandra, DNS", focal: true },
+ *       { sets: [0, 1, 2], label: "⚠ impossible" },
+ *     ]}
+ *   />
+ *
+ * circles[n].color: 'blue' | 'green' | 'amber' | 'rose' | 'violet'
+ * intersection.focal: true → accent color on the label (max 1–2)
+ */
+
+interface VennCircle {
+  label: string;
+  color?: string;
+}
+
+interface VennIntersection {
+  sets: number[];     // indices into circles[]
+  label: string;
+  sub?: string;
+  focal?: boolean;
+}
+
+interface Props {
+  circles: VennCircle[];
+  intersections?: VennIntersection[];
+  title?: string;
+  caption?: string;
+}
+
+const { circles, intersections = [], title, caption } = Astro.props;
+
+const PALETTE: Record<string, { fill: string; stroke: string }> = {
+  blue:   { fill: 'rgba(59,130,246,0.18)',  stroke: '#3b82f6' },
+  green:  { fill: 'rgba(22,163,74,0.18)',   stroke: '#16a34a' },
+  amber:  { fill: 'rgba(245,158,11,0.18)',  stroke: '#f59e0b' },
+  rose:   { fill: 'rgba(244,63,94,0.18)',   stroke: '#f43f5e' },
+  violet: { fill: 'rgba(139,92,246,0.18)',  stroke: '#8b5cf6' },
+  teal:   { fill: 'rgba(14,165,233,0.18)',  stroke: '#0ea5e9' },
+};
+function pal(c: VennCircle) { return PALETTE[c.color ?? 'blue'] ?? PALETTE['blue']; }
+
+const n = circles.length;
+const is3 = n >= 3;
+
+// SVG canvas
+const W = 380, H = is3 ? 300 : 220;
+const CX = W / 2, CY = H / 2;
+
+// Circle geometry
+let circlePositions: { cx: number; cy: number; r: number }[];
+
+if (!is3) {
+  // 2 circles: side by side with overlap
+  const r = 80;
+  const overlap = r * 0.6;
+  circlePositions = [
+    { cx: CX - r + overlap / 2, cy: CY, r },
+    { cx: CX + r - overlap / 2, cy: CY, r },
+  ];
+} else {
+  // 3 circles: triangle arrangement
+  const r = 90;
+  const spread = 52;
+  circlePositions = [
+    { cx: CX,          cy: CY - spread,     r }, // top
+    { cx: CX - spread, cy: CY + spread * 0.6, r }, // bottom-left
+    { cx: CX + spread, cy: CY + spread * 0.6, r }, // bottom-right
+  ];
+}
+
+// Label positions for each circle (outside intersection zone)
+function circleLabel(i: number): { x: number; y: number; anchor: string } {
+  if (!is3) {
+    const { cx, cy, r } = circlePositions[i];
+    return i === 0
+      ? { x: cx - r + 10, y: cy - r * 0.6, anchor: 'middle' }
+      : { x: cx + r - 10, y: cy - r * 0.6, anchor: 'middle' };
+  }
+  // 3-circle
+  const offsets = [
+    { x: 0,   y: -14, anchor: 'middle' },
+    { x: -14, y: 14,  anchor: 'end'   },
+    { x: 14,  y: 14,  anchor: 'start' },
+  ];
+  const { cx, cy, r } = circlePositions[i];
+  const o = offsets[i];
+  const dir = [
+    { dx: 0, dy: -1 },
+    { dx: -0.866, dy: 0.5 },
+    { dx: 0.866,  dy: 0.5 },
+  ][i];
+  return {
+    x: cx + dir.dx * (r + 18) + o.x,
+    y: cy + dir.dy * (r + 18) + o.y,
+    anchor: o.anchor,
+  };
+}
+
+// Intersection label positions (approximate centroid of sets)
+function intersectionPos(sets: number[]): { x: number; y: number } {
+  const pts = sets.map(i => circlePositions[i]);
+  return {
+    x: pts.reduce((s, p) => s + p.cx, 0) / pts.length,
+    y: pts.reduce((s, p) => s + p.cy, 0) / pts.length,
+  };
+}
+---
+
+<div class="vn-wrap">
+  {title && <div class="vn-titlebar"><span class="vn-prompt">$</span> {title}</div>}
+  <div class="vn-body">
+    <svg
+      width={W}
+      height={H}
+      viewBox={`0 0 ${W} ${H}`}
+      style="display:block; overflow:visible; max-width:100%; height:auto;"
+      aria-label={title ?? 'Venn diagram'}
+    >
+      <!-- Circles (low-opacity fills, stroke edges) -->
+      {circles.map((circle, i) => {
+        const { cx, cy, r } = circlePositions[i];
+        const p = pal(circle);
+        return (
+          <circle
+            cx={cx} cy={cy} r={r}
+            fill={p.fill}
+            stroke={p.stroke}
+            stroke-width="1.5"
+            opacity="0.85"
+          />
+        );
+      })}
+
+      <!-- Circle labels (outside) -->
+      {circles.map((circle, i) => {
+        const pos = circleLabel(i);
+        const p = pal(circle);
+        return (
+          <text
+            x={pos.x} y={pos.y}
+            text-anchor={pos.anchor}
+            font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+            font-size="11" font-weight="700"
+            fill={p.stroke}
+          >{circle.label}</text>
+        );
+      })}
+
+      <!-- Intersection labels -->
+      {intersections.map(ix => {
+        const pos = intersectionPos(ix.sets);
+        const isFocal = ix.focal === true;
+        return (
+          <>
+            <text
+              x={pos.x} y={pos.y + (ix.sub ? -5 : 4)}
+              text-anchor="middle"
+              font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+              font-size={isFocal ? '11' : '10'} font-weight={isFocal ? '700' : '600'}
+              fill={isFocal ? 'var(--color-accent)' : 'var(--color-text)'}
+            >{ix.label}</text>
+            {ix.sub && (
+              <text
+                x={pos.x} y={pos.y + 10}
+                text-anchor="middle"
+                font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+                font-size="8"
+                fill={isFocal ? 'var(--color-accent)' : 'var(--color-text-muted)'}
+              >{ix.sub}</text>
+            )}
+          </>
+        );
+      })}
+    </svg>
+  </div>
+  {caption && <div class="vn-caption"><span class="vn-prompt">▶</span> {caption}</div>}
+</div>
+
+<style>
+  .vn-wrap {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    margin: 1.5rem 0;
+    overflow: hidden;
+    font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+  }
+  .vn-titlebar {
+    padding: 0.4rem 0.875rem;
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-surface-2);
+    font-size: 0.65rem;
+    color: var(--color-text-muted);
+  }
+  .vn-prompt { color: var(--color-accent); font-weight: 700; margin-right: 0.35rem; }
+  .vn-body {
+    padding: 1.25rem;
+    overflow-x: auto;
+    display: flex;
+    justify-content: center;
+  }
+  .vn-caption {
+    padding: 0.45rem 0.875rem;
+    border-top: 1px solid var(--color-border);
+    font-size: 0.62rem;
+    color: var(--color-text-dim);
+    background: var(--color-bg);
+    line-height: 1.5;
+  }
+</style>

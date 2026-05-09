@@ -16,6 +16,8 @@ import Callout from '../../../components/mdx/Callout.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
 import LayerStack from '../../../components/mdx/LayerStack.astro';
 import SequenceDiagram from '../../../components/mdx/SequenceDiagram.astro';
+import Pyramid from '../../../components/mdx/Pyramid.astro';
+import Flowchart from '../../../components/mdx/Flowchart.astro';
 
 Consensus is the problem that unifies everything in distributed systems: how do multiple processes agree on a single value, even when some may fail?
 
@@ -124,6 +126,33 @@ Raft (Ongaro and Ousterhout, 2014) was designed specifically for **understandabi
 - A candidate votes for itself and requests votes from others (RequestVote RPC)
 - A server grants a vote if the candidate's term is at least as large as its own, and the candidate's log is at least as up-to-date as the voter's log
 
+<Flowchart
+  title="Raft leader election state machine"
+  nodes={[
+    { id: "follower",   label: "Follower",         shape: "oval",    color: "teal", sub: "awaiting heartbeat" },
+    { id: "timeout",    label: "Election timeout?", shape: "diamond" },
+    { id: "candidate",  label: "Become Candidate",  shape: "rect",   sub: "increment term, vote self" },
+    { id: "sendvotes",  label: "RequestVote RPCs",  shape: "rect",   sub: "broadcast to all peers" },
+    { id: "majority",   label: "Majority votes?",   shape: "diamond" },
+    { id: "leader",     label: "Leader",            shape: "oval",   color: "teal", sub: "send heartbeats" },
+    { id: "higher",     label: "Higher-term msg?",  shape: "diamond" },
+    { id: "revert",     label: "Revert to Follower", shape: "rect" },
+  ]}
+  edges={[
+    { from: "follower",  to: "timeout" },
+    { from: "timeout",   to: "candidate", label: "yes" },
+    { from: "timeout",   to: "follower",  label: "no (heartbeat ok)" },
+    { from: "candidate", to: "sendvotes" },
+    { from: "sendvotes", to: "majority" },
+    { from: "majority",  to: "leader",   label: "yes" },
+    { from: "majority",  to: "higher" ,  label: "no / timeout" },
+    { from: "higher",    to: "revert",   label: "yes" },
+    { from: "higher",    to: "candidate",label: "no — retry" },
+    { from: "revert",    to: "follower" },
+  ]}
+  caption="A Raft server cycles between three states. The happy path (follower → candidate → leader) requires a quorum. Any discovery of a higher-term message resets the cycle."
+/>
+
 **Log replication**:
 1. Client sends command to leader
 2. Leader appends command to its log (uncommitted)
@@ -210,5 +239,20 @@ The distributed systems topics form a progression:
 5. **Anti-entropy**: mechanisms to repair diverged replicas
 6. **Distributed transactions**: atomic commitment across partitions (2PC, 3PC, Spanner, Calvin)
 7. **Consensus**: the core problem that ties everything together (Paxos, Raft, PBFT)
+
+<Pyramid
+  title="Distributed systems knowledge progression"
+  orientation="pyramid"
+  layers={[
+    { label: "Consensus",               sub: "Paxos, Raft, PBFT — ties it all together", focal: true },
+    { label: "Distributed Transactions", sub: "2PC, 3PC, Spanner, Calvin" },
+    { label: "Anti-Entropy",            sub: "replica repair, read repair, Merkle trees" },
+    { label: "Consistency Models",      sub: "linearizability → eventual consistency" },
+    { label: "Leader Election",         sub: "coordinator designation" },
+    { label: "Failure Detection",       sub: "heartbeats, Phi-Accrual, SWIM" },
+    { label: "Fundamentals",            sub: "concurrency, fallacies, FLP impossibility" },
+  ]}
+  caption="Each layer builds on the one below it. Consensus (apex) is only understandable once you have failure detection, elections, and consistency as foundations."
+/>
 
 Together, these explain how modern distributed databases — Cassandra, CockroachDB, TiDB, Spanner, etcd — achieve the consistency and availability properties they advertise. Every production distributed database is a specific point in the trade-off space defined by these algorithms.
