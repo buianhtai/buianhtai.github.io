@@ -79,10 +79,11 @@ const gridRows = Math.max(...states.map((s) => s.row!));
 // Layout constants (px) — SVG is rendered at these dimensions, CSS scales it
 const BOX_W = 140;
 const BOX_H = 56;
-const COL_GAP = 80;
-const ROW_GAP = 70;
-const PAD_X = 20;
-const PAD_Y = 24;
+const COL_GAP = 100;
+const ROW_GAP = 100;  // larger gap gives diagonal labels more room
+const PAD_X = 30;
+// Extra vertical padding so labels above top-row boxes have room
+const PAD_Y = 44;
 
 const svgW = PAD_X * 2 + gridCols * BOX_W + (gridCols - 1) * COL_GAP;
 const svgH = PAD_Y * 2 + gridRows * BOX_H + (gridRows - 1) * ROW_GAP;
@@ -94,6 +95,10 @@ function boxCx(s: State) {
 function boxCy(s: State) {
   return PAD_Y + (s.row! - 1) * (BOX_H + ROW_GAP) + BOX_H / 2;
 }
+function boxTop(s: State)    { return boxCy(s) - BOX_H / 2; }
+function boxBottom(s: State) { return boxCy(s) + BOX_H / 2; }
+function boxLeft(s: State)   { return boxCx(s) - BOX_W / 2; }
+function boxRight(s: State)  { return boxCx(s) + BOX_W / 2; }
 
 // Intersection of line from (cx,cy) through (tx,ty) with box edge
 function edgePoint(cx: number, cy: number, tx: number, ty: number, margin = 6): [number, number] {
@@ -102,26 +107,96 @@ function edgePoint(cx: number, cy: number, tx: number, ty: number, margin = 6): 
   const hw = BOX_W / 2 + margin;
   const hh = BOX_H / 2 + margin;
   if (Math.abs(dx) < 0.01 && Math.abs(dy) < 0.01) return [cx, cy];
-  // Scale to whichever box wall is hit first
   const sx = dx !== 0 ? hw / Math.abs(dx) : Infinity;
   const sy = dy !== 0 ? hh / Math.abs(dy) : Infinity;
   const s = Math.min(sx, sy);
   return [cx + dx * s, cy + dy * s];
 }
 
+// Font metrics at font-size 9 monospace
+const CHAR_W = 5.6;
+const LABEL_PAD_H = 10; // horizontal padding total
+const LABEL_H = 12;     // label rect height
+
 // Build arrow path data for each transition
 interface ArrowData {
   d: string;
   lx: number;
   ly: number;
+  labelW: number;
   label?: string;
   color: string;
   id: string;
+  dasharray?: string;
+  markerId: string;
+}
+
+function getMarkerId(color: string) {
+  return color === '#94a3b8' ? 'arr-back'
+       : color === '#f43f5e' ? 'arr-error'
+       : color === '#8b5cf6' ? 'arr-self'
+       : 'arr-accent';
 }
 
 const arrows: ArrowData[] = [];
-// Track pairs to offset parallel edges slightly
 const pairCount: Record<string, number> = {};
+
+// Track placed label bounding boxes for collision avoidance
+interface LabelBBox { lx: number; ly: number; hw: number; hh: number; }
+const placedLabels: LabelBBox[] = [];
+
+function labelWidth(label: string) {
+  return Math.max(label.length * CHAR_W + LABEL_PAD_H, 32);
+}
+
+// Check if a candidate position (lx, ly center) collides with any state box
+// We only block positions where the label would land ON TOP OF a state box
+function collidesWithBoxes(lx: number, ly: number, lw: number): boolean {
+  const lhw = lw / 2;
+  const lhh = LABEL_H / 2;
+  for (const s of states) {
+    const bl = boxLeft(s);
+    const br = boxRight(s);
+    const bt = boxTop(s);
+    const bb = boxBottom(s);
+    // Overlap: label rect [lx-lhw, lx+lhw] x [ly-lhh, ly+lhh] vs box rect [bl, br] x [bt, bb]
+    const overlapX = lx + lhw > bl + 4 && lx - lhw < br - 4;
+    const overlapY = ly + lhh > bt + 4 && ly - lhh < bb - 4;
+    if (overlapX && overlapY) return true;
+  }
+  return false;
+}
+
+function collidesWithLabels(lx: number, ly: number, lw: number): boolean {
+  const hw = lw / 2;
+  const hh = LABEL_H / 2;
+  for (const lb of placedLabels) {
+    // Only flag collision if labels actually overlap (not just proximity)
+    if (Math.abs(lx - lb.lx) < (hw + lb.hw) && Math.abs(ly - lb.ly) < (hh + lb.hh)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function findLabelPos(
+  candidateLx: number,
+  candidateLy: number,
+  lw: number,
+  nudgeX: number,  // direction to shift if collision
+  nudgeY: number,
+): [number, number] {
+  const steps = [0, 16, -16, 32, -32, 48, -48, 64, -64];
+  for (const step of steps) {
+    const lx = candidateLx + nudgeX * step;
+    const ly = candidateLy + nudgeY * step;
+    if (!collidesWithBoxes(lx, ly, lw) && !collidesWithLabels(lx, ly, lw)) {
+      return [lx, ly];
+    }
+  }
+  // Fallback: place far enough in nudge direction to clear boxes
+  return [candidateLx + nudgeX * 80, candidateLy + nudgeY * 80];
+}
 
 transitions.forEach((t) => {
   const fromS = states.find((s) => s.id === t.from);
@@ -135,24 +210,31 @@ transitions.forEach((t) => {
     'var(--color-accent)';
 
   const arrowId = `arr-${t.from}-${t.to}`;
+  const markerId = getMarkerId(color);
+  const dasharray = t.type === 'back' ? '5 3' : undefined;
+  const lw = t.label ? labelWidth(t.label) : 0;
 
   if (t.type === 'self' || t.from === t.to) {
-    // Self-loop: small arc above the box
     const cx = boxCx(fromS);
     const cy = boxCy(fromS);
-    const lx = cx;
-    const ly = cy - BOX_H / 2 - 28;
     const r = 22;
     const sx = cx - r * 0.6;
     const ex = cx + r * 0.6;
     const sy = cy - BOX_H / 2 - 2;
     const ey = cy - BOX_H / 2 - 2;
+    const loopTop = cy - BOX_H / 2 - 28;
+
+    let lx = cx;
+    let ly = loopTop - 4;
+    if (t.label) {
+      [lx, ly] = findLabelPos(lx, ly, lw, 1, -1);
+      placedLabels.push({ lx, ly, hw: lw / 2, hh: LABEL_H / 2 });
+    }
+
     arrows.push({
-      d: `M ${sx} ${sy} Q ${lx} ${ly - 16} ${ex} ${ey}`,
-      lx, ly: ly + 8,
-      label: t.label,
-      color,
-      id: arrowId,
+      d: `M ${sx} ${sy} Q ${cx} ${loopTop - 16} ${ex} ${ey}`,
+      lx, ly, labelW: lw,
+      label: t.label, color, id: arrowId, markerId, dasharray,
     });
     return;
   }
@@ -162,7 +244,6 @@ transitions.forEach((t) => {
   const tcx = boxCx(toS);
   const tcy = boxCy(toS);
 
-  // Offset parallel (A→B and B→A) edges by curving them
   const pairKey = [fromS.id, toS.id].sort().join('|');
   pairCount[pairKey] = (pairCount[pairKey] ?? 0) + 1;
   const pairIdx = pairCount[pairKey];
@@ -170,28 +251,78 @@ transitions.forEach((t) => {
   const [sx, sy] = edgePoint(fcx, fcy, tcx, tcy, 4);
   const [ex, ey] = edgePoint(tcx, tcy, fcx, fcy, 4);
 
-  // Determine control point for quadratic bezier
-  // Alternate curve direction for parallel edges
   const dx = ex - sx;
   const dy = ey - sy;
   const len = Math.sqrt(dx * dx + dy * dy);
-  // Perpendicular offset: 0 for first edge, 40px for second
   const perpX = -dy / len;
   const perpY =  dx / len;
-  const offset = pairIdx === 1 ? 0 : (pairIdx % 2 === 0 ? 36 : -36);
 
-  const mx = (sx + ex) / 2 + perpX * offset;
-  const my = (sy + ey) / 2 + perpY * offset;
+  // Curve parallel edges to opposite sides
+  const curveOffset = pairIdx === 1 ? 0 : (pairIdx % 2 === 0 ? 44 : -44);
 
-  // Label position: midpoint of bezier at t=0.5
-  const lx = 0.25 * sx + 0.5 * mx + 0.25 * ex;
-  const ly = 0.25 * sy + 0.5 * my + 0.25 * ey;
+  const mx = (sx + ex) / 2 + perpX * curveOffset;
+  const my = (sy + ey) / 2 + perpY * curveOffset;
 
-  const d = offset === 0
+  // Bezier midpoint
+  const bezMidX = 0.25 * sx + 0.5 * mx + 0.25 * ex;
+  const bezMidY = 0.25 * sy + 0.5 * my + 0.25 * ey;
+
+  // Determine label placement zone based on arrow direction:
+  // Horizontal same-row: place above top edge of row or below bottom edge
+  // Vertical same-col: place left or right of the column gap
+  // Diagonal: push perpendicular from bezier midpoint
+  let lx = bezMidX;
+  let ly = bezMidY;
+  let nudgeX = perpX;
+  let nudgeY = perpY;
+
+  const sameRow = fromS.row === toS.row;
+  const sameCol = fromS.col === toS.col;
+
+  if (sameRow) {
+    // Horizontal arrow: prefer above row (negative Y direction)
+    // "above" is safer: row top = PAD_Y + (row-1)*(BOX_H+ROW_GAP)
+    const rowTop = PAD_Y + (fromS.row! - 1) * (BOX_H + ROW_GAP);
+    const aboveY = rowTop - 10; // 10px above the box top
+    lx = (sx + ex) / 2;
+    // pairIdx 1 goes above, pairIdx 2 goes below
+    if (pairIdx % 2 === 1) {
+      ly = aboveY;
+      nudgeX = 0; nudgeY = -1;
+    } else {
+      const rowBottom = rowTop + BOX_H + 10;
+      ly = rowBottom;
+      nudgeX = 0; nudgeY = 1;
+    }
+  } else if (sameCol) {
+    // Vertical arrow: prefer in the column gap, nudge horizontally
+    lx = bezMidX;
+    ly = bezMidY;
+    nudgeX = pairIdx % 2 === 1 ? 1 : -1;
+    nudgeY = 0;
+  } else {
+    // Diagonal: push perpendicular from the bezier midpoint
+    // Use a larger initial push to clear state boxes
+    const push = curveOffset === 0 ? 20 : Math.abs(curveOffset) * 0.5 + 10;
+    const side = pairIdx % 2 === 1 ? 1 : -1;
+    lx = bezMidX + perpX * push * side;
+    ly = bezMidY + perpY * push * side;
+    nudgeX = perpX * side;
+    nudgeY = perpY * side;
+  }
+
+  let finalLx = lx;
+  let finalLy = ly;
+  if (t.label) {
+    [finalLx, finalLy] = findLabelPos(lx, ly, lw, nudgeX, nudgeY);
+    placedLabels.push({ lx: finalLx, ly: finalLy, hw: lw / 2, hh: LABEL_H / 2 });
+  }
+
+  const d = curveOffset === 0
     ? `M ${sx} ${sy} L ${ex} ${ey}`
     : `M ${sx} ${sy} Q ${mx} ${my} ${ex} ${ey}`;
 
-  arrows.push({ d, lx, ly, label: t.label, color, id: arrowId });
+  arrows.push({ d, lx: finalLx, ly: finalLy, labelW: lw, label: t.label, color, id: arrowId, markerId, dasharray });
 });
 ---
 
@@ -224,10 +355,6 @@ transitions.forEach((t) => {
 
         <!-- Draw arrows first (behind boxes) -->
         {arrows.map((a) => {
-          const markerId =
-            a.color === '#94a3b8' ? 'arr-back' :
-            a.color === '#f43f5e' ? 'arr-error' :
-            a.color === '#8b5cf6' ? 'arr-self'  : 'arr-accent';
           return (
             <>
               <path
@@ -235,19 +362,19 @@ transitions.forEach((t) => {
                 fill="none"
                 stroke={a.color}
                 stroke-width="1.5"
-                stroke-dasharray={a.color === '#94a3b8' ? '5 3' : undefined}
-                marker-end={`url(#${markerId})`}
+                stroke-dasharray={a.dasharray}
+                marker-end={`url(#${a.markerId})`}
               />
               {a.label && (
                 <>
                   <rect
-                    x={a.lx - 2}
-                    y={a.ly - 8}
-                    width={a.label.length * 5.4 + 4}
-                    height="11"
+                    x={a.lx - a.labelW / 2}
+                    y={a.ly - LABEL_H + 3}
+                    width={a.labelW}
+                    height={LABEL_H}
                     rx="2"
                     fill="var(--color-surface)"
-                    opacity="0.88"
+                    opacity="0.95"
                   />
                   <text
                     x={a.lx}
@@ -255,7 +382,8 @@ transitions.forEach((t) => {
                     font-size="9"
                     font-family="var(--font-mono, monospace)"
                     fill="var(--color-text-muted)"
-                    text-anchor="start"
+                    text-anchor="middle"
+                    dominant-baseline="auto"
                   >{a.label}</text>
                 </>
               )}
