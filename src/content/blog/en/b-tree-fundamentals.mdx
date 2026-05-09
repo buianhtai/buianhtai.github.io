@@ -128,6 +128,29 @@ When a node fills up (reaches its maximum key count), it must split before a new
 
 Splits always propagate upward and always terminate, because the root is the only node that can't push overflows up further — instead, it creates a new root.
 
+<ArchDiagram
+  title="Node split — before and after"
+  zones={[
+    { id: "before", label: "BEFORE — leaf is full (order 3, max 3 keys)", color: "rose" },
+    { id: "after",  label: "AFTER — split at median, median promoted to parent", color: "green" },
+  ]}
+  nodes={[
+    { id: "b_parent", label: "Parent",        sub: "separator: [30]\nchild ptr → full-leaf", zone: "before", row: 1, col: 1, color: "amber" },
+    { id: "b_leaf",   label: "Full Leaf",     sub: "keys: [10, 20, 30, 40]\nOVERFLOW — must split", zone: "before", row: 2, col: 1, color: "rose" },
+
+    { id: "a_parent", label: "Parent",        sub: "separator: [30, 20]\nptrs → left + right", zone: "after", row: 1, col: 1, color: "amber" },
+    { id: "a_left",   label: "Left Sibling",  sub: "keys: [10, 20]\nlower half stays", zone: "after", row: 2, col: 1, color: "green" },
+    { id: "a_right",  label: "Right Sibling", sub: "keys: [30, 40]\nupper half — new page", zone: "after", row: 2, col: 2, color: "green" },
+  ]}
+  edges={[
+    { from: "b_parent", to: "b_leaf",   label: "child ptr", type: "solid" },
+    { from: "a_parent", to: "a_left",   label: "left child", type: "solid" },
+    { from: "a_parent", to: "a_right",  label: "right child", type: "solid" },
+    { from: "a_left",   to: "a_right",  label: "→ sibling link", type: "dashed" },
+  ]}
+  caption="Split at the median (20): keys ≤ 20 stay in the left node; keys > 20 go into a new right sibling. The median key (20) is promoted up to the parent as a new separator. The parent gains one extra child pointer. If the parent is also full, it splits too — propagating upward until reaching a non-full ancestor or creating a new root."
+/>
+
 ---
 
 ## <Label color="teal">5</Label> Node Merges
