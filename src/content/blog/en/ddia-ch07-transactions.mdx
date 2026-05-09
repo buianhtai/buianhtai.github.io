@@ -149,6 +149,30 @@ Several strategies prevent the lost-update problem (two reads of the same row fo
   ]}
 />
 
+<SequenceDiagram
+  title="lost update — read-modify-write race condition"
+  actors={[
+    { label: "Client A (Txn A)", color: "teal" },
+    { label: "Database",         color: "blue" },
+    { label: "Client B (Txn B)", color: "amber" },
+  ]}
+  messages={[
+    { from: "Client A (Txn A)", to: "Database",         label: "READ counter (value=42)",            type: "request" },
+    { from: "Database",         to: "Client A (Txn A)", label: "returns 42",                          type: "response" },
+    { from: "Client B (Txn B)", to: "Database",         label: "READ counter (value=42)",            type: "request" },
+    { from: "Database",         to: "Client B (Txn B)", label: "returns 42",                          type: "response" },
+    { divider: "both transactions compute 42+1=43 independently" },
+    { from: "Client A (Txn A)", to: "Database",         label: "WRITE counter = 43", type: "request" },
+    { from: "Client B (Txn B)", to: "Database",         label: "WRITE counter = 43 — LOST UPDATE", type: "request", highlight: true },
+    { note: "Expected: counter = 44 (two increments). Actual: counter = 43. Client A's write is silently lost." },
+    { divider: "fix: atomic write — UPDATE counter SET value = value + 1" },
+    { from: "Client A (Txn A)", to: "Database",         label: "atomic: UPDATE SET value = value+1", type: "request" },
+    { from: "Client B (Txn B)", to: "Database",         label: "atomic: UPDATE SET value = value+1 (queued)", type: "request" },
+    { note: "Database serialises the two atomic increments. Result: counter = 44 ✓" },
+  ]}
+  caption="The read-modify-write pattern is a lost-update trap. The fix is always to use a database-level atomic operation (UPDATE SET x = x+1), compare-and-set (UPDATE WHERE x = old_value), or SELECT FOR UPDATE — not application-level locking."
+/>
+
 ## <Label color="teal">6</Label> Write Skew and Phantoms
 
 Write skew is the hardest anomaly to reason about under snapshot isolation. Each transaction individually sees a consistent snapshot and writes valid data — but the combination of the two writes violates an application invariant.

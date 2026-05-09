@@ -16,6 +16,7 @@ import DataTable from '../../../components/mdx/DataTable.astro';
 import Pipeline from '../../../components/mdx/Pipeline.astro';
 import CompareTable from '../../../components/mdx/CompareTable.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
+import ArchDiagram from '../../../components/mdx/ArchDiagram.astro';
 
 Part III of DDIA shifts perspective. Parts I and II focused on how databases store, retrieve, and replicate data in response to real-time requests. Part III asks: what happens when the job is not to answer a query but to *transform* a large dataset — when the input is measured in terabytes and the output takes hours to compute?
 
@@ -90,6 +91,30 @@ MapReduce was published by Google in 2004. Its insight: many large-scale data tr
     { label: "", direction: "right" },
   ]}
   footer="The shuffle phase is the network-intensive heart of MapReduce: all mapper outputs are sorted and routed across the cluster by key."
+/>
+
+<ArchDiagram
+  title="mapreduce cluster topology — shuffle phase"
+  zones={[
+    { id: "map", label: "Map phase (data-local)", color: "teal" },
+    { id: "reduce", label: "Reduce phase (network I/O)", color: "amber" },
+  ]}
+  nodes={[
+    { id: "m1", label: "Mapper 1", sub: "block A",     zone: "map",    row: 1, col: 1, color: "teal" },
+    { id: "m2", label: "Mapper 2", sub: "block B",     zone: "map",    row: 1, col: 2, color: "teal" },
+    { id: "m3", label: "Mapper 3", sub: "block C",     zone: "map",    row: 1, col: 3, color: "teal" },
+    { id: "r1", label: "Reducer 1", sub: "keys 0-M",   zone: "reduce", row: 1, col: 1, color: "amber" },
+    { id: "r2", label: "Reducer 2", sub: "keys M-Z",   zone: "reduce", row: 1, col: 2, color: "amber" },
+  ]}
+  edges={[
+    { from: "m1", to: "r1", label: "key A-M",  type: "solid" },
+    { from: "m1", to: "r2", label: "key N-Z",  type: "solid" },
+    { from: "m2", to: "r1", label: "key A-M",  type: "solid" },
+    { from: "m2", to: "r2", label: "key N-Z",  type: "solid" },
+    { from: "m3", to: "r1", label: "key A-M",  type: "solid" },
+    { from: "m3", to: "r2", label: "key N-Z",  type: "solid" },
+  ]}
+  caption="The shuffle phase is all-to-all: every mapper sends output to every reducer (partitioned by key range). This is O(M×R) network connections and is the dominant I/O cost in MapReduce jobs."
 />
 
 **What MapReduce provides:**

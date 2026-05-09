@@ -16,6 +16,8 @@ import DataTable from '../../../components/mdx/DataTable.astro';
 import Pipeline from '../../../components/mdx/Pipeline.astro';
 import CompareTable from '../../../components/mdx/CompareTable.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
+import ArchDiagram from '../../../components/mdx/ArchDiagram.astro';
+import SequenceDiagram from '../../../components/mdx/SequenceDiagram.astro';
 
 Chapter 12 is Kleppmann's synthesis — and his manifesto. It shifts from "how things are" to "how things should be." Having spent eleven chapters cataloguing the tools, algorithms, and tradeoffs of data systems, he now argues for a coherent design philosophy: build systems around immutable event logs, derive all read-optimized state from those logs, favor end-to-end correctness over point-in-time distributed transactions, and recognize that building data-intensive systems carries real ethical responsibilities.
 
@@ -55,6 +57,36 @@ The result: production systems are composed of many specialized stores, each opt
 
 **Derived data vs. distributed transactions**: Both aim to keep multiple systems consistent. Distributed transactions use locking and atomic commit — correct but expensive, available only for systems that support XA or 2PC, and blocking on coordinator failure. Derived data via event logs is asynchronous — eventually consistent but highly available, and makes it trivial to add new derived views by replaying the log.
 
+<ArchDiagram
+  title="dual writes vs CDC — why single write path wins"
+  zones={[
+    { id: "bad",  label: "Dual writes (broken)", color: "amber" },
+    { id: "good", label: "CDC / event log (correct)", color: "teal" },
+  ]}
+  nodes={[
+    { id: "app1",   label: "Application A",   sub: "write to DB + search",       zone: "bad",  row: 1, col: 1, color: "amber" },
+    { id: "app2",   label: "Application B",   sub: "concurrent writer",          zone: "bad",  row: 1, col: 2, color: "amber" },
+    { id: "db_bad", label: "Primary DB",      sub: "gets A first",               zone: "bad",  row: 2, col: 1 },
+    { id: "idx_bad",label: "Search index",    sub: "gets B first — diverged!",   zone: "bad",  row: 2, col: 2 },
+    { id: "src",    label: "System of record", sub: "DB or event log",           zone: "good", row: 1, col: 1, color: "teal" },
+    { id: "cdc",    label: "CDC / WAL tail",  sub: "ordered change stream",      zone: "good", row: 2, col: 1, color: "teal" },
+    { id: "search", label: "Search index",    sub: "derives from CDC",           zone: "good", row: 3, col: 1 },
+    { id: "cache",  label: "Cache",           sub: "derives from CDC",           zone: "good", row: 3, col: 2 },
+    { id: "dw",     label: "Data warehouse",  sub: "derives from CDC",           zone: "good", row: 3, col: 3 },
+  ]}
+  edges={[
+    { from: "app1",   to: "db_bad",  label: "write order 1", type: "solid" },
+    { from: "app1",   to: "idx_bad", label: "write order 2", type: "solid" },
+    { from: "app2",   to: "db_bad",  label: "write order 2", type: "solid" },
+    { from: "app2",   to: "idx_bad", label: "write order 1", type: "solid" },
+    { from: "src",    to: "cdc",     label: "single write",  type: "solid" },
+    { from: "cdc",    to: "search",  label: "ordered",       type: "dashed" },
+    { from: "cdc",    to: "cache",   label: "ordered",       type: "dashed" },
+    { from: "cdc",    to: "dw",      label: "ordered",       type: "dashed" },
+  ]}
+  caption="Dual writes create a race condition: two concurrent writers can reach the DB and the search index in opposite orders, causing permanent divergence. CDC from a single ordered log eliminates this — all derived systems see the same total order."
+/>
+
 ## <Label color="teal">2</Label> Unbundling the Database
 
 The traditional database bundles many features into one product: storage, indexing, query processing, transactions, replication, authorization. This monolith is convenient for simple applications but limits specialization.
@@ -89,6 +121,29 @@ The problem: **two code paths for the same logic**. Every query must be implemen
 
 The **Kappa architecture** (Jay Kreps, 2014) proposes eliminating the batch layer: run only a stream processor, but use a log that retains full history. When you need to recompute, replay the log through the same stream processor. This unifies the code path and is operationally simpler — though it requires stream processors capable of handling high-throughput replays.
 
+<ArchDiagram
+  title="lambda vs kappa architecture"
+  zones={[
+    { id: "lambda", label: "Lambda — two code paths (complex)", color: "amber" },
+    { id: "kappa",  label: "Kappa — single code path (simple)", color: "teal" },
+  ]}
+  nodes={[
+    { id: "lb",   label: "Batch layer",     sub: "Spark/Hadoop, full history",   zone: "lambda", row: 1, col: 1, color: "amber" },
+    { id: "ls",   label: "Speed layer",     sub: "Storm/Flink, recent events",   zone: "lambda", row: 1, col: 2, color: "amber" },
+    { id: "lsrv", label: "Serving layer",   sub: "merge batch + speed at query", zone: "lambda", row: 2, col: 1 },
+    { id: "klog", label: "Durable log",     sub: "Kafka with full history",      zone: "kappa",  row: 1, col: 1, color: "teal" },
+    { id: "kstr", label: "Stream processor", sub: "Flink — one code path",      zone: "kappa",  row: 1, col: 2, color: "teal" },
+    { id: "ksrv", label: "Serving store",   sub: "read-optimized derived state", zone: "kappa",  row: 2, col: 1 },
+  ]}
+  edges={[
+    { from: "lb",   to: "lsrv", label: "batch results",   type: "solid" },
+    { from: "ls",   to: "lsrv", label: "speed results",   type: "solid" },
+    { from: "klog", to: "kstr", label: "events (replay for recompute)", type: "solid" },
+    { from: "kstr", to: "ksrv", label: "derived state",   type: "solid" },
+  ]}
+  caption="Lambda requires maintaining the same business logic in two frameworks (batch + stream). Kappa uses one stream processor and replays the full log to recompute — simpler to operate and reason about."
+/>
+
 ## <Label color="teal">4</Label> End-to-End Correctness Without Distributed Transactions
 
 The "at-least-once delivery + idempotent consumer" pattern is more robust than 2PC for most use cases.
@@ -112,6 +167,32 @@ Append a new event record rather than updating a counter in place. "User X was c
 <FlowStep step="4" color="amber" title="Suppress duplicates at the consumer boundary">
 Fencing tokens (Ch08), idempotent consumer check tables, or Kafka transactional producers + consumer group offsets handle the edge cases where exactly-once matters most.
 </FlowStep>
+
+<SequenceDiagram
+  title="end-to-end idempotency — duplicate request safely suppressed"
+  actors={[
+    { label: "Client",           color: "teal" },
+    { label: "API gateway",      color: "blue" },
+    { label: "Payment service",  color: "green" },
+    { label: "Idempotency store", color: "amber" },
+  ]}
+  messages={[
+    { from: "Client",          to: "API gateway",       label: "POST /charge (request_id=uuid-abc123, amount=$100)", type: "request" },
+    { from: "API gateway",     to: "Payment service",   label: "forward charge (request_id=uuid-abc123)",            type: "request" },
+    { from: "Payment service", to: "Idempotency store", label: "lookup uuid-abc123",                                  type: "request" },
+    { from: "Idempotency store",to: "Payment service",  label: "not found — proceed",                                type: "response" },
+    { from: "Payment service", to: "Payment service",   label: "process charge → success",                           type: "async" },
+    { from: "Payment service", to: "Idempotency store", label: "store uuid-abc123 → result: charged",                type: "request" },
+    { from: "Payment service", to: "API gateway",       label: "200 OK: charged $100",                               type: "response" },
+    { divider: "Network blip — client retries" },
+    { from: "Client",          to: "API gateway",       label: "POST /charge (request_id=uuid-abc123, amount=$100) RETRY", type: "request", highlight: true },
+    { from: "API gateway",     to: "Payment service",   label: "forward charge (request_id=uuid-abc123)",            type: "request" },
+    { from: "Payment service", to: "Idempotency store", label: "lookup uuid-abc123",                                  type: "request" },
+    { from: "Idempotency store",to: "Payment service",  label: "FOUND — return cached result",                       type: "response", highlight: true },
+    { from: "Payment service", to: "API gateway",       label: "200 OK: charged $100 (deduplicated — no double charge)", type: "response" },
+  ]}
+  caption="The idempotency key (request_id) flows end-to-end. On retry, the idempotency store returns the cached result rather than processing again. This handles at-least-once delivery without 2PC — the pattern scales to any operation where the result is deterministic."
+/>
 
 **Immutability and the append-only model** also provide human fault tolerance: if a bug causes incorrect processing, roll back the consumer offset and replay from before the bug was deployed. The event log is unchanged. The derived state is rebuilt correctly. This is qualitatively different from mutable databases, where rolling back code does not undo data corruption.
 

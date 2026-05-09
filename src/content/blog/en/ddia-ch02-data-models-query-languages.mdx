@@ -38,6 +38,35 @@ This layering is why data model choice matters so much. The model you pick at la
 **The core insight:** each data model embodies assumptions about usage patterns. Some operations are fast, some are slow, some are unsupported. Choosing a model means accepting those trade-offs for the lifetime of the application — or paying the migration cost later.
 </Callout>
 
+<ArchDiagram
+  title="data model abstraction stack"
+  zones={[
+    { id: "app",   label: "Application layer", color: "teal" },
+    { id: "store", label: "Storage layer",      color: "blue" },
+    { id: "hw",    label: "Hardware layer",     color: "amber" },
+  ]}
+  nodes={[
+    { id: "obj",   label: "Objects / structs", sub: "your domain model",          zone: "app",   row: 1, col: 1, color: "teal" },
+    { id: "rel",   label: "Relational tables", sub: "rows, columns, joins",       zone: "store", row: 1, col: 1 },
+    { id: "doc",   label: "Documents (JSON)",  sub: "nested tree structure",      zone: "store", row: 1, col: 2 },
+    { id: "graph", label: "Graph (vertices)",  sub: "nodes + edges",              zone: "store", row: 1, col: 3 },
+    { id: "eng",   label: "DB engine",         sub: "B-tree / LSM-tree / buffer", zone: "store", row: 2, col: 2, color: "blue" },
+    { id: "bytes", label: "Bytes on disk",     sub: "pages, blocks, SSTables",    zone: "hw",    row: 1, col: 1 },
+    { id: "signals",label: "Electrical signals", sub: "NAND flash / HDD sectors", zone: "hw",    row: 1, col: 2 },
+  ]}
+  edges={[
+    { from: "obj",  to: "rel",    label: "ORM / serialize", type: "solid" },
+    { from: "obj",  to: "doc",    label: "direct fit",       type: "solid" },
+    { from: "obj",  to: "graph",  label: "property graph",  type: "solid" },
+    { from: "rel",  to: "eng",    label: "query optimizer", type: "dashed" },
+    { from: "doc",  to: "eng",    label: "collection scan", type: "dashed" },
+    { from: "graph",to: "eng",    label: "traversal plan",  type: "dashed" },
+    { from: "eng",  to: "bytes",  label: "page writes",     type: "solid" },
+    { from: "bytes",to: "signals",label: "physical write",  type: "solid" },
+  ]}
+  caption="Each layer hides the complexity below and exposes a simpler interface above. The model you choose at the storage layer (relational, document, graph) shapes what is natural or awkward in every layer above it."
+/>
+
 ## <Label color="teal">2</Label> Relational vs Document: The Oldest Modern Debate
 
 ### The Relational Model's Staying Power
@@ -61,6 +90,33 @@ The document representation has better *locality* — one read fetches the whole
 <Callout color="amber">
 **Decision rule:** if your data naturally forms a tree of one-to-many relationships that you always load together, the document model reduces complexity. If entities are shared across multiple parents and you need referential integrity, start relational. Data tends to become more interconnected over time, so bias toward the model that handles joins well unless you have strong evidence otherwise.
 </Callout>
+
+<ArchDiagram
+  title="object-relational impedance mismatch — LinkedIn profile example"
+  zones={[
+    { id: "obj",    label: "Application object (OOP)", color: "teal" },
+    { id: "rel",    label: "Relational schema (SQL)",  color: "amber" },
+    { id: "doc",    label: "Document model (JSON)",    color: "blue" },
+  ]}
+  nodes={[
+    { id: "user",    label: "User object",    sub: "id, name, summary",         zone: "obj", row: 1, col: 1, color: "teal" },
+    { id: "pos",     label: "positions[]",    sub: "List<Position>",            zone: "obj", row: 2, col: 1 },
+    { id: "edu",     label: "education[]",    sub: "List<Education>",           zone: "obj", row: 2, col: 2 },
+    { id: "utbl",    label: "users table",    sub: "id, name, summary",         zone: "rel", row: 1, col: 1, color: "amber" },
+    { id: "ptbl",    label: "positions table", sub: "user_id FK, title, company", zone: "rel", row: 2, col: 1, color: "amber" },
+    { id: "etbl",    label: "education table", sub: "user_id FK, school, degree", zone: "rel", row: 2, col: 2, color: "amber" },
+    { id: "jdoc",    label: "user document",  sub: "JSON blob: all nested",     zone: "doc", row: 1, col: 1, color: "blue" },
+  ]}
+  edges={[
+    { from: "user",  to: "pos",   label: "has-many",       type: "solid" },
+    { from: "user",  to: "edu",   label: "has-many",       type: "solid" },
+    { from: "user",  to: "utbl",  label: "ORM maps",       type: "dashed" },
+    { from: "pos",   to: "ptbl",  label: "split to table", type: "dashed" },
+    { from: "edu",   to: "etbl",  label: "split to table", type: "dashed" },
+    { from: "user",  to: "jdoc",  label: "direct fit",     type: "solid" },
+  ]}
+  caption="The relational model splits one-to-many into separate tables (3 tables for one profile). The document model stores the whole profile as one blob — better locality for reads, but cross-document references and joins become your problem."
+/>
 
 ### Many-to-One, Many-to-Many, and Normalization
 

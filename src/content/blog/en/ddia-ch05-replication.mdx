@@ -18,6 +18,7 @@ import CompareTable from '../../../components/mdx/CompareTable.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
 import SequenceDiagram from '../../../components/mdx/SequenceDiagram.astro';
 import StateMachine from '../../../components/mdx/StateMachine.astro';
+import ArchDiagram from '../../../components/mdx/ArchDiagram.astro';
 
 Replication sounds like copying data. It isn't. Copying data is trivial; what's hard is handling the changes to that data, because changes arrive continuously, nodes fail at inopportune moments, and networks drop packets between the leader and every follower. Chapter 5 is Kleppmann's systematic tour of what actually goes wrong in replicated systems and what the three main replication architectures — single-leader, multi-leader, leaderless — trade against each other.
 
@@ -190,6 +191,39 @@ The safest rule: **avoid multi-leader replication if you don't need it**. Most a
 
 - **All-to-all**: every leader replicates to every other. Most resilient but can cause causal ordering problems (a write arrives at a follower leader before the write it causally depends on).
 - **Star/circular**: writes propagate through a chain. A single node failure can break the replication path.
+
+<ArchDiagram
+  title="multi-leader replication topologies — resilience vs complexity"
+  zones={[
+    { id: "a2a",  label: "All-to-all (resilient, conflict-prone)", color: "teal" },
+    { id: "star", label: "Star (single point of failure)",         color: "amber" },
+    { id: "ring", label: "Circular / ring (chain failure risk)",   color: "blue" },
+  ]}
+  nodes={[
+    { id: "a1", label: "DC-1 Leader", sub: "US-East",  zone: "a2a",  row: 1, col: 1, color: "teal" },
+    { id: "a2", label: "DC-2 Leader", sub: "EU-West",  zone: "a2a",  row: 1, col: 2, color: "teal" },
+    { id: "a3", label: "DC-3 Leader", sub: "AP-South", zone: "a2a",  row: 2, col: 1 },
+    { id: "sc", label: "Center node", sub: "replication hub", zone: "star", row: 1, col: 2, color: "amber" },
+    { id: "s1", label: "Leaf-1",      sub: "",          zone: "star", row: 2, col: 1 },
+    { id: "s2", label: "Leaf-2",      sub: "",          zone: "star", row: 2, col: 2 },
+    { id: "s3", label: "Leaf-3",      sub: "",          zone: "star", row: 2, col: 3 },
+    { id: "r1", label: "Ring-1",      sub: "",          zone: "ring", row: 1, col: 1, color: "blue" },
+    { id: "r2", label: "Ring-2",      sub: "",          zone: "ring", row: 1, col: 2, color: "blue" },
+    { id: "r3", label: "Ring-3",      sub: "",          zone: "ring", row: 2, col: 1, color: "blue" },
+  ]}
+  edges={[
+    { from: "a1", to: "a2", label: "",  type: "solid" },
+    { from: "a2", to: "a3", label: "",  type: "solid" },
+    { from: "a1", to: "a3", label: "",  type: "solid" },
+    { from: "sc", to: "s1", label: "",  type: "solid" },
+    { from: "sc", to: "s2", label: "",  type: "solid" },
+    { from: "sc", to: "s3", label: "",  type: "solid" },
+    { from: "r1", to: "r2", label: "",  type: "solid" },
+    { from: "r2", to: "r3", label: "",  type: "solid" },
+    { from: "r3", to: "r1", label: "",  type: "solid" },
+  ]}
+  caption="All-to-all survives any single node failure but causal ordering is hard to guarantee. Star has a central hub failure point. Ring breaks replication on any single node failure. Most real deployments use all-to-all within a region and selective cross-region replication."
+/>
 
 ## <Label color="teal">5</Label> Leaderless Replication (Dynamo-Style)
 

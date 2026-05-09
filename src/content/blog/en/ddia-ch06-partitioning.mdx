@@ -17,6 +17,7 @@ import Pipeline from '../../../components/mdx/Pipeline.astro';
 import CompareTable from '../../../components/mdx/CompareTable.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
 import HeatGrid from '../../../components/mdx/HeatGrid.astro';
+import ArchDiagram from '../../../components/mdx/ArchDiagram.astro';
 
 Replication gives you multiple copies of the same data on different machines. Partitioning gives you different data on different machines. When your dataset outgrows a single node — in storage, query throughput, or both — partitioning (also called sharding) is the only path to horizontal scalability. Chapter 6 is Kleppmann's analysis of the tradeoffs: any partitioning scheme that works well for one access pattern works poorly for another, and the most common mistake is choosing a partition key without thinking about which queries that choice makes fast and which it makes impossible.
 
@@ -136,6 +137,35 @@ When nodes are added or removed — or when a node fails — data must move betw
 Automatic rebalancing under load can cascade: slow node → system decides to rebalance → massive network I/O → other nodes slow down → more rebalancing triggered. Production databases often make rebalancing a manual or semi-automatic operation for exactly this reason.
 </Callout>
 
+<ArchDiagram
+  title="rebalancing strategies — data movement cost comparison"
+  zones={[
+    { id: "bad",   label: "Hash mod N (avoid — O(N) movement)", color: "amber" },
+    { id: "fixed", label: "Fixed partitions (Elasticsearch)",    color: "teal" },
+    { id: "dyn",   label: "Dynamic (HBase) / Proportional (Cassandra)", color: "blue" },
+  ]}
+  nodes={[
+    { id: "b1", label: "Node 1",        sub: "~33% keys",    zone: "bad",   row: 1, col: 1, color: "amber" },
+    { id: "b2", label: "Node 2",        sub: "~33% keys",    zone: "bad",   row: 1, col: 2, color: "amber" },
+    { id: "b3", label: "New node 3",    sub: "add: reshuffle ALL", zone: "bad", row: 1, col: 3 },
+    { id: "f1", label: "Node A (P1-3)", sub: "3 partitions", zone: "fixed", row: 1, col: 1, color: "teal" },
+    { id: "f2", label: "Node B (P4-6)", sub: "3 partitions", zone: "fixed", row: 1, col: 2, color: "teal" },
+    { id: "f3", label: "Node C (P7-9)", sub: "add: steal 1 from each", zone: "fixed", row: 1, col: 3 },
+    { id: "d1", label: "Large partition", sub: "grows → split", zone: "dyn",   row: 1, col: 1, color: "blue" },
+    { id: "d2", label: "P-A + P-B",    sub: "after split",  zone: "dyn",   row: 2, col: 1 },
+    { id: "d3", label: "New node",     sub: "takes half of split", zone: "dyn", row: 2, col: 2 },
+  ]}
+  edges={[
+    { from: "b1", to: "b3", label: "keys migrate",   type: "dashed" },
+    { from: "b2", to: "b3", label: "keys migrate",   type: "dashed" },
+    { from: "f1", to: "f3", label: "move P1",        type: "solid" },
+    { from: "f2", to: "f3", label: "move P4",        type: "solid" },
+    { from: "d1", to: "d2", label: "split at threshold", type: "solid" },
+    { from: "d2", to: "d3", label: "one half moves", type: "dashed" },
+  ]}
+  caption="Hash mod N is catastrophic on node add: almost every key must move. Fixed partitions move only whole partitions (O(k) not O(N)). Dynamic splitting grows partition count with data size. Proportional (Cassandra virtual nodes) keeps partition size stable per-node as the cluster scales."
+/>
+
 ## <Label color="teal">6</Label> Request Routing: Getting Queries to the Right Partition
 
 Once data is partitioned across nodes, how does a client know which node to send a request to?
@@ -152,6 +182,34 @@ Once data is partitioned across nodes, how does a client know which node to send
 />
 
 All three approaches require nodes to be aware of partition assignments, which change during rebalancing. The standard solution is a coordination service: **ZooKeeper** (used by HBase, Kafka, SolrCloud) or **etcd** maintains the authoritative partition → node mapping. Routing components subscribe to ZooKeeper and update their local copy when changes occur. Cassandra and Riak use a **gossip protocol** instead — nodes broadcast partition assignment changes to each other, avoiding a centralised coordination dependency.
+
+<ArchDiagram
+  title="request routing — 3 approaches to finding the right partition"
+  zones={[
+    { id: "client", label: "Approach 1: client-side routing",  color: "teal" },
+    { id: "tier",   label: "Approach 2: routing tier",         color: "amber" },
+    { id: "any",    label: "Approach 3: any-node proxy",       color: "blue" },
+  ]}
+  nodes={[
+    { id: "c1",  label: "Smart client",   sub: "Cassandra driver (gossip map)", zone: "client", row: 1, col: 1, color: "teal" },
+    { id: "cn1", label: "Node A (P1-P3)", sub: "direct hit",                    zone: "client", row: 1, col: 2 },
+    { id: "rt",  label: "Routing tier",   sub: "mongos / HAProxy",              zone: "tier",   row: 1, col: 1, color: "amber" },
+    { id: "tn1", label: "Node B (P4-P6)", sub: "forwarded",                     zone: "tier",   row: 1, col: 2 },
+    { id: "ac",  label: "Any client",     sub: "sends to random node",          zone: "any",    row: 1, col: 1 },
+    { id: "an1", label: "Node C (wrong)", sub: "proxy forward internally",      zone: "any",    row: 1, col: 2, color: "blue" },
+    { id: "an2", label: "Node D (right)", sub: "owns partition",                zone: "any",    row: 1, col: 3 },
+    { id: "zk",  label: "ZooKeeper / etcd", sub: "authoritative partition map", zone: "tier",   row: 2, col: 1 },
+  ]}
+  edges={[
+    { from: "c1",  to: "cn1", label: "route direct",  type: "solid" },
+    { from: "rt",  to: "tn1", label: "forward",        type: "solid" },
+    { from: "ac",  to: "an1", label: "random send",    type: "solid" },
+    { from: "an1", to: "an2", label: "proxy",          type: "dashed" },
+    { from: "zk",  to: "rt",  label: "partition map",  type: "dashed" },
+    { from: "zk",  to: "c1",  label: "partition map",  type: "dashed" },
+  ]}
+  caption="Client-side routing (Cassandra) is lowest-latency but complex client logic. Routing tier (MongoDB mongos) centralises routing at the cost of an extra hop. Any-node (Riak) keeps clients simple but adds intra-cluster hops."
+/>
 
 ## <Label color="teal">7</Label> Combining Partitioning with Replication
 

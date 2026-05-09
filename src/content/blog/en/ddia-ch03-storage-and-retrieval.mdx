@@ -18,6 +18,7 @@ import LayerStack from '../../../components/mdx/LayerStack.astro';
 import CompareTable from '../../../components/mdx/CompareTable.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
 import SequenceDiagram from '../../../components/mdx/SequenceDiagram.astro';
+import HeatGrid from '../../../components/mdx/HeatGrid.astro';
 
 Chapter 3 is the chapter that makes storage engines legible. Most engineers treat the database as a black box: you send writes, you get reads, you pick an index column here and there. But storage engine internals determine whether your write-heavy workload degrades gracefully or collapses, whether a crash leaves data inconsistent, whether your analytics query scans 500 GB or 50 MB. Kleppmann argues that you don't need to build a storage engine — but you do need to understand the two dominant families well enough to choose and tune them.
 
@@ -199,6 +200,22 @@ Kleppmann covers several other index structures that fill specific niches:
 />
 
 Multi-dimensional indexes deserve a special note. A simple B-tree index on `(latitude, longitude)` can efficiently query "all restaurants within 0.5° of longitude 122°W" but cannot efficiently query "within a bounding box defined by both lat and lon simultaneously". That's why PostGIS and MongoDB use R-trees or geohash-based approaches for spatial queries.
+
+<HeatGrid
+  title="index structure fit matrix — workload vs index type"
+  rows={["B-Tree", "LSM-Tree", "Hash index", "Full-text / inverted", "R-tree / spatial", "In-memory"]}
+  cols={["Point read", "Range scan", "Write throughput", "Exact-match only", "Text search", "Geo / 2D"]}
+  cells={[
+    ["✓", "✓", "~", "✗", "✗", "✗"],
+    ["~", "✓", "✓", "✗", "✗", "✗"],
+    ["✓", "✗", "✓", "✓", "✗", "✗"],
+    ["✓", "~", "~", "✓", "✓", "✗"],
+    ["✗", "✗", "~", "✗", "✗", "✓"],
+    ["✓", "✓", "✓", "✓", "✗", "✗"],
+  ]}
+  legend={{ good: "best fit", partial: "usable with caveats", bad: "not supported" }}
+  caption="No single index structure wins across all workload types. Hash indexes are fastest for exact-match reads but can't range-scan. B-Trees balance reads and range queries. LSM-Trees optimise write throughput at the cost of read amplification. Choose by your dominant access pattern."
+/>
 
 ## <Label color="teal">7</Label> Transaction Processing vs Analytics: Two Different Worlds
 

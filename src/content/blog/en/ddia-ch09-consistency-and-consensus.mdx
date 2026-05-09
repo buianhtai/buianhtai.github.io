@@ -18,6 +18,7 @@ import CompareTable from '../../../components/mdx/CompareTable.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
 import SequenceDiagram from '../../../components/mdx/SequenceDiagram.astro';
 import StateMachine from '../../../components/mdx/StateMachine.astro';
+import ArchDiagram from '../../../components/mdx/ArchDiagram.astro';
 
 Chapter 8 catalogued everything that can go wrong. Chapter 9 asks: given all those failure modes, what can we actually guarantee, and how? The central topic is **consensus** — getting all nodes to agree on a single value despite node crashes and network failures. Consensus sounds like one problem but it turns out to underlie leader election, atomic commit, total order broadcast, and distributed locking. Solve consensus, and many other problems become tractable.
 
@@ -98,6 +99,31 @@ Since network partitions are a reality (not optional), the meaningful choice is 
 <Callout color="amber">
 CAP is a trilemma about behavior during a network partition, not a general system design tradeoff. "AP vs CP" is a shorthand that hides enormous complexity. The real question is: what does your system do when nodes cannot communicate?
 </Callout>
+
+<ArchDiagram
+  title="CAP theorem — partition forces a choice between C and A"
+  zones={[
+    { id: "cp",    label: "CP choice: consistency over availability", color: "teal" },
+    { id: "ap",    label: "AP choice: availability over consistency", color: "amber" },
+    { id: "part",  label: "Network partition (unavoidable)",          color: "red" },
+  ]}
+  nodes={[
+    { id: "node1", label: "Node A",          sub: "can reach clients",   zone: "part", row: 1, col: 1, color: "teal" },
+    { id: "node2", label: "Node B",          sub: "cannot reach A",      zone: "part", row: 1, col: 2, color: "amber" },
+    { id: "cp_a",  label: "CP: Node A",      sub: "refuse writes until healed", zone: "cp", row: 1, col: 1, color: "teal" },
+    { id: "cp_b",  label: "CP: Node B",      sub: "refuse writes (no quorum)", zone: "cp", row: 1, col: 2 },
+    { id: "ap_a",  label: "AP: Node A",      sub: "accept writes (diverge)", zone: "ap", row: 1, col: 1 },
+    { id: "ap_b",  label: "AP: Node B",      sub: "accept writes (diverge)", zone: "ap", row: 1, col: 2, color: "amber" },
+    { id: "reconcile", label: "Conflict reconcile", sub: "LWW / CRDT / custom merge", zone: "ap", row: 2, col: 1 },
+  ]}
+  edges={[
+    { from: "node1",    to: "node2",     label: "PARTITION",      type: "dashed" },
+    { from: "cp_a",     to: "cp_b",      label: "blocked",        type: "dashed" },
+    { from: "ap_a",     to: "reconcile", label: "on heal",        type: "solid" },
+    { from: "ap_b",     to: "reconcile", label: "on heal",        type: "solid" },
+  ]}
+  caption="During a partition, CP systems sacrifice availability (refuse requests that can't be coordinated). AP systems sacrifice consistency (accept diverging writes, reconcile on heal). There is no third option — partition tolerance is not optional in real networks."
+/>
 
 In practice, most applications don't need full linearizability and can accept causal consistency — a weaker but still useful guarantee that preserves cause-effect ordering without the coordination cost of linearizability.
 

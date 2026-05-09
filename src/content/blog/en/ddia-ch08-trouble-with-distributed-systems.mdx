@@ -18,6 +18,8 @@ import CompareTable from '../../../components/mdx/CompareTable.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
 import SequenceDiagram from '../../../components/mdx/SequenceDiagram.astro';
 import HeatGrid from '../../../components/mdx/HeatGrid.astro';
+import ArchDiagram from '../../../components/mdx/ArchDiagram.astro';
+import StateMachine from '../../../components/mdx/StateMachine.astro';
 
 Chapter 8 is a deliberate exercise in pessimism. Kleppmann writes that experienced systems operators deal with "long-lived network partitions in a single data center, PDU failures, switch failures, accidental power cycles of whole racks, whole-DC backbone failures, whole-DC power failures, and a hypoglycemic driver smashing his Ford pickup truck into a DC's HVAC system." The point is not to terrify — it's to establish the actual failure model before Chapter 9 discusses how to build correct systems within it.
 
@@ -37,6 +39,39 @@ A single computer, when working correctly, is deterministic. If hardware fails, 
 Distributed systems have no such luxury. The network between nodes means that partial failure is endemic: one node can be healthy while another is unreachable; a message can arrive at a node that has since crashed before it could respond; a network switch can drop packets selectively. Unlike a crashed single computer, the system is "sometimes working and sometimes unpredictably failing." You may not even know whether an operation succeeded — the message may have been delivered but the response lost.
 
 **This is not a solvable engineering problem** in the sense that you can eliminate it with better hardware. Network latency is fundamentally unbounded in the asynchronous model. The right response is to build software that handles partial failure gracefully, not software that assumes it won't happen.
+
+<ArchDiagram
+  title="partial failure state space — all ambiguous outcomes from one request"
+  zones={[
+    { id: "send",  label: "Sender perspective",   color: "teal" },
+    { id: "net",   label: "Network / receiver",   color: "amber" },
+  ]}
+  nodes={[
+    { id: "req",    label: "Client sends request",  sub: "fire and wait",          zone: "send", row: 1, col: 1, color: "teal" },
+    { id: "to",     label: "Timeout fires",         sub: "no response received",    zone: "send", row: 2, col: 1, color: "amber" },
+    { id: "lost",   label: "Request lost",          sub: "never delivered",         zone: "net",  row: 1, col: 1 },
+    { id: "queued", label: "Queued in network",     sub: "delayed, not lost",       zone: "net",  row: 1, col: 2 },
+    { id: "crash",  label: "Node crashed",          sub: "before processing",       zone: "net",  row: 2, col: 1 },
+    { id: "pause",  label: "Node paused (GC/VM)",   sub: "processing later",        zone: "net",  row: 2, col: 2 },
+    { id: "rsp_ok", label: "Response sent, lost",   sub: "processed but no reply",  zone: "net",  row: 3, col: 1 },
+    { id: "rsp_dl", label: "Response delayed",      sub: "in transit to client",    zone: "net",  row: 3, col: 2 },
+  ]}
+  edges={[
+    { from: "req",    to: "lost",   label: "",         type: "dashed" },
+    { from: "req",    to: "queued", label: "",         type: "dashed" },
+    { from: "req",    to: "crash",  label: "",         type: "dashed" },
+    { from: "req",    to: "pause",  label: "",         type: "dashed" },
+    { from: "req",    to: "rsp_ok", label: "",         type: "dashed" },
+    { from: "req",    to: "rsp_dl", label: "",         type: "dashed" },
+    { from: "lost",   to: "to",     label: "→ timeout", type: "solid" },
+    { from: "queued", to: "to",     label: "→ timeout", type: "solid" },
+    { from: "crash",  to: "to",     label: "→ timeout", type: "solid" },
+    { from: "pause",  to: "to",     label: "→ timeout", type: "solid" },
+    { from: "rsp_ok", to: "to",     label: "→ timeout", type: "solid" },
+    { from: "rsp_dl", to: "to",     label: "→ timeout", type: "solid" },
+  ]}
+  caption="A timeout is not a diagnosis — it is a symptom. Six distinct root causes all look identical from the sender's perspective. Retrying may be safe (request was lost) or catastrophic (request was processed but response was lost). You cannot tell which without idempotency."
+/>
 
 ## <Label color="teal">2</Label> Unreliable Networks
 
@@ -156,6 +191,48 @@ The fix is a **fencing token**: each time a lock is granted, issue a monotonical
 <Callout color="teal">
 The paused-lock-holder pattern is one of the most insidious bugs in distributed systems. It doesn't manifest in testing (GC pauses are short in development), it's hard to reproduce, and it causes data corruption rather than a clean failure.
 </Callout>
+
+<SequenceDiagram
+  title="paused lock holder — GC pause causes stale lease corruption"
+  actors={[
+    { label: "Client A",        color: "teal" },
+    { label: "Lock service",    color: "blue" },
+    { label: "Shared resource", color: "amber" },
+    { label: "Client B",        color: "green" },
+  ]}
+  messages={[
+    { from: "Client A",     to: "Lock service",    label: "acquire lock → token=33, lease=60s",       type: "request" },
+    { from: "Lock service", to: "Client A",         label: "granted: token=33, expires T+60s",         type: "response" },
+    { from: "Client A",     to: "Client A",         label: "PAUSED: stop-the-world GC for 90s",        type: "async", highlight: true },
+    { note: "At T+60s: lease expires. Client A is still paused — doesn't know it." },
+    { from: "Client B",     to: "Lock service",    label: "acquire lock → token=34, lease=60s",       type: "request" },
+    { from: "Lock service", to: "Client B",         label: "granted: token=34",                        type: "response" },
+    { from: "Client B",     to: "Shared resource", label: "write (token=34) — accepted",              type: "request" },
+    { divider: "Client A resumes after 90s — still believes it holds the lock" },
+    { from: "Client A",     to: "Shared resource", label: "write (token=33) — STALE", type: "request", highlight: true },
+    { note: "Resource rejects: token=33 < highest seen (34). Fencing token prevents corruption." },
+    { from: "Shared resource", to: "Client A",     label: "REJECTED: stale token",                    type: "response" },
+  ]}
+  caption="Without fencing tokens, Client A's stale write would have silently corrupted the shared resource. The fix: the resource server tracks the highest seen token and rejects any write with a lower token — regardless of what the client believes."
+/>
+
+<StateMachine
+  title="distributed node state — from the cluster's perspective"
+  states={[
+    { id: "healthy",   label: "Healthy",         sub: "heartbeats arriving",       initial: true },
+    { id: "suspected", label: "Suspected dead",  sub: "heartbeat timeout",         color: "amber" },
+    { id: "dead",      label: "Declared dead",   sub: "quorum voted to remove",    color: "red" },
+    { id: "rejoining", label: "Rejoining",       sub: "node reconnects, syncing",  color: "blue" },
+  ]}
+  transitions={[
+    { from: "healthy",   to: "suspected", label: "heartbeat timeout (e.g. 30s)" },
+    { from: "suspected", to: "healthy",   label: "heartbeat resumes" },
+    { from: "suspected", to: "dead",      label: "quorum declares dead" },
+    { from: "dead",      to: "rejoining", label: "node sends reconnect message" },
+    { from: "rejoining", to: "healthy",   label: "sync complete, quorum accepts" },
+  ]}
+  caption="A node transitions from Healthy → Suspected when heartbeats stop. It transitions to Dead only when a quorum votes — not when a timeout fires. The node itself may not know it has been declared dead (it was paused). On reconnect it must sync before rejoining."
+/>
 
 ## <Label color="teal">5</Label> Knowledge, Truth, and Lies
 

@@ -18,6 +18,7 @@ import CompareTable from '../../../components/mdx/CompareTable.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
 import HeatGrid from '../../../components/mdx/HeatGrid.astro';
 import SequenceDiagram from '../../../components/mdx/SequenceDiagram.astro';
+import ArchDiagram from '../../../components/mdx/ArchDiagram.astro';
 
 Every production system changes. Features ship, schemas evolve, services get new fields. The naive assumption — deploy everything at once, flip a flag — breaks the moment you have more than one server. Rolling upgrades mean old code and new code run simultaneously, reading and writing the same data. Chapter 4 is Kleppmann's argument that **encoding format is not an implementation detail** — it is a contract between every component that touches your data, and breaking that contract is one of the most common sources of production incidents.
 
@@ -40,6 +41,34 @@ The simplest approach — language-specific serialisation (`java.io.Serializable
 - Instantiates arbitrary classes during decoding — a vector for remote code execution
 - Versioning and schema evolution are afterthoughts
 - Performance and size efficiency are typically poor
+
+<ArchDiagram
+  title="encoding / decoding pipeline — in-memory → wire → storage"
+  zones={[
+    { id: "mem",  label: "In-memory representation", color: "teal" },
+    { id: "wire", label: "Wire / storage format",    color: "blue" },
+    { id: "recv", label: "Receiver in-memory",       color: "green" },
+  ]}
+  nodes={[
+    { id: "obj",    label: "Objects / structs", sub: "pointers, type-rich",          zone: "mem",  row: 1, col: 1, color: "teal" },
+    { id: "json",   label: "JSON / XML",        sub: "human-readable, no binary",    zone: "wire", row: 1, col: 1 },
+    { id: "proto",  label: "Protobuf / Thrift", sub: "binary, schema-versioned",     zone: "wire", row: 1, col: 2, color: "blue" },
+    { id: "avro",   label: "Avro",              sub: "schema in registry",           zone: "wire", row: 1, col: 3, color: "blue" },
+    { id: "disk",   label: "Disk / log",        sub: "SSTable, WAL, Kafka message",  zone: "wire", row: 2, col: 2 },
+    { id: "decoded",label: "Decoded object",    sub: "may differ from sender",       zone: "recv", row: 1, col: 1, color: "green" },
+  ]}
+  edges={[
+    { from: "obj",    to: "json",    label: "encode",        type: "solid" },
+    { from: "obj",    to: "proto",   label: "encode",        type: "solid" },
+    { from: "obj",    to: "avro",    label: "encode",        type: "solid" },
+    { from: "proto",  to: "disk",    label: "persist",       type: "dashed" },
+    { from: "avro",   to: "disk",    label: "persist",       type: "dashed" },
+    { from: "json",   to: "decoded", label: "decode",        type: "solid" },
+    { from: "proto",  to: "decoded", label: "decode (schema match)", type: "solid" },
+    { from: "avro",   to: "decoded", label: "decode (writer+reader schema)", type: "solid" },
+  ]}
+  caption="The encoding format determines portability, efficiency, and schema evolution safety. JSON is universal but leaky. Protobuf/Thrift use field tags for safe evolution. Avro uses a schema registry to reconcile writer and reader schemas at decode time."
+/>
 
 ## <Label color="teal">2</Label> JSON, XML, CSV — Ubiquitous but Leaky
 

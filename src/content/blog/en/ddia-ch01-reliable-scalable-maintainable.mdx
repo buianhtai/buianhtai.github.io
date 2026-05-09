@@ -42,6 +42,33 @@ This observation is not cosmetic. It completely changes what building blocks you
 When you combine a primary database, a cache layer, and a search index into a single service, you have built a new, bespoke data system. The API you expose is the contract of that composite system — including its consistency guarantees and failure modes.
 </Callout>
 
+<ArchDiagram
+  title="composite data system — you are now the system designer"
+  zones={[
+    { id: "client", label: "Client layer", color: "teal" },
+    { id: "app",    label: "Application (your code)", color: "blue" },
+    { id: "stores", label: "Specialist stores", color: "amber" },
+  ]}
+  nodes={[
+    { id: "web",    label: "Web/API",      sub: "request handler",    zone: "client", row: 1, col: 1 },
+    { id: "svc",    label: "Service",      sub: "your data system",   zone: "app",    row: 1, col: 1, color: "blue" },
+    { id: "db",     label: "Primary DB",   sub: "source of truth",    zone: "stores", row: 1, col: 1, color: "teal" },
+    { id: "cache",  label: "Cache",        sub: "Redis / Memcached",  zone: "stores", row: 1, col: 2, color: "amber" },
+    { id: "search", label: "Search index", sub: "Elasticsearch",      zone: "stores", row: 2, col: 1 },
+    { id: "queue",  label: "Message queue", sub: "Kafka / SQS",       zone: "stores", row: 2, col: 2 },
+  ]}
+  edges={[
+    { from: "web",   to: "svc",    label: "API call",          type: "solid" },
+    { from: "svc",   to: "db",     label: "write (truth)",     type: "solid" },
+    { from: "svc",   to: "cache",  label: "read/invalidate",   type: "solid" },
+    { from: "svc",   to: "search", label: "index update",      type: "dashed" },
+    { from: "svc",   to: "queue",  label: "event publish",     type: "dashed" },
+    { from: "db",    to: "cache",  label: "consistency?",      type: "dashed" },
+    { from: "db",    to: "search", label: "sync?",             type: "dashed" },
+  ]}
+  caption="The moment you add a cache or search index alongside your primary DB, your application code must maintain consistency contracts between them. This is a distributed systems problem — owned by you, not any single datastore."
+/>
+
 The practical implication: once you cross that line from "using a database" to "composing multiple storage and processing tools," the questions you must answer change entirely. How do you keep the cache consistent with the database on writes? What happens to the search index when the database has an outage? Who owns the guarantee that a message sent to the queue is eventually reflected in the read model? These are not database questions — they are distributed systems questions, and they start at the application layer.
 
 **Decision rule:** Before adding a second data store to your stack (a cache, a search index, a message queue), explicitly write down the consistency contract your application will maintain between them. If you cannot write it down, you cannot test it, and you almost certainly will violate it in production under load.
@@ -244,6 +271,32 @@ The operability checklist from this chapter is worth printing out:
 - Documentation describes operational behavior, not just API shapes
 - System defaults are safe; administrators can override without unsafe workarounds
 - The system can self-heal on known transient failures, but humans retain manual override
+
+<ArchDiagram
+  title="observability stack — making system internals visible"
+  zones={[
+    { id: "signals", label: "Observability signals", color: "teal" },
+    { id: "ops",     label: "Operator actions",      color: "green" },
+  ]}
+  nodes={[
+    { id: "logs",    label: "Structured logs",  sub: "error rates, audit trail",  zone: "signals", row: 1, col: 1, color: "teal" },
+    { id: "metrics", label: "Metrics",          sub: "p99 latency, queue depth",  zone: "signals", row: 1, col: 2, color: "teal" },
+    { id: "traces",  label: "Distributed traces", sub: "request spans across svc", zone: "signals", row: 1, col: 3, color: "teal" },
+    { id: "health",  label: "Health endpoints", sub: "liveness, readiness",       zone: "signals", row: 2, col: 2 },
+    { id: "detect",  label: "Detect degradation", sub: "alerts + dashboards",    zone: "ops",     row: 1, col: 1 },
+    { id: "diagnose",label: "Diagnose root cause", sub: "trace + log correlation", zone: "ops",    row: 1, col: 2, color: "green" },
+    { id: "act",     label: "Act + verify",    sub: "rollback, scale, restart",  zone: "ops",     row: 1, col: 3 },
+  ]}
+  edges={[
+    { from: "logs",    to: "detect",   label: "",            type: "solid" },
+    { from: "metrics", to: "detect",   label: "",            type: "solid" },
+    { from: "traces",  to: "diagnose", label: "",            type: "solid" },
+    { from: "health",  to: "detect",   label: "",            type: "dashed" },
+    { from: "detect",  to: "diagnose", label: "alert fired", type: "solid" },
+    { from: "diagnose",to: "act",      label: "root cause",  type: "solid" },
+  ]}
+  caption="Operability is not about having logs — it is about making the right signals queryable when something breaks at 3am. Structured logs enable alerting; distributed traces connect the symptom (slow API) to the cause (slow DB query in service C)."
+/>
 
 ### Simplicity: Accidental Complexity Is a Choice
 

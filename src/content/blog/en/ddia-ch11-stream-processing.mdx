@@ -16,6 +16,8 @@ import DataTable from '../../../components/mdx/DataTable.astro';
 import Pipeline from '../../../components/mdx/Pipeline.astro';
 import CompareTable from '../../../components/mdx/CompareTable.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
+import SequenceDiagram from '../../../components/mdx/SequenceDiagram.astro';
+import ArchDiagram from '../../../components/mdx/ArchDiagram.astro';
 
 Batch processing (Ch10) assumes bounded input: a job reads a fixed dataset, transforms it, and terminates. But most real-world data is unbounded — it arrives continuously and never "finishes." Users generate events today, tomorrow, and indefinitely. Waiting until end-of-day to process them introduces latency that many applications can't tolerate.
 
@@ -123,6 +125,30 @@ These diverge in practice: a mobile client generates events offline and batches 
 Correct event-time windowing requires deciding: how long do you wait for late events before closing a window? There is no universally correct answer. Kleppmann calls this the "straggler problem" — you must choose a point at which you declare the window closed and emit results, accepting that some late events will be missed or trigger corrections.
 </Callout>
 
+<SequenceDiagram
+  title="event time vs processing time — late event handling"
+  actors={[
+    { label: "Mobile Client",   color: "teal" },
+    { label: "Kafka Topic",     color: "blue" },
+    { label: "Stream Processor", color: "green" },
+    { label: "Window [0-60s]",  color: "amber" },
+  ]}
+  messages={[
+    { from: "Mobile Client",   to: "Kafka Topic",      label: "event t=30s (event time) — sent immediately", type: "request" },
+    { from: "Kafka Topic",     to: "Stream Processor", label: "deliver at processing time T+0",               type: "request" },
+    { from: "Stream Processor", to: "Window [0-60s]",  label: "add to window [0-60s]",                       type: "request" },
+    { divider: "client goes offline — buffering events" },
+    { from: "Mobile Client",   to: "Mobile Client",    label: "events t=45s, t=50s buffered offline",         type: "async" },
+    { note: "Stream processor closes window [0-60s] at processing time T+90s — emits result." },
+    { from: "Stream Processor", to: "Window [0-60s]",  label: "CLOSE window — emit count=1",                 type: "response" },
+    { divider: "client reconnects — late events arrive" },
+    { from: "Mobile Client",   to: "Kafka Topic",      label: "events t=45s, t=50s (event time — 90s late)", type: "request", highlight: true },
+    { from: "Kafka Topic",     to: "Stream Processor", label: "deliver at processing time T+120s",            type: "request" },
+    { note: "Window [0-60s] already closed. Late events t=45s and t=50s are STRAGGLERS. Options: drop, update, or emit correction." },
+  ]}
+  caption="Late events are normal: mobile offline, retried microservices, log shipping delays. Watermarks signal 'all events up to time T have arrived' — processors close windows when the watermark passes. Choosing the watermark advance rate trades latency against correctness."
+/>
+
 ### Window Types
 
 <DataTable
@@ -150,6 +176,35 @@ Stream joins are conceptually similar to batch joins but harder because one or b
     { "Join Type": "Stream-table join (enrichment)", "How it works": "One side is a slowly-changing table (e.g., user profile). Each stream event is enriched by joining with the current table state.", "State requirement": "Full table cached in processor memory (or remote lookup)", Example: "Enrich click events with user profile attributes" },
     { "Join Type": "Table-table join (dual-CDC)", "How it works": "Both sides are change streams from databases. Processor maintains current version of both tables and joins on key.", "State requirement": "Full current state of both tables", Example: "Materialized join view: orders joined with shipping status" },
   ]}
+/>
+
+<ArchDiagram
+  title="stream join types — state requirements and data flows"
+  zones={[
+    { id: "ss",  label: "Stream-stream join",         color: "teal" },
+    { id: "st",  label: "Stream-table join (enrich)", color: "amber" },
+    { id: "tt",  label: "Table-table join (dual CDC)", color: "blue" },
+  ]}
+  nodes={[
+    { id: "sa",  label: "Clicks stream",    sub: "unbounded events",         zone: "ss",  row: 1, col: 1, color: "teal" },
+    { id: "sb",  label: "Searches stream",  sub: "unbounded events",         zone: "ss",  row: 1, col: 2, color: "teal" },
+    { id: "sw",  label: "Time window buf",  sub: "1h state for matching",    zone: "ss",  row: 2, col: 1 },
+    { id: "ev",  label: "Click events",     sub: "stream: user actions",     zone: "st",  row: 1, col: 1 },
+    { id: "tb",  label: "User table",       sub: "cached in processor mem",  zone: "st",  row: 1, col: 2, color: "amber" },
+    { id: "enriched", label: "Enriched output", sub: "click + profile attrs", zone: "st", row: 2, col: 1 },
+    { id: "ordcdc", label: "Orders CDC",    sub: "change stream from DB",    zone: "tt",  row: 1, col: 1 },
+    { id: "shipcdc",label: "Shipping CDC",  sub: "change stream from DB",    zone: "tt",  row: 1, col: 2, color: "blue" },
+    { id: "matview",label: "Materialized view", sub: "orders + shipping status", zone: "tt", row: 2, col: 1 },
+  ]}
+  edges={[
+    { from: "sa",     to: "sw",      label: "buffer in window",  type: "solid" },
+    { from: "sb",     to: "sw",      label: "buffer in window",  type: "solid" },
+    { from: "ev",     to: "enriched",label: "enrich with table", type: "solid" },
+    { from: "tb",     to: "enriched",label: "lookup",            type: "dashed" },
+    { from: "ordcdc", to: "matview", label: "update state",      type: "solid" },
+    { from: "shipcdc",to: "matview", label: "update state",      type: "solid" },
+  ]}
+  caption="Stream-stream joins require bounded state (a time window for both sides). Stream-table joins require the full table cached in memory. Table-table joins (dual CDC) maintain current state of both tables and re-emit the join result on every change to either side."
 />
 
 ## <Label color="teal">5</Label> Fault Tolerance: Exactly-Once Processing
