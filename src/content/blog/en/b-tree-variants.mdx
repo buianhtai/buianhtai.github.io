@@ -97,19 +97,17 @@ FD-Trees improve write throughput over standard B-Trees while keeping read perfo
     { id: "run-zone", label: "Immutable Logarithmic Runs", color: "amber" },
   ]}
   nodes={[
-    { id: "l0", label: "Level 0 (mutable)", sub: "small B-Tree\nreceives all writes\nsize: S entries", zone: "mutable-zone", row: 1, col: 1, color: "teal" },
-    { id: "l1", label: "Level 1 (run)", sub: "immutable sorted run\nsize: S entries\nwith cascade ptrs → L2", zone: "run-zone", row: 1, col: 1, color: "amber" },
-    { id: "l2", label: "Level 2 (run)", sub: "immutable sorted run\nsize: S² entries\nwith cascade ptrs → L3", zone: "run-zone", row: 1, col: 2, color: "amber" },
-    { id: "l3", label: "Level 3 (run)", sub: "immutable sorted run\nsize: S³ entries\nlargest level", zone: "run-zone", row: 1, col: 3, color: "amber" },
+    { id: "l0", label: "Level 0",  sub: "mutable B-Tree\nall writes land here\nsize: S entries",        zone: "mutable-zone", row: 1, col: 1, color: "teal" },
+    { id: "l1", label: "Level 1",  sub: "immutable sorted run\nsize: S entries\nembeds cascade ptrs→L2", zone: "run-zone",     row: 1, col: 1, color: "amber" },
+    { id: "l2", label: "Level 2",  sub: "immutable sorted run\nsize: S^2 entries\nembeds cascade ptrs→L3", zone: "run-zone",   row: 1, col: 2, color: "amber" },
+    { id: "l3", label: "Level 3",  sub: "immutable sorted run\nsize: S^3 entries\nlargest level",         zone: "run-zone",   row: 1, col: 3, color: "amber" },
   ]}
   edges={[
-    { from: "l0", to: "l1", label: "merge when L0 full", type: "solid" },
-    { from: "l1", to: "l2", label: "cascade merge", type: "solid" },
-    { from: "l2", to: "l3", label: "cascade merge", type: "solid" },
-    { from: "l1", to: "l2", label: "fractional cascade ptr", type: "dashed" },
-    { from: "l2", to: "l3", label: "fractional cascade ptr", type: "dashed" },
+    { from: "l0", to: "l1", label: "merge (L0 full)",   type: "solid" },
+    { from: "l1", to: "l2", label: "cascade merge + ptrs", type: "solid" },
+    { from: "l2", to: "l3", label: "cascade merge + ptrs", type: "solid" },
   ]}
-  caption="Writes land in the mutable Level 0 B-Tree. When Level 0 fills, its contents are merge-sorted into Level 1 (an immutable sorted run). When Level 1 fills, it cascades into the larger Level 2, and so on. Fractional cascading pre-builds inter-level pointers so a range read can descend through all levels in O(log N + K) rather than O(K log N)."
+  caption="Writes land in the mutable Level 0 B-Tree. When Level 0 fills, its contents are merge-sorted into Level 1 (an immutable sorted run). When Level 1 fills, it cascades into the larger Level 2, and so on. Each immutable run embeds fractional cascading pointers into the next level — a range read descends through all levels in O(log N + K) rather than O(K log N)."
 />
 
 ---

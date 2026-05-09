@@ -16,6 +16,7 @@ import Callout from '../../../components/mdx/Callout.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
 import SequenceDiagram from '../../../components/mdx/SequenceDiagram.astro';
+import ArchDiagram from '../../../components/mdx/ArchDiagram.astro';
 
 > If a tree falls in a forest and no one is around to hear it, does it make a sound?
 
@@ -89,6 +90,33 @@ Rather than triggering failure at a fixed timeout, applications can set their ow
 - High threshold (φ > 8): wait longer, fewer false positives but slower detection
 
 **Key advantage**: the algorithm automatically adapts to changing network conditions. In a network with high variance in latency, the failure detector widens its thresholds automatically. This is what Apache Cassandra uses for its failure detection.
+
+<ArchDiagram
+  title="Phi-Accrual Failure Detector — data flow and decision"
+  zones={[
+    { id: "input",    label: "Input — heartbeat inter-arrival samples", color: "teal" },
+    { id: "compute",  label: "Phi computation",                         color: "amber" },
+    { id: "decision", label: "Decision — per threshold",                color: "green" },
+  ]}
+  nodes={[
+    { id: "hb1",   label: "Heartbeat t1",  sub: "inter-arrival: 120ms",         zone: "input",    row: 1, col: 1, color: "teal" },
+    { id: "hb2",   label: "Heartbeat t2",  sub: "inter-arrival: 118ms",         zone: "input",    row: 1, col: 2, color: "teal" },
+    { id: "hb3",   label: "Heartbeat t3",  sub: "inter-arrival: 125ms",         zone: "input",    row: 1, col: 3, color: "teal" },
+    { id: "dist",  label: "Distribution",  sub: "fit exponential model\nmean=121ms, var=low",      zone: "compute", row: 1, col: 1, color: "amber" },
+    { id: "phi",   label: "phi(t)",        sub: "-log10(P(late >= t))\ngrows with silence",        zone: "compute", row: 1, col: 2, color: "amber" },
+    { id: "ok",    label: "phi < 8",       sub: "node healthy\nkeep monitoring",                   zone: "decision", row: 1, col: 1, color: "green" },
+    { id: "fail",  label: "phi >= 8",      sub: "node suspected\nmark as failed",                  zone: "decision", row: 1, col: 2, color: "rose" },
+  ]}
+  edges={[
+    { from: "hb1",  to: "dist", label: "sample",        type: "solid" },
+    { from: "hb2",  to: "dist", label: "sample",        type: "solid" },
+    { from: "hb3",  to: "dist", label: "sample",        type: "solid" },
+    { from: "dist", to: "phi",  label: "P(t) lookup",   type: "solid" },
+    { from: "phi",  to: "ok",   label: "below threshold", type: "dashed" },
+    { from: "phi",  to: "fail", label: "above threshold", type: "solid" },
+  ]}
+  caption="Heartbeat inter-arrival times are sampled and fit to a distribution (usually exponential). phi(t) is computed as -log10 of the probability that a heartbeat this late is still normal network variance. As silence grows, phi grows. When phi exceeds the configured threshold (Cassandra default: 8), the peer is marked suspected. Under high network variance, the distribution widens and phi rises more slowly — preventing false positives during GC pauses or load spikes."
+/>
 
 <FlowStep steps={[
   { title: "Heartbeat ping-timeout — fixed threshold", body: "P1 sends a ping to P2 every T seconds. If no reply arrives within deadline D, P2 is marked suspected. Simple to implement; the weakness is that D must be statically configured. Under network load spikes or GC pauses, legitimate delays exceed D and healthy nodes are incorrectly suspected. Requires careful manual tuning per deployment environment." },

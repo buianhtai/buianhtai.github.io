@@ -17,6 +17,7 @@ import DataTable from '../../../components/mdx/DataTable.astro';
 import LayerStack from '../../../components/mdx/LayerStack.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
 import SequenceDiagram from '../../../components/mdx/SequenceDiagram.astro';
+import ArchDiagram from '../../../components/mdx/ArchDiagram.astro';
 
 The B-Tree is brilliant for reads. For high-throughput writes, it has a fundamental problem: in-place updates require seeking to the right page and rewriting it. Every write is a random write. Random writes are the slowest operation on any storage medium.
 
@@ -151,6 +152,31 @@ Two variants relax the sorted-order requirement for even better write throughput
 **Bitcask**: all writes are sequential appends to a single log file. An in-memory hash index maps every key to the latest record's offset in the log. Reads are: hash lookup → single disk seek → return value. Extremely fast writes and reads, but the entire key set must fit in memory.
 
 **WiscKey**: separates keys from values in RocksDB-style leveled storage. Keys (small) are stored in a sorted LSM structure; values (large) are stored in a separate append-only value log. This drastically reduces write amplification for large values — the sorted LSM only sorts/compacts keys, not multi-KB values. Trade-off: range scans that also retrieve values require random reads into the value log.
+
+<ArchDiagram
+  title="Unordered LSM variants — Bitcask vs WiscKey vs Standard LSM"
+  zones={[
+    { id: "bitcask",  label: "Bitcask",       color: "teal" },
+    { id: "wisckey",  label: "WiscKey",        color: "amber" },
+    { id: "lsm",      label: "Standard LSM",   color: "green" },
+  ]}
+  nodes={[
+    { id: "bc-mem",  label: "Hash Index",    sub: "key → (file, offset)\nall keys in RAM",      zone: "bitcask", row: 1, col: 1, color: "teal" },
+    { id: "bc-log",  label: "Append Log",    sub: "one sequential file\nall writes append",      zone: "bitcask", row: 2, col: 1, color: "teal" },
+    { id: "wk-lsm",  label: "Key LSM",       sub: "sorted keys only\n+ vLog offset ptr",         zone: "wisckey", row: 1, col: 1, color: "amber" },
+    { id: "wk-vlog", label: "Value Log",     sub: "append-only log\nlarge values only",          zone: "wisckey", row: 2, col: 1, color: "amber" },
+    { id: "ls-mem",  label: "Memtable",      sub: "sorted in-memory\n(skiplist)",                zone: "lsm",     row: 1, col: 1, color: "green" },
+    { id: "ls-l0",   label: "L0 SSTables",   sub: "sorted key+value\noverlapping ranges",        zone: "lsm",     row: 2, col: 1, color: "green" },
+    { id: "ls-ln",   label: "LN SSTables",   sub: "sorted key+value\nnon-overlapping",           zone: "lsm",     row: 3, col: 1, color: "green" },
+  ]}
+  edges={[
+    { from: "bc-mem",  to: "bc-log",  label: "read: 1 seek",    type: "solid" },
+    { from: "wk-lsm",  to: "wk-vlog", label: "read: LSM + 1 random vLog seek", type: "solid" },
+    { from: "ls-mem",  to: "ls-l0",   label: "flush",           type: "solid" },
+    { from: "ls-l0",   to: "ls-ln",   label: "compaction",      type: "solid" },
+  ]}
+  caption="Bitcask: hash index in RAM + single append log — fastest writes and point reads, but all keys must fit in memory. WiscKey: sorted key LSM + separate value log — low write amplification for large values, range scans need random value log reads. Standard LSM: keys and values co-located, sorted at every level — best range scan performance, higher write amplification."
+/>
 
 <FlowStep steps={[
   { title: "Bitcask — hash index, single log file", body: "All writes append to one log file. An in-memory hash table maps every key to (file_id, offset, size) of its latest record. Reads: hash lookup → one disk seek → return value. Startup: replay the log to rebuild the in-memory index. Constraint: the entire key set must fit in RAM. Best for: write-heavy workloads where all keys fit in memory (IoT sensor data, message queues)." },
