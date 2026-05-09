@@ -1,0 +1,300 @@
+---
+/**
+ * HeatGrid — 2-D matrix with colour-intensity cells.
+ *
+ * Great for: isolation level × anomaly matrices, quorum overlap (w+r>n),
+ * MVCC transaction visibility, partition load heatmaps.
+ *
+ * Usage:
+ *   <HeatGrid
+ *     rows={["Read Uncommitted", "Read Committed", "Repeatable Read", "Serializable"]}
+ *     cols={["Dirty Read", "Non-repeatable Read", "Phantom Read", "Write Skew"]}
+ *     cells={[
+ *       ["allowed", "allowed",   "allowed",   "allowed"],
+ *       ["blocked", "allowed",   "allowed",   "allowed"],
+ *       ["blocked", "blocked",   "allowed",   "allowed"],
+ *       ["blocked", "blocked",   "blocked",   "blocked"],
+ *     ]}
+ *     rowLabel="Isolation Level"
+ *     colLabel="Anomaly"
+ *     caption="Isolation levels vs anomalies — green = blocked (safe), red = allowed (unsafe)"
+ *   />
+ *
+ * Cell values:
+ *   "blocked" / "safe" / "yes" / true  → green ✓
+ *   "allowed" / "unsafe" / "no" / false → red ✗
+ *   "partial" / "~"                      → amber ~
+ *   A plain string                        → shown as-is, intensity from value (0-1 float for heatmap)
+ *   { value: string; heat?: number; label?: string } → full control
+ *
+ * heat (0–1): 0 = cold (surface), 1 = hot (accent)
+ */
+
+type CellValue =
+  | string
+  | boolean
+  | number
+  | { value?: string; heat?: number; label?: string; note?: string };
+
+interface Props {
+  rows: string[];
+  cols: string[];
+  cells: CellValue[][];
+  rowLabel?: string;
+  colLabel?: string;
+  caption?: string;
+  title?: string;
+  legend?: Array<{ color: string; label: string }>;
+  /** 'semantic' uses green/red for yes/no; 'heat' uses accent gradient. Default: 'semantic' */
+  mode?: 'semantic' | 'heat';
+}
+
+const { rows, cols, cells, rowLabel, colLabel, caption, title, legend, mode = 'semantic' } = Astro.props;
+
+interface Resolved {
+  display: string;
+  cls: string;
+  style: string;
+  note?: string;
+}
+
+function resolve(raw: CellValue): Resolved {
+  // Object form
+  if (typeof raw === 'object' && raw !== null && !Array.isArray(raw)) {
+    const c = raw as { value?: string; heat?: number; label?: string; note?: string };
+    const heat = c.heat ?? 0;
+    const style = mode === 'heat'
+      ? `background: rgba(var(--hg-hot-rgb), ${heat * 0.7 + 0.05}); color: ${heat > 0.55 ? 'var(--color-bg)' : 'var(--color-text)'};`
+      : '';
+    return { display: c.label ?? c.value ?? '', cls: 'hg-custom', style, note: c.note };
+  }
+
+  // Boolean
+  if (typeof raw === 'boolean') {
+    return raw
+      ? { display: '✓', cls: 'hg-yes', style: '' }
+      : { display: '✗', cls: 'hg-no', style: '' };
+  }
+
+  // Number (treat as heat 0-1)
+  if (typeof raw === 'number') {
+    const heat = Math.max(0, Math.min(1, raw));
+    const style = `background: rgba(var(--hg-hot-rgb), ${heat * 0.7 + 0.05}); color: ${heat > 0.55 ? 'var(--color-bg)' : 'var(--color-text)'};`;
+    return { display: raw.toString(), cls: 'hg-heat', style };
+  }
+
+  // String keywords
+  const v = String(raw).toLowerCase().trim();
+  if (['blocked', 'safe', 'yes', 'true', '✓'].includes(v))
+    return { display: '✓', cls: 'hg-yes', style: '' };
+  if (['allowed', 'unsafe', 'no', 'false', '✗', '—'].includes(v))
+    return { display: '✗', cls: 'hg-no', style: '' };
+  if (['partial', '~', 'varies'].includes(v))
+    return { display: '~', cls: 'hg-partial', style: '' };
+
+  return { display: raw as string, cls: 'hg-text', style: '' };
+}
+---
+
+<div class="hg-wrap">
+  {title && <div class="hg-titlebar"><span class="hg-prompt">$</span> {title}</div>}
+
+  <div class="hg-scroll">
+    <table class="hg-table">
+      <thead>
+        <tr>
+          <th class="hg-corner">{rowLabel && <span class="hg-axis-label hg-row-axis">{rowLabel}</span>}</th>
+          {cols.map((c) => (
+            <th class="hg-col-head">{c}</th>
+          ))}
+        </tr>
+        {colLabel && (
+          <tr>
+            <td colspan={cols.length + 1} class="hg-col-axis-row">
+              <span class="hg-axis-label">{colLabel} →</span>
+            </td>
+          </tr>
+        )}
+      </thead>
+      <tbody>
+        {rows.map((r, ri) => (
+          <tr class="hg-row">
+            <td class="hg-row-head">{r}</td>
+            {(cells[ri] ?? []).map((raw, ci) => {
+              const { display, cls, style, note } = resolve(raw);
+              return (
+                <td class={`hg-cell ${cls}`} style={style} title={note}>
+                  {display}
+                  {note && <span class="hg-cell-note">{note}</span>}
+                </td>
+              );
+            })}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+
+  {legend && legend.length > 0 && (
+    <div class="hg-legend">
+      {legend.map((l) => (
+        <span class="hg-legend-item">
+          <span class="hg-legend-dot" style={`background: ${l.color}`}></span>
+          {l.label}
+        </span>
+      ))}
+    </div>
+  )}
+
+  {caption && <div class="hg-caption"><span class="hg-prompt">▶</span> {caption}</div>}
+</div>
+
+<style>
+  .hg-wrap {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    margin: 1.5rem 0;
+    overflow: hidden;
+    font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+    /* hot accent in RGB for rgba() trick */
+    --hg-hot-rgb: 69, 137, 255;
+  }
+
+  .hg-titlebar {
+    padding: 0.4rem 0.875rem;
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-surface-2);
+    font-size: 0.65rem;
+    color: var(--color-text-muted);
+  }
+  .hg-prompt { color: var(--color-accent); font-weight: 700; margin-right: 0.35rem; }
+
+  .hg-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .hg-table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.72rem;
+  }
+
+  /* ── Corner & axis labels ── */
+  .hg-corner {
+    padding: 0.4rem 0.6rem;
+    background: var(--color-surface-2);
+    border-bottom: 2px solid var(--color-border);
+    border-right: 2px solid var(--color-border);
+    min-width: 8rem;
+    position: relative;
+  }
+  .hg-axis-label {
+    font-size: 0.57rem;
+    color: var(--color-text-muted);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .hg-col-axis-row {
+    padding: 0.15rem 0.6rem;
+    text-align: right;
+    background: var(--color-surface-2);
+  }
+
+  /* ── Column headers ── */
+  .hg-col-head {
+    padding: 0.4rem 0.6rem;
+    background: var(--color-surface-2);
+    border-bottom: 2px solid var(--color-border);
+    border-right: 1px solid var(--color-border);
+    font-size: 0.64rem;
+    font-weight: 700;
+    color: var(--color-text);
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  /* ── Row headers ── */
+  .hg-row-head {
+    padding: 0.4rem 0.75rem 0.4rem 0.6rem;
+    border-bottom: 1px solid var(--color-border);
+    border-right: 2px solid var(--color-border);
+    background: var(--color-surface-2);
+    font-size: 0.67rem;
+    font-weight: 600;
+    color: var(--color-text-dim);
+    white-space: nowrap;
+  }
+
+  /* ── Cells ── */
+  .hg-cell {
+    padding: 0.35rem 0.6rem;
+    border-bottom: 1px solid var(--color-border);
+    border-right: 1px solid var(--color-border);
+    text-align: center;
+    font-size: 0.8rem;
+    font-weight: 700;
+    position: relative;
+    transition: background 0.1s;
+  }
+  .hg-row:hover .hg-cell { background: var(--color-bg) !important; }
+
+  /* Semantic states */
+  .hg-yes     { color: #16a34a; background: rgba(22,163,74,0.07); }
+  .hg-no      { color: #f43f5e; background: rgba(244,63,94,0.07); }
+  .hg-partial { color: #f59e0b; background: rgba(245,158,11,0.07); font-size: 1rem; }
+  .hg-text    { color: var(--color-text); font-size: 0.65rem; font-weight: 400; }
+  .hg-heat    { font-size: 0.7rem; font-weight: 600; }
+  .hg-custom  { font-size: 0.7rem; }
+
+  /* Inline note */
+  .hg-cell-note {
+    display: none;
+    position: absolute;
+    bottom: calc(100% + 4px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--color-surface-2);
+    border: 1px solid var(--color-border);
+    padding: 0.25rem 0.5rem;
+    font-size: 0.6rem;
+    white-space: nowrap;
+    color: var(--color-text-dim);
+    z-index: 10;
+    pointer-events: none;
+  }
+  .hg-cell:hover .hg-cell-note { display: block; }
+
+  /* ── Legend ── */
+  .hg-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
+    padding: 0.5rem 0.875rem;
+    border-top: 1px solid var(--color-border);
+    background: var(--color-surface-2);
+  }
+  .hg-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.62rem;
+    color: var(--color-text-dim);
+  }
+  .hg-legend-dot {
+    width: 0.55rem;
+    height: 0.55rem;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  /* ── Caption ── */
+  .hg-caption {
+    padding: 0.45rem 0.875rem;
+    border-top: 1px solid var(--color-border);
+    font-size: 0.62rem;
+    color: var(--color-text-dim);
+    background: var(--color-bg);
+    line-height: 1.5;
+  }
+</style>

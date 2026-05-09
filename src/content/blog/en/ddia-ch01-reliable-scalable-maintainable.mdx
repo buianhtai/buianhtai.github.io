@@ -18,6 +18,8 @@ import Pipeline from '../../../components/mdx/Pipeline.astro';
 import LayerStack from '../../../components/mdx/LayerStack.astro';
 import CompareTable from '../../../components/mdx/CompareTable.astro';
 import PatternLifecycle from '../../../components/mdx/PatternLifecycle.astro';
+import ArchDiagram from '../../../components/mdx/ArchDiagram.astro';
+import HeatGrid from '../../../components/mdx/HeatGrid.astro';
 
 Chapter 1 of *Designing Data-Intensive Applications* does something unusual for an opening chapter: it refuses to be introductory. Rather than warming you up with history or motivation, Kleppmann immediately forces precision. "Reliable," "scalable," and "maintainable" are words that every engineering team uses and almost none define rigorously. By the end of the chapter they have precise meanings, measurable proxies, and real failure modes attached to each of them. That shift from adjective to engineering discipline is what makes this chapter worth revisiting no matter how senior you are.
 
@@ -63,6 +65,28 @@ Kleppmann organizes faults into three categories that demand very different miti
     { "Fault Class": "Software", "Typical Cause": "Bugs, runaway processes, bad inputs, cascading failures", "Correlation": "High — hits all instances simultaneously", "Primary Mitigation": "Isolation, testing, process restart, canary deploys" },
     { "Fault Class": "Human", "Typical Cause": "Config errors, accidental deletes, bad deploys", "Correlation": "Medium — one operator, wide blast radius", "Primary Mitigation": "Sandboxes, rollback tooling, gradual rollout, monitoring" },
   ]}
+/>
+
+<ArchDiagram
+  title="fault propagation model"
+  zones={[
+    { id: "hw", label: "Hardware Fault", color: "teal" },
+    { id: "sw", label: "Software Fault", color: "rose" },
+  ]}
+  nodes={[
+    { id: "disk1", label: "Disk A",   sub: "fails",   zone: "hw", row: 1, col: 1, color: "teal" },
+    { id: "disk2", label: "Disk B",   sub: "ok",      zone: "hw", row: 1, col: 2 },
+    { id: "svc1",  label: "Svc v1.2", sub: "bug hits", zone: "sw", row: 1, col: 1, color: "rose" },
+    { id: "svc2",  label: "Svc v1.2", sub: "same bug", zone: "sw", row: 1, col: 2, color: "rose" },
+    { id: "svc3",  label: "Svc v1.2", sub: "same bug", zone: "sw", row: 2, col: 1, color: "rose" },
+  ]}
+  edges={[
+    { from: "disk1", to: "disk2", label: "independent", type: "dashed" },
+    { from: "svc1",  to: "svc2",  label: "correlated",  type: "solid" },
+    { from: "svc1",  to: "svc3",  label: "correlated",  type: "solid" },
+    { from: "svc2",  to: "svc3",  label: "simultaneous", type: "solid" },
+  ]}
+  caption="Hardware faults are independent — one disk dying doesn't predict another. Software bugs are correlated — the same bug hits every instance running that version simultaneously."
 />
 
 The correlation column is where most engineers under-invest. Hardware faults are largely independent — one disk dying on a 10,000-disk cluster is expected once per day, but the failure of one disk does not predict another. Software faults are the opposite: a kernel bug triggered by a leap-second event will bring down *every* instance running that kernel *simultaneously*. The June 2012 Linux leap-second bug is a vivid example: it hung a large swath of the internet at the same instant because the failure mode was correlated across millions of hosts.
@@ -136,6 +160,26 @@ The mean response time hides the users who matter most. Amazon found that the cu
     { "Percentile": "p999", "Meaning": "99.9% faster; 1 in 1,000 is slower", "Typical Use": "High-value customer protection (Amazon's choice)" },
     { "Percentile": "p9999", "Meaning": "99.99% faster; 1 in 10,000 is slower", "Typical Use": "Usually not worth optimizing — diminishing returns" },
   ]}
+/>
+
+<HeatGrid
+  title="tail latency amplification"
+  rows={["1 backend call", "5 backend calls", "10 backend calls", "50 backend calls"]}
+  cols={["p50 tail risk", "p95 tail risk", "p99 tail risk"]}
+  cells={[
+    [{ value: "~0%",  heat: 0.02 }, { value: "5%",  heat: 0.05 }, { value: "1%",  heat: 0.01 }],
+    [{ value: "~0%",  heat: 0.05 }, { value: "23%", heat: 0.23 }, { value: "5%",  heat: 0.05 }],
+    [{ value: "~1%",  heat: 0.08 }, { value: "40%", heat: 0.40 }, { value: "10%", heat: 0.10 }],
+    [{ value: "~10%", heat: 0.22 }, { value: "92%", heat: 0.92 }, { value: "40%", heat: 0.40 }],
+  ]}
+  mode="heat"
+  rowLabel="Fan-out degree"
+  colLabel="Probability at least one call is slow"
+  legend={[
+    { color: "rgba(69,137,255,0.1)", label: "low risk" },
+    { color: "rgba(69,137,255,0.7)", label: "high risk" },
+  ]}
+  caption="Tail latency amplification: with 50 backend calls per request, even a 1-in-20 slow call (p95) means 92% of requests will have at least one slow leg."
 />
 
 Two phenomena make tail latencies more dangerous than the numbers suggest:

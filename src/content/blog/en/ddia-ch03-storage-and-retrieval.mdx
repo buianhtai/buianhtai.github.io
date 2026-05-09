@@ -17,6 +17,7 @@ import Pipeline from '../../../components/mdx/Pipeline.astro';
 import LayerStack from '../../../components/mdx/LayerStack.astro';
 import CompareTable from '../../../components/mdx/CompareTable.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
+import SequenceDiagram from '../../../components/mdx/SequenceDiagram.astro';
 
 Chapter 3 is the chapter that makes storage engines legible. Most engineers treat the database as a black box: you send writes, you get reads, you pick an index column here and there. But storage engine internals determine whether your write-heavy workload degrades gracefully or collapses, whether a crash leaves data inconsistent, whether your analytics query scans 500 GB or 50 MB. Kleppmann argues that you don't need to build a storage engine — but you do need to understand the two dominant families well enough to choose and tune them.
 
@@ -83,6 +84,29 @@ The hash index's fatal flaw is the RAM requirement. Log-Structured Merge-trees (
   ]}
   arrows={["flush when memtable exceeds threshold", "compaction merges and promotes levels"]}
   caption="LSM-tree write path. Writes always go to the in-memory memtable; reads may need to check memtable + multiple SSTable levels."
+/>
+
+<SequenceDiagram
+  title="lsm-tree write path — from client to disk"
+  actors={[
+    { label: "Client",      color: "teal" },
+    { label: "WAL (disk)",  color: "amber" },
+    { label: "Memtable",    color: "blue" },
+    { label: "Compaction",  color: "green" },
+  ]}
+  messages={[
+    { from: "Client",     to: "WAL (disk)", label: "append key=X val=V",        type: "request" },
+    { from: "WAL (disk)", to: "Client",     label: "ack (durable)",              type: "response" },
+    { from: "Client",     to: "Memtable",   label: "insert into sorted tree",    type: "request" },
+    { note: "Client's write is complete — both WAL and memtable updated" },
+    { divider: "memtable reaches size threshold (e.g. 64 MB)" },
+    { from: "Memtable",   to: "WAL (disk)", label: "flush sorted SSTable to L0", type: "request" },
+    { from: "WAL (disk)", to: "Memtable",   label: "new memtable starts fresh",  type: "response" },
+    { divider: "background compaction" },
+    { from: "Compaction", to: "WAL (disk)", label: "merge L0 → L1 SSTables",    type: "request" },
+    { from: "WAL (disk)", to: "Compaction", label: "non-overlapping L1 files",   type: "response" },
+  ]}
+  caption="LSM write path: writes are always sequential — first WAL (crash durability), then in-memory memtable. Compaction runs in the background, never blocking the write path."
 />
 
 The write-ahead log (WAL) ensures durability: every write is appended to an on-disk WAL before being applied to the memtable. If the process crashes before the memtable is flushed, the WAL replays the lost writes. The WAL is separate from the SSTables — it's crash recovery only, not the main data store.

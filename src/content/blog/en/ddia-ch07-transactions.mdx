@@ -16,6 +16,9 @@ import DataTable from '../../../components/mdx/DataTable.astro';
 import Pipeline from '../../../components/mdx/Pipeline.astro';
 import CompareTable from '../../../components/mdx/CompareTable.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
+import HeatGrid from '../../../components/mdx/HeatGrid.astro';
+import SequenceDiagram from '../../../components/mdx/SequenceDiagram.astro';
+import StateMachine from '../../../components/mdx/StateMachine.astro';
 
 A transaction is a deceptively simple idea: group several reads and writes into a logical unit that either fully succeeds (commit) or fully fails (abort, rollback). No partial application. No left-over garbage from a failed halfway state. If the application retries, it's safe to do so.
 
@@ -58,6 +61,19 @@ Most databases don't offer full serializability by default. Instead they offer a
     { "Isolation Level": "Snapshot Isolation (MVCC)", "Dirty Read": "prevented", "Dirty Write": "prevented", "Read Skew": "prevented", "Lost Update": "often prevented", "Write Skew": "possible", "Phantom": "possible" },
     { "Isolation Level": "Serializable", "Dirty Read": "prevented", "Dirty Write": "prevented", "Read Skew": "prevented", "Lost Update": "prevented", "Write Skew": "prevented", "Phantom": "prevented" },
   ]}
+/>
+
+<HeatGrid
+  title="isolation level × anomaly prevention matrix"
+  rows={["Read Uncommitted", "Read Committed", "Snapshot Isolation (MVCC)", "Serializable"]}
+  cols={["Dirty Read", "Dirty Write", "Read Skew", "Lost Update", "Write Skew", "Phantom"]}
+  cells={[
+    ["no",  "yes", "no",  "no",  "no",  "no"],
+    ["yes", "yes", "no",  "no",  "no",  "no"],
+    ["yes", "yes", "yes", "partial", "no", "no"],
+    ["yes", "yes", "yes", "yes", "yes", "yes"],
+  ]}
+  caption="Green = anomaly prevented at this isolation level. Red = still possible. Most production databases default to Read Committed — which leaves 4 of 6 anomalies possible."
 />
 
 **Dirty read**: reading another transaction's uncommitted writes. Read committed prevents this by holding the old value visible until the write commits.
@@ -144,6 +160,30 @@ Write skew is the hardest anomaly to reason about under snapshot isolation. Each
 4. Result: zero doctors on-call
 
 Neither write was a lost update — they wrote to different rows. Neither was a dirty write. Neither read stale data. The anomaly arose because the *premise* of the decision (at least one other doctor remains) became false after both decisions were made.
+
+<SequenceDiagram
+  title="write skew — on-call doctor scenario under snapshot isolation"
+  actors={[
+    { label: "Dr. Alice (Txn A)", color: "teal" },
+    { label: "DB (MVCC snapshot)", color: "blue" },
+    { label: "Dr. Bob (Txn B)",   color: "amber" },
+  ]}
+  messages={[
+    { from: "Dr. Alice (Txn A)", to: "DB (MVCC snapshot)", label: "BEGIN — snapshot at T1", type: "request" },
+    { from: "Dr. Bob (Txn B)",   to: "DB (MVCC snapshot)", label: "BEGIN — snapshot at T1", type: "request" },
+    { from: "Dr. Alice (Txn A)", to: "DB (MVCC snapshot)", label: "SELECT count(*) WHERE on_call = true", type: "request" },
+    { from: "DB (MVCC snapshot)", to: "Dr. Alice (Txn A)", label: "2 doctors on call",        type: "response" },
+    { from: "Dr. Bob (Txn B)",   to: "DB (MVCC snapshot)", label: "SELECT count(*) WHERE on_call = true", type: "request" },
+    { from: "DB (MVCC snapshot)", to: "Dr. Bob (Txn B)",   label: "2 doctors on call",        type: "response" },
+    { note: "Both see premise: ≥2 doctors on call → safe to go off-call" },
+    { from: "Dr. Alice (Txn A)", to: "DB (MVCC snapshot)", label: "UPDATE doctors SET on_call=false WHERE id='alice'", type: "request" },
+    { from: "Dr. Bob (Txn B)",   to: "DB (MVCC snapshot)", label: "UPDATE doctors SET on_call=false WHERE id='bob'",   type: "request" },
+    { from: "Dr. Alice (Txn A)", to: "DB (MVCC snapshot)", label: "COMMIT", type: "request" },
+    { from: "Dr. Bob (Txn B)",   to: "DB (MVCC snapshot)", label: "COMMIT — succeeds!", type: "request", highlight: true },
+    { note: "RESULT: 0 doctors on call. Invariant violated. Only serializability (SSI) or SELECT FOR UPDATE prevents this." },
+  ]}
+  caption="Write skew is undetectable at snapshot isolation: both transactions read consistent snapshots, make locally valid decisions, and commit successfully. The database cannot see that the combination violates the invariant."
+/>
 
 The general pattern: **check-then-act**, where the "check" involves a read and the "act" involves a write that changes what the check would return. This is the phantom problem: one transaction's write changes the result of another transaction's search.
 

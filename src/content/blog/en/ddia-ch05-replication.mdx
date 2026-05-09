@@ -16,6 +16,8 @@ import DataTable from '../../../components/mdx/DataTable.astro';
 import Pipeline from '../../../components/mdx/Pipeline.astro';
 import CompareTable from '../../../components/mdx/CompareTable.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
+import SequenceDiagram from '../../../components/mdx/SequenceDiagram.astro';
+import StateMachine from '../../../components/mdx/StateMachine.astro';
 
 Replication sounds like copying data. It isn't. Copying data is trivial; what's hard is handling the changes to that data, because changes arrive continuously, nodes fail at inopportune moments, and networks drop packets between the leader and every follower. Chapter 5 is Kleppmann's systematic tour of what actually goes wrong in replicated systems and what the three main replication architectures — single-leader, multi-leader, leaderless — trade against each other.
 
@@ -93,6 +95,27 @@ The new leader's log position may be behind the old leader's last write. Those w
 Old leader comes back, doesn't know it was replaced. Two nodes accept writes simultaneously. Without a fencing mechanism (STONITH, epoch-based leader leases), data diverges silently.
 </FlowStep>
 
+<StateMachine
+  title="single-leader failover state machine"
+  cols={3}
+  states={[
+    { id: "normal",    label: "Normal",        sub: "leader + followers healthy",    color: "green",  row: 1, col: 2, initial: true },
+    { id: "detect",    label: "Detect failure", sub: "heartbeat timeout exceeded",   color: "amber",  row: 2, col: 1 },
+    { id: "elect",     label: "Elect leader",   sub: "most up-to-date follower",     color: "teal",   row: 2, col: 2 },
+    { id: "splitbrain",label: "Split-brain",    sub: "2 nodes think they're leader", color: "rose",   row: 2, col: 3 },
+    { id: "recovered", label: "Recovered",      sub: "new leader active, old fenced", color: "green", row: 3, col: 2, final: true },
+  ]}
+  transitions={[
+    { from: "normal",     to: "detect",    label: "leader heartbeat stops" },
+    { from: "detect",     to: "elect",     label: "consensus reached (Raft/Patroni)" },
+    { from: "detect",     to: "splitbrain",label: "no consensus — timeout races", type: "dashed" },
+    { from: "elect",      to: "recovered", label: "fencing token issued to old leader" },
+    { from: "splitbrain", to: "recovered", label: "STONITH / epoch bump fences old leader" },
+    { from: "splitbrain", to: "splitbrain",label: "writes diverge until resolved", type: "self" },
+  ]}
+  caption="Failover is the riskiest operation in single-leader replication. Split-brain (two active leaders) is the catastrophic failure mode. Always require a fencing mechanism — STONITH, epoch-based leases, or distributed lock — before the new leader accepts writes."
+/>
+
 <Callout color="amber">
 The GitHub MySQL incident: a promoted follower that was behind the leader reused autoincrement primary keys, causing MySQL and Redis to refer to different records under the same ID. Private data was disclosed to wrong users. Failover is not a safe operation — it requires careful coordination.
 </Callout>
@@ -110,6 +133,28 @@ Asynchronous followers are always behind the leader by some amount — the **rep
     { Anomaly: "Monotonic reads violation", "What the user sees": "User reads a comment, refreshes, comment disappears (first read hit an up-to-date follower, second hit a lagging one)", Fix: "Pin each user to a single replica via consistent hashing on user ID" },
     { Anomaly: "Consistent prefix reads violation", "What the user sees": "Observer sees Mrs. Cake's answer before Mr. Poons asked the question — causally related writes landed on different partitions with different lag", Fix: "Write causally related events to the same partition; or use vector clocks to track causal dependencies" },
   ]}
+/>
+
+<SequenceDiagram
+  title="replication lag — read-your-writes anomaly"
+  actors={[
+    { label: "User",         color: "teal" },
+    { label: "Leader",       color: "blue" },
+    { label: "Follower (lagging)", color: "amber" },
+  ]}
+  messages={[
+    { from: "User",    to: "Leader",             label: "POST /profile — update bio",    type: "request" },
+    { from: "Leader",  to: "User",               label: "200 OK",                        type: "response" },
+    { note: "Leader applies write at LSN 1042. Follower at LSN 1035 — 7 entries behind." },
+    { from: "User",    to: "Follower (lagging)", label: "GET /profile (read replica)",   type: "request" },
+    { from: "Follower (lagging)", to: "User",    label: "200 OK — old bio returned",     type: "error", highlight: true },
+    { note: "BUG: user's edit appears to vanish — write went to leader, read hit lagging follower" },
+    { divider: "fix: read-your-writes consistency" },
+    { from: "User",    to: "Follower (lagging)", label: "GET /profile (with min-LSN=1042)", type: "request" },
+    { from: "Follower (lagging)", to: "User",    label: "wait… follower catches up to LSN 1042", type: "async" },
+    { from: "Follower (lagging)", to: "User",    label: "200 OK — updated bio returned", type: "response" },
+  ]}
+  caption="Read-your-writes requires the client to track the last-write LSN and ensure reads are served by a replica that has applied at least that LSN. Most database proxies handle this transparently."
 />
 
 **Read-your-writes** (also called read-after-write consistency) is the most commonly needed guarantee. The standard implementation: after a write, the client records the LSN of that write. On subsequent reads, the client sends that LSN to the replica. If the replica's applied LSN is below the client's last-write LSN, either wait or redirect to the leader. PostgreSQL clients and most managed database proxies support this transparently.

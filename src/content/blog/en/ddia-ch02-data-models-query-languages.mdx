@@ -16,6 +16,8 @@ import FlowStep from '../../../components/mdx/FlowStep.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
 import Pipeline from '../../../components/mdx/Pipeline.astro';
 import CompareTable from '../../../components/mdx/CompareTable.astro';
+import HeatGrid from '../../../components/mdx/HeatGrid.astro';
+import ArchDiagram from '../../../components/mdx/ArchDiagram.astro';
 
 Every piece of software you write rests on a data model, and that model quietly dictates which operations are cheap, which are expensive, and which are effectively impossible. Kleppmann opens Chapter 2 with a Wittgenstein epigraph — "the limits of my language mean the limits of my world" — and the rest of the chapter proves the point: the data model you choose *is* the language your application thinks in. Pick the wrong one and you spend years fighting it; pick the right one and entire categories of problems dissolve.
 
@@ -96,6 +98,27 @@ Modern document databases have not repeated CODASYL's mistake: they use document
   caption="Relational excels at structured joins and integrity. Document wins on locality for tree-shaped data. Graph handles deeply interconnected, variable-depth relationships."
 />
 
+<ArchDiagram
+  title="data model selection — decision topology"
+  zones={[
+    { id: "simple", label: "Tree-shaped data", color: "teal" },
+    { id: "complex", label: "Interconnected data", color: "amber" },
+  ]}
+  nodes={[
+    { id: "doc",   label: "Document DB",  sub: "JSON/BSON, locality", zone: "simple",  row: 1, col: 1, color: "teal" },
+    { id: "rel",   label: "Relational",   sub: "SQL, joins, optimizer", zone: "simple", row: 1, col: 2 },
+    { id: "graph", label: "Graph DB",     sub: "vertices + edges",  zone: "complex", row: 1, col: 1, color: "amber" },
+    { id: "hyb",   label: "Hybrid",       sub: "PG JSON, Mongo agg", zone: "complex", row: 1, col: 2 },
+  ]}
+  edges={[
+    { from: "doc",   to: "rel",   label: "add many-to-many refs",    type: "dashed" },
+    { from: "rel",   to: "graph", label: "add variable-depth traversal", type: "dashed" },
+    { from: "doc",   to: "hyb",   label: "convergence path",         type: "solid" },
+    { from: "rel",   to: "hyb",   label: "JSON columns / graph ext", type: "solid" },
+  ]}
+  caption="Data interconnectedness grows over time — models that start as simple trees tend to migrate rightward. Build with one eye on the evolution trajectory."
+/>
+
 ### Schema-on-Read vs Schema-on-Write
 
 Document databases are sometimes called "schemaless," but Kleppmann argues this is misleading. The code that reads the data always assumes some structure — there is an *implicit* schema. The real distinction is:
@@ -146,6 +169,21 @@ This is exactly why MongoDB later introduced the aggregation pipeline — a decl
     { Language: "Datalog", Paradigm: "Declarative (rule-based)", Optimization: "Rule engine", "Best For": "Recursive / composable queries" },
     { Language: "Gremlin", Paradigm: "Imperative", Optimization: "Traversal engine", "Best For": "Step-by-step graph exploration" },
   ]}
+/>
+
+<HeatGrid
+  title="query language fit by access pattern"
+  rows={["SQL", "Cypher", "SPARQL", "Datalog", "MapReduce", "Aggregation Pipeline"]}
+  cols={["Simple lookups", "Multi-table joins", "Variable-depth traversal", "Recursive rules", "Batch aggregation", "Parallel execution"]}
+  cells={[
+    ["yes", "yes", "partial", "partial", "no",      "yes"],
+    ["partial", "partial", "yes", "partial", "no",  "partial"],
+    ["partial", "partial", "yes", "yes",    "no",   "partial"],
+    ["partial", "partial", "yes", "yes",    "partial", "partial"],
+    ["no",  "no",  "no",  "no",  "yes",   "partial"],
+    ["yes", "yes", "partial", "partial", "yes",     "yes"],
+  ]}
+  caption="No query language excels at everything. SQL dominates joins and batch aggregation. Cypher/SPARQL own recursive graph traversal. Datalog excels at composable rule-based recursion."
 />
 
 ## <Label color="teal">5</Label> Graph-Like Data Models

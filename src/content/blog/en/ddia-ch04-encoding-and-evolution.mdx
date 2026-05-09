@@ -16,6 +16,8 @@ import DataTable from '../../../components/mdx/DataTable.astro';
 import Pipeline from '../../../components/mdx/Pipeline.astro';
 import CompareTable from '../../../components/mdx/CompareTable.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
+import HeatGrid from '../../../components/mdx/HeatGrid.astro';
+import SequenceDiagram from '../../../components/mdx/SequenceDiagram.astro';
 
 Every production system changes. Features ship, schemas evolve, services get new fields. The naive assumption — deploy everything at once, flip a flag — breaks the moment you have more than one server. Rolling upgrades mean old code and new code run simultaneously, reading and writing the same data. Chapter 4 is Kleppmann's argument that **encoding format is not an implementation detail** — it is a contract between every component that touches your data, and breaking that contract is one of the most common sources of production incidents.
 
@@ -80,6 +82,20 @@ The three dominant schema-first binary formats are Thrift (Facebook), Protocol B
     { label: "Compact binary encoding",    values: ["no",  "yes",     "yes",     "yes"] },
   ]}
   caption="Encoding format comparison. Avro's dynamic schema resolution makes it ideal for Hadoop and Kafka schemas stored in a registry."
+/>
+
+<HeatGrid
+  title="encoding format compatibility matrix"
+  rows={["JSON (no schema)", "JSON Schema", "Thrift", "Protocol Buffers", "Avro"]}
+  cols={["Backward compat", "Forward compat", "Compact binary", "No codegen needed", "Dynamic schema", "Human readable"]}
+  cells={[
+    ["no",  "no",  "no",  "yes", "yes", "yes"],
+    ["partial", "partial", "no", "yes", "no",  "yes"],
+    ["yes", "yes", "yes", "no",  "no",  "no"],
+    ["yes", "yes", "yes", "no",  "no",  "no"],
+    ["yes", "yes", "yes", "yes", "yes", "no"],
+  ]}
+  caption="Avro is the only format that combines compact binary, full compatibility guarantees, no codegen requirement, and dynamic schema resolution — at the cost of requiring a schema registry."
 />
 
 **Protocol Buffers and Thrift** use field tags (integer IDs) in the wire format instead of field names. This is key to evolution: when you add a new field, you assign it a new tag. Old code that doesn't know tag 15 simply skips it (forward compatibility). New code that expects tag 15 but doesn't see it uses the default value (backward compatibility). The rule: **you may add fields freely; you may never reuse an old tag number for a new field; you may only remove optional fields**.
@@ -169,6 +185,32 @@ For the entire duration of the rolling deploy — potentially hours — the data
 <FlowStep step="5" color="green" title="Deploy completes — all nodes on new version">
 All new records have new fields. Old records are still on disk with old format and will remain there until overwritten or explicitly migrated.
 </FlowStep>
+
+<SequenceDiagram
+  title="rolling upgrade — mixed-version coexistence"
+  actors={[
+    { label: "Node A (v2)",   color: "green" },
+    { label: "Database",      color: "blue" },
+    { label: "Node B (v1)",   color: "amber" },
+    { label: "Node C (v2)",   color: "green" },
+  ]}
+  messages={[
+    { divider: "phase 1 — v2 deployed to nodes A and C only" },
+    { from: "Node A (v2)", to: "Database", label: "WRITE: {name, email, avatar_url}", type: "request" },
+    { from: "Database",    to: "Node A (v2)", label: "ok",                            type: "response" },
+    { from: "Node B (v1)", to: "Database", label: "READ row written by v2",           type: "request" },
+    { from: "Database",    to: "Node B (v1)", label: "returns {name, email, avatar_url}", type: "response" },
+    { note: "Node B (v1) must IGNORE unknown 'avatar_url' field — forward compatibility required" },
+    { divider: "node B writes a row it read" },
+    { from: "Node B (v1)", to: "Database", label: "WRITE {name, email} (drops avatar_url!)", type: "error", highlight: true },
+    { note: "BUG: if ORM doesn't preserve unknown fields, avatar_url is silently lost" },
+    { divider: "phase 2 — all nodes upgraded to v2" },
+    { from: "Node C (v2)", to: "Database", label: "READ old row — avatar_url missing", type: "request" },
+    { from: "Database",    to: "Node C (v2)", label: "{name, email}",                  type: "response" },
+    { note: "Node C (v2) uses default for avatar_url — backward compatibility" },
+  ]}
+  caption="The silent data-loss bug (step 5) is the reason ORMs and serialisers must preserve unknown fields. Protobuf and Avro do this by design. Custom JSON deserialisers often don't."
+/>
 
 This is why "just update the schema and redeploy" is not a safe strategy. The system must tolerate mixed-version data at all times. Encoding formats that enforce this — Protobuf, Avro, Thrift — make the system safer. Encoding formats that don't — raw JSON, language serialisation — let mixed-version data silently corrupt your system.
 

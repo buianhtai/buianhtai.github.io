@@ -16,6 +16,8 @@ import DataTable from '../../../components/mdx/DataTable.astro';
 import Pipeline from '../../../components/mdx/Pipeline.astro';
 import CompareTable from '../../../components/mdx/CompareTable.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
+import SequenceDiagram from '../../../components/mdx/SequenceDiagram.astro';
+import HeatGrid from '../../../components/mdx/HeatGrid.astro';
 
 Chapter 8 is a deliberate exercise in pessimism. Kleppmann writes that experienced systems operators deal with "long-lived network partitions in a single data center, PDU failures, switch failures, accidental power cycles of whole racks, whole-DC backbone failures, whole-DC power failures, and a hypoglycemic driver smashing his Ford pickup truck into a DC's HVAC system." The point is not to terrify — it's to establish the actual failure model before Chapter 9 discusses how to build correct systems within it.
 
@@ -52,6 +54,33 @@ When you send a request and don't receive a response, you cannot distinguish bet
 A timeout tells you that you haven't received a response. It tells you nothing about whether the remote side received and processed your request. This asymmetry is the source of enormous complexity in distributed systems.
 </Callout>
 
+<SequenceDiagram
+  title="what a timeout tells you — three scenarios"
+  actors={[
+    { label: "Client",   color: "teal" },
+    { label: "Network",  color: "amber" },
+    { label: "Server",   color: "blue" },
+  ]}
+  messages={[
+    { divider: "scenario A — request lost" },
+    { from: "Client",  to: "Network", label: "request",          type: "request" },
+    { from: "Network", to: "Client",  label: "packet dropped",   type: "error" },
+    { note: "Server never received request. Operation did NOT execute. Safe to retry." },
+    { divider: "scenario B — server crashed mid-execution" },
+    { from: "Client",  to: "Network", label: "request",          type: "request" },
+    { from: "Network", to: "Server",  label: "request delivered",type: "request" },
+    { from: "Server",  to: "Network", label: "CRASH before response", type: "error" },
+    { note: "Server may have partially executed. State unknown. Retry may re-execute partially." },
+    { divider: "scenario C — response lost" },
+    { from: "Client",  to: "Network", label: "request",          type: "request" },
+    { from: "Network", to: "Server",  label: "request delivered",type: "request" },
+    { from: "Server",  to: "Network", label: "response",         type: "response" },
+    { from: "Network", to: "Client",  label: "response dropped", type: "error", highlight: true },
+    { note: "DANGER: operation FULLY EXECUTED. Retry = duplicate. Must use idempotency keys!" },
+  ]}
+  caption="All three scenarios look identical to the client: timeout. Only idempotent operations (safe to retry) or exactly-once protocols (idempotency keys, distributed transaction IDs) handle scenario C correctly."
+/>
+
 **Network failures in practice**: A study of medium-sized datacenters found ~12 network faults per month, half disconnecting a single machine and half disconnecting an entire rack. EC2 is well-known for transient network glitches. Even well-managed private datacenter networks experience routing reconfiguration events where packets are delayed for over a minute. Network links can work asymmetrically (inbound drops, outbound succeeds).
 
 **Choosing timeout values** is harder than it looks. Too long: slow failure detection, poor user experience during node failure. Too short: false positives that cause unnecessary failovers. Network round-trip times vary by orders of magnitude depending on load, network congestion, and VM scheduling. There is no single "right" timeout — it depends on the application's latency requirements and the acceptable rate of false positives.
@@ -73,6 +102,21 @@ Physical clocks in computers drift. A quartz oscillator drifts roughly 200ms per
     { "Failure Mode": "Virtualization", "Description": "CPU time is shared between VMs; a VM may be paused while another runs, making elapsed time appear very different from wall clock time", "Consequence": "VM thinks 1ms elapsed; actually 100ms passed; all timing assumptions wrong" },
     { "Failure Mode": "Network path to NTP server", "Description": "NTP synchronization latency is itself variable; synchronization accuracy is limited by network RTT", "Consequence": "Practical accuracy of synchronized clocks in datacenters: ~1ms; over WAN: ~100ms" },
   ]}
+/>
+
+<HeatGrid
+  title="clock type safety matrix"
+  rows={["Time-of-day clock", "Monotonic clock", "NTP-synced time-of-day", "Lamport timestamp", "Vector clock", "TrueTime (Spanner)"]}
+  cols={["Measure duration (local)", "Order events (single node)", "Order events (cross-node)", "Handles NTP jumps safely", "Causal ordering"]}
+  cells={[
+    ["no",  "partial", "no",  "no",  "no"],
+    ["yes", "yes",     "no",  "yes", "no"],
+    ["yes", "partial", "partial", "no", "no"],
+    ["no",  "yes",     "yes", "yes", "partial"],
+    ["no",  "yes",     "yes", "yes", "yes"],
+    ["yes", "yes",     "yes", "yes", "partial"],
+  ]}
+  caption="Use monotonic clocks for local duration measurement. For cross-node event ordering, use Lamport timestamps or vector clocks — never physical timestamps. TrueTime (specialized hardware) is the only physical clock safe for distributed ordering."
 />
 
 **Two types of clocks:**

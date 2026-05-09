@@ -1,0 +1,263 @@
+---
+/**
+ * StateMachine — Directed state transition diagram.
+ *
+ * Renders states as rounded boxes arranged in a grid, with labeled
+ * transition arrows between them. Supports initial/final/error state marking.
+ *
+ * Usage:
+ *   <StateMachine
+ *     states={[
+ *       { id: "follower",  label: "Follower",   sub: "receives heartbeats",  initial: true },
+ *       { id: "candidate", label: "Candidate",  sub: "requesting votes",     color: "amber" },
+ *       { id: "leader",    label: "Leader",     sub: "sends heartbeats",     color: "green" },
+ *     ]}
+ *     transitions={[
+ *       { from: "follower",  to: "candidate", label: "timeout — no heartbeat" },
+ *       { from: "candidate", to: "leader",    label: "majority votes" },
+ *       { from: "candidate", to: "follower",  label: "higher term seen", type: "back" },
+ *       { from: "leader",    to: "follower",  label: "higher term seen", type: "back" },
+ *     ]}
+ *     caption="Raft consensus node state machine"
+ *   />
+ *
+ * state.color: 'blue'|'teal'|'amber'|'rose'|'violet'|'green' (default: accent)
+ * transition.type: 'forward'|'back'|'self'|'error' (default: forward)
+ */
+
+interface State {
+  id: string;
+  label: string;
+  sub?: string;
+  initial?: boolean;
+  final?: boolean;
+  color?: string;
+  row?: number; // explicit row placement (1-based)
+  col?: number; // explicit column placement (1-based)
+}
+
+interface Transition {
+  from: string;
+  to: string;
+  label?: string;
+  type?: 'forward' | 'back' | 'self' | 'error';
+}
+
+interface Props {
+  states: State[];
+  transitions: Transition[];
+  caption?: string;
+  title?: string;
+  cols?: number; // grid columns (default: auto)
+}
+
+const { states, transitions, caption, title, cols } = Astro.props;
+
+const COLORS: Record<string, { border: string; bg: string; text: string }> = {
+  blue:   { border: 'var(--color-accent)',  bg: 'rgba(69,137,255,0.08)',   text: 'var(--color-accent)' },
+  teal:   { border: '#0ea5e9',              bg: 'rgba(14,165,233,0.08)',   text: '#0ea5e9' },
+  amber:  { border: '#f59e0b',              bg: 'rgba(245,158,11,0.08)',   text: '#f59e0b' },
+  rose:   { border: '#f43f5e',              bg: 'rgba(244,63,94,0.08)',    text: '#f43f5e' },
+  violet: { border: '#8b5cf6',              bg: 'rgba(139,92,246,0.08)',   text: '#8b5cf6' },
+  green:  { border: '#16a34a',              bg: 'rgba(22,163,74,0.08)',    text: '#16a34a' },
+};
+
+function stateColor(s: State) {
+  const c = s.color ?? 'blue';
+  return COLORS[c] ?? COLORS['blue'];
+}
+
+// Assign grid positions if not explicit
+const gridCols = cols ?? Math.ceil(Math.sqrt(states.length));
+states.forEach((s, i) => {
+  if (!s.row) s.row = Math.floor(i / gridCols) + 1;
+  if (!s.col) s.col = (i % gridCols) + 1;
+});
+const gridRows = Math.max(...states.map((s) => s.row!));
+---
+
+<div class="sm-wrap">
+  {title && <div class="sm-titlebar"><span class="sm-prompt">$</span> {title}</div>}
+
+  <div class="sm-body">
+    <!-- State grid -->
+    <div
+      class="sm-grid"
+      style={`grid-template-columns: repeat(${gridCols}, 1fr); grid-template-rows: repeat(${gridRows}, auto)`}
+    >
+      {states.map((s) => {
+        const c = stateColor(s);
+        return (
+          <div
+            class={`sm-state${s.initial ? ' sm-initial' : ''}${s.final ? ' sm-final' : ''}`}
+            id={`sm-s-${s.id}`}
+            style={`grid-row: ${s.row}; grid-column: ${s.col}; --sc-border: ${c.border}; --sc-bg: ${c.bg}; --sc-text: ${c.text}`}
+          >
+            {s.initial && <span class="sm-badge sm-badge-init">start</span>}
+            {s.final && <span class="sm-badge sm-badge-final">end</span>}
+            <div class="sm-state-label">{s.label}</div>
+            {s.sub && <div class="sm-state-sub">{s.sub}</div>}
+          </div>
+        );
+      })}
+    </div>
+
+    <!-- Transitions table below the grid -->
+    {transitions.length > 0 && (
+      <div class="sm-trans-section">
+        <div class="sm-trans-header">transitions</div>
+        <div class="sm-trans-list">
+          {transitions.map((t) => {
+            const fromState = states.find((s) => s.id === t.from);
+            const toState   = states.find((s) => s.id === t.to);
+            const typeClass = `sm-trans-${t.type ?? 'forward'}`;
+            return (
+              <div class={`sm-trans-row ${typeClass}`}>
+                <span class="sm-trans-from">{fromState?.label ?? t.from}</span>
+                <span class="sm-trans-arrow">
+                  {t.type === 'back'  ? '←' :
+                   t.type === 'self'  ? '↺' :
+                   t.type === 'error' ? '✕' : '→'}
+                </span>
+                <span class="sm-trans-to">{toState?.label ?? t.to}</span>
+                {t.label && <span class="sm-trans-label">{t.label}</span>}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    )}
+  </div>
+
+  {caption && <div class="sm-caption"><span class="sm-prompt">▶</span> {caption}</div>}
+</div>
+
+<style>
+  .sm-wrap {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    margin: 1.5rem 0;
+    overflow: hidden;
+    font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+  }
+
+  .sm-titlebar {
+    padding: 0.4rem 0.875rem;
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-surface-2);
+    font-size: 0.65rem;
+    color: var(--color-text-muted);
+  }
+  .sm-prompt { color: var(--color-accent); font-weight: 700; margin-right: 0.35rem; }
+
+  .sm-body { padding: 1.25rem; }
+
+  /* ── State grid ── */
+  .sm-grid {
+    display: grid;
+    gap: 1.5rem 2rem;
+    margin-bottom: 1rem;
+  }
+
+  .sm-state {
+    position: relative;
+    padding: 0.65rem 0.875rem 0.6rem;
+    border: 1.5px solid var(--sc-border);
+    border-radius: 6px;
+    background: var(--sc-bg);
+    text-align: center;
+  }
+
+  .sm-initial { border-style: solid; }
+  .sm-final   { border-style: double; border-width: 3px; }
+
+  .sm-badge {
+    position: absolute;
+    top: -0.55rem;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.5rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.05rem 0.3rem;
+    border-radius: 2px;
+    white-space: nowrap;
+  }
+  .sm-badge-init  { background: var(--color-accent);  color: var(--color-bg); }
+  .sm-badge-final { background: #16a34a; color: #fff; }
+
+  .sm-state-label {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--sc-text);
+    letter-spacing: 0.01em;
+  }
+
+  .sm-state-sub {
+    font-size: 0.6rem;
+    color: var(--color-text-muted);
+    margin-top: 0.2rem;
+    line-height: 1.3;
+  }
+
+  /* ── Transitions list ── */
+  .sm-trans-section {
+    border-top: 1px solid var(--color-border);
+    padding-top: 0.75rem;
+    margin-top: 0.5rem;
+  }
+
+  .sm-trans-header {
+    font-size: 0.58rem;
+    color: var(--color-text-muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 0.4rem;
+  }
+
+  .sm-trans-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+
+  .sm-trans-row {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr 2fr;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.67rem;
+    border-radius: 2px;
+  }
+
+  .sm-trans-row:hover { background: var(--color-surface-2); }
+
+  .sm-trans-from { color: var(--color-text-dim); text-align: right; }
+  .sm-trans-to   { color: var(--color-text-dim); }
+
+  .sm-trans-arrow {
+    font-size: 0.8rem;
+    color: var(--color-accent);
+    text-align: center;
+  }
+  .sm-trans-back  .sm-trans-arrow { color: var(--color-text-muted); }
+  .sm-trans-error .sm-trans-arrow { color: #f43f5e; }
+  .sm-trans-self  .sm-trans-arrow { color: #8b5cf6; }
+
+  .sm-trans-label {
+    color: var(--color-text-muted);
+    font-size: 0.6rem;
+    font-style: italic;
+  }
+
+  /* ── Caption ── */
+  .sm-caption {
+    padding: 0.45rem 0.875rem;
+    border-top: 1px solid var(--color-border);
+    font-size: 0.62rem;
+    color: var(--color-text-dim);
+    background: var(--color-bg);
+    line-height: 1.5;
+  }
+</style>

@@ -16,6 +16,7 @@ import DataTable from '../../../components/mdx/DataTable.astro';
 import Pipeline from '../../../components/mdx/Pipeline.astro';
 import CompareTable from '../../../components/mdx/CompareTable.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
+import HeatGrid from '../../../components/mdx/HeatGrid.astro';
 
 Replication gives you multiple copies of the same data on different machines. Partitioning gives you different data on different machines. When your dataset outgrows a single node — in storage, query throughput, or both — partitioning (also called sharding) is the only path to horizontal scalability. Chapter 6 is Kleppmann's analysis of the tradeoffs: any partitioning scheme that works well for one access pattern works poorly for another, and the most common mistake is choosing a partition key without thinking about which queries that choice makes fast and which it makes impossible.
 
@@ -78,6 +79,21 @@ Cassandra addresses this with **compound partition keys**: the first part of the
     { label: "Compound key range within partition", values: ["yes", "partial"] },
   ]}
   caption="Key-range wins on range queries; hash wins on write distribution. Most real systems (Cassandra, DynamoDB) use hash partitioning with compound keys to recover some range-query ability."
+/>
+
+<HeatGrid
+  title="write load distribution — key-range vs hash partitioning"
+  rows={["Key-Range: timestamp key (IoT stream)", "Key-Range: user_id (balanced)", "Hash: timestamp key", "Hash: user_id", "Hash + compound: sensor_id + timestamp"]}
+  cols={["Partition 1", "Partition 2", "Partition 3", "Partition 4", "Partition 5"]}
+  cells={[
+    [{ value: "99%", heat: 0.99 }, { value: "1%", heat: 0.01 }, { value: "0%", heat: 0.0 }, { value: "0%", heat: 0.0 }, { value: "0%", heat: 0.0 }],
+    [{ value: "20%", heat: 0.2 },  { value: "19%", heat: 0.19 }, { value: "22%", heat: 0.22 }, { value: "18%", heat: 0.18 }, { value: "21%", heat: 0.21 }],
+    [{ value: "21%", heat: 0.21 }, { value: "20%", heat: 0.2 }, { value: "19%", heat: 0.19 }, { value: "21%", heat: 0.21 }, { value: "19%", heat: 0.19 }],
+    [{ value: "20%", heat: 0.2 },  { value: "21%", heat: 0.21 }, { value: "19%", heat: 0.19 }, { value: "20%", heat: 0.2 }, { value: "20%", heat: 0.2 }],
+    [{ value: "20%", heat: 0.2 },  { value: "20%", heat: 0.2 }, { value: "20%", heat: 0.2 }, { value: "20%", heat: 0.2 }, { value: "20%", heat: 0.2 }],
+  ]}
+  mode="heat"
+  caption="Key-range partitioning on a timestamp key creates a catastrophic hot spot (99% of writes → partition 1). Hashing distributes load uniformly. Compound partition keys (sensor_id hashed, timestamp sorted within) recover range-query ability per sensor while keeping load even."
 />
 
 **Relieving hot spots on very popular keys:** Even with hash partitioning, a single very popular key (a celebrity's user ID, a viral post) will saturate one partition. The standard mitigation: add a random suffix to the key (e.g. append a random number 0–99, creating 100 sub-keys). Writes distribute across 100 partitions. Reads must be scattered to all 100 and merged. This trades read complexity for write availability — only worthwhile for genuinely extreme hot spots.

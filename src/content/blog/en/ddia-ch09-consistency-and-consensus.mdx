@@ -16,6 +16,8 @@ import DataTable from '../../../components/mdx/DataTable.astro';
 import Pipeline from '../../../components/mdx/Pipeline.astro';
 import CompareTable from '../../../components/mdx/CompareTable.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
+import SequenceDiagram from '../../../components/mdx/SequenceDiagram.astro';
+import StateMachine from '../../../components/mdx/StateMachine.astro';
 
 Chapter 8 catalogued everything that can go wrong. Chapter 9 asks: given all those failure modes, what can we actually guarantee, and how? The central topic is **consensus** — getting all nodes to agree on a single value despite node crashes and network failures. Consensus sounds like one problem but it turns out to underlie leader election, atomic commit, total order broadcast, and distributed locking. Solve consensus, and many other problems become tractable.
 
@@ -60,6 +62,26 @@ A database can be serializable but not linearizable (e.g., snapshot isolation wi
     { "Use Case": "Shopping cart", "Linearizability Required?": "No", "Reason": "Add-to-cart operations can be merged; eventual consistency acceptable" },
     { "Use Case": "Bank balance check", "Linearizability Required?": "Depends", "Reason": "Reading your own balance needs read-your-writes; checking whether funds are available before transfer needs linearizability" },
   ]}
+/>
+
+<SequenceDiagram
+  title="linearizability violation — world cup example"
+  actors={[
+    { label: "Alice",         color: "teal" },
+    { label: "Replica A (up-to-date)", color: "blue" },
+    { label: "Replica B (lagging)",    color: "amber" },
+    { label: "Bob",           color: "green" },
+  ]}
+  messages={[
+    { from: "Alice",  to: "Replica A (up-to-date)", label: "write: result = 'Germany wins'", type: "request" },
+    { from: "Replica A (up-to-date)", to: "Alice",  label: "ack — write committed",          type: "response" },
+    { from: "Alice",  to: "Bob",                    label: "(phone call) 'Germany won!'",     type: "async" },
+    { from: "Bob",    to: "Replica B (lagging)",    label: "GET /match-result",               type: "request" },
+    { from: "Replica B (lagging)", to: "Bob",       label: "'game still in progress'",        type: "error", highlight: true },
+    { note: "Linearizability violation: Bob's read started AFTER Alice's write completed, but sees stale data." },
+    { note: "Fix: linearizable reads must go through leader, or replica must wait until caught up." },
+  ]}
+  caption="Kleppmann's World Cup example. Bob's read starts after Alice's write successfully committed. A linearizable system must return 'Germany wins' — but a lagging replica returns stale data. This is not linearizable."
 />
 
 **The cost of linearizability**: any system that provides linearizability must coordinate every read and write through a single leader or a consensus protocol. This coordination introduces latency proportional to network RTT and becomes unavailable when the network partitions (by the CAP theorem). Single-leader replication with synchronous reads from the leader is linearizable, but the leader becomes a bottleneck.
@@ -152,6 +174,24 @@ Real consensus algorithms don't directly implement the single-value consensus fo
     { Algorithm: "Zab", "Epoch term": "epoch", Mechanism: "Zookeeper Atomic Broadcast; similar to Paxos but optimized for primary-backup replication; supports recovery protocol", "Notable use": "Apache ZooKeeper" },
     { Algorithm: "Viewstamped Replication", "Epoch term": "view number", Mechanism: "Replicated state machine; primary/backup; view change protocol for leader failure", "Notable use": "Foundation of many distributed systems research" },
   ]}
+/>
+
+<StateMachine
+  title="raft consensus — node state machine"
+  cols={3}
+  states={[
+    { id: "follower",  label: "Follower",   sub: "receives heartbeats; applies log", color: "teal",  row: 1, col: 2, initial: true },
+    { id: "candidate", label: "Candidate",  sub: "requests votes; increments term",  color: "amber", row: 2, col: 1 },
+    { id: "leader",    label: "Leader",     sub: "sends heartbeats; replicates log", color: "green", row: 2, col: 3, final: true },
+  ]}
+  transitions={[
+    { from: "follower",  to: "candidate", label: "election timeout — no heartbeat" },
+    { from: "candidate", to: "leader",    label: "majority votes received" },
+    { from: "candidate", to: "follower",  label: "higher term seen", type: "back" },
+    { from: "leader",    to: "follower",  label: "higher term seen", type: "back" },
+    { from: "candidate", to: "candidate", label: "split vote — restart", type: "self" },
+  ]}
+  caption="Raft node state machine. A follower that receives no heartbeat within the election timeout becomes a candidate. Winning a majority vote makes it leader. Seeing a higher term from any other node immediately reverts any node to follower — preventing split-brain."
 />
 
 **Total order broadcast ↔ consensus equivalence:**

@@ -1,0 +1,382 @@
+---
+/**
+ * SequenceDiagram — Time-ordered message exchange between named actors.
+ *
+ * Renders a horizontal swimlane diagram with actors as columns and messages
+ * as horizontal arrows (or self-arrows) on a shared time axis.
+ *
+ * Usage:
+ *   <SequenceDiagram
+ *     actors={["Client", "Leader", "Follower 1", "Follower 2"]}
+ *     messages={[
+ *       { from: "Client",   to: "Leader",     label: "write(x=1)",   type: "request" },
+ *       { from: "Leader",   to: "Follower 1", label: "replicate",    type: "async" },
+ *       { from: "Leader",   to: "Follower 2", label: "replicate",    type: "async" },
+ *       { from: "Leader",   to: "Client",     label: "ack",          type: "response" },
+ *       { note: "Follower 2 lags — replication lag begins" },
+ *     ]}
+ *     caption="Semi-synchronous single-leader replication"
+ *   />
+ *
+ * message.type:
+ *   "request"  — solid arrow (→)
+ *   "response" — dashed arrow (--→)
+ *   "async"    — dotted arrow (···→)
+ *   "error"    — red arrow
+ * A message with only `note` renders as a full-width annotation row.
+ * A message with `activate: actor` highlights that actor's lifeline.
+ */
+
+interface Actor {
+  id?: string;
+  label: string;
+  color?: string; // optional per-actor accent: 'blue'|'teal'|'amber'|'rose'|'violet'|'green'
+}
+
+interface Message {
+  from?: string;
+  to?: string;
+  label?: string;
+  type?: 'request' | 'response' | 'async' | 'error' | 'self';
+  note?: string;        // full-width annotation row
+  divider?: string;     // section break with label
+  highlight?: boolean;  // highlight this row
+}
+
+interface Props {
+  actors: (string | Actor)[];
+  messages: Message[];
+  caption?: string;
+  title?: string;
+}
+
+const { actors: rawActors, messages, caption, title } = Astro.props;
+
+// Normalize actors to Actor objects
+const actors: Actor[] = rawActors.map((a) =>
+  typeof a === 'string' ? { label: a } : a
+);
+
+const actorIds = actors.map((a) => a.id ?? a.label);
+
+function actorIndex(name: string | undefined): number {
+  if (!name) return -1;
+  return actorIds.indexOf(name);
+}
+
+const COLORS: Record<string, string> = {
+  blue:   'var(--color-accent)',
+  teal:   '#0ea5e9',
+  amber:  '#f59e0b',
+  rose:   '#f43f5e',
+  violet: '#8b5cf6',
+  green:  '#16a34a',
+};
+
+function actorColor(a: Actor): string {
+  return a.color ? (COLORS[a.color] ?? a.color) : 'var(--color-accent)';
+}
+
+const N = actors.length;
+---
+
+<div class="sd-wrap">
+  {title && <div class="sd-titlebar"><span class="sd-prompt">$</span> {title}</div>}
+
+  <div class="sd-scroll">
+    <div class="sd-inner" style={`--sd-cols: ${N}`}>
+      <!-- Actor headers -->
+      <div class="sd-header-row">
+        {actors.map((a, i) => (
+          <div class="sd-actor-cell" style={`grid-column: ${i + 1}; --actor-color: ${actorColor(a)}`}>
+            <div class="sd-actor-box">{a.label}</div>
+            <div class="sd-lifeline-top"></div>
+          </div>
+        ))}
+      </div>
+
+      <!-- Messages -->
+      {messages.map((msg, mi) => {
+        if (msg.note) {
+          return (
+            <div class="sd-note-row" style={`grid-column: 1 / span ${N}`}>
+              <span class="sd-note-icon">◆</span>
+              <span class="sd-note-text">{msg.note}</span>
+            </div>
+          );
+        }
+        if (msg.divider) {
+          return (
+            <div class="sd-divider-row" style={`grid-column: 1 / span ${N}`}>
+              <span class="sd-divider-label">{msg.divider}</span>
+            </div>
+          );
+        }
+        const fi = actorIndex(msg.from);
+        const ti = actorIndex(msg.to);
+        const isSelf = msg.type === 'self' || fi === ti;
+        const leftCol  = isSelf ? fi + 1 : Math.min(fi, ti) + 1;
+        const rightCol = isSelf ? fi + 2 : Math.max(fi, ti) + 2;
+        const arrowRight = isSelf ? true : fi < ti;
+        const typeClass = `sd-arrow-${msg.type ?? 'request'}`;
+        const hlClass = msg.highlight ? ' sd-row-highlight' : '';
+
+        return (
+          <div class={`sd-msg-row${hlClass}`} style={`grid-column: 1 / span ${N}`}>
+            {/* Lifeline segments for each actor column */}
+            {actors.map((_, ci) => (
+              <div class="sd-lifeline-seg" style={`grid-column: ${ci + 1}`}></div>
+            ))}
+            {/* Arrow overlay */}
+            <div
+              class={`sd-arrow ${typeClass}${arrowRight ? ' sd-arrow-right' : ' sd-arrow-left'}${isSelf ? ' sd-arrow-self' : ''}`}
+              style={`--arr-left: ${(leftCol - 1) / N * 100}%; --arr-width: ${(rightCol - leftCol) / N * 100}%`}
+            >
+              <span class="sd-arrow-label">{msg.label}</span>
+              <span class="sd-arrow-line"></span>
+            </div>
+          </div>
+        );
+      })}
+
+      <!-- Lifeline footers (actor labels repeated) -->
+      <div class="sd-footer-row">
+        {actors.map((a, i) => (
+          <div class="sd-actor-foot" style={`grid-column: ${i + 1}; --actor-color: ${actorColor(a)}`}>
+            <div class="sd-lifeline-bot"></div>
+            <div class="sd-actor-box">{a.label}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+
+  {caption && <div class="sd-caption"><span class="sd-prompt">▶</span> {caption}</div>}
+</div>
+
+<style>
+  .sd-wrap {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    margin: 1.5rem 0;
+    overflow: hidden;
+    font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+  }
+
+  .sd-titlebar {
+    padding: 0.4rem 0.875rem;
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-surface-2);
+    font-size: 0.65rem;
+    color: var(--color-text-muted);
+  }
+  .sd-prompt { color: var(--color-accent); font-weight: 700; margin-right: 0.35rem; }
+
+  .sd-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .sd-inner {
+    display: grid;
+    grid-template-columns: repeat(var(--sd-cols), 1fr);
+    min-width: calc(var(--sd-cols) * 7rem);
+    padding: 0;
+    position: relative;
+  }
+
+  /* ── Actor headers ── */
+  .sd-header-row,
+  .sd-footer-row {
+    display: contents;
+  }
+
+  .sd-actor-cell,
+  .sd-actor-foot {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .sd-actor-box {
+    padding: 0.3rem 0.6rem;
+    border: 1px solid var(--actor-color, var(--color-accent));
+    background: var(--color-surface-2);
+    color: var(--actor-color, var(--color-accent));
+    font-size: 0.68rem;
+    font-weight: 700;
+    white-space: nowrap;
+    letter-spacing: 0.02em;
+    text-align: center;
+    width: 80%;
+    box-sizing: border-box;
+  }
+
+  .sd-lifeline-top,
+  .sd-lifeline-bot {
+    width: 1px;
+    height: 0.75rem;
+    background: var(--color-border);
+  }
+
+  /* ── Message rows ── */
+  .sd-msg-row {
+    display: grid;
+    grid-template-columns: repeat(var(--sd-cols), 1fr);
+    min-height: 2.6rem;
+    position: relative;
+  }
+
+  .sd-row-highlight {
+    background: var(--color-accent-glow, rgba(69,137,255,0.06));
+  }
+
+  .sd-lifeline-seg {
+    border-right: 1px dashed var(--color-border);
+    min-height: 2.6rem;
+  }
+
+  /* ── Arrows ── */
+  .sd-arrow {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    left: var(--arr-left);
+    width: var(--arr-width);
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    pointer-events: none;
+    padding: 0 0.5rem;
+    box-sizing: border-box;
+  }
+
+  .sd-arrow-label {
+    font-size: 0.6rem;
+    color: var(--color-text-dim);
+    text-align: center;
+    white-space: nowrap;
+    margin-bottom: 0.1rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .sd-arrow-line {
+    display: block;
+    height: 1px;
+    background: var(--color-accent);
+    position: relative;
+  }
+
+  /* Arrowhead right */
+  .sd-arrow-right .sd-arrow-line::after {
+    content: '';
+    position: absolute;
+    right: -1px;
+    top: -4px;
+    border: 4px solid transparent;
+    border-left: 7px solid var(--color-accent);
+  }
+
+  /* Arrowhead left */
+  .sd-arrow-left .sd-arrow-line::before {
+    content: '';
+    position: absolute;
+    left: -1px;
+    top: -4px;
+    border: 4px solid transparent;
+    border-right: 7px solid var(--color-accent);
+  }
+
+  /* Response — dashed */
+  .sd-arrow-response .sd-arrow-line {
+    background: repeating-linear-gradient(
+      to right,
+      var(--color-accent) 0, var(--color-accent) 5px,
+      transparent 5px, transparent 9px
+    );
+    height: 1px;
+  }
+  .sd-arrow-response .sd-arrow-line::after {
+    border-left-color: var(--color-accent);
+  }
+
+  /* Async — dotted, dimmer */
+  .sd-arrow-async .sd-arrow-line {
+    background: repeating-linear-gradient(
+      to right,
+      var(--color-text-muted) 0, var(--color-text-muted) 2px,
+      transparent 2px, transparent 6px
+    );
+  }
+  .sd-arrow-async .sd-arrow-line::after {
+    border-left-color: var(--color-text-muted);
+  }
+  .sd-arrow-async .sd-arrow-label { color: var(--color-text-muted); }
+
+  /* Error — red */
+  .sd-arrow-error .sd-arrow-line { background: #f43f5e; }
+  .sd-arrow-error .sd-arrow-line::after { border-left-color: #f43f5e; }
+  .sd-arrow-error .sd-arrow-label { color: #f43f5e; }
+
+  /* Self-arrow (same column) */
+  .sd-arrow-self .sd-arrow-line {
+    height: 0;
+    border-top: 1px solid var(--color-accent);
+    border-right: 1px solid var(--color-accent);
+    border-bottom: 1px solid var(--color-accent);
+    background: none;
+    min-height: 1.2rem;
+    width: 60%;
+  }
+  .sd-arrow-self .sd-arrow-line::after {
+    top: auto;
+    bottom: -4px;
+    right: -1px;
+  }
+
+  /* ── Note row ── */
+  .sd-note-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.875rem;
+    background: var(--color-surface-2);
+    border-top: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--color-border);
+    font-size: 0.63rem;
+    color: var(--color-text-dim);
+  }
+  .sd-note-icon { color: var(--color-accent); font-size: 0.55rem; flex-shrink: 0; }
+  .sd-note-text { font-style: italic; }
+
+  /* ── Divider row ── */
+  .sd-divider-row {
+    display: flex;
+    align-items: center;
+    padding: 0.2rem 0.875rem;
+    gap: 0.5rem;
+    font-size: 0.6rem;
+    color: var(--color-text-muted);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .sd-divider-row::before,
+  .sd-divider-row::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--color-border);
+  }
+  .sd-divider-label { white-space: nowrap; }
+
+  /* ── Caption ── */
+  .sd-caption {
+    padding: 0.45rem 0.875rem;
+    border-top: 1px solid var(--color-border);
+    font-size: 0.62rem;
+    color: var(--color-text-dim);
+    background: var(--color-bg);
+    line-height: 1.5;
+  }
+</style>
