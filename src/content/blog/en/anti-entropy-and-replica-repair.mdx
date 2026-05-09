@@ -14,6 +14,8 @@ import Label from '../../../components/mdx/Label.astro';
 import HeroGrid from '../../../components/mdx/HeroGrid.astro';
 import Callout from '../../../components/mdx/Callout.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
+import ArchDiagram from '../../../components/mdx/ArchDiagram.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
 
 In eventually consistent systems, replicas are allowed to temporarily diverge. Anti-entropy is the collection of mechanisms that bring them back into sync.
 
@@ -79,6 +81,31 @@ To compare two replicas' states, they exchange only their root hashes. If the ro
 
 This reduces the data needed to detect divergence from O(dataset size) to O(log N × hash size). For a dataset with millions of records, comparing Merkle tree roots takes microseconds vs. hours for a full scan.
 
+<ArchDiagram
+  title="Merkle tree anti-entropy — isolate divergent ranges"
+  zones={[
+    { id: "replica_a", label: "Replica A", color: "teal" },
+    { id: "replica_b", label: "Replica B", color: "amber" },
+  ]}
+  nodes={[
+    { id: "ra_root", label: "Root Hash", sub: "H(H1a + H2a)\nabc123...", zone: "replica_a", row: 1, col: 1, color: "teal" },
+    { id: "ra_h1", label: "H1a", sub: "hash(keys 0–511)\nabc...", zone: "replica_a", row: 2, col: 1 },
+    { id: "ra_h2", label: "H2a", sub: "hash(keys 512–1023)\n789...", zone: "replica_a", row: 2, col: 2 },
+    { id: "rb_root", label: "Root Hash", sub: "H(H1b + H2b)\ndef456... ≠ abc123", zone: "replica_b", row: 1, col: 1, color: "amber" },
+    { id: "rb_h1", label: "H1b", sub: "hash(keys 0–511)\nabc... ✓ MATCH", zone: "replica_b", row: 2, col: 1, color: "green" },
+    { id: "rb_h2", label: "H2b", sub: "hash(keys 512–1023)\nXXX... ✗ MISMATCH", zone: "replica_b", row: 2, col: 2, color: "rose" },
+  ]}
+  edges={[
+    { from: "ra_root", to: "ra_h1", label: "", type: "solid" },
+    { from: "ra_root", to: "ra_h2", label: "", type: "solid" },
+    { from: "rb_root", to: "rb_h1", label: "", type: "solid" },
+    { from: "rb_root", to: "rb_h2", label: "", type: "solid" },
+    { from: "ra_root", to: "rb_root", label: "compare roots", type: "dashed" },
+    { from: "ra_h2", to: "rb_h2", label: "divergence here", type: "dashed" },
+  ]}
+  caption="Comparing root hashes reveals divergence in O(1). Descending only into mismatching subtrees isolates the exact key range that differs in O(log N) steps, sending only that range for repair instead of the full dataset."
+/>
+
 <Callout color="teal">
 Apache Cassandra uses Merkle trees for its anti-entropy repair process. The `nodetool repair` command triggers a full Merkle tree comparison between replicas for all data ranges, then streams the missing data. For large clusters with infrequent failures, Merkle trees make this process feasible.
 </Callout>
@@ -126,3 +153,10 @@ Gossip protocols (also called epidemic protocols) spread information through a c
 - **Failure information**: which nodes are suspected dead (SWIM protocol)
 - **Schema changes**: distributed DDL propagation
 - **Load information**: per-node statistics for query routing
+
+<FlowStep steps={[
+  { title: "Round 0 — seed node has new information", body: "One node (the seed) has a state update: a failure notification, a schema change, or a membership event. It selects k random peers (fanout k, typically 2–4) and sends the update to each. The seed is now 'infected'." },
+  { title: "Round 1 — O(k) nodes infected", body: "Each newly informed node repeats the process: select k random peers, forward the update. Nodes that already have the update discard it (idempotent). After round 1, up to k newly-informed nodes each spread to k more — exponential growth." },
+  { title: "Round O(log_k N) — full coverage", body: "After O(log_k N) rounds, all N nodes are informed with high probability. With N=1000 and k=3, this takes ~6 rounds. The expected total message count is O(N log N) — each node sends only k messages per round regardless of total cluster size." },
+  { title: "Resilience through redundancy", body: "If a node crashes mid-round or a network link fails, its recipients already have the update and continue propagating via other paths. The epidemic model means there is no single point of failure — the information travels through multiple independent paths simultaneously, reaching every reachable node." },
+]} />

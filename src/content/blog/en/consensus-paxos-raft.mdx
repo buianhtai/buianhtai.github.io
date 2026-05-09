@@ -15,6 +15,7 @@ import HeroGrid from '../../../components/mdx/HeroGrid.astro';
 import Callout from '../../../components/mdx/Callout.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
 import LayerStack from '../../../components/mdx/LayerStack.astro';
+import SequenceDiagram from '../../../components/mdx/SequenceDiagram.astro';
 
 Consensus is the problem that unifies everything in distributed systems: how do multiple processes agree on a single value, even when some may fail?
 
@@ -86,6 +87,26 @@ Paxos (Lamport, 1989) is the foundational consensus algorithm. Despite its theor
 Paxos correctness: any two quorums overlap by at least one member. If a value V was chosen in Phase 2 of an earlier round, any subsequent Phase 1 that touches a quorum will see V from the overlapping acceptor and must re-propose V. This prevents two different values from being chosen in different rounds.
 </Callout>
 
+<SequenceDiagram
+  title="Paxos — Prepare (Phase 1) then Accept (Phase 2)"
+  actors={["Proposer", "Acceptor A", "Acceptor B", "Acceptor C"]}
+  messages={[
+    { from: "Proposer", to: "Acceptor A", label: "PREPARE(N=7)" },
+    { from: "Proposer", to: "Acceptor B", label: "PREPARE(N=7)" },
+    { from: "Proposer", to: "Acceptor C", label: "PREPARE(N=7)" },
+    { from: "Acceptor A", to: "Proposer", label: "PROMISE(N=7, no prior value)" },
+    { from: "Acceptor B", to: "Proposer", label: "PROMISE(N=7, no prior value)" },
+    { from: "Acceptor C", to: "Proposer", label: "PROMISE(N=7, no prior value)" },
+    { from: "Proposer", to: "Proposer", label: "quorum reached — choose value V" },
+    { from: "Proposer", to: "Acceptor A", label: "ACCEPT(N=7, V)" },
+    { from: "Proposer", to: "Acceptor B", label: "ACCEPT(N=7, V)" },
+    { from: "Proposer", to: "Acceptor C", label: "ACCEPT(N=7, V)" },
+    { from: "Acceptor A", to: "Proposer", label: "ACCEPTED(N=7, V)" },
+    { from: "Acceptor B", to: "Proposer", label: "ACCEPTED(N=7, V)" },
+    { from: "Proposer", to: "Proposer", label: "majority accepted — value V is CHOSEN" },
+  ]}
+/>
+
 **Paxos variants**:
 - **Fast Paxos**: clients propose directly to acceptors (bypassing leader for first round), reducing latency by one round-trip in the common case
 - **Egalitarian Paxos (EPaxos)**: eliminates the single leader bottleneck by allowing any replica to act as leader for non-conflicting commands
@@ -120,6 +141,25 @@ Raft (Ongaro and Ousterhout, 2014) was designed specifically for **understandabi
     { tag: "L3", color: "amber", title: "Candidates (transient)",  items: ["State between follower and leader during election", "Request votes from all peers", "Return to follower if higher-term leader is discovered", "Become leader if majority vote received"] },
   ]}
   caption="Raft's three server states. Each server is always in exactly one state."
+/>
+
+<SequenceDiagram
+  title="Raft log replication — leader to followers"
+  actors={["Client", "Leader (term 3)", "Follower 1", "Follower 2"]}
+  messages={[
+    { from: "Client", to: "Leader (term 3)", label: "SET x=42" },
+    { from: "Leader (term 3)", to: "Leader (term 3)", label: "append entry [index=8, term=3, x=42] — uncommitted" },
+    { from: "Leader (term 3)", to: "Follower 1", label: "AppendEntries(term=3, index=8, entry=x=42, commitIdx=7)" },
+    { from: "Leader (term 3)", to: "Follower 2", label: "AppendEntries(term=3, index=8, entry=x=42, commitIdx=7)" },
+    { from: "Follower 1", to: "Follower 1", label: "append [index=8] to local log" },
+    { from: "Follower 2", to: "Follower 2", label: "append [index=8] to local log" },
+    { from: "Follower 1", to: "Leader (term 3)", label: "ACK success (matchIndex=8)" },
+    { from: "Follower 2", to: "Leader (term 3)", label: "ACK success (matchIndex=8)" },
+    { from: "Leader (term 3)", to: "Leader (term 3)", label: "majority ACKed — commit index → 8, apply x=42" },
+    { from: "Leader (term 3)", to: "Client", label: "OK — write committed" },
+    { from: "Leader (term 3)", to: "Follower 1", label: "next AppendEntries: commitIdx=8 (followers commit)" },
+    { from: "Leader (term 3)", to: "Follower 2", label: "next AppendEntries: commitIdx=8 (followers commit)" },
+  ]}
 />
 
 ---

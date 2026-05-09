@@ -15,6 +15,7 @@ import HeroGrid from '../../../components/mdx/HeroGrid.astro';
 import Callout from '../../../components/mdx/Callout.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
+import ArchDiagram from '../../../components/mdx/ArchDiagram.astro';
 
 Here is something most application developers never think about: in memory, you call `malloc`, get a pointer, write to it, and the runtime handles the rest. On disk, you have only `read` and `write` at byte offsets. There is no dynamic allocation. There is no garbage collector. You manage your own heap within fixed-size pages.
 
@@ -122,6 +123,30 @@ The slotted page format is the standard solution to variable-size cell managemen
 ]} />
 
 The key insight: the slot array gives stable O(1) access to any cell by slot index, even as cells are deleted and the page becomes fragmented. The physical position of a cell changes during compaction, but its slot index does not.
+
+<ArchDiagram
+  title="Slotted page memory layout"
+  zones={[
+    { id: "header-zone", label: "Page Header", color: "teal" },
+    { id: "slot-zone", label: "Slot Array (grows →)", color: "amber" },
+    { id: "free-zone", label: "Free Space", color: "green" },
+    { id: "cell-zone", label: "Cell Data (← grows)", color: "rose" },
+  ]}
+  nodes={[
+    { id: "hdr", label: "Page Header", sub: "page ID · type · cell count\nfree space offset · checksum", zone: "header-zone", row: 1, col: 1, color: "teal" },
+    { id: "slot1", label: "Slot 1", sub: "offset=4080\nlength=24", zone: "slot-zone", row: 1, col: 1, color: "amber" },
+    { id: "slot2", label: "Slot 2", sub: "offset=4052\nlength=28", zone: "slot-zone", row: 1, col: 2, color: "amber" },
+    { id: "slot3", label: "Slot 3 (freed)", sub: "offset=0\nlength=0", zone: "slot-zone", row: 1, col: 3, color: "amber" },
+    { id: "free", label: "Free Space", sub: "available bytes\nbetween array tail\nand last cell", zone: "free-zone", row: 1, col: 1, color: "green" },
+    { id: "cell2", label: "Cell 2", sub: "key + value bytes\n(28 bytes)", zone: "cell-zone", row: 1, col: 1, color: "rose" },
+    { id: "cell1", label: "Cell 1", sub: "key + value bytes\n(24 bytes)", zone: "cell-zone", row: 1, col: 2, color: "rose" },
+  ]}
+  edges={[
+    { from: "slot1", to: "cell1", label: "offset ptr", type: "dashed" },
+    { from: "slot2", to: "cell2", label: "offset ptr", type: "dashed" },
+  ]}
+  caption="The slot array at the top grows rightward; cells are appended from the bottom upward. Deleting a record zeros its slot entry but leaves the cell bytes in place — the freed space appears as a gap within the cell region. When fragmentation prevents a new cell from fitting despite sufficient total free bytes, the engine compacts by sliding all live cells together and rewriting the slot offsets, without changing slot indices."
+/>
 
 ---
 

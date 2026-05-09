@@ -14,6 +14,8 @@ import Label from '../../../components/mdx/Label.astro';
 import HeroGrid from '../../../components/mdx/HeroGrid.astro';
 import Callout from '../../../components/mdx/Callout.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import SequenceDiagram from '../../../components/mdx/SequenceDiagram.astro';
 
 > If a tree falls in a forest and no one is around to hear it, does it make a sound?
 
@@ -88,6 +90,12 @@ Rather than triggering failure at a fixed timeout, applications can set their ow
 
 **Key advantage**: the algorithm automatically adapts to changing network conditions. In a network with high variance in latency, the failure detector widens its thresholds automatically. This is what Apache Cassandra uses for its failure detection.
 
+<FlowStep steps={[
+  { title: "Heartbeat ping-timeout — fixed threshold", body: "P1 sends a ping to P2 every T seconds. If no reply arrives within deadline D, P2 is marked suspected. Simple to implement; the weakness is that D must be statically configured. Under network load spikes or GC pauses, legitimate delays exceed D and healthy nodes are incorrectly suspected. Requires careful manual tuning per deployment environment." },
+  { title: "Phi-accrual — statistical suspicion score", body: "The failure detector samples the inter-arrival times of heartbeats from P2 and fits a distribution (typically exponential or normal). φ(t) is the negative log probability that a heartbeat arriving at time t represents normal network variance — not failure. φ grows continuously the longer a heartbeat is missing. The application sets its own threshold: Cassandra uses φ ≥ 8 by default, which corresponds to a false positive rate under 1/1000 under typical conditions." },
+  { title: "Phi self-calibration — adapting to network conditions", body: "When the network slows down (e.g. GC pause adds 500ms to heartbeats), the phi-accrual detector's distribution model widens automatically. The same φ threshold now requires a longer silence before triggering. This means the detector doesn't fire during legitimate slowdowns, but still triggers promptly when the process truly crashes (heartbeats stop arriving entirely). The adaptation happens per-peer, so one slow node doesn't affect detection of other nodes." },
+]} />
+
 <DataTable
   caption="Failure detector comparison"
   accent="teal"
@@ -118,3 +126,21 @@ This approach eliminates the single point of failure present in centralized moni
 Rather than a central process detecting failures in others, we can reverse the statement. The SWIM protocol (Scalable Weakly-consistent Infection-style process group Membership) uses a combination of pings, indirect pings, and gossip to achieve failure detection without any central coordinator.
 
 SWIM detects failures in O(log N) time with high probability while keeping the message overhead per node constant — a major improvement over pairwise heartbeats which require O(N) messages per round. Systems like HashiCorp Consul and Serf use SWIM-based membership for production cluster management.
+
+<SequenceDiagram
+  title="SWIM indirect ping — detecting failure without false positives"
+  actors={["P1 (detector)", "P2 (suspect)", "P3 (intermediary)", "P4 (intermediary)"]}
+  messages={[
+    { from: "P1 (detector)", to: "P2 (suspect)", label: "direct PING" },
+    { from: "P2 (suspect)", to: "P1 (detector)", label: "[no response — timeout]" },
+    { from: "P1 (detector)", to: "P3 (intermediary)", label: "PING-REQ: please ping P2 on my behalf" },
+    { from: "P1 (detector)", to: "P4 (intermediary)", label: "PING-REQ: please ping P2 on my behalf" },
+    { from: "P3 (intermediary)", to: "P2 (suspect)", label: "indirect PING" },
+    { from: "P4 (intermediary)", to: "P2 (suspect)", label: "indirect PING" },
+    { from: "P2 (suspect)", to: "P3 (intermediary)", label: "ACK (P2 is alive, P1-P2 link failed)" },
+    { from: "P3 (intermediary)", to: "P1 (detector)", label: "ACK forwarded — P2 is alive" },
+    { from: "P1 (detector)", to: "P1 (detector)", label: "P2 alive confirmed — cancel suspicion" },
+    { from: "P4 (intermediary)", to: "P1 (detector)", label: "[no ACK — P2 also unreachable from P4]" },
+    { from: "P1 (detector)", to: "P1 (detector)", label: "all indirect pings failed — mark P2 FAILED, gossip to cluster" },
+  ]}
+/>

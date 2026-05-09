@@ -15,6 +15,8 @@ import HeroGrid from '../../../components/mdx/HeroGrid.astro';
 import Callout from '../../../components/mdx/Callout.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
 import LayerStack from '../../../components/mdx/LayerStack.astro';
+import ArchDiagram from '../../../components/mdx/ArchDiagram.astro';
+import SequenceDiagram from '../../../components/mdx/SequenceDiagram.astro';
 
 Replication — maintaining multiple copies of data across different nodes — is the fundamental mechanism for fault tolerance in distributed systems. But as soon as there are two copies of the same data, they can diverge. And the moment they diverge, you must decide: which one is "right"?
 
@@ -72,6 +74,20 @@ Given two events A and B:
 
 Causal consistency uses this to guarantee: if write W1 happened-before write W2, then any process that sees W2 must also have seen W1.
 
+<SequenceDiagram
+  title="Vector clocks — tracking causality and detecting conflicts"
+  actors={["Alice [2,0,0]", "Bob [0,1,0]", "Carol [0,0,1]"]}
+  messages={[
+    { from: "Alice [2,0,0]", to: "Alice [2,0,0]", label: "local event → A:[2,0,0]" },
+    { from: "Alice [2,0,0]", to: "Bob [0,1,0]", label: "send msg, vc=[2,0,0]" },
+    { from: "Bob [0,1,0]", to: "Bob [0,1,0]", label: "receive: merge → [2,1,0], local event → [2,2,0]" },
+    { from: "Bob [0,1,0]", to: "Carol [0,0,1]", label: "send msg, vc=[2,2,0]" },
+    { from: "Carol [0,0,1]", to: "Carol [0,0,1]", label: "receive from Bob: merge → [2,2,1]" },
+    { from: "Alice [2,0,0]", to: "Carol [0,0,1]", label: "concurrent send, vc=[2,0,0]" },
+    { from: "Carol [0,0,1]", to: "Carol [0,0,1]", label: "[2,0,0] vs [2,2,1]: neither dominates → CONFLICT" },
+  ]}
+/>
+
 <DataTable
   caption="Consistency models and their trade-offs"
   accent="teal"
@@ -113,6 +129,27 @@ Common configurations:
 - **N=3, W=2, R=2**: quorum reads and writes (W+R=4 > N=3, strongly consistent)
 - **N=3, W=3, R=1**: all replicas must acknowledge writes (max durability, slow writes)
 - **N=3, W=1, R=3**: all replicas must respond to reads (max read freshness, slow reads)
+
+<ArchDiagram
+  title="Quorum reads: W+R>N guarantees overlap"
+  zones={[
+    { id: "cluster", label: "N=5 replica cluster", color: "teal" },
+  ]}
+  nodes={[
+    { id: "n1", label: "Replica 1", sub: "write quorum\nmember", zone: "cluster", row: 1, col: 1, color: "teal" },
+    { id: "n2", label: "Replica 2", sub: "write quorum\nmember", zone: "cluster", row: 1, col: 2, color: "teal" },
+    { id: "n3", label: "Replica 3", sub: "OVERLAP\nW∩R", zone: "cluster", row: 1, col: 3, color: "amber" },
+    { id: "n4", label: "Replica 4", sub: "read quorum\nmember", zone: "cluster", row: 2, col: 1, color: "green" },
+    { id: "n5", label: "Replica 5", sub: "read quorum\nmember", zone: "cluster", row: 2, col: 2, color: "green" },
+  ]}
+  edges={[
+    { from: "n1", to: "n3", label: "W=3 write set", type: "solid" },
+    { from: "n2", to: "n3", label: "", type: "solid" },
+    { from: "n3", to: "n4", label: "R=3 read set", type: "dashed" },
+    { from: "n3", to: "n5", label: "", type: "dashed" },
+  ]}
+  caption="With N=5 replicas, W=3 writes and R=3 reads guarantee at least 1 replica in common (W+R=6 > N=5). That overlap replica always holds the latest write, so the read is guaranteed to see it. Setting W=R=3 means the system tolerates 2 node failures for both reads and writes."
+/>
 
 ---
 

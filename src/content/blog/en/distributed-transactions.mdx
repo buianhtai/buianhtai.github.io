@@ -15,6 +15,7 @@ import HeroGrid from '../../../components/mdx/HeroGrid.astro';
 import Callout from '../../../components/mdx/Callout.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
+import SequenceDiagram from '../../../components/mdx/SequenceDiagram.astro';
 
 We've covered transactions on a single node. Now extend this to the distributed case: how do you execute a transaction that spans multiple partitions or nodes, and ensure all-or-nothing atomicity even if nodes fail?
 
@@ -59,6 +60,29 @@ This is harder than single-node transactions because cohorts fail independently 
 
 **Cohort failure in Phase 2**: if a cohort has already voted YES but fails before receiving the COMMIT/ABORT decision, it is in the **uncertainty period** — it has committed to a decision but doesn't know what it is. It must block, waiting for the coordinator to recover and retransmit.
 
+<SequenceDiagram
+  title="Two-Phase Commit (2PC) — prepare then commit"
+  actors={["Coordinator", "Cohort A", "Cohort B", "Cohort C"]}
+  messages={[
+    { from: "Coordinator", to: "Cohort A", label: "PREPARE txn-42" },
+    { from: "Coordinator", to: "Cohort B", label: "PREPARE txn-42" },
+    { from: "Coordinator", to: "Cohort C", label: "PREPARE txn-42" },
+    { from: "Cohort A", to: "Cohort A", label: "write PREPARE to WAL, acquire locks" },
+    { from: "Cohort B", to: "Cohort B", label: "write PREPARE to WAL, acquire locks" },
+    { from: "Cohort C", to: "Cohort C", label: "write PREPARE to WAL, acquire locks" },
+    { from: "Cohort A", to: "Coordinator", label: "VOTE-YES" },
+    { from: "Cohort B", to: "Coordinator", label: "VOTE-YES" },
+    { from: "Cohort C", to: "Coordinator", label: "VOTE-YES" },
+    { from: "Coordinator", to: "Coordinator", label: "all YES → write COMMIT to WAL" },
+    { from: "Coordinator", to: "Cohort A", label: "COMMIT txn-42" },
+    { from: "Coordinator", to: "Cohort B", label: "COMMIT txn-42" },
+    { from: "Coordinator", to: "Cohort C", label: "COMMIT txn-42" },
+    { from: "Cohort A", to: "Coordinator", label: "ACK — committed, locks released" },
+    { from: "Cohort B", to: "Coordinator", label: "ACK — committed, locks released" },
+    { from: "Cohort C", to: "Coordinator", label: "ACK — committed, locks released" },
+  ]}
+/>
+
 <Callout color="rose">
 **The 2PC blocking problem**: if the coordinator fails after cohorts have voted YES but before sending the final COMMIT/ABORT, cohorts are blocked indefinitely. They hold locks but cannot proceed without knowing the decision. This is 2PC's fundamental weakness: it is not fault-tolerant against coordinator failures.
 </Callout>
@@ -76,6 +100,27 @@ This is harder than single-node transactions because cohorts fail independently 
 The key difference: after Phase 2, cohorts know that all other cohorts are also in the pre-commit state (have voted YES). If the coordinator fails at this point, cohorts can communicate with each other and safely commit — no blocking required.
 
 **Weakness**: 3PC assumes no network partitions. In a partitioned network, cohorts on different sides may make conflicting decisions. This makes 3PC unsafe in practice for systems with network partitions — it trades the blocking problem for a split-brain risk.
+
+<SequenceDiagram
+  title="Three-Phase Commit (3PC) — pre-commit eliminates blocking"
+  actors={["Coordinator", "Cohort A", "Cohort B"]}
+  messages={[
+    { from: "Coordinator", to: "Cohort A", label: "CANCOMMIT? (Phase 1)" },
+    { from: "Coordinator", to: "Cohort B", label: "CANCOMMIT? (Phase 1)" },
+    { from: "Cohort A", to: "Coordinator", label: "YES" },
+    { from: "Cohort B", to: "Coordinator", label: "YES" },
+    { from: "Coordinator", to: "Cohort A", label: "PRECOMMIT (Phase 2) — prepare + lock" },
+    { from: "Coordinator", to: "Cohort B", label: "PRECOMMIT (Phase 2) — prepare + lock" },
+    { from: "Cohort A", to: "Cohort A", label: "write PREPARE to WAL, hold locks" },
+    { from: "Cohort B", to: "Cohort B", label: "write PREPARE to WAL, hold locks" },
+    { from: "Cohort A", to: "Coordinator", label: "ACK PRECOMMIT" },
+    { from: "Cohort B", to: "Coordinator", label: "ACK PRECOMMIT" },
+    { from: "Coordinator", to: "Cohort A", label: "DOCOMMIT (Phase 3) — commit now" },
+    { from: "Coordinator", to: "Cohort B", label: "DOCOMMIT (Phase 3) — commit now" },
+    { from: "Cohort A", to: "Coordinator", label: "ACK — committed" },
+    { from: "Cohort B", to: "Coordinator", label: "ACK — committed" },
+  ]}
+/>
 
 <DataTable
   caption="2PC vs 3PC trade-offs"

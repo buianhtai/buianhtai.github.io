@@ -16,6 +16,7 @@ import Callout from '../../../components/mdx/Callout.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
 import LayerStack from '../../../components/mdx/LayerStack.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
+import SequenceDiagram from '../../../components/mdx/SequenceDiagram.astro';
 
 The B-Tree is brilliant for reads. For high-throughput writes, it has a fundamental problem: in-place updates require seeking to the right page and rewriting it. Every write is a random write. Random writes are the slowest operation on any storage medium.
 
@@ -61,6 +62,27 @@ An LSM Tree has two classes of components:
 <Callout color="amber">
 A delete in an LSM Tree is a write, not a removal. This has an important consequence: a deleted key continues to consume space in SSTables until compaction reaches the level where all prior versions have been merged. Under aggressive delete workloads (time-series expiry, GDPR deletion), space amplification can be significant before compaction catches up.
 </Callout>
+
+<SequenceDiagram
+  title="LSM Tree read path — memtable → L0 → L1"
+  actors={["Client", "Memtable", "L0 SSTables", "L1 SSTables"]}
+  messages={[
+    { from: "Client", to: "Memtable", label: "GET key=K" },
+    { from: "Memtable", to: "Memtable", label: "binary search — O(log N)" },
+    { from: "Memtable", to: "Client", label: "found: return value (most recent write)" },
+    { from: "Client", to: "Memtable", label: "GET key=K (not in memtable)" },
+    { from: "Memtable", to: "Client", label: "miss — not found" },
+    { from: "Client", to: "L0 SSTables", label: "check newest L0 file: Bloom filter test" },
+    { from: "L0 SSTables", to: "L0 SSTables", label: "Bloom filter: possible match" },
+    { from: "L0 SSTables", to: "L0 SSTables", label: "read index block → seek to data block" },
+    { from: "L0 SSTables", to: "Client", label: "found in L0 — return value" },
+    { from: "Client", to: "L0 SSTables", label: "GET key=K (not in any L0 file)" },
+    { from: "L0 SSTables", to: "Client", label: "all L0 Bloom filters: definite miss — skip" },
+    { from: "Client", to: "L1 SSTables", label: "binary search L1 for key range" },
+    { from: "L1 SSTables", to: "L1 SSTables", label: "exactly 1 L1 file covers key range" },
+    { from: "L1 SSTables", to: "Client", label: "read from L1 SSTable" },
+  ]}
+/>
 
 ---
 
@@ -129,6 +151,12 @@ Two variants relax the sorted-order requirement for even better write throughput
 **Bitcask**: all writes are sequential appends to a single log file. An in-memory hash index maps every key to the latest record's offset in the log. Reads are: hash lookup → single disk seek → return value. Extremely fast writes and reads, but the entire key set must fit in memory.
 
 **WiscKey**: separates keys from values in RocksDB-style leveled storage. Keys (small) are stored in a sorted LSM structure; values (large) are stored in a separate append-only value log. This drastically reduces write amplification for large values — the sorted LSM only sorts/compacts keys, not multi-KB values. Trade-off: range scans that also retrieve values require random reads into the value log.
+
+<FlowStep steps={[
+  { title: "Bitcask — hash index, single log file", body: "All writes append to one log file. An in-memory hash table maps every key to (file_id, offset, size) of its latest record. Reads: hash lookup → one disk seek → return value. Startup: replay the log to rebuild the in-memory index. Constraint: the entire key set must fit in RAM. Best for: write-heavy workloads where all keys fit in memory (IoT sensor data, message queues)." },
+  { title: "WiscKey — key-value separation", body: "Keys are stored in a normal leveled LSM structure (small, sorted, compacted). Values are stored in a separate append-only value log. Each key's entry in the LSM holds only (vLog offset, value size). Reads: LSM lookup → one random read in the value log. Write amplification drops dramatically for large values — compaction only sorts/rewrites keys. Constraint: value log needs its own GC pass to reclaim space from overwritten keys. Best for: workloads with large values (blobs, documents) where write amplification of standard LSM compaction is the bottleneck." },
+  { title: "Comparison: when to use each", body: "Bitcask wins when: key set fits in RAM, workload is write-heavy, reads are point lookups (not range scans), operational simplicity matters. WiscKey wins when: values are large (multi-KB), write amplification from compaction is the bottleneck, range scan access is acceptable (sequential key reads, random value fetches). Standard LSM wins when: workload requires range scans with value retrieval, all record sizes are similar, or the operational complexity of key-value separation is not justified." },
+]} />
 
 <Callout color="teal">
 The LSM vs B-Tree choice is not just about write throughput vs read throughput. It is also about operational characteristics: LSM Trees require compaction tuning, but are simpler to reason about for crash recovery (immutable files, WAL-only durability). B-Trees require vacuum and fragmentation management, but reads are simpler (one authoritative copy per key). Most production systems at write-scale choose LSM; most at read-scale or requiring predictable read latency choose B-Trees.

@@ -14,6 +14,7 @@ import Label from '../../../components/mdx/Label.astro';
 import HeroGrid from '../../../components/mdx/HeroGrid.astro';
 import Callout from '../../../components/mdx/Callout.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
+import SequenceDiagram from '../../../components/mdx/SequenceDiagram.astro';
 
 Leader election is the process by which a group of distributed nodes selects one member to act as coordinator. The leader makes decisions, orders messages, and drives the system forward — reducing the expensive peer-to-peer coordination that would otherwise be required for every operation.
 
@@ -60,6 +61,23 @@ The Bully algorithm (Garcia-Molina, 1982) elects the process with the highest ID
 - Problem: generates O(N²) messages in the worst case
 - Problem: a process recovering from a temporary failure may repeatedly trigger elections, causing instability
 
+<SequenceDiagram
+  title="Bully Algorithm — highest-ID process wins"
+  actors={["Node 1 (low)", "Node 3 (dead)", "Node 5 (mid)", "Node 7 (new leader)"]}
+  messages={[
+    { from: "Node 1 (low)", to: "Node 3 (dead)", label: "ELECTION (higher ID)" },
+    { from: "Node 1 (low)", to: "Node 5 (mid)", label: "ELECTION (higher ID)" },
+    { from: "Node 1 (low)", to: "Node 7 (new leader)", label: "ELECTION (higher ID)" },
+    { from: "Node 3 (dead)", to: "Node 1 (low)", label: "[no response — crashed]" },
+    { from: "Node 5 (mid)", to: "Node 1 (low)", label: "OK — I'm taking over" },
+    { from: "Node 7 (new leader)", to: "Node 1 (low)", label: "OK — I'm taking over" },
+    { from: "Node 5 (mid)", to: "Node 7 (new leader)", label: "ELECTION" },
+    { from: "Node 7 (new leader)", to: "Node 5 (mid)", label: "OK — I win (highest ID alive)" },
+    { from: "Node 7 (new leader)", to: "Node 1 (low)", label: "COORDINATOR — I am the new leader" },
+    { from: "Node 7 (new leader)", to: "Node 5 (mid)", label: "COORDINATOR — I am the new leader" },
+  ]}
+/>
+
 ---
 
 ## <Label color="teal">3</Label> Next-In-Line Failover
@@ -91,6 +109,20 @@ Nodes are logically arranged in a ring. When a leader failure is detected:
 4. A COORDINATOR message with the new leader's ID is sent around the ring
 
 **Properties**: O(N) messages per election (much better than Bully's O(N²)), but requires a known ring topology. Multiple nodes detecting the leader failure simultaneously can trigger concurrent elections, which must be resolved.
+
+<SequenceDiagram
+  title="Ring Algorithm — election message travels the ring"
+  actors={["Node A (initiator)", "Node B", "Node C", "Node D (highest ID)"]}
+  messages={[
+    { from: "Node A (initiator)", to: "Node B", label: "ELECTION(id=A)" },
+    { from: "Node B", to: "Node C", label: "ELECTION(id=B) — B > A, replace" },
+    { from: "Node C", to: "Node D (highest ID)", label: "ELECTION(id=C)" },
+    { from: "Node D (highest ID)", to: "Node A (initiator)", label: "ELECTION(id=D) — D is highest, full circuit" },
+    { from: "Node A (initiator)", to: "Node B", label: "COORDINATOR(id=D) — D is the new leader" },
+    { from: "Node B", to: "Node C", label: "COORDINATOR(id=D)" },
+    { from: "Node C", to: "Node D (highest ID)", label: "COORDINATOR(id=D) — election complete" },
+  ]}
+/>
 
 ---
 

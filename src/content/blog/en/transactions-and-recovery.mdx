@@ -15,6 +15,7 @@ import HeroGrid from '../../../components/mdx/HeroGrid.astro';
 import Callout from '../../../components/mdx/Callout.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
+import SequenceDiagram from '../../../components/mdx/SequenceDiagram.astro';
 
 Here is the question: your database just crashed mid-write. Power failed. Disk controller threw an error. The process was killed. When it comes back up, what state is the data in?
 
@@ -67,6 +68,23 @@ Why WAL provides durability:
 3. If the system crashes, the log contains everything needed to redo all committed modifications
 
 **Log Sequence Number (LSN)**: each log record has a monotonically increasing LSN. Each page header stores the LSN of the most recent modification to that page. During recovery, LSNs determine which log records have already been applied and which still need to be.
+
+<SequenceDiagram
+  title="WAL write path and LSN assignment"
+  actors={["Transaction", "Log Manager", "Buffer Pool", "Disk: WAL File", "Disk: Data Pages"]}
+  messages={[
+    { from: "Transaction", to: "Log Manager", label: "write(page P, old=X, new=Y)" },
+    { from: "Log Manager", to: "Log Manager", label: "assign LSN=42 to log record" },
+    { from: "Log Manager", to: "Disk: WAL File", label: "append log record LSN=42 (sequential write)" },
+    { from: "Disk: WAL File", to: "Log Manager", label: "fsync ACK — record is durable" },
+    { from: "Log Manager", to: "Buffer Pool", label: "pageLSN[P] = 42 (mark dirty)" },
+    { from: "Log Manager", to: "Transaction", label: "OK — write logged" },
+    { from: "Transaction", to: "Log Manager", label: "commit()" },
+    { from: "Log Manager", to: "Disk: WAL File", label: "append COMMIT record LSN=43" },
+    { from: "Disk: WAL File", to: "Transaction", label: "commit ACK — transaction is durable" },
+    { from: "Buffer Pool", to: "Disk: Data Pages", label: "flush dirty page P (async, after commit)" },
+  ]}
+/>
 
 ---
 

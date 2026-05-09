@@ -15,6 +15,7 @@ import HeroGrid from '../../../components/mdx/HeroGrid.astro';
 import Callout from '../../../components/mdx/Callout.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
+import ArchDiagram from '../../../components/mdx/ArchDiagram.astro';
 
 B-Trees are over 50 years old — introduced in 1971 — and remain the dominant storage structure in relational databases, key-value stores, and filesystems. To understand why, you need to understand what came before them and exactly where it broke down.
 
@@ -67,6 +68,33 @@ In a **B+ Tree** (the variant most databases use), all data records live in leaf
 1. Internal nodes can hold more keys — no data payload means more keys per page
 2. Range scans are efficient: leaf nodes are linked in a doubly-linked list
 3. Lookup always reaches a leaf: predictable I/O cost
+
+<ArchDiagram
+  title="B+ Tree node structure"
+  zones={[
+    { id: "root-zone", label: "Root", color: "teal" },
+    { id: "internal-zone", label: "Internal Nodes", color: "amber" },
+    { id: "leaf-zone", label: "Leaf Nodes", color: "green" },
+  ]}
+  nodes={[
+    { id: "root", label: "Root Node", sub: "separator keys + child pointers\n(no data records)", zone: "root-zone", row: 1, col: 1, color: "teal" },
+    { id: "int1", label: "Internal Node A", sub: "separator keys + child pointers", zone: "internal-zone", row: 1, col: 1, color: "amber" },
+    { id: "int2", label: "Internal Node B", sub: "separator keys + child pointers", zone: "internal-zone", row: 1, col: 2, color: "amber" },
+    { id: "leaf1", label: "Leaf Node 1", sub: "key-value records\n+ sibling pointer →", zone: "leaf-zone", row: 1, col: 1, color: "green" },
+    { id: "leaf2", label: "Leaf Node 2", sub: "key-value records\n+ sibling pointer →", zone: "leaf-zone", row: 1, col: 2, color: "green" },
+    { id: "leaf3", label: "Leaf Node 3", sub: "key-value records\n(last leaf, ptr = null)", zone: "leaf-zone", row: 1, col: 3, color: "green" },
+  ]}
+  edges={[
+    { from: "root", to: "int1", label: "child pointer", type: "solid" },
+    { from: "root", to: "int2", label: "child pointer", type: "solid" },
+    { from: "int1", to: "leaf1", label: "child pointer", type: "solid" },
+    { from: "int1", to: "leaf2", label: "child pointer", type: "solid" },
+    { from: "int2", to: "leaf3", label: "child pointer", type: "solid" },
+    { from: "leaf1", to: "leaf2", label: "→ next leaf", type: "dashed" },
+    { from: "leaf2", to: "leaf3", label: "→ next leaf", type: "dashed" },
+  ]}
+  caption="The root holds only separator keys that route searches downward — it stores no data records. Internal nodes likewise carry separator keys and child pointers to narrow the search path. All actual data records live exclusively in leaf nodes, which are linked in a sibling chain so range scans can walk leaves sequentially without revisiting internal nodes."
+/>
 
 ---
 

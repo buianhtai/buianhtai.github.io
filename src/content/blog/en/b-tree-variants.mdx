@@ -15,6 +15,8 @@ import HeroGrid from '../../../components/mdx/HeroGrid.astro';
 import Callout from '../../../components/mdx/Callout.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
+import LayerStack from '../../../components/mdx/LayerStack.astro';
+import ArchDiagram from '../../../components/mdx/ArchDiagram.astro';
 
 Standard B-Trees dominate because they work well across a wide range of workloads. But "works well across many workloads" means "optimal for none." When your workload is specific — write-heavy, concurrency-heavy, or memory-heavy — the standard design has real costs that variants can reduce.
 
@@ -38,6 +40,13 @@ The consequence: every write produces a new path from the modified leaf to the r
 **LMDB** (Lightning Memory-Mapped Database) is the reference implementation: memory-mapped CoW B-Tree, single-writer/multiple-reader via MVCC snapshots. The active root is a single pointer swap.
 
 **The cost**: write amplification. Modifying one leaf rewrites O(height) pages — typically 3–5 pages. Standard B-Trees may rewrite only 1 page for a point update that doesn't cause a split.
+
+<LayerStack layers={[
+  { tag: "Step 1", color: "rose", title: "Write to new leaf page", items: ["Leaf page L is never modified in place", "New page L' is written with the updated key-value", "Old page L remains until GC — readers following old root still see it"] },
+  { tag: "Step 2", color: "amber", title: "Clone parent to point to new leaf", items: ["Internal node P (parent of L) is cloned as P'", "P'.children[i] = pointer to L' (not L)", "P' is written as a new page — P is unchanged"] },
+  { tag: "Step 3", color: "teal", title: "Propagate clones to root", items: ["Every ancestor from P up to root is cloned", "Each clone updates one child pointer to its new child", "O(height) new pages written — typically 3–5 pages"] },
+  { tag: "Step 4", color: "green", title: "Atomic root pointer swap", items: ["The new root R' is written last", "A single pointer swap (CAS) makes R' the active root", "Readers on old root see old tree; new readers see new tree — no lock needed", "Old pages (L, P, ...) are reclaimed by GC when no reader holds a reference"] },
+]} />
 
 ---
 
@@ -80,6 +89,28 @@ Level 2 (immutable run): [larger sorted file, with fractional cascade pointers i
 ```
 
 FD-Trees improve write throughput over standard B-Trees while keeping read performance acceptable via fractional cascading. The trade-off: space amplification from multiple copies of the same key across levels during compaction.
+
+<ArchDiagram
+  title="FD-Tree level structure with fractional cascading"
+  zones={[
+    { id: "mutable-zone", label: "Mutable Component", color: "teal" },
+    { id: "run-zone", label: "Immutable Logarithmic Runs", color: "amber" },
+  ]}
+  nodes={[
+    { id: "l0", label: "Level 0 (mutable)", sub: "small B-Tree\nreceives all writes\nsize: S entries", zone: "mutable-zone", row: 1, col: 1, color: "teal" },
+    { id: "l1", label: "Level 1 (run)", sub: "immutable sorted run\nsize: S entries\nwith cascade ptrs → L2", zone: "run-zone", row: 1, col: 1, color: "amber" },
+    { id: "l2", label: "Level 2 (run)", sub: "immutable sorted run\nsize: S² entries\nwith cascade ptrs → L3", zone: "run-zone", row: 1, col: 2, color: "amber" },
+    { id: "l3", label: "Level 3 (run)", sub: "immutable sorted run\nsize: S³ entries\nlargest level", zone: "run-zone", row: 1, col: 3, color: "amber" },
+  ]}
+  edges={[
+    { from: "l0", to: "l1", label: "merge when L0 full", type: "solid" },
+    { from: "l1", to: "l2", label: "cascade merge", type: "solid" },
+    { from: "l2", to: "l3", label: "cascade merge", type: "solid" },
+    { from: "l1", to: "l2", label: "fractional cascade ptr", type: "dashed" },
+    { from: "l2", to: "l3", label: "fractional cascade ptr", type: "dashed" },
+  ]}
+  caption="Writes land in the mutable Level 0 B-Tree. When Level 0 fills, its contents are merge-sorted into Level 1 (an immutable sorted run). When Level 1 fills, it cascades into the larger Level 2, and so on. Fractional cascading pre-builds inter-level pointers so a range read can descend through all levels in O(log N + K) rather than O(K log N)."
+/>
 
 ---
 
