@@ -20,6 +20,7 @@ import FlowStep from '../../../components/mdx/FlowStep.astro';
 import SequenceDiagram from '../../../components/mdx/SequenceDiagram.astro';
 import StateMachine from '../../../components/mdx/StateMachine.astro';
 import ArchDiagram from '../../../components/mdx/ArchDiagram.astro';
+import MindMap from '../../../components/mdx/MindMap.astro';
 
 Chapter 8 catalogued everything that can go wrong. Chapter 9 asks: given all those failure modes, what can we actually guarantee, and how? The central topic is **consensus** — getting all nodes to agree on a single value despite node crashes and network failures. Consensus sounds like one problem but it turns out to underlie leader election, atomic commit, total order broadcast, and distributed locking. Solve consensus, and many other problems become tractable.
 
@@ -33,6 +34,66 @@ Chapter 8 catalogued everything that can go wrong. Chapter 9 asks: given all tho
 ## <Label color="teal">1</Label> The Consistency Guarantee Spectrum
 
 Distributed databases don't offer a binary choice between "consistent" and "inconsistent." They offer a spectrum of models, trading safety guarantees for performance and availability.
+
+<MindMap
+  title="Consistency model landscape"
+  size={500}
+  root={{ label: "Consistency Models" }}
+  branches={[
+    {
+      label: "Linearizability",
+      color: "teal",
+      leaves: [
+        { label: "Single-copy illusion" },
+        { label: "Recency guarantee" },
+        { label: "Leader reads" },
+      ]
+    },
+    {
+      label: "Sequential",
+      color: "blue",
+      leaves: [
+        { label: "Global order exists" },
+        { label: "No recency" },
+      ]
+    },
+    {
+      label: "Causal",
+      color: "green",
+      leaves: [
+        { label: "Cause before effect" },
+        { label: "Concurrent allowed" },
+        { label: "Vector clocks" },
+      ]
+    },
+    {
+      label: "Read-your-writes",
+      color: "violet",
+      leaves: [
+        { label: "Own writes visible" },
+        { label: "Sticky sessions" },
+      ]
+    },
+    {
+      label: "Monotonic Read",
+      color: "amber",
+      leaves: [
+        { label: "No time travel" },
+        { label: "Always forward" },
+      ]
+    },
+    {
+      label: "Eventual",
+      color: "rose",
+      leaves: [
+        { label: "Weakest guarantee" },
+        { label: "Converges if no writes" },
+        { label: "AP systems" },
+      ]
+    },
+  ]}
+  caption="Consistency models from strongest (linearizability) to weakest (eventual). Each weaker model trades safety for lower latency or higher availability."
+/>
 
 **Eventual consistency** is the weakest practical guarantee: if writes stop, all replicas will eventually converge to the same value. It says nothing about *when* they converge. A read issued immediately after a write to a different replica may return a stale value. For many applications (social media timelines, shopping cart recommendations) this is acceptable.
 

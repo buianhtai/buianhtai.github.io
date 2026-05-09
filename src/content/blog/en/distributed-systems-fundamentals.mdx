@@ -15,6 +15,7 @@ import HeroGrid from '../../../components/mdx/HeroGrid.astro';
 import Callout from '../../../components/mdx/Callout.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
 import LayerStack from '../../../components/mdx/LayerStack.astro';
+import MindMap from '../../../components/mdx/MindMap.astro';
 
 The moment you spread a database across more than one machine, everything gets harder. Not a little harder — categorically harder. Problems that are trivially solved on a single node become theoretically impossible on a distributed system.
 
@@ -113,6 +114,60 @@ Real distributed systems exist on a spectrum between two extremes:
 ## <Label color="teal">7</Label> Failure Models
 
 Different types of failures require different algorithmic responses:
+
+<MindMap
+  title="Distributed systems failure taxonomy"
+  size={480}
+  root={{ label: "Failure\nModels" }}
+  branches={[
+    {
+      label: "Crash Faults",
+      color: "teal",
+      leaves: [
+        { label: "Fail-stop" },
+        { label: "Fail-recover" },
+        { label: "Timeout detection" },
+      ]
+    },
+    {
+      label: "Omission Faults",
+      color: "amber",
+      leaves: [
+        { label: "Send omission" },
+        { label: "Receive omission" },
+        { label: "Partial connectivity" },
+      ]
+    },
+    {
+      label: "Byzantine Faults",
+      color: "rose",
+      leaves: [
+        { label: "Arbitrary messages" },
+        { label: "Malicious nodes" },
+        { label: "BFT: 3f+1 nodes" },
+      ]
+    },
+    {
+      label: "Network Faults",
+      color: "violet",
+      leaves: [
+        { label: "Message loss" },
+        { label: "Reordering" },
+        { label: "Partition" },
+      ]
+    },
+    {
+      label: "Detection",
+      color: "green",
+      leaves: [
+        { label: "Heartbeats" },
+        { label: "Phi Accrual" },
+        { label: "Gossip protocol" },
+      ]
+    },
+  ]}
+  caption="Failure taxonomy: each fault type requires progressively more sophisticated detection and recovery algorithms."
+/>
 
 <LayerStack
   layers={[

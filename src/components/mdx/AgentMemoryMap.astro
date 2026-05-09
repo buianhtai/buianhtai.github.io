@@ -1,0 +1,387 @@
+---
+/**
+ * AgentMemoryMap — semantic shape diagram for LLM / agent architectures.
+ *
+ * Purpose-built for AI system diagrams where shape carries semantic meaning:
+ *   hexagon  → Agent / Orchestrator
+ *   circle   → LLM / Model
+ *   cylinder → Vector Store / Database
+ *   rect     → Tool / Function
+ *   oval     → Human / User
+ *   diamond  → Decision / Router
+ *   cloud    → External Service / API
+ *
+ * Nodes are placed on a 0–100 grid. Edges connect them with optional labels
+ * and type styling (call, memory, feedback, data).
+ *
+ * Usage:
+ *   <AgentMemoryMap
+ *     title="ReAct agent with memory"
+ *     nodes={[
+ *       { id:"user",   label:"User",        shape:"oval",     x:50, y:5,  color:"default" },
+ *       { id:"orch",   label:"Orchestrator",shape:"hexagon",  x:50, y:28, color:"teal",   sub:"ReAct loop" },
+ *       { id:"llm",    label:"LLM",         shape:"circle",   x:20, y:55, color:"violet", sub:"gpt-4o" },
+ *       { id:"mem",    label:"Episodic\nMemory", shape:"cylinder", x:80, y:55, color:"amber" },
+ *       { id:"tools",  label:"Tools",       shape:"rect",     x:50, y:75, color:"green",  sub:"search, code, web" },
+ *       { id:"router", label:"Router",      shape:"diamond",  x:50, y:48, color:"rose" },
+ *     ]}
+ *     edges={[
+ *       { from:"user",   to:"orch",   label:"prompt",   type:"call" },
+ *       { from:"orch",   to:"router", label:"plan",     type:"call" },
+ *       { from:"router", to:"llm",    label:"reason",   type:"call" },
+ *       { from:"router", to:"mem",    label:"recall",   type:"memory" },
+ *       { from:"llm",    to:"tools",  label:"act",      type:"call" },
+ *       { from:"tools",  to:"orch",   label:"observe",  type:"feedback" },
+ *       { from:"orch",   to:"mem",    label:"store",    type:"memory" },
+ *       { from:"orch",   to:"user",   label:"answer",   type:"data" },
+ *     ]}
+ *     legend={true}
+ *     caption="ReAct loop: plan → route → reason/recall → act → observe → repeat."
+ *   />
+ *
+ * edge.type: 'call' (solid) | 'memory' (dashed amber) | 'feedback' (dashed) | 'data' (dotted)
+ */
+
+interface AgentNode {
+  id: string;
+  label: string;
+  x: number;         // 0–100 grid
+  y: number;         // 0–100 grid
+  shape: 'hexagon' | 'circle' | 'cylinder' | 'rect' | 'oval' | 'diamond' | 'cloud';
+  color?: string;
+  sub?: string;
+  badge?: string;
+}
+
+interface AgentEdge {
+  from: string;
+  to: string;
+  label?: string;
+  type?: 'call' | 'memory' | 'feedback' | 'data';
+}
+
+interface Props {
+  nodes: AgentNode[];
+  edges?: AgentEdge[];
+  title?: string;
+  caption?: string;
+  legend?: boolean;
+  height?: number;
+}
+
+const { nodes, edges = [], title, caption, legend = true, height = 380 } = Astro.props;
+
+const W = 640;
+const H = height;
+const MX = 60;
+const MY = 40;
+
+function toX(gx: number): number { return MX + (gx / 100) * (W - 2 * MX); }
+function toY(gy: number): number { return MY + (gy / 100) * (H - 2 * MY); }
+
+const NODE_COLORS: Record<string, { fill: string; stroke: string; text: string }> = {
+  teal:    { fill: 'rgba(14,165,233,0.12)',  stroke: '#0ea5e9', text: '#0ea5e9' },
+  amber:   { fill: 'rgba(245,158,11,0.12)',  stroke: '#f59e0b', text: '#f59e0b' },
+  green:   { fill: 'rgba(22,163,74,0.12)',   stroke: '#16a34a', text: '#16a34a' },
+  rose:    { fill: 'rgba(244,63,94,0.12)',   stroke: '#f43f5e', text: '#f43f5e' },
+  violet:  { fill: 'rgba(139,92,246,0.12)',  stroke: '#8b5cf6', text: '#8b5cf6' },
+  blue:    { fill: 'rgba(59,130,246,0.12)',  stroke: '#3b82f6', text: '#3b82f6' },
+  default: { fill: 'var(--color-surface-2)', stroke: 'var(--color-border)', text: 'var(--color-text)' },
+};
+function nc(n: AgentNode) { return NODE_COLORS[n.color ?? 'default'] ?? NODE_COLORS['default']; }
+
+const EDGE_STYLES: Record<string, { stroke: string; dash?: string; label: string }> = {
+  call:     { stroke: 'var(--color-text-muted)',         label: 'call' },
+  memory:   { stroke: '#f59e0b', dash: '5 3',            label: 'memory' },
+  feedback: { stroke: 'var(--color-text-muted)', dash: '3 3', label: 'feedback' },
+  data:     { stroke: '#0ea5e9', dash: '1 3',            label: 'data' },
+};
+function es(edge: AgentEdge) { return EDGE_STYLES[edge.type ?? 'call'] ?? EDGE_STYLES['call']; }
+
+const RW = 52;   // half-width for rect/hexagon
+const RH = 24;   // half-height
+
+function hexPath(cx: number, cy: number): string {
+  const pts: string[] = [];
+  for (let i = 0; i < 6; i++) {
+    const a = Math.PI / 180 * (60 * i - 30);
+    pts.push(`${cx + RW * Math.cos(a)},${cy + (RH + 4) * Math.sin(a)}`);
+  }
+  return `M ${pts.join(' L ')} Z`;
+}
+
+function diamondPath(cx: number, cy: number): string {
+  return `M ${cx},${cy - RH - 4} L ${cx + RW + 4},${cy} L ${cx},${cy + RH + 4} L ${cx - RW - 4},${cy} Z`;
+}
+
+const nodeMap = Object.fromEntries(nodes.map(n => [n.id, n]));
+
+// Edge arrow offset from center
+function edgeEndpoints(fromN: AgentNode, toN: AgentNode) {
+  const fx = toX(fromN.x), fy = toY(fromN.y);
+  const tx = toX(toN.x),   ty = toY(toN.y);
+  const dx = tx - fx, dy = ty - fy;
+  const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+  const ux = dx / dist, uy = dy / dist;
+  const r = Math.max(RW, RH) + 6;
+  return { x1: fx + ux * r, y1: fy + uy * r, x2: tx - ux * r, y2: ty - uy * r };
+}
+
+const uid = `amm-${Math.random().toString(36).slice(2, 6)}`;
+
+const legendItems = [
+  { shape: 'hexagon',  label: 'Agent / Orchestrator' },
+  { shape: 'circle',   label: 'LLM / Model' },
+  { shape: 'cylinder', label: 'Vector Store / DB' },
+  { shape: 'rect',     label: 'Tool / Function' },
+  { shape: 'oval',     label: 'Human / User' },
+  { shape: 'diamond',  label: 'Decision / Router' },
+  { shape: 'cloud',    label: 'External API' },
+];
+---
+
+<div class="amm-wrap">
+  {title && <div class="amm-titlebar"><span class="amm-prompt">$</span> {title}</div>}
+  <div class="amm-body">
+    <svg
+      width={W} height={H}
+      viewBox={`0 0 ${W} ${H}`}
+      style="display:block; max-width:100%; height:auto; overflow:visible;"
+      aria-label={title ?? 'Agent memory architecture diagram'}
+    >
+      <defs>
+        <marker id={`${uid}-arr`} markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="var(--color-text-muted)" opacity="0.75" />
+        </marker>
+        <marker id={`${uid}-arr-mem`} markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#f59e0b" opacity="0.85" />
+        </marker>
+        <marker id={`${uid}-arr-data`} markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#0ea5e9" opacity="0.85" />
+        </marker>
+      </defs>
+
+      <!-- Edges -->
+      {edges.map(edge => {
+        const from = nodeMap[edge.from];
+        const to   = nodeMap[edge.to];
+        if (!from || !to) return null;
+        const { x1, y1, x2, y2 } = edgeEndpoints(from, to);
+        const style = es(edge);
+        const midX = (x1 + x2) / 2;
+        const midY = (y1 + y2) / 2;
+
+        const markerId = edge.type === 'memory' ? `${uid}-arr-mem`
+          : edge.type === 'data' ? `${uid}-arr-data`
+          : `${uid}-arr`;
+
+        return (
+          <>
+            <line
+              x1={x1} y1={y1} x2={x2} y2={y2}
+              stroke={style.stroke}
+              stroke-width="1.5"
+              stroke-dasharray={style.dash}
+              marker-end={`url(#${markerId})`}
+              opacity="0.7"
+            />
+            {edge.label && (
+              <>
+                <rect x={midX - 24} y={midY - 8} width="48" height="12"
+                  rx="2" fill="var(--color-surface)" opacity="0.92"
+                />
+                <text
+                  x={midX} y={midY + 2}
+                  text-anchor="middle"
+                  font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+                  font-size="8" fill={style.stroke}
+                >{edge.label}</text>
+              </>
+            )}
+          </>
+        );
+      })}
+
+      <!-- Nodes -->
+      {nodes.map(node => {
+        const cx = toX(node.x);
+        const cy = toY(node.y);
+        const col = nc(node);
+        const shape = node.shape;
+
+        return (
+          <>
+            {shape === 'hexagon' && (
+              <path d={hexPath(cx, cy)} fill={col.fill} stroke={col.stroke} stroke-width="2" />
+            )}
+            {shape === 'circle' && (
+              <>
+                <circle cx={cx} cy={cy} r={RH + 6} fill={col.fill} stroke={col.stroke} stroke-width="2" />
+                <circle cx={cx} cy={cy} r={RH + 10} fill="none" stroke={col.stroke} stroke-width="0.8" opacity="0.4" />
+              </>
+            )}
+            {shape === 'cylinder' && (
+              <>
+                <rect x={cx - RW} y={cy - RH + 4} width={RW * 2} height={RH * 2 - 8}
+                  fill={col.fill} stroke={col.stroke} stroke-width="1.5"
+                />
+                <ellipse cx={cx} cy={cy - RH + 4} rx={RW} ry={7}
+                  fill={col.fill} stroke={col.stroke} stroke-width="1.5"
+                />
+                <ellipse cx={cx} cy={cy + RH - 4} rx={RW} ry={7}
+                  fill={col.fill} stroke={col.stroke} stroke-width="0.8" opacity="0.4"
+                />
+              </>
+            )}
+            {shape === 'rect' && (
+              <rect x={cx - RW} y={cy - RH} width={RW * 2} height={RH * 2}
+                rx="6" fill={col.fill} stroke={col.stroke} stroke-width="1.5"
+              />
+            )}
+            {shape === 'oval' && (
+              <ellipse cx={cx} cy={cy} rx={RW} ry={RH}
+                fill={col.fill} stroke={col.stroke} stroke-width="1.5"
+              />
+            )}
+            {shape === 'diamond' && (
+              <path d={diamondPath(cx, cy)} fill={col.fill} stroke={col.stroke} stroke-width="1.5" />
+            )}
+            {shape === 'cloud' && (
+              <>
+                <ellipse cx={cx} cy={cy} rx={RW * 1.1} ry={RH * 0.85}
+                  fill={col.fill} stroke={col.stroke} stroke-width="1.5"
+                />
+                <ellipse cx={cx - RW * 0.45} cy={cy - RH * 0.55} rx={RH * 0.55} ry={RH * 0.5}
+                  fill={col.fill} stroke={col.stroke} stroke-width="1"
+                />
+                <ellipse cx={cx + RW * 0.38} cy={cy - RH * 0.55} rx={RH * 0.6} ry={RH * 0.5}
+                  fill={col.fill} stroke={col.stroke} stroke-width="1"
+                />
+              </>
+            )}
+
+            {/* Label */}
+            {node.label.split('\n').map((line, i, arr) => (
+              <text
+                x={cx} y={cy + (i - (arr.length - 1) / 2) * 11 + (node.sub ? -5 : 4)}
+                text-anchor="middle"
+                font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+                font-size="9.5" font-weight="700"
+                fill={col.text}
+              >{line}</text>
+            ))}
+            {node.sub && (
+              <text
+                x={cx} y={cy + (node.label.split('\n').length * 10) / 2 + 3}
+                text-anchor="middle"
+                font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+                font-size="7.5" fill="var(--color-text-muted)"
+              >{node.sub}</text>
+            )}
+            {node.badge && (
+              <>
+                <rect x={cx + RW - 14} y={cy - RH - 2} width="18" height="11" rx="3"
+                  fill="var(--color-accent)" opacity="0.9"
+                />
+                <text x={cx + RW - 5} y={cy - RH + 7}
+                  text-anchor="middle"
+                  font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+                  font-size="7" font-weight="700" fill="var(--color-bg)"
+                >{node.badge}</text>
+              </>
+            )}
+          </>
+        );
+      })}
+    </svg>
+
+    {/* Legend */}
+    {legend && (
+      <div class="amm-legend">
+        {legendItems.map(item => (
+          <div class="amm-legend-item">
+            <svg width="22" height="16" viewBox="0 0 22 16" style="flex-shrink:0">
+              {item.shape === 'hexagon' && <polygon points="11,1 20,5.5 20,10.5 11,15 2,10.5 2,5.5" fill="rgba(14,165,233,0.15)" stroke="#0ea5e9" stroke-width="1.2" />}
+              {item.shape === 'circle' && <><circle cx="11" cy="8" r="6" fill="rgba(139,92,246,0.15)" stroke="#8b5cf6" stroke-width="1.2" /><circle cx="11" cy="8" r="8" fill="none" stroke="#8b5cf6" stroke-width="0.6" opacity="0.4" /></>}
+              {item.shape === 'cylinder' && <><rect x="4" y="4" width="14" height="10" fill="rgba(245,158,11,0.15)" stroke="#f59e0b" stroke-width="1.1" /><ellipse cx="11" cy="4" rx="7" ry="3" fill="rgba(245,158,11,0.15)" stroke="#f59e0b" stroke-width="1.1" /></>}
+              {item.shape === 'rect' && <rect x="2" y="3" width="18" height="10" rx="2" fill="rgba(22,163,74,0.15)" stroke="#16a34a" stroke-width="1.2" />}
+              {item.shape === 'oval' && <ellipse cx="11" cy="8" rx="9" ry="6" fill="rgba(100,116,139,0.12)" stroke="var(--color-border)" stroke-width="1.2" />}
+              {item.shape === 'diamond' && <polygon points="11,1 21,8 11,15 1,8" fill="rgba(244,63,94,0.15)" stroke="#f43f5e" stroke-width="1.2" />}
+              {item.shape === 'cloud' && <><ellipse cx="11" cy="9" rx="9" ry="6" fill="rgba(59,130,246,0.15)" stroke="#3b82f6" stroke-width="1" /><ellipse cx="6" cy="5" rx="4" ry="3.5" fill="rgba(59,130,246,0.15)" stroke="#3b82f6" stroke-width="0.8" /><ellipse cx="15" cy="4.5" rx="4.5" ry="3.5" fill="rgba(59,130,246,0.15)" stroke="#3b82f6" stroke-width="0.8" /></>}
+            </svg>
+            <span>{item.label}</span>
+          </div>
+        ))}
+        <div class="amm-legend-edges">
+          <div class="amm-legend-edge"><svg width="28" height="8"><line x1="0" y1="4" x2="22" y2="4" stroke="var(--color-text-muted)" stroke-width="1.5" /><polygon points="22,1 28,4 22,7" fill="var(--color-text-muted)" opacity="0.75" /></svg><span>call</span></div>
+          <div class="amm-legend-edge"><svg width="28" height="8"><line x1="0" y1="4" x2="22" y2="4" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="4 2" /><polygon points="22,1 28,4 22,7" fill="#f59e0b" opacity="0.85" /></svg><span>memory</span></div>
+          <div class="amm-legend-edge"><svg width="28" height="8"><line x1="0" y1="4" x2="22" y2="4" stroke="var(--color-text-muted)" stroke-width="1.5" stroke-dasharray="3 3" /><polygon points="22,1 28,4 22,7" fill="var(--color-text-muted)" opacity="0.75" /></svg><span>feedback</span></div>
+          <div class="amm-legend-edge"><svg width="28" height="8"><line x1="0" y1="4" x2="22" y2="4" stroke="#0ea5e9" stroke-width="1.5" stroke-dasharray="1 3" /><polygon points="22,1 28,4 22,7" fill="#0ea5e9" opacity="0.85" /></svg><span>data</span></div>
+        </div>
+      </div>
+    )}
+  </div>
+  {caption && <div class="amm-caption"><span class="amm-prompt">▶</span> {caption}</div>}
+</div>
+
+<style>
+  .amm-wrap {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    margin: 1.5rem 0;
+    overflow: hidden;
+    font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+  }
+  .amm-titlebar {
+    padding: 0.4rem 0.875rem;
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-surface-2);
+    font-size: 0.65rem;
+    color: var(--color-text-muted);
+  }
+  .amm-prompt { color: var(--color-accent); font-weight: 700; margin-right: 0.35rem; }
+  .amm-body {
+    padding: 1rem;
+    overflow-x: auto;
+  }
+  .amm-legend {
+    border-top: 1px solid var(--color-border);
+    padding: 0.6rem 0.5rem 0.3rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem 1rem;
+    align-items: center;
+  }
+  .amm-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.62rem;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+  }
+  .amm-legend-edges {
+    display: flex;
+    gap: 0.8rem;
+    align-items: center;
+    border-left: 1px solid var(--color-border);
+    padding-left: 0.8rem;
+    margin-left: 0.2rem;
+  }
+  .amm-legend-edge {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.62rem;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+  }
+  .amm-caption {
+    padding: 0.45rem 0.875rem;
+    border-top: 1px solid var(--color-border);
+    font-size: 0.62rem;
+    color: var(--color-text-dim);
+    background: var(--color-bg);
+    line-height: 1.5;
+  }
+</style>

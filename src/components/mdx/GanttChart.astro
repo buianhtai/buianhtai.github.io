@@ -1,0 +1,306 @@
+---
+/**
+ * GanttChart — timeline with overlapping duration bars.
+ *
+ * Renders a horizontal Gantt chart with labeled time units (weeks, phases,
+ * days, sprints, etc.). Each task row spans a range of [start, end] columns.
+ * Rows can be grouped under section headers.
+ *
+ * Usage:
+ *   <GanttChart
+ *     title="Database migration timeline"
+ *     units={["W1", "W2", "W3", "W4", "W5", "W6", "W7", "W8"]}
+ *     tasks={[
+ *       { label: "Audit schema",          start: 0, end: 2, color: "teal" },
+ *       { label: "Write migration SQL",   start: 1, end: 3, color: "teal" },
+ *       { label: "Dual-write mode",       start: 3, end: 6, color: "amber" },
+ *       { label: "Shadow reads",          start: 4, end: 6, color: "amber" },
+ *       { label: "Traffic cutover",       start: 6, end: 7, color: "rose", focal: true },
+ *       { label: "Old DB decommission",   start: 7, end: 8, color: "green" },
+ *     ]}
+ *     milestones={[
+ *       { unit: 3, label: "Feature freeze" },
+ *       { unit: 6, label: "Go/No-go" },
+ *     ]}
+ *     caption="8-week zero-downtime migration plan. Dual-write overlaps reads for consistency validation."
+ *   />
+ *
+ * task.color: 'teal' | 'amber' | 'green' | 'rose' | 'violet' | 'blue' | 'default'
+ * task.focal: true — accent ring + brighter bar
+ * task.section: string — group label rendered above as section header row
+ * milestone.unit: column index (integer) for the milestone line
+ */
+
+interface GanttTask {
+  label: string;
+  start: number;    // column index (0-based)
+  end: number;      // column index (exclusive)
+  color?: string;
+  focal?: boolean;
+  sub?: string;
+  section?: string; // if set, a section header row is inserted before this task
+}
+
+interface Milestone {
+  unit: number;     // column index
+  label: string;
+  color?: string;
+}
+
+interface Props {
+  units: string[];        // column header labels
+  tasks: GanttTask[];
+  milestones?: Milestone[];
+  title?: string;
+  caption?: string;
+}
+
+const { units, tasks, milestones = [], title, caption } = Astro.props;
+
+const COLORS: Record<string, { bar: string; text: string; border: string; focalBorder: string }> = {
+  teal:    { bar: 'rgba(14,165,233,0.18)',  text: '#0ea5e9', border: '#0ea5e9', focalBorder: '#0ea5e9' },
+  amber:   { bar: 'rgba(245,158,11,0.18)',  text: '#f59e0b', border: '#f59e0b', focalBorder: '#f59e0b' },
+  green:   { bar: 'rgba(22,163,74,0.18)',   text: '#16a34a', border: '#16a34a', focalBorder: '#16a34a' },
+  rose:    { bar: 'rgba(244,63,94,0.18)',   text: '#f43f5e', border: '#f43f5e', focalBorder: '#f43f5e' },
+  violet:  { bar: 'rgba(139,92,246,0.18)',  text: '#8b5cf6', border: '#8b5cf6', focalBorder: '#8b5cf6' },
+  blue:    { bar: 'rgba(59,130,246,0.18)',  text: '#3b82f6', border: '#3b82f6', focalBorder: '#3b82f6' },
+  default: { bar: 'var(--color-surface-2)', text: 'var(--color-text)', border: 'var(--color-border)', focalBorder: 'var(--color-accent)' },
+};
+function tc(task: GanttTask) {
+  return COLORS[task.color ?? 'default'] ?? COLORS['default'];
+}
+
+const COL_W    = 64;   // width per unit column
+const LABEL_W  = 140;  // left label column
+const ROW_H    = 34;
+const HEADER_H = 28;
+const SECTION_H = 22;
+const BAR_H    = 20;
+const BAR_PAD  = (ROW_H - BAR_H) / 2;
+const PAD_Y    = 8;
+
+// Build flat row list with section headers injected
+interface RowSection { kind: 'section'; label: string }
+interface RowTask    { kind: 'task'; task: GanttTask }
+type Row = RowSection | RowTask;
+
+const rows: Row[] = [];
+let lastSection: string | undefined;
+for (const task of tasks) {
+  if (task.section && task.section !== lastSection) {
+    rows.push({ kind: 'section', label: task.section });
+    lastSection = task.section;
+  }
+  rows.push({ kind: 'task', task });
+}
+
+const totalCols = units.length;
+const svgW = LABEL_W + totalCols * COL_W;
+
+// Compute cumulative Y for each row
+function rowY(idx: number): number {
+  let y = PAD_Y + HEADER_H;
+  for (let i = 0; i < idx; i++) {
+    y += rows[i].kind === 'section' ? SECTION_H : ROW_H;
+  }
+  return y;
+}
+const svgH = rowY(rows.length) + PAD_Y;
+
+function colX(col: number): number { return LABEL_W + col * COL_W; }
+---
+
+<div class="gc-wrap">
+  {title && <div class="gc-titlebar"><span class="gc-prompt">$</span> {title}</div>}
+  <div class="gc-body">
+    <svg
+      width={svgW} height={svgH}
+      viewBox={`0 0 ${svgW} ${svgH}`}
+      style="display:block; max-width:100%; height:auto; overflow:visible;"
+      aria-label={title ?? 'Gantt chart'}
+    >
+      <!-- Column header backgrounds alternating -->
+      {units.map((_, ci) => (
+        <rect
+          x={colX(ci)} y={0}
+          width={COL_W} height={svgH}
+          fill={ci % 2 === 0 ? 'transparent' : 'rgba(100,116,139,0.03)'}
+        />
+      ))}
+
+      <!-- Header row -->
+      <rect x={0} y={PAD_Y} width={svgW} height={HEADER_H}
+        fill="var(--color-surface-2)"
+      />
+      <text
+        x={LABEL_W / 2} y={PAD_Y + HEADER_H / 2 + 4}
+        text-anchor="middle"
+        font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+        font-size="9" font-weight="700"
+        fill="var(--color-text-muted)"
+      >Task</text>
+      {units.map((unit, ci) => (
+        <text
+          x={colX(ci) + COL_W / 2} y={PAD_Y + HEADER_H / 2 + 4}
+          text-anchor="middle"
+          font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+          font-size="9" font-weight="700"
+          fill="var(--color-text-muted)"
+        >{unit}</text>
+      ))}
+
+      <!-- Grid vertical lines -->
+      {units.map((_, ci) => (
+        <line
+          x1={colX(ci)} y1={PAD_Y}
+          x2={colX(ci)} y2={svgH}
+          stroke="var(--color-border)" stroke-width="0.5" opacity="0.5"
+        />
+      ))}
+      <line
+        x1={svgW} y1={PAD_Y}
+        x2={svgW} y2={svgH}
+        stroke="var(--color-border)" stroke-width="0.5" opacity="0.5"
+      />
+
+      <!-- Milestone lines -->
+      {milestones.map(ms => {
+        const mx = colX(ms.unit);
+        return (
+          <>
+            <line
+              x1={mx} y1={PAD_Y + HEADER_H}
+              x2={mx} y2={svgH - PAD_Y}
+              stroke="var(--color-accent)" stroke-width="1.5"
+              stroke-dasharray="4 3" opacity="0.7"
+            />
+            <rect
+              x={mx - 28} y={PAD_Y + HEADER_H + 2} width="56" height="13"
+              rx="2" fill="rgba(var(--color-accent-rgb,69,137,255),0.12)"
+              stroke="var(--color-accent)" stroke-width="0.8"
+            />
+            <text
+              x={mx} y={PAD_Y + HEADER_H + 12}
+              text-anchor="middle"
+              font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+              font-size="7.5" font-weight="700"
+              fill="var(--color-accent)"
+            >{ms.label}</text>
+          </>
+        );
+      })}
+
+      <!-- Rows -->
+      {rows.map((row, ri) => {
+        const ry = rowY(ri);
+
+        if (row.kind === 'section') {
+          return (
+            <>
+              <rect x={0} y={ry} width={svgW} height={SECTION_H}
+                fill="var(--color-surface-2)" opacity="0.6"
+              />
+              <text
+                x={8} y={ry + SECTION_H / 2 + 4}
+                font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+                font-size="8.5" font-weight="800" letter-spacing="0.05em"
+                fill="var(--color-text-muted)"
+                text-transform="uppercase"
+              >◆ {row.label}</text>
+            </>
+          );
+        }
+
+        const task = row.task;
+        const col = tc(task);
+        const barX = colX(task.start);
+        const barW = (task.end - task.start) * COL_W;
+        const barStroke = task.focal ? col.focalBorder : col.border;
+        const barStrokeW = task.focal ? '2' : '1';
+        const barFill = task.focal
+          ? col.bar.replace('0.18', '0.32')
+          : col.bar;
+
+        return (
+          <>
+            {/* Horizontal separator */}
+            <line
+              x1={0} y1={ry}
+              x2={svgW} y2={ry}
+              stroke="var(--color-border)" stroke-width="0.4" opacity="0.5"
+            />
+
+            {/* Label */}
+            <text
+              x={8} y={ry + ROW_H / 2 + (task.sub ? -4 : 4)}
+              font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+              font-size="9.5" font-weight={task.focal ? '700' : '400'}
+              fill={task.focal ? col.text : 'var(--color-text)'}
+            >{task.label}</text>
+            {task.sub && (
+              <text
+                x={8} y={ry + ROW_H / 2 + 9}
+                font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+                font-size="8" fill="var(--color-text-muted)"
+              >{task.sub}</text>
+            )}
+
+            {/* Bar */}
+            <rect
+              x={barX + 2} y={ry + BAR_PAD}
+              width={Math.max(barW - 4, 4)} height={BAR_H}
+              rx="4"
+              fill={barFill}
+              stroke={barStroke}
+              stroke-width={barStrokeW}
+            />
+          </>
+        );
+      })}
+
+      {/* Bottom border */}
+      <line
+        x1={0} y1={svgH - PAD_Y}
+        x2={svgW} y2={svgH - PAD_Y}
+        stroke="var(--color-border)" stroke-width="0.5"
+      />
+      {/* Left border */}
+      <line
+        x1={LABEL_W} y1={PAD_Y}
+        x2={LABEL_W} y2={svgH - PAD_Y}
+        stroke="var(--color-border)" stroke-width="1"
+      />
+    </svg>
+  </div>
+  {caption && <div class="gc-caption"><span class="gc-prompt">▶</span> {caption}</div>}
+</div>
+
+<style>
+  .gc-wrap {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    margin: 1.5rem 0;
+    overflow: hidden;
+    font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+  }
+  .gc-titlebar {
+    padding: 0.4rem 0.875rem;
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-surface-2);
+    font-size: 0.65rem;
+    color: var(--color-text-muted);
+  }
+  .gc-prompt { color: var(--color-accent); font-weight: 700; margin-right: 0.35rem; }
+  .gc-body {
+    padding: 1rem;
+    overflow-x: auto;
+  }
+  .gc-caption {
+    padding: 0.45rem 0.875rem;
+    border-top: 1px solid var(--color-border);
+    font-size: 0.62rem;
+    color: var(--color-text-dim);
+    background: var(--color-bg);
+    line-height: 1.5;
+  }
+</style>

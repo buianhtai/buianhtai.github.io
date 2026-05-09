@@ -824,3 +824,270 @@ interface Props {
 />
 ```
 **When to use:** Set membership overlaps, shared properties between 2-3 systems, CAP theorem, RUM Conjecture. Use `focal: true` on the most interesting intersection. Circle colors: `'blue' | 'green' | 'amber' | 'rose' | 'violet' | 'teal'`.
+
+---
+
+### Swimlane
+**Pattern:** Actor-partitioned process flow. Each horizontal lane belongs to one actor; steps within lanes are ordered left-to-right; cross-lane arrows are drawn as orthogonal elbow paths.
+**Props:**
+```ts
+interface Lane {
+  id: string;
+  label: string;
+  color?: 'teal' | 'amber' | 'green' | 'rose' | 'violet' | 'blue';
+}
+interface Step {
+  id: string;
+  lane: string;       // lane id
+  label: string;
+  sub?: string;
+  focal?: boolean;    // accent ring highlight
+}
+interface Arrow {
+  from: string;       // step id
+  to: string;
+  label?: string;
+  type?: 'solid' | 'dashed' | 'async';
+}
+interface Props {
+  lanes: Lane[];
+  steps: Step[];
+  arrows?: Arrow[];
+  title?: string;
+  caption?: string;
+}
+```
+**Usage:**
+```mdx
+<Swimlane
+  title="Raft write path"
+  lanes={[
+    { id: "client",   label: "Client",     color: "teal" },
+    { id: "leader",   label: "Leader",     color: "amber" },
+    { id: "follower", label: "Follower ×N",color: "green" },
+  ]}
+  steps={[
+    { id: "req",    lane: "client",   label: "PUT key=val" },
+    { id: "wal",    lane: "leader",   label: "Append WAL" },
+    { id: "rep",    lane: "follower", label: "Replicate" },
+    { id: "ack",    lane: "follower", label: "ACK" },
+    { id: "commit", lane: "leader",   label: "Commit",    focal: true },
+    { id: "resp",   lane: "client",   label: "OK" },
+  ]}
+  arrows={[
+    { from: "req",    to: "wal",    label: "write" },
+    { from: "wal",    to: "rep",    label: "AppendEntries" },
+    { from: "rep",    to: "ack" },
+    { from: "ack",    to: "commit", label: "quorum" },
+    { from: "commit", to: "resp",   label: "200 OK" },
+  ]}
+  caption="Raft write: leader WALs, replicates to quorum, commits, responds."
+/>
+```
+**When to use:** Multi-actor process flows where horizontal position shows time order and vertical lanes show actor boundaries. Replaces Mermaid swimlane diagrams. Best for 2–5 actors and 4–10 steps.
+
+---
+
+### NetworkMap
+**Pattern:** Free-layout infrastructure topology with nodes at explicit (x,y) grid positions (0–100 scale) and straight edges between them.
+**Props:**
+```ts
+interface MapNode {
+  id: string;
+  label: string;
+  x: number;     // 0–100 grid
+  y: number;
+  shape?: 'rect' | 'oval' | 'hexagon' | 'cylinder' | 'diamond' | 'cloud';
+  color?: 'teal' | 'amber' | 'green' | 'rose' | 'violet' | 'blue' | 'default';
+  sub?: string;
+  badge?: string;
+}
+interface MapEdge {
+  from: string;
+  to: string;
+  label?: string;
+  style?: 'solid' | 'dashed';
+  bidirectional?: boolean;
+}
+interface Props {
+  nodes: MapNode[];
+  edges?: MapEdge[];
+  title?: string;
+  caption?: string;
+  height?: number; // default 340
+}
+```
+**Usage:**
+```mdx
+<NetworkMap
+  title="Kubernetes cluster topology"
+  nodes={[
+    { id:"lb",   label:"Load Balancer", x:50, y:5,  shape:"hexagon",  color:"teal" },
+    { id:"api1", label:"API Server 1",  x:25, y:35, shape:"rect",     color:"blue" },
+    { id:"etcd", label:"etcd",          x:75, y:35, shape:"cylinder", color:"amber" },
+    { id:"n1",   label:"Node 1",        x:25, y:70, shape:"rect",     color:"green" },
+    { id:"n2",   label:"Node 2",        x:75, y:70, shape:"rect",     color:"green" },
+  ]}
+  edges={[
+    { from:"lb",   to:"api1", label:"HTTPS" },
+    { from:"api1", to:"etcd", label:"raft" },
+    { from:"api1", to:"n1" },
+    { from:"api1", to:"n2" },
+  ]}
+  caption="Control plane schedules to worker nodes; all reads go through etcd."
+/>
+```
+**Shapes:** `rect` = service, `oval` = user/actor, `hexagon` = orchestrator/LB, `cylinder` = database/store, `diamond` = decision/router, `cloud` = external API.
+**When to use:** Infrastructure topology, Kubernetes cluster maps, microservice networks, cloud architecture. Use instead of ArchDiagram when nodes need free positioning.
+
+---
+
+### MindMap
+**Pattern:** Radial concept clustering. A central root radiates to primary branches; each branch can have secondary leaves. Angular layout is computed automatically.
+**Props:**
+```ts
+interface RootNode { label: string; sub?: string; }
+interface Leaf { label: string; }
+interface Branch {
+  label: string;
+  color?: 'teal' | 'amber' | 'green' | 'rose' | 'violet' | 'blue' | 'default';
+  leaves?: Leaf[];
+}
+interface Props {
+  root: RootNode;
+  branches: Branch[];
+  title?: string;
+  caption?: string;
+  size?: number; // canvas diameter, default 520
+}
+```
+**Usage:**
+```mdx
+<MindMap
+  title="CAP Theorem concepts"
+  root={{ label: "CAP Theorem" }}
+  branches={[
+    { label: "Consistency",        color: "teal",   leaves: [{ label: "Linearizability" }, { label: "Read-your-writes" }] },
+    { label: "Availability",       color: "green",  leaves: [{ label: "Every request responds" }] },
+    { label: "Partition Tolerance",color: "amber",  leaves: [{ label: "Network splits" }, { label: "Message drops" }] },
+    { label: "CP systems",         color: "violet", leaves: [{ label: "HBase" }, { label: "Zookeeper" }] },
+    { label: "AP systems",         color: "rose",   leaves: [{ label: "Cassandra" }, { label: "CouchDB" }] },
+  ]}
+  caption="CAP: only 2 of 3 properties are achievable during a partition."
+/>
+```
+**When to use:** Concept clustering, knowledge maps, taxonomy trees, brainstorm visualization. Use instead of Tree when you want radial (non-hierarchical) layout. Supports 3–8 branches, each with 1–4 leaves.
+
+---
+
+### GanttChart
+**Pattern:** Horizontal Gantt chart with labeled time-unit columns and duration bars per task. Optional milestone lines and section headers.
+**Props:**
+```ts
+interface GanttTask {
+  label: string;
+  start: number;    // column index (0-based, inclusive)
+  end: number;      // column index (exclusive)
+  color?: 'teal' | 'amber' | 'green' | 'rose' | 'violet' | 'blue';
+  focal?: boolean;  // brighter bar + bold label
+  sub?: string;
+  section?: string; // section header row inserted before this task
+}
+interface Milestone {
+  unit: number;     // column index
+  label: string;
+}
+interface Props {
+  units: string[];        // column header labels (e.g. ["W1","W2",...])
+  tasks: GanttTask[];
+  milestones?: Milestone[];
+  title?: string;
+  caption?: string;
+}
+```
+**Usage:**
+```mdx
+<GanttChart
+  title="Migration timeline"
+  units={["W1","W2","W3","W4","W5","W6"]}
+  tasks={[
+    { label: "Schema audit",      start: 0, end: 2, color: "teal" },
+    { label: "Dual-write mode",   start: 2, end: 5, color: "amber" },
+    { label: "Traffic cutover",   start: 5, end: 6, color: "rose", focal: true },
+  ]}
+  milestones={[{ unit: 5, label: "Go/No-go" }]}
+  caption="6-week zero-downtime migration. Dual-write overlaps for consistency validation."
+/>
+```
+**When to use:** Project timelines, algorithm phase breakdowns, migration roadmaps, feature release schedules. `section` prop groups tasks under a header row. `focal` highlights the most important task. Use instead of Timeline when bars have duration (start/end) rather than single point-in-time events.
+
+---
+
+### AgentMemoryMap
+**Pattern:** Purpose-built semantic topology diagram for LLM/agent architectures. Node shapes carry semantic meaning. Built-in legend. Four edge types with distinct visual styles.
+**Props:**
+```ts
+interface AgentNode {
+  id: string;
+  label: string;
+  x: number;   // 0–100 grid
+  y: number;
+  shape: 'hexagon' | 'circle' | 'cylinder' | 'rect' | 'oval' | 'diamond' | 'cloud';
+  color?: 'teal' | 'amber' | 'green' | 'rose' | 'violet' | 'blue' | 'default';
+  sub?: string;
+  badge?: string;
+}
+interface AgentEdge {
+  from: string;
+  to: string;
+  label?: string;
+  type?: 'call' | 'memory' | 'feedback' | 'data';
+}
+interface Props {
+  nodes: AgentNode[];
+  edges?: AgentEdge[];
+  title?: string;
+  caption?: string;
+  legend?: boolean; // default true
+  height?: number;  // default 380
+}
+```
+**Shape semantics:**
+- `hexagon` → Agent / Orchestrator
+- `circle` → LLM / Model (double ring)
+- `cylinder` → Vector Store / Database
+- `rect` → Tool / Function
+- `oval` → Human / User
+- `diamond` → Decision / Router
+- `cloud` → External Service / API
+
+**Edge type semantics:**
+- `call` → solid line (synchronous invocation)
+- `memory` → dashed amber (memory read/write)
+- `feedback` → dashed (observe/return)
+- `data` → dotted blue (data flow)
+
+**Usage:**
+```mdx
+<AgentMemoryMap
+  title="ReAct agent with memory"
+  nodes={[
+    { id:"user",  label:"User",         shape:"oval",     x:50, y:5,  color:"default" },
+    { id:"agent", label:"Orchestrator", shape:"hexagon",  x:50, y:28, color:"teal",   sub:"ReAct loop" },
+    { id:"llm",   label:"LLM",          shape:"circle",   x:20, y:55, color:"violet", sub:"gpt-4o" },
+    { id:"mem",   label:"Memory Store", shape:"cylinder", x:80, y:50, color:"amber" },
+    { id:"tools", label:"Tools",        shape:"rect",     x:50, y:78, color:"green",  sub:"search, code" },
+  ]}
+  edges={[
+    { from:"user",  to:"agent", label:"prompt",   type:"call" },
+    { from:"agent", to:"llm",   label:"reason",   type:"call" },
+    { from:"agent", to:"mem",   label:"recall",   type:"memory" },
+    { from:"agent", to:"tools", label:"act",      type:"call" },
+    { from:"tools", to:"agent", label:"observe",  type:"feedback" },
+    { from:"agent", to:"user",  label:"answer",   type:"data" },
+  ]}
+  caption="ReAct loop: plan → reason/recall → act → observe → repeat."
+/>
+```
+**When to use:** LLM agent architecture diagrams, multi-agent system maps, RAG pipeline overviews. Use instead of ArchDiagram when you need semantic shapes that communicate the role of each node (LLM vs store vs tool vs router).
+

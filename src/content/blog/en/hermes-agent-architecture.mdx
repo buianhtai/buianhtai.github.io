@@ -19,6 +19,8 @@ import Pipeline from '../../../components/mdx/Pipeline.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
 import Mermaid from '../../../components/mdx/Mermaid.astro';
 import ProviderGrid from '../../../components/mdx/ProviderGrid.astro';
+import AgentMemoryMap from '../../../components/mdx/AgentMemoryMap.astro';
+import Swimlane from '../../../components/mdx/Swimlane.astro';
 
 Most AI coding agents are either too narrow (one CLI, one provider, one interface) or too shallow (a wrapper with no memory, no scheduling, no runtime story). Building a general-purpose agent that works across Telegram, Docker, a GPU cluster, and your local terminal — while remaining trainable — requires a fundamentally different architecture.
 
@@ -81,6 +83,34 @@ Each turn follows a precise sequence:
 </FlowStep>
 
 The message alternation rules are strict and enforced: after the system message the sequence is always `User → Assistant → User → Assistant`. During tool calling: `Assistant (with tool_calls) → Tool → Tool → ... → Assistant`. Providers validate these sequences and reject malformed histories — so the loop is the only place that can safely mutate conversation state.
+
+<AgentMemoryMap
+  title="Hermes AIAgent component architecture"
+  height={340}
+  nodes={[
+    { id: "user",     label: "User / Client",   shape: "oval",     x: 50, y: 5,  color: "default" },
+    { id: "agent",    label: "AIAgent",          shape: "hexagon",  x: 50, y: 25, color: "teal",   sub: "run_conversation()" },
+    { id: "prompt",   label: "Prompt Builder",   shape: "rect",     x: 15, y: 50, color: "blue",   sub: "SOUL.md + MEMORY.md" },
+    { id: "llm",      label: "LLM Provider",     shape: "circle",   x: 50, y: 52, color: "violet", sub: "OpenAI / Anthropic" },
+    { id: "tools",    label: "Tool Registry",    shape: "rect",     x: 83, y: 38, color: "green",  sub: "52 toolsets" },
+    { id: "compress", label: "Compressor",       shape: "diamond",  x: 83, y: 65, color: "amber",  sub: ">50% context?" },
+    { id: "sqlite",   label: "SQLite Session",   shape: "cylinder", x: 25, y: 80, color: "amber",  sub: "hermes_state.py" },
+    { id: "memory",   label: "MEMORY.md",        shape: "cylinder", x: 72, y: 88, color: "green",  sub: "persistent memory" },
+  ]}
+  edges={[
+    { from: "user",     to: "agent",    label: "message",    type: "call" },
+    { from: "agent",    to: "prompt",   label: "assemble",   type: "call" },
+    { from: "agent",    to: "compress", label: "check",      type: "call" },
+    { from: "agent",    to: "llm",      label: "completion", type: "call" },
+    { from: "llm",      to: "tools",    label: "tool_calls", type: "call" },
+    { from: "tools",    to: "agent",    label: "results",    type: "feedback" },
+    { from: "agent",    to: "sqlite",   label: "flush",      type: "data" },
+    { from: "agent",    to: "memory",   label: "update",     type: "memory" },
+    { from: "agent",    to: "user",     label: "response",   type: "data" },
+  ]}
+  legend={true}
+  caption="AIAgent orchestrates prompt building, context compression, LLM calls, tool dispatch, and persistent state flush in each turn."
+/>
 
 ## <Label color="amber">3</Label> HOW: Tools, Toolsets, and Backends
 

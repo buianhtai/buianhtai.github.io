@@ -1,0 +1,303 @@
+---
+/**
+ * MindMap — radial concept clustering diagram.
+ *
+ * A central root node radiates out to primary branches, each of which can
+ * have secondary leaves. Layout is computed automatically using equal angular
+ * spacing. All nodes are pure SVG — no JS required.
+ *
+ * Usage:
+ *   <MindMap
+ *     title="CAP Theorem concepts"
+ *     root={{ label: "CAP Theorem" }}
+ *     branches={[
+ *       {
+ *         label: "Consistency",
+ *         color: "teal",
+ *         leaves: [
+ *           { label: "Linearizability" },
+ *           { label: "Sequential" },
+ *           { label: "Read-your-writes" },
+ *         ]
+ *       },
+ *       {
+ *         label: "Availability",
+ *         color: "green",
+ *         leaves: [
+ *           { label: "Every request responds" },
+ *           { label: "No infinite waits" },
+ *         ]
+ *       },
+ *       {
+ *         label: "Partition Tolerance",
+ *         color: "amber",
+ *         leaves: [
+ *           { label: "Network splits" },
+ *           { label: "Message drops" },
+ *         ]
+ *       },
+ *       { label: "CP systems",  color: "violet", leaves: [{ label: "HBase" }, { label: "Zookeeper" }] },
+ *       { label: "AP systems",  color: "rose",   leaves: [{ label: "Cassandra" }, { label: "CouchDB" }] },
+ *       { label: "PACELC",      color: "blue",   leaves: [{ label: "Latency vs Consistency" }] },
+ *     ]}
+ *     caption="CAP says you can only guarantee 2 of 3 properties during a partition."
+ *   />
+ *
+ * branch.color: 'teal' | 'amber' | 'green' | 'rose' | 'violet' | 'blue' | 'default'
+ */
+
+interface RootNode {
+  label: string;
+  sub?: string;
+}
+
+interface Leaf {
+  label: string;
+}
+
+interface Branch {
+  label: string;
+  color?: string;
+  leaves?: Leaf[];
+}
+
+interface Props {
+  root: RootNode;
+  branches: Branch[];
+  title?: string;
+  caption?: string;
+  size?: number; // canvas diameter, default 520
+}
+
+const { root, branches, title, caption, size = 520 } = Astro.props;
+
+const COLORS: Record<string, { fill: string; stroke: string; text: string; leaf: string; line: string }> = {
+  teal:    { fill: 'rgba(14,165,233,0.12)',  stroke: '#0ea5e9', text: '#0ea5e9',  leaf: 'rgba(14,165,233,0.06)',  line: 'rgba(14,165,233,0.35)' },
+  amber:   { fill: 'rgba(245,158,11,0.12)',  stroke: '#f59e0b', text: '#f59e0b',  leaf: 'rgba(245,158,11,0.06)',  line: 'rgba(245,158,11,0.35)' },
+  green:   { fill: 'rgba(22,163,74,0.12)',   stroke: '#16a34a', text: '#16a34a',  leaf: 'rgba(22,163,74,0.06)',   line: 'rgba(22,163,74,0.35)' },
+  rose:    { fill: 'rgba(244,63,94,0.12)',   stroke: '#f43f5e', text: '#f43f5e',  leaf: 'rgba(244,63,94,0.06)',   line: 'rgba(244,63,94,0.35)' },
+  violet:  { fill: 'rgba(139,92,246,0.12)',  stroke: '#8b5cf6', text: '#8b5cf6',  leaf: 'rgba(139,92,246,0.06)',  line: 'rgba(139,92,246,0.35)' },
+  blue:    { fill: 'rgba(59,130,246,0.12)',  stroke: '#3b82f6', text: '#3b82f6',  leaf: 'rgba(59,130,246,0.06)',  line: 'rgba(59,130,246,0.35)' },
+  default: { fill: 'var(--color-surface-2)', stroke: 'var(--color-border)',        text: 'var(--color-text)',       leaf: 'var(--color-surface)',   line: 'var(--color-border)' },
+};
+function cc(branch: Branch) { return COLORS[branch.color ?? 'default'] ?? COLORS['default']; }
+
+const CX = size / 2;
+const CY = size / 2;
+const ROOT_R    = 38;   // root circle radius
+const BRANCH_R  = 30;   // primary branch node (half-width of rect)
+const BRANCH_H  = 18;
+const LEAF_R    = 24;
+const LEAF_H    = 14;
+const R_BRANCH  = size * 0.28; // distance from center to branch
+const R_LEAF    = size * 0.44; // distance from center to leaf
+
+const n = branches.length;
+
+// Helper: bezier curve control point
+function bezierPath(x1: number, y1: number, x2: number, y2: number): string {
+  const mx = (x1 + x2) / 2;
+  const my = (y1 + y2) / 2;
+  return `M ${x1} ${y1} Q ${mx} ${my} ${x2} ${y2}`;
+}
+
+function wrapText(text: string, maxChars = 14): string[] {
+  if (text.length <= maxChars) return [text];
+  const words = text.split(' ');
+  const lines: string[] = [];
+  let cur = '';
+  for (const w of words) {
+    if ((cur + ' ' + w).trim().length <= maxChars) {
+      cur = (cur + ' ' + w).trim();
+    } else {
+      if (cur) lines.push(cur);
+      cur = w;
+    }
+  }
+  if (cur) lines.push(cur);
+  return lines.slice(0, 2); // max 2 lines
+}
+---
+
+<div class="mm-wrap">
+  {title && <div class="mm-titlebar"><span class="mm-prompt">$</span> {title}</div>}
+  <div class="mm-body">
+    <svg
+      width={size} height={size}
+      viewBox={`0 0 ${size} ${size}`}
+      style="display:block; max-width:100%; height:auto; overflow:visible;"
+      aria-label={title ?? 'Mind map diagram'}
+    >
+      <!-- Branch lines + leaf lines -->
+      {branches.map((branch, bi) => {
+        const angle = (bi / n) * 2 * Math.PI - Math.PI / 2;
+        const bx = CX + R_BRANCH * Math.cos(angle);
+        const by = CY + R_BRANCH * Math.sin(angle);
+        const col = cc(branch);
+
+        const leaves = branch.leaves ?? [];
+        const lCount = leaves.length;
+
+        return (
+          <>
+            {/* Root → branch curved line */}
+            <path
+              d={bezierPath(CX, CY, bx, by)}
+              fill="none"
+              stroke={col.line}
+              stroke-width="2"
+            />
+
+            {/* Branch → leaf lines */}
+            {leaves.map((leaf, li) => {
+              const spread = Math.PI * 0.28;
+              const lAngle = lCount === 1
+                ? angle
+                : angle - spread / 2 + (li / (lCount - 1)) * spread;
+              const lx = CX + R_LEAF * Math.cos(lAngle);
+              const ly = CY + R_LEAF * Math.sin(lAngle);
+              return (
+                <path
+                  d={bezierPath(bx, by, lx, ly)}
+                  fill="none"
+                  stroke={col.line}
+                  stroke-width="1.2"
+                  stroke-dasharray="3 2"
+                />
+              );
+            })}
+          </>
+        );
+      })}
+
+      <!-- Root node -->
+      <circle
+        cx={CX} cy={CY} r={ROOT_R}
+        fill="var(--color-accent)" opacity="0.12"
+        stroke="var(--color-accent)" stroke-width="2"
+      />
+      <circle
+        cx={CX} cy={CY} r={ROOT_R - 6}
+        fill="var(--color-surface)"
+        stroke="var(--color-accent)" stroke-width="1" opacity="0.5"
+      />
+      {(() => {
+        const lines = wrapText(root.label, 10);
+        return lines.map((line, i) => (
+          <text
+            x={CX} y={CY + (i - (lines.length - 1) / 2) * 11 + 4}
+            text-anchor="middle"
+            font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+            font-size="10" font-weight="800"
+            fill="var(--color-accent)"
+          >{line}</text>
+        ));
+      })()}
+      {root.sub && (
+        <text
+          x={CX} y={CY + ROOT_R + 12}
+          text-anchor="middle"
+          font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+          font-size="8" fill="var(--color-text-muted)"
+        >{root.sub}</text>
+      )}
+
+      <!-- Branch nodes + leaf nodes -->
+      {branches.map((branch, bi) => {
+        const angle = (bi / n) * 2 * Math.PI - Math.PI / 2;
+        const bx = CX + R_BRANCH * Math.cos(angle);
+        const by = CY + R_BRANCH * Math.sin(angle);
+        const col = cc(branch);
+        const lines = wrapText(branch.label, 14);
+
+        const leaves = branch.leaves ?? [];
+        const lCount = leaves.length;
+
+        return (
+          <>
+            {/* Branch node (rounded rect) */}
+            <rect
+              x={bx - BRANCH_R} y={by - BRANCH_H}
+              width={BRANCH_R * 2} height={BRANCH_H * 2}
+              rx="8"
+              fill={col.fill} stroke={col.stroke} stroke-width="1.5"
+            />
+            {lines.map((line, i) => (
+              <text
+                x={bx} y={by + (i - (lines.length - 1) / 2) * 10 + 4}
+                text-anchor="middle"
+                font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+                font-size="9" font-weight="700"
+                fill={col.text}
+              >{line}</text>
+            ))}
+
+            {/* Leaf nodes */}
+            {leaves.map((leaf, li) => {
+              const spread = Math.PI * 0.28;
+              const lAngle = lCount === 1
+                ? angle
+                : angle - spread / 2 + (li / (lCount - 1)) * spread;
+              const lx = CX + R_LEAF * Math.cos(lAngle);
+              const ly = CY + R_LEAF * Math.sin(lAngle);
+              const lleaf = wrapText(leaf.label, 13);
+
+              return (
+                <>
+                  <rect
+                    x={lx - LEAF_R} y={ly - LEAF_H}
+                    width={LEAF_R * 2} height={LEAF_H * 2}
+                    rx="5"
+                    fill={col.leaf} stroke={col.stroke} stroke-width="1"
+                    opacity="0.85"
+                  />
+                  {lleaf.map((line, i) => (
+                    <text
+                      x={lx} y={ly + (i - (lleaf.length - 1) / 2) * 9 + 4}
+                      text-anchor="middle"
+                      font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+                      font-size="8" fill="var(--color-text)"
+                    >{line}</text>
+                  ))}
+                </>
+              );
+            })}
+          </>
+        );
+      })}
+    </svg>
+  </div>
+  {caption && <div class="mm-caption"><span class="mm-prompt">▶</span> {caption}</div>}
+</div>
+
+<style>
+  .mm-wrap {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    margin: 1.5rem 0;
+    overflow: hidden;
+    font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+  }
+  .mm-titlebar {
+    padding: 0.4rem 0.875rem;
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-surface-2);
+    font-size: 0.65rem;
+    color: var(--color-text-muted);
+  }
+  .mm-prompt { color: var(--color-accent); font-weight: 700; margin-right: 0.35rem; }
+  .mm-body {
+    padding: 1.25rem;
+    overflow-x: auto;
+    display: flex;
+    justify-content: center;
+  }
+  .mm-caption {
+    padding: 0.45rem 0.875rem;
+    border-top: 1px solid var(--color-border);
+    font-size: 0.62rem;
+    color: var(--color-text-dim);
+    background: var(--color-bg);
+    line-height: 1.5;
+  }
+</style>

@@ -1,0 +1,330 @@
+---
+/**
+ * NetworkMap — free-layout node/edge graph for infrastructure topology.
+ *
+ * Nodes are placed at explicit (x, y) coordinates in a 0–100 grid
+ * (automatically scaled to the SVG canvas). Edges are straight or
+ * curved connections between nodes.
+ *
+ * Usage:
+ *   <NetworkMap
+ *     title="Kubernetes cluster topology"
+ *     nodes={[
+ *       { id:"lb",    label:"Load Balancer", x:50, y:5,  shape:"hexagon", color:"teal" },
+ *       { id:"api1",  label:"API Server 1",  x:25, y:30, shape:"rect",    color:"blue" },
+ *       { id:"api2",  label:"API Server 2",  x:75, y:30, shape:"rect",    color:"blue" },
+ *       { id:"etcd",  label:"etcd",          x:50, y:30, shape:"cylinder", color:"amber" },
+ *       { id:"n1",    label:"Node 1",        x:20, y:60, shape:"rect",    color:"green" },
+ *       { id:"n2",    label:"Node 2",        x:50, y:60, shape:"rect",    color:"green" },
+ *       { id:"n3",    label:"Node 3",        x:80, y:60, shape:"rect",    color:"green" },
+ *       { id:"db",    label:"Postgres",      x:50, y:88, shape:"cylinder", color:"rose" },
+ *     ]}
+ *     edges={[
+ *       { from:"lb",   to:"api1", label:"HTTPS" },
+ *       { from:"lb",   to:"api2", label:"HTTPS" },
+ *       { from:"api1", to:"etcd", label:"raft" },
+ *       { from:"api2", to:"etcd", label:"raft" },
+ *       { from:"api1", to:"n1" }, { from:"api1", to:"n2" }, { from:"api2", to:"n3" },
+ *       { from:"n1",   to:"db",   label:"SQL" },
+ *       { from:"n2",   to:"db",   label:"SQL" },
+ *     ]}
+ *     caption="Control plane (top) schedules workloads onto worker nodes; all nodes read etcd."
+ *   />
+ *
+ * node.shape: 'rect' | 'oval' | 'hexagon' | 'cylinder' | 'diamond' | 'cloud'
+ * node.color:  'teal' | 'amber' | 'green' | 'rose' | 'violet' | 'blue' | 'default'
+ * node.badge:  short text overlay (version / count)
+ * node.sub:    subtitle below label
+ * edge.style: 'solid' (default) | 'dashed'
+ * edge.bidirectional: true for ↔ arrow
+ */
+
+interface MapNode {
+  id: string;
+  label: string;
+  x: number;     // 0–100 grid
+  y: number;     // 0–100 grid
+  shape?: 'rect' | 'oval' | 'hexagon' | 'cylinder' | 'diamond' | 'cloud';
+  color?: string;
+  sub?: string;
+  badge?: string;
+}
+
+interface MapEdge {
+  from: string;
+  to: string;
+  label?: string;
+  style?: 'solid' | 'dashed';
+  bidirectional?: boolean;
+}
+
+interface Props {
+  nodes: MapNode[];
+  edges?: MapEdge[];
+  title?: string;
+  caption?: string;
+  height?: number; // SVG canvas height, default 340
+}
+
+const { nodes, edges = [], title, caption, height = 340 } = Astro.props;
+
+const W = 640;
+const H = height;
+const MARGIN_X = 64;
+const MARGIN_Y = 40;
+
+// Grid to canvas coordinates
+function toCanvasX(gx: number): number {
+  return MARGIN_X + (gx / 100) * (W - 2 * MARGIN_X);
+}
+function toCanvasY(gy: number): number {
+  return MARGIN_Y + (gy / 100) * (H - 2 * MARGIN_Y);
+}
+
+const NODE_COLORS: Record<string, { fill: string; stroke: string; text: string }> = {
+  teal:    { fill: 'rgba(14,165,233,0.1)',  stroke: '#0ea5e9', text: '#0ea5e9' },
+  amber:   { fill: 'rgba(245,158,11,0.1)',  stroke: '#f59e0b', text: '#f59e0b' },
+  green:   { fill: 'rgba(22,163,74,0.1)',   stroke: '#16a34a', text: '#16a34a' },
+  rose:    { fill: 'rgba(244,63,94,0.1)',   stroke: '#f43f5e', text: '#f43f5e' },
+  violet:  { fill: 'rgba(139,92,246,0.1)',  stroke: '#8b5cf6', text: '#8b5cf6' },
+  blue:    { fill: 'rgba(59,130,246,0.1)',  stroke: '#3b82f6', text: '#3b82f6' },
+  default: { fill: 'var(--color-surface-2)', stroke: 'var(--color-border)', text: 'var(--color-text)' },
+};
+function nc(node: MapNode) {
+  return NODE_COLORS[node.color ?? 'default'] ?? NODE_COLORS['default'];
+}
+
+const NODE_RW = 54;
+const NODE_RH = 26;
+
+function nodeCenter(id: string): { cx: number; cy: number } {
+  const n = nodes.find(n => n.id === id)!;
+  return { cx: toCanvasX(n.x), cy: toCanvasY(n.y) };
+}
+
+// Approximate border intersection for edge endpoints
+function edgeEndpoints(from: MapNode, to: MapNode) {
+  const fx = toCanvasX(from.x), fy = toCanvasY(from.y);
+  const tx = toCanvasX(to.x),   ty = toCanvasY(to.y);
+  const dx = tx - fx, dy = ty - fy;
+  const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+  const ux = dx / dist, uy = dy / dist;
+  // Offset from center by approx node radius
+  const r = Math.max(NODE_RW, NODE_RH) * 0.95;
+  return {
+    x1: fx + ux * r, y1: fy + uy * r,
+    x2: tx - ux * r, y2: ty - uy * r,
+  };
+}
+
+const nodeMap = Object.fromEntries(nodes.map(n => [n.id, n]));
+
+// Build hexagon path centered at (cx,cy) with approx radius r
+function hexPath(cx: number, cy: number, rx: number, ry: number): string {
+  const pts: string[] = [];
+  for (let i = 0; i < 6; i++) {
+    const a = Math.PI / 180 * (60 * i - 30);
+    pts.push(`${cx + rx * Math.cos(a)},${cy + ry * Math.sin(a)}`);
+  }
+  return `M ${pts.join(' L ')} Z`;
+}
+
+function diamondPath(cx: number, cy: number, rx: number, ry: number): string {
+  return `M ${cx},${cy - ry} L ${cx + rx},${cy} L ${cx},${cy + ry} L ${cx - rx},${cy} Z`;
+}
+
+const id = `nm-${Math.random().toString(36).slice(2, 7)}`;
+---
+
+<div class="nm-wrap">
+  {title && <div class="nm-titlebar"><span class="nm-prompt">$</span> {title}</div>}
+  <div class="nm-body">
+    <svg
+      width={W} height={H}
+      viewBox={`0 0 ${W} ${H}`}
+      style="display:block; max-width:100%; height:auto; overflow:visible;"
+      aria-label={title ?? 'Network topology diagram'}
+    >
+      <defs>
+        <marker id={`${id}-arr`} markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="var(--color-text-muted)" opacity="0.7" />
+        </marker>
+        <marker id={`${id}-arr-bi`} markerWidth="8" markerHeight="6" refX="1" refY="3" orient="auto">
+          <polygon points="8 0, 0 3, 8 6" fill="var(--color-text-muted)" opacity="0.7" />
+        </marker>
+        {/* Cloud shape filter */}
+        <filter id={`${id}-glow`} x="-30%" y="-30%" width="160%" height="160%">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="2" result="blur" />
+          <feComposite in="SourceGraphic" in2="blur" operator="over" />
+        </filter>
+      </defs>
+
+      <!-- Edges -->
+      {edges.map(edge => {
+        const from = nodeMap[edge.from];
+        const to   = nodeMap[edge.to];
+        if (!from || !to) return null;
+        const { x1, y1, x2, y2 } = edgeEndpoints(from, to);
+        const midX = (x1 + x2) / 2;
+        const midY = (y1 + y2) / 2;
+        const isDash = edge.style === 'dashed';
+
+        return (
+          <>
+            <line
+              x1={x1} y1={y1} x2={x2} y2={y2}
+              stroke="var(--color-text-muted)"
+              stroke-width="1.4"
+              stroke-dasharray={isDash ? '5 3' : undefined}
+              marker-end={`url(#${id}-arr)`}
+              marker-start={edge.bidirectional ? `url(#${id}-arr-bi)` : undefined}
+              opacity="0.6"
+            />
+            {edge.label && (
+              <>
+                <rect
+                  x={midX - 26} y={midY - 8} width="52" height="12"
+                  rx="2" fill="var(--color-surface)" opacity="0.92"
+                />
+                <text
+                  x={midX} y={midY + 1.5}
+                  text-anchor="middle"
+                  font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+                  font-size="8" fill="var(--color-text-muted)"
+                >{edge.label}</text>
+              </>
+            )}
+          </>
+        );
+      })}
+
+      <!-- Nodes -->
+      {nodes.map(node => {
+        const cx = toCanvasX(node.x);
+        const cy = toCanvasY(node.y);
+        const col = nc(node);
+        const shape = node.shape ?? 'rect';
+
+        return (
+          <>
+            {shape === 'rect' && (
+              <rect
+                x={cx - NODE_RW} y={cy - NODE_RH}
+                width={NODE_RW * 2} height={NODE_RH * 2}
+                rx="6" fill={col.fill} stroke={col.stroke} stroke-width="1.5"
+              />
+            )}
+            {shape === 'oval' && (
+              <ellipse cx={cx} cy={cy} rx={NODE_RW} ry={NODE_RH}
+                fill={col.fill} stroke={col.stroke} stroke-width="1.5"
+              />
+            )}
+            {shape === 'hexagon' && (
+              <path d={hexPath(cx, cy, NODE_RW, NODE_RH)}
+                fill={col.fill} stroke={col.stroke} stroke-width="1.5"
+              />
+            )}
+            {shape === 'diamond' && (
+              <path d={diamondPath(cx, cy, NODE_RW * 1.1, NODE_RH * 1.3)}
+                fill={col.fill} stroke={col.stroke} stroke-width="1.5"
+              />
+            )}
+            {shape === 'cylinder' && (
+              <>
+                <rect
+                  x={cx - NODE_RW} y={cy - NODE_RH + 6}
+                  width={NODE_RW * 2} height={NODE_RH * 2 - 12}
+                  fill={col.fill} stroke={col.stroke} stroke-width="1.5"
+                />
+                <ellipse cx={cx} cy={cy - NODE_RH + 6} rx={NODE_RW} ry={7}
+                  fill={col.fill} stroke={col.stroke} stroke-width="1.5"
+                />
+                <ellipse cx={cx} cy={cy + NODE_RH - 6} rx={NODE_RW} ry={7}
+                  fill={col.fill} stroke={col.stroke} stroke-width="0.8" opacity="0.5"
+                />
+              </>
+            )}
+            {shape === 'cloud' && (
+              <>
+                <ellipse cx={cx} cy={cy} rx={NODE_RW * 1.1} ry={NODE_RH * 0.85}
+                  fill={col.fill} stroke={col.stroke} stroke-width="1.5"
+                />
+                <ellipse cx={cx - NODE_RW * 0.5} cy={cy - NODE_RH * 0.5} rx={NODE_RH * 0.6} ry={NODE_RH * 0.55}
+                  fill={col.fill} stroke={col.stroke} stroke-width="1"
+                />
+                <ellipse cx={cx + NODE_RW * 0.4} cy={cy - NODE_RH * 0.55} rx={NODE_RH * 0.65} ry={NODE_RH * 0.55}
+                  fill={col.fill} stroke={col.stroke} stroke-width="1"
+                />
+              </>
+            )}
+
+            {/* Label */}
+            <text
+              x={cx} y={cy + (node.sub ? -4 : 4)}
+              text-anchor="middle"
+              font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+              font-size="9.5" font-weight="700"
+              fill={col.text}
+            >{node.label}</text>
+            {node.sub && (
+              <text
+                x={cx} y={cy + 9}
+                text-anchor="middle"
+                font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+                font-size="7.5" fill="var(--color-text-muted)"
+              >{node.sub}</text>
+            )}
+            {node.badge && (
+              <>
+                <rect
+                  x={cx + NODE_RW - 16} y={cy - NODE_RH - 1}
+                  width="20" height="11" rx="3"
+                  fill="var(--color-accent)" opacity="0.9"
+                />
+                <text
+                  x={cx + NODE_RW + 4} y={cy - NODE_RH + 8}
+                  text-anchor="middle"
+                  font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+                  font-size="7" font-weight="700" fill="var(--color-bg)"
+                >{node.badge}</text>
+              </>
+            )}
+          </>
+        );
+      })}
+    </svg>
+  </div>
+  {caption && <div class="nm-caption"><span class="nm-prompt">▶</span> {caption}</div>}
+</div>
+
+<style>
+  .nm-wrap {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    margin: 1.5rem 0;
+    overflow: hidden;
+    font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+  }
+  .nm-titlebar {
+    padding: 0.4rem 0.875rem;
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-surface-2);
+    font-size: 0.65rem;
+    color: var(--color-text-muted);
+  }
+  .nm-prompt { color: var(--color-accent); font-weight: 700; margin-right: 0.35rem; }
+  .nm-body {
+    padding: 1rem;
+    overflow-x: auto;
+    display: flex;
+    justify-content: center;
+  }
+  .nm-caption {
+    padding: 0.45rem 0.875rem;
+    border-top: 1px solid var(--color-border);
+    font-size: 0.62rem;
+    color: var(--color-text-dim);
+    background: var(--color-bg);
+    line-height: 1.5;
+  }
+</style>

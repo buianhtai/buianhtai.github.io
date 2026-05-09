@@ -1,0 +1,325 @@
+---
+/**
+ * Swimlane — actor-partitioned process flow.
+ *
+ * Each lane belongs to one actor. Steps inside a lane are ordered left-to-right.
+ * Cross-lane arrows are drawn as orthogonal paths between steps.
+ *
+ * Usage:
+ *   <Swimlane
+ *     title="Write path: client to storage"
+ *     lanes={[
+ *       { id: "client",  label: "Client",       color: "teal" },
+ *       { id: "leader",  label: "Leader",       color: "amber" },
+ *       { id: "follower",label: "Follower ×N",  color: "green" },
+ *       { id: "disk",    label: "Disk / WAL",   color: "violet" },
+ *     ]}
+ *     steps={[
+ *       { id: "req",    lane: "client",   label: "PUT key=val" },
+ *       { id: "wal",    lane: "leader",   label: "Append WAL" },
+ *       { id: "rep",    lane: "follower", label: "Replicate" },
+ *       { id: "ack",    lane: "follower", label: "ACK" },
+ *       { id: "commit", lane: "leader",   label: "Commit" },
+ *       { id: "resp",   lane: "client",   label: "OK" },
+ *     ]}
+ *     arrows={[
+ *       { from: "req",    to: "wal",    label: "write" },
+ *       { from: "wal",    to: "rep",    label: "AppendEntries" },
+ *       { from: "rep",    to: "ack" },
+ *       { from: "ack",    to: "commit", label: "majority" },
+ *       { from: "commit", to: "resp",   label: "200 OK" },
+ *     ]}
+ *     caption="Raft write path: leader WALs, replicates to quorum, commits, responds."
+ *   />
+ *
+ * lane.color: 'teal' | 'amber' | 'green' | 'rose' | 'violet' | 'blue'
+ * step.focal: true — accent ring on this step
+ * arrow.type: 'solid' (default) | 'dashed' | 'async'
+ */
+
+interface Lane {
+  id: string;
+  label: string;
+  color?: string;
+}
+
+interface Step {
+  id: string;
+  lane: string;       // lane id
+  label: string;
+  sub?: string;
+  focal?: boolean;
+}
+
+interface Arrow {
+  from: string;       // step id
+  to: string;         // step id
+  label?: string;
+  type?: 'solid' | 'dashed' | 'async';
+}
+
+interface Props {
+  lanes: Lane[];
+  steps: Step[];
+  arrows?: Arrow[];
+  title?: string;
+  caption?: string;
+  direction?: 'horizontal' | 'vertical'; // default: horizontal
+}
+
+const { lanes, steps, arrows = [], title, caption, direction = 'horizontal' } = Astro.props;
+
+const LANE_COLORS: Record<string, { fill: string; stroke: string; text: string; header: string }> = {
+  teal:   { fill: 'rgba(14,165,233,0.04)',  stroke: '#0ea5e9', text: '#0ea5e9',  header: 'rgba(14,165,233,0.12)' },
+  amber:  { fill: 'rgba(245,158,11,0.04)',  stroke: '#f59e0b', text: '#f59e0b',  header: 'rgba(245,158,11,0.12)' },
+  green:  { fill: 'rgba(22,163,74,0.04)',   stroke: '#16a34a', text: '#16a34a',  header: 'rgba(22,163,74,0.12)' },
+  rose:   { fill: 'rgba(244,63,94,0.04)',   stroke: '#f43f5e', text: '#f43f5e',  header: 'rgba(244,63,94,0.12)' },
+  violet: { fill: 'rgba(139,92,246,0.04)',  stroke: '#8b5cf6', text: '#8b5cf6',  header: 'rgba(139,92,246,0.12)' },
+  blue:   { fill: 'rgba(59,130,246,0.04)',  stroke: '#3b82f6', text: '#3b82f6',  header: 'rgba(59,130,246,0.12)' },
+  default:{ fill: 'rgba(100,116,139,0.04)', stroke: 'var(--color-border)', text: 'var(--color-text-muted)', header: 'var(--color-surface-2)' },
+};
+function lc(lane: Lane) { return LANE_COLORS[lane.color ?? 'default'] ?? LANE_COLORS['default']; }
+
+const STEP_W    = 120;
+const STEP_H    = 44;
+const STEP_GAP  = 48;  // horizontal gap between steps in same lane
+const LANE_H    = 88;  // height of each lane row
+const LABEL_W   = 96;  // left column for lane label
+const PAD_X     = 16;
+const PAD_Y     = 16;
+const HEADER_H  = 28;  // step header height
+
+// Build ordered step list per lane (preserve insertion order)
+const laneStepOrder: Record<string, string[]> = {};
+lanes.forEach(l => { laneStepOrder[l.id] = []; });
+steps.forEach(s => { laneStepOrder[s.lane]?.push(s.id); });
+
+// Compute column (x position within lane) for each step
+// All lanes share the same column grid — steps in different lanes can be at the same column
+// We assign columns by global step order: step gets the next available column in its lane
+const stepColInLane: Record<string, number> = {};
+steps.forEach(s => {
+  const prev = laneStepOrder[s.lane].indexOf(s.id);
+  stepColInLane[s.id] = prev;
+});
+const maxCols = Math.max(...Object.values(laneStepOrder).map(arr => arr.length), 1);
+
+// Canvas dimensions
+const svgW = LABEL_W + PAD_X + maxCols * (STEP_W + STEP_GAP) + PAD_X;
+const svgH = PAD_Y + lanes.length * LANE_H + PAD_Y;
+
+function stepX(stepId: string): number {
+  return LABEL_W + PAD_X + stepColInLane[stepId] * (STEP_W + STEP_GAP);
+}
+function stepY(stepId: string): number {
+  const step = steps.find(s => s.id === stepId)!;
+  const laneIdx = lanes.findIndex(l => l.id === step.lane);
+  return PAD_Y + laneIdx * LANE_H;
+}
+function stepCX(stepId: string): number { return stepX(stepId) + STEP_W / 2; }
+function stepCY(stepId: string): number { return stepY(stepId) + LANE_H / 2; }
+
+// Build orthogonal arrow paths
+function arrowPath(fromId: string, toId: string): string {
+  const fromX = stepCX(fromId);
+  const fromY = stepCY(fromId);
+  const toX   = stepCX(toId);
+  const toY   = stepCY(toId);
+
+  const fromRight = fromX + STEP_W / 2;
+  const toLeft    = toX - STEP_W / 2;
+  const fromBot   = fromY + STEP_H / 2;
+  const toTop     = toY - STEP_H / 2;
+
+  if (fromY === toY) {
+    // Same lane — straight horizontal
+    return `M ${fromRight} ${fromY} L ${toLeft} ${toY}`;
+  }
+  // Cross-lane — elbow: right from source, down/up, left into target
+  const midX = fromX + STEP_W / 2 + (STEP_GAP / 2);
+  return `M ${fromRight} ${fromY} L ${midX} ${fromY} L ${midX} ${toY} L ${toLeft} ${toY}`;
+}
+
+const stepMap = Object.fromEntries(steps.map(s => [s.id, s]));
+---
+
+<div class="sl-wrap">
+  {title && <div class="sl-titlebar"><span class="sl-prompt">$</span> {title}</div>}
+  <div class="sl-body">
+    <svg
+      width={svgW}
+      height={svgH}
+      viewBox={`0 0 ${svgW} ${svgH}`}
+      style="display:block; overflow:visible; max-width:100%; height:auto;"
+      aria-label={title ?? 'Swimlane diagram'}
+    >
+      <defs>
+        <marker id="sl-arr" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="var(--color-text-muted)" opacity="0.8" />
+        </marker>
+        <marker id="sl-arr-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="var(--color-accent)" />
+        </marker>
+      </defs>
+
+      <!-- Lane backgrounds + labels -->
+      {lanes.map((lane, li) => {
+        const col = lc(lane);
+        const y = PAD_Y + li * LANE_H;
+        return (
+          <>
+            {/* Lane background */}
+            <rect
+              x={LABEL_W} y={y}
+              width={svgW - LABEL_W - PAD_X} height={LANE_H}
+              fill={col.fill}
+              stroke={col.stroke} stroke-width="0.5" opacity="0.6"
+            />
+            {/* Lane label column */}
+            <rect
+              x={0} y={y}
+              width={LABEL_W} height={LANE_H}
+              fill={col.header}
+            />
+            <text
+              x={LABEL_W / 2} y={y + LANE_H / 2 + 4}
+              text-anchor="middle"
+              font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+              font-size="10" font-weight="700"
+              fill={col.text}
+            >{lane.label}</text>
+            {/* Horizontal separator */}
+            <line
+              x1={0} y1={y} x2={svgW} y2={y}
+              stroke="var(--color-border)" stroke-width="0.5"
+            />
+          </>
+        );
+      })}
+      {/* Bottom border */}
+      <line
+        x1={0} y1={PAD_Y + lanes.length * LANE_H}
+        x2={svgW} y2={PAD_Y + lanes.length * LANE_H}
+        stroke="var(--color-border)" stroke-width="0.5"
+      />
+      {/* Label column right border */}
+      <line
+        x1={LABEL_W} y1={PAD_Y}
+        x2={LABEL_W} y2={PAD_Y + lanes.length * LANE_H}
+        stroke="var(--color-border)" stroke-width="1"
+      />
+
+      <!-- Arrows (below steps) -->
+      {arrows.map(arrow => {
+        const from = stepMap[arrow.from];
+        const to   = stepMap[arrow.to];
+        if (!from || !to) return null;
+        const d = arrowPath(arrow.from, arrow.to);
+        const isDashed = arrow.type === 'dashed' || arrow.type === 'async';
+        const midX = (stepCX(arrow.from) + STEP_W / 2 + (stepCX(arrow.to) - STEP_W / 2)) / 2;
+        const midY = stepCY(arrow.from) === stepCY(arrow.to)
+          ? stepCY(arrow.from) - 10
+          : (stepCY(arrow.from) + stepCY(arrow.to)) / 2;
+
+        return (
+          <>
+            <path
+              d={d}
+              fill="none"
+              stroke="var(--color-text-muted)"
+              stroke-width="1.5"
+              stroke-dasharray={isDashed ? '5 3' : undefined}
+              marker-end="url(#sl-arr)"
+              opacity="0.7"
+            />
+            {arrow.label && (
+              <>
+                <rect
+                  x={midX - 28} y={midY - 9} width="56" height="13"
+                  rx="2" fill="var(--color-surface)" opacity="0.9"
+                />
+                <text
+                  x={midX} y={midY + 1}
+                  text-anchor="middle"
+                  font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+                  font-size="8.5" fill="var(--color-text-muted)"
+                >{arrow.label}</text>
+              </>
+            )}
+          </>
+        );
+      })}
+
+      <!-- Steps -->
+      {steps.map(step => {
+        const lane = lanes.find(l => l.id === step.lane)!;
+        const col  = lc(lane);
+        const x = stepX(step.id);
+        const y = stepY(step.id) + (LANE_H - STEP_H) / 2;
+        const strokeW = step.focal ? '2' : '1.2';
+        const fill   = step.focal ? 'rgba(var(--color-accent-rgb,69,137,255),0.1)' : 'var(--color-surface)';
+        const stroke = step.focal ? 'var(--color-accent)' : col.stroke;
+        const textC  = step.focal ? 'var(--color-accent)' : 'var(--color-text)';
+
+        return (
+          <>
+            <rect
+              x={x} y={y}
+              width={STEP_W} height={STEP_H}
+              rx="6"
+              fill={fill} stroke={stroke} stroke-width={strokeW}
+            />
+            <text
+              x={x + STEP_W / 2} y={y + (step.sub ? STEP_H / 2 - 5 : STEP_H / 2 + 4)}
+              text-anchor="middle" dominant-baseline="middle"
+              font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+              font-size="10" font-weight="700"
+              fill={textC}
+            >{step.label}</text>
+            {step.sub && (
+              <text
+                x={x + STEP_W / 2} y={y + STEP_H / 2 + 9}
+                text-anchor="middle"
+                font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+                font-size="8" fill="var(--color-text-muted)"
+              >{step.sub}</text>
+            )}
+          </>
+        );
+      })}
+    </svg>
+  </div>
+  {caption && <div class="sl-caption"><span class="sl-prompt">▶</span> {caption}</div>}
+</div>
+
+<style>
+  .sl-wrap {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    margin: 1.5rem 0;
+    overflow: hidden;
+    font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+  }
+  .sl-titlebar {
+    padding: 0.4rem 0.875rem;
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-surface-2);
+    font-size: 0.65rem;
+    color: var(--color-text-muted);
+  }
+  .sl-prompt { color: var(--color-accent); font-weight: 700; margin-right: 0.35rem; }
+  .sl-body {
+    padding: 1rem;
+    overflow-x: auto;
+    display: flex;
+    justify-content: flex-start;
+  }
+  .sl-caption {
+    padding: 0.45rem 0.875rem;
+    border-top: 1px solid var(--color-border);
+    font-size: 0.62rem;
+    color: var(--color-text-dim);
+    background: var(--color-bg);
+    line-height: 1.5;
+  }
+</style>
