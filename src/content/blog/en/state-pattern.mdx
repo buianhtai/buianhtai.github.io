@@ -16,6 +16,7 @@ import Callout from '../../../components/mdx/Callout.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
 import StateMachine from '../../../components/mdx/StateMachine.astro';
+import ArchDiagram from '../../../components/mdx/ArchDiagram.astro';
 
 When an object's behavior depends on its current state — and it has several states — the naïve implementation is a nest of conditionals that punishes every future change. State pattern replaces those conditionals with a set of classes, one per state, that each know what to do when called.
 
@@ -98,6 +99,34 @@ public void turnCrank()     { state.turnCrank(); state.dispense(); }
 ```
 
 Adding `WinnerState` requires one new class — no edits to any existing state.
+
+<ArchDiagram
+  title="State Pattern — Context delegates to the current State object"
+  zones={[
+    { id: "context",  label: "Context (GumballMachine)",   color: "teal" },
+    { id: "iface",    label: "State interface",             color: "amber" },
+    { id: "states",   label: "Concrete States",             color: "green" },
+  ]}
+  nodes={[
+    { id: "ctx",     label: "GumballMachine",   sub: "state: State\ninsertQuarter() → state.insertQuarter()\nturnCrank() → state.turnCrank()", zone: "context", row: 1, col: 1, color: "teal" },
+    { id: "iface",   label: "«interface» State", sub: "insertQuarter()\nejectQuarter()\nturnCrank()\ndispense()",                              zone: "iface",   row: 1, col: 1, color: "amber" },
+    { id: "no_q",    label: "NoQuarterState",    sub: "insertQuarter()\n→ setState(hasQuarter)",                                               zone: "states",  row: 1, col: 1 },
+    { id: "has_q",   label: "HasQuarterState",   sub: "turnCrank()\n→ setState(sold | winner)",                                               zone: "states",  row: 1, col: 2 },
+    { id: "sold",    label: "SoldState",          sub: "dispense()\n→ setState(noQuarter | soldOut)",                                         zone: "states",  row: 1, col: 3 },
+    { id: "winner",  label: "WinnerState",        sub: "dispense() 2x\n→ setState(noQuarter | soldOut)",                                      zone: "states",  row: 2, col: 1 },
+    { id: "soldout", label: "SoldOutState",       sub: "all actions\n→ print 'machine empty'",                                                zone: "states",  row: 2, col: 2 },
+  ]}
+  edges={[
+    { from: "ctx",    to: "iface",   label: "delegates all\nactions to →", type: "solid" },
+    { from: "no_q",   to: "iface",   label: "implements",  type: "dashed" },
+    { from: "has_q",  to: "iface",   label: "implements",  type: "dashed" },
+    { from: "sold",   to: "iface",   label: "implements",  type: "dashed" },
+    { from: "winner", to: "iface",   label: "implements",  type: "dashed" },
+    { from: "soldout",to: "iface",   label: "implements",  type: "dashed" },
+    { from: "ctx",    to: "no_q",    label: "setState()",  type: "dashed" },
+  ]}
+  caption="GumballMachine holds a single State reference. Every action method is a one-liner that delegates to state.action(). The concrete state classes call setState() on the context to drive transitions — no conditionals in the context, no cross-state coupling in the calling code."
+/>
 
 <FlowStep steps={[
   { title: "Context holds the current state object", body: "GumballMachine stores a State reference. It delegates every action — insertQuarter(), ejectQuarter(), turnCrank(), dispense() — to whatever state object it currently holds." },

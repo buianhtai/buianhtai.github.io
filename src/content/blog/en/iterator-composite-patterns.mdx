@@ -190,6 +190,35 @@ There is no free lunch: you choose between uniformity (single interface, runtime
 
 A Composite tree often needs to be traversed. An Iterator that traverses a Composite tree is a natural combination:
 
+<ArchDiagram
+  title="CompositeMenuIterator — flattening a tree into a sequential stream"
+  zones={[
+    { id: "tree",   label: "Composite tree (input)",      color: "teal" },
+    { id: "iter",   label: "CompositeMenuIterator",        color: "amber" },
+    { id: "output", label: "Sequential output (client)",   color: "green" },
+  ]}
+  nodes={[
+    { id: "root",    label: "ALL MENUS",         sub: "Menu (root)\nprint() calls iterator",      zone: "tree",   row: 1, col: 2, color: "teal" },
+    { id: "pkm",     label: "Pancake Menu",      sub: "Menu (composite)\nchildren: 3 items",      zone: "tree",   row: 2, col: 1 },
+    { id: "din",     label: "Diner Menu",        sub: "Menu (composite)\nchildren: item + sub-menu", zone: "tree", row: 2, col: 3 },
+    { id: "stack",   label: "Stack<Iterator>",   sub: "push child iterators\nas composites descend", zone: "iter", row: 1, col: 1, color: "amber" },
+    { id: "hasnext", label: "hasNext()",         sub: "peek top of stack\nskip exhausted iters",  zone: "iter",   row: 1, col: 2, color: "amber" },
+    { id: "next",    label: "next()",            sub: "advance top iter\npush if composite node", zone: "iter",   row: 1, col: 3, color: "amber" },
+    { id: "client",  label: "Waitress (client)", sub: "while(iter.hasNext())\n  print(iter.next())", zone: "output", row: 1, col: 1, color: "green" },
+  ]}
+  edges={[
+    { from: "root",    to: "pkm",     label: "contains",         type: "solid" },
+    { from: "root",    to: "din",     label: "contains",         type: "solid" },
+    { from: "root",    to: "stack",   label: "createIterator()", type: "dashed" },
+    { from: "pkm",     to: "stack",   label: "push child iter",  type: "dashed" },
+    { from: "din",     to: "stack",   label: "push child iter",  type: "dashed" },
+    { from: "stack",   to: "hasnext", label: "drives",           type: "solid" },
+    { from: "hasnext", to: "next",    label: "true",             type: "solid" },
+    { from: "next",    to: "client",  label: "MenuItem (leaf)",  type: "solid" },
+  ]}
+  caption="CompositeMenuIterator holds a stack of child iterators. next() advances the top iterator; if the returned node is a Menu (composite), its iterator is pushed onto the stack. The client sees a flat stream of MenuItems via the standard hasNext()/next() interface — completely unaware of the tree structure underneath."
+/>
+
 <FlowStep steps={[
   { title: "Composite provides the tree structure", body: "Menus and items form a part-whole hierarchy with a uniform component interface." },
   { title: "Iterator provides the traversal order", body: "CompositeMenuIterator wraps the tree and flattens it into a sequential stream using a stack, making tree traversal look like a simple hasNext/next loop." },

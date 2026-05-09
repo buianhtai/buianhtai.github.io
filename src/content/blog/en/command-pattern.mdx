@@ -127,6 +127,25 @@ The four roles:
 
 ## <Label color="teal">4</Label> Undo — How Commands Reverse Themselves
 
+<SequenceDiagram
+  title="Multi-level undo — execute() pushes, undo() pops and reverses"
+  actors={["User", "RemoteControl", "Undo Stack", "LightOnCommand", "StereoOnCmd"]}
+  messages={[
+    { from: "User",          to: "RemoteControl",  label: "onButtonPushed(0) — light on" },
+    { from: "RemoteControl", to: "LightOnCommand",  label: "execute() → light.on()" },
+    { from: "RemoteControl", to: "Undo Stack",      label: "push(LightOnCommand)" },
+    { from: "User",          to: "RemoteControl",   label: "onButtonPushed(1) — stereo on" },
+    { from: "RemoteControl", to: "StereoOnCmd",     label: "execute() → stereo.on() + vol=11" },
+    { from: "RemoteControl", to: "Undo Stack",      label: "push(StereoOnCmd)" },
+    { from: "User",          to: "RemoteControl",   label: "undoButtonPushed() — Ctrl+Z" },
+    { from: "RemoteControl", to: "Undo Stack",      label: "pop() → StereoOnCmd" },
+    { from: "RemoteControl", to: "StereoOnCmd",     label: "undo() → stereo.off()" },
+    { from: "User",          to: "RemoteControl",   label: "undoButtonPushed() — Ctrl+Z again" },
+    { from: "RemoteControl", to: "Undo Stack",      label: "pop() → LightOnCommand" },
+    { from: "RemoteControl", to: "LightOnCommand",  label: "undo() → light.off()" },
+  ]}
+/>
+
 <FlowStep steps={[
   { title: "execute() stores enough state to reverse", body: "LightOnCommand.execute() turns the light on. LightOnCommand.undo() turns it off. StereoOnWithCDCommand.execute() sets volume to 11 and CD mode; undo() turns the stereo off. Each command is self-contained — it knows how to undo exactly what it did." },
   { title: "The invoker tracks the last command", body: "RemoteControl keeps a lastCommand field. Every time onButtonWasPushed() fires, it stores the command. When the undo button is pressed, it calls lastCommand.undo() — no special undo stack needed for single-level undo." },
