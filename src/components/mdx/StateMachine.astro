@@ -69,7 +69,11 @@ function stateColor(s: State) {
 }
 
 // Assign grid positions if not explicit
-const gridCols = cols ?? Math.ceil(Math.sqrt(states.length));
+// Use explicit max-col when any state has an explicit col, else auto-layout
+const explicitMaxCol = states.some((s) => s.col != null)
+  ? Math.max(...states.filter((s) => s.col != null).map((s) => s.col!))
+  : 0;
+const gridCols = cols ?? (explicitMaxCol > 0 ? explicitMaxCol : Math.ceil(Math.sqrt(states.length)));
 states.forEach((s, i) => {
   if (!s.row) s.row = Math.floor(i / gridCols) + 1;
   if (!s.col) s.col = (i % gridCols) + 1;
