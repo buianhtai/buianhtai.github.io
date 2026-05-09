@@ -15,11 +15,20 @@ const allPosts = await getCollection('blog', p =>
 
 // Group by series
 const seriesIds = [...new Set(allPosts.map(p => p.data.series).filter(Boolean))] as string[];
-const seriesGroups = seriesIds.map(id => ({
-  meta: seriesMeta[id],
-  id,
-  posts: getSeriesPosts(allPosts, id),
-}));
+const seriesGroups = seriesIds.map(id => {
+  const posts = getSeriesPosts(allPosts, id);
+  // Derive the track from the first post's seriesSection
+  const section = posts[0]?.data.seriesSection ?? null;
+  return { meta: seriesMeta[id], id, posts, section };
+});
+
+// Track accent colours (stable mapping)
+const trackColors: Record<string, { bg: string; text: string; border: string }> = {
+  'Systems Design':      { bg: 'rgba(69,137,255,0.12)',  text: '#4589ff', border: 'rgba(69,137,255,0.35)' },
+  'Storage & Databases': { bg: 'rgba(52,211,153,0.10)',  text: '#34d399', border: 'rgba(52,211,153,0.30)' },
+  'Design Patterns':     { bg: 'rgba(251,191,36,0.10)',  text: '#fbbf24', border: 'rgba(251,191,36,0.30)' },
+  'Engineering Craft':   { bg: 'rgba(167,139,250,0.10)', text: '#a78bfa', border: 'rgba(167,139,250,0.30)' },
+};
 
 // Stand-alone foundations posts (no series)
 const standalone = allPosts
@@ -77,7 +86,9 @@ const totalRows = 1 + seriesGroups.length + (standalone.length > 0 ? 1 : 0);
       </div>
 
       <!-- ── Rows: one per series ── -->
-      {seriesGroups.map(({ id, meta, posts }, si) => (
+      {seriesGroups.map(({ id, meta, posts, section }, si) => {
+        const tc = section ? trackColors[section] : null;
+        return (
         <div class="fl-row" data-row={si + 1}>
 
           <!-- Col 0: Series overview -->
@@ -92,6 +103,14 @@ const totalRows = 1 + seriesGroups.length + (standalone.length > 0 ? 1 : 0);
             <div class="fl-slide-inner">
               <!-- Left: series info -->
               <div class="fl-series-left">
+                {section && tc && (
+                  <div
+                    class="fl-track-badge"
+                    style={`background:${tc.bg};color:${tc.text};border-color:${tc.border}`}
+                  >
+                    {section}
+                  </div>
+                )}
                 <div class="fl-series-eyebrow">
                   <span class="fl-series-icon">◈</span>
                   <span class="fl-series-ordinal">Series {si + 1} of {seriesGroups.length}</span>
@@ -195,7 +214,8 @@ const totalRows = 1 + seriesGroups.length + (standalone.length > 0 ? 1 : 0);
             );
           })}
         </div>
-      ))}
+        );
+      })}
 
       <!-- ── Standalone articles row (if any) ── -->
       {standalone.length > 0 && (
@@ -563,6 +583,21 @@ const totalRows = 1 + seriesGroups.length + (standalone.length > 0 ? 1 : 0);
   @keyframes hint-pulse {
     0%, 100% { opacity: 0.4; }
     50%       { opacity: 1; }
+  }
+
+  /* ────────────────────── TRACK BADGE ── */
+  .fl-track-badge {
+    display: inline-flex;
+    align-items: center;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.58rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    border: 1px solid;
+    padding: 0.2rem 0.7rem;
+    margin-bottom: 0.75rem;
+    border-radius: 2px;
   }
 
   /* ────────────────────── SERIES SLIDE ── */

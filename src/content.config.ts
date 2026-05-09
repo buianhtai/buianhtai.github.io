@@ -28,6 +28,7 @@ export const blogSchema = z.object({
   category: z.enum(['architecture', 'golang', 'devops', 'ai', 'tutorial', 'foundations']),
   series: seriesSchema,
   seriesOrder: z.number().optional(),
+  seriesSection: z.string().optional(),
   featured: z.boolean().default(false),
   draft: z.boolean().default(false),
 });
