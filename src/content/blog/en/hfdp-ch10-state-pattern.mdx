@@ -1,0 +1,216 @@
+---
+title: "HFDP Ch.10 — The State Pattern"
+description: "The Gumball Machine teaches how to eliminate multi-state conditionals by extracting each state into its own class — turning a fragile nest of if/else into a clean object graph that adds new states without touching existing ones."
+pubDate: 2026-05-08
+tags: ["design-patterns", "state", "oo-design", "java", "foundations"]
+lang: "en"
+category: "foundations"
+series: "head-first-design-patterns"
+seriesOrder: 10
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import StateMachine from '../../../components/mdx/StateMachine.astro';
+
+The State Pattern and the Strategy Pattern share the same structural skeleton — a context holding a reference to an interface, delegating behaviour to a concrete implementation. What separates them is *who drives the transitions*: in Strategy the client configures the algorithm and leaves it there; in State the object transitions itself through a lifecycle, and its behaviour changes automatically at each step. Chapter 10 builds the distinction from a Gumball Machine, a problem that breaks visibly when you get it wrong.
+
+<HeroGrid items={[
+  { label: "4 States", sublabel: "NoQuarter · HasQuarter · Sold · SoldOut", color: "#0891b2" },
+  { label: "OCP Win", sublabel: "New state = new class, zero edits to existing", color: "#059669" },
+  { label: "Gumball Machine", sublabel: "Running example across the whole chapter", color: "#d97706" },
+  { label: "State ≠ Strategy", sublabel: "Transitions managed inside, not by client", color: "#7c3aed" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> The Conditional Explosion
+
+The first implementation of the gumball machine controller uses integer constants for each state and a wall of `if/else` in every action method:
+
+```java
+final static int SOLD_OUT   = 0;
+final static int NO_QUARTER = 1;
+final static int HAS_QUARTER = 2;
+final static int SOLD       = 3;
+
+int state = SOLD_OUT;
+
+public void insertQuarter() {
+    if (state == HAS_QUARTER) {
+        System.out.println("You can't insert another quarter");
+    } else if (state == SOLD_OUT) {
+        System.out.println("You can't insert a quarter, the machine is sold out");
+    } else if (state == SOLD) {
+        System.out.println("Please wait, we're already giving you a gumball");
+    } else if (state == NO_QUARTER) {
+        state = HAS_QUARTER;
+        System.out.println("You inserted a quarter");
+    }
+}
+```
+
+Every action — `insertQuarter`, `ejectQuarter`, `turnCrank`, `dispense` — has the same structure: four branches, one per state. Multiply four actions by four states and you get sixteen branches to maintain. Now Mighty Gumball wants a new feature: a 1-in-10 chance of winning two gumballs. That's a fifth state (`WINNER`). Adding it means editing every method, introducing a fifth branch to each, and auditing sixteen existing branches to make sure none of them accidentally fire in the new state.
+
+The conditional approach doesn't just resist change — it punishes it.
+
+---
+
+## <Label color="teal">2</Label> The State Pattern Solution
+
+Extract each state into its own class. Define a `State` interface with one method per action. The context (`GumballMachine`) holds a reference to the current state object and delegates every action to it.
+
+<StateMachine
+  title="Gumball Machine — State transitions"
+  states={[
+    { id: "no_q",    label: "No Quarter",   sub: "waiting for coin",    row: 1, col: 2 },
+    { id: "has_q",   label: "Has Quarter",  sub: "ready to dispense",   row: 2, col: 3 },
+    { id: "sold",    label: "Gumball Sold", sub: "dispensing",          row: 2, col: 1 },
+    { id: "sold_out",label: "Sold Out",     sub: "empty machine",       row: 3, col: 2 },
+    { id: "winner",  label: "Winner!",      sub: "dispense 2 gumballs", row: 1, col: 4 },
+  ]}
+  transitions={[
+    { from: "no_q",    to: "has_q",    label: "insertQuarter()" },
+    { from: "has_q",   to: "no_q",    label: "ejectQuarter()" },
+    { from: "has_q",   to: "sold",    label: "turnCrank() [normal]" },
+    { from: "has_q",   to: "winner",  label: "turnCrank() [1 in 10]" },
+    { from: "sold",    to: "no_q",    label: "dispense() [count > 0]" },
+    { from: "sold",    to: "sold_out",label: "dispense() [count = 0]" },
+    { from: "winner",  to: "no_q",    label: "dispense() [count > 1]" },
+    { from: "winner",  to: "sold_out",label: "dispense() [count ≤ 1]" },
+  ]}
+/>
+
+The `State` interface:
+
+```java
+public interface State {
+    void insertQuarter();
+    void ejectQuarter();
+    void turnCrank();
+    void dispense();
+}
+```
+
+Each concrete state implements exactly the transitions it cares about. Invalid actions print an error — they don't silently corrupt state.
+
+```java
+public class NoQuarterState implements State {
+    GumballMachine gumballMachine;
+
+    public NoQuarterState(GumballMachine gumballMachine) {
+        this.gumballMachine = gumballMachine;
+    }
+
+    public void insertQuarter() {
+        System.out.println("You inserted a quarter");
+        gumballMachine.setState(gumballMachine.getHasQuarterState());
+    }
+    public void ejectQuarter()  { System.out.println("You haven't inserted a quarter"); }
+    public void turnCrank()     { System.out.println("You turned, but there's no quarter"); }
+    public void dispense()      { System.out.println("You need to pay first"); }
+}
+```
+
+States reference the context to trigger transitions: `gumballMachine.setState(gumballMachine.getSoldState())`. The context stores all state objects (created once at construction) and exposes getters for each so states can navigate the graph without hardcoding `new`.
+
+---
+
+## <Label color="teal">3</Label> The Context
+
+```java
+public class GumballMachine {
+    State soldOutState;
+    State noQuarterState;
+    State hasQuarterState;
+    State soldState;
+    State winnerState;
+
+    State state;
+    int count = 0;
+
+    public GumballMachine(int numberGumballs) {
+        soldOutState   = new SoldOutState(this);
+        noQuarterState = new NoQuarterState(this);
+        hasQuarterState = new HasQuarterState(this);
+        soldState      = new SoldState(this);
+        winnerState    = new WinnerState(this);
+
+        this.count = numberGumballs;
+        state = numberGumballs > 0 ? noQuarterState : soldOutState;
+    }
+
+    public void insertQuarter() { state.insertQuarter(); }
+    public void ejectQuarter()  { state.ejectQuarter();  }
+    public void turnCrank()     { state.turnCrank(); state.dispense(); }
+
+    void setState(State state)  { this.state = state; }
+    void releaseBall() {
+        if (count > 0) { System.out.println("A gumball comes rolling out..."); count--; }
+    }
+    // getters for each state...
+}
+```
+
+The context is now a pure delegator. Its `insertQuarter`, `ejectQuarter`, `turnCrank` methods forward directly to `state`. No conditionals remain in the context.
+
+---
+
+## <Label color="teal">4</Label> Adding the Winner State
+
+Adding the 1-in-10 winner feature with the old design meant touching every method. With State:
+
+1. Add `WinnerState implements State` — handle `dispense()` to release two gumballs
+2. Add `winnerState` field to `GumballMachine` constructor
+3. In `HasQuarterState.turnCrank()`, add one branch: if random hits 1 in 10, call `setState(winnerState)` instead of `setState(soldState)`
+
+That's one new file and two small edits to existing code. No other states are touched. This is OCP in action: the four existing states are closed; the system is open to new states.
+
+<Callout color="teal">
+State objects often end up being flyweights — the context creates each state once and hands references to all states. No state creates another state; it just asks the context to switch to one it already knows about. This keeps the graph navigable without coupling states to each other's constructors.
+</Callout>
+
+---
+
+## <Label color="teal">5</Label> State vs Strategy vs Template Method
+
+All three patterns look similar in UML — a context, an interface, concrete classes. The differences are in intent and who drives variation:
+
+<DataTable
+  caption="Behavioral pattern comparison"
+  accent="teal"
+  headers={["Pattern", "Who drives change", "Transition logic lives in", "Typical use"]}
+  rows={[
+    { "Pattern": "State",           "Who drives change": "Object itself (automatic)", "Transition logic lives in": "Concrete state classes",    "Typical use": "Order status, UI screens, parsers, protocol FSMs" },
+    { "Pattern": "Strategy",        "Who drives change": "Client (at config time)",   "Transition logic lives in": "Nowhere (no transitions)",   "Typical use": "Sorting algorithms, pricing rules, formatters" },
+    { "Pattern": "Template Method", "Who drives change": "Base class skeleton",        "Transition logic lives in": "N/A (fixed sequence)",        "Typical use": "Frameworks, parsers, beverage recipes" },
+  ]}
+/>
+
+The key question: *does the context need to change its behaviour dynamically based on internal conditions?* If yes — State. If the algorithm is chosen once from outside — Strategy. If the algorithm has a fixed skeleton with variable steps — Template Method.
+
+---
+
+## <Label color="teal">6</Label> Real-World Instances
+
+The pattern shows up wherever an entity has a lifecycle:
+
+<FlowStep steps={[
+  { title: "Order fulfilment",     body: "Pending → Paid → Shipped → Delivered → Returned. Each state handles only the events valid for it — cancelling a shipped order behaves differently than cancelling a pending one." },
+  { title: "TCP connection",       body: "CLOSED → LISTEN → SYN_SENT → ESTABLISHED → FIN_WAIT → TIME_WAIT. The kernel delegates every packet event to the current connection-state object." },
+  { title: "Vending / ATM",       body: "The textbook case: idle, card inserted, PIN entered, transaction, dispensing, out of service. Invalid actions at any state are no-ops or errors without a conditional tower." },
+  { title: "UI wizard / workflow", body: "Multi-step forms where each step has different valid actions (Back, Next, Submit). State encapsulates per-step validation and navigation without a monolithic step-router." },
+]} />
+
+---
+
+## What the Pattern Actually Buys You
+
+- **No more state-tag conditionals.** Every `if (state == X)` block in an action method is a candidate for extraction into a State class. Once extracted, adding a state no longer touches existing branches.
+- **Invalid transitions become explicit.** Each state only implements the transitions that make sense. Calling `ejectQuarter()` in `SoldOutState` prints a sensible message rather than silently passing or crashing.
+- **Testability per state.** `NoQuarterState` can be unit-tested by creating a mock `GumballMachine` and exercising all four actions in isolation.
+- **Context stays thin.** The context is a pure delegator. Its only job is to maintain the count of gumballs and the current state reference — not to encode any business logic.
+- **OCP on state additions.** New states require new files, not edits to existing ones. The existing states remain untouched and therefore untested risk is zero.

@@ -1,0 +1,212 @@
+---
+title: "HFDP Ch.3 — Decorator Pattern"
+description: "How the Decorator Pattern solves Starbuzz Coffee's subclass explosion by wrapping components at runtime, enforcing the Open-Closed Principle, and why Java I/O is its most visible real-world application."
+pubDate: 2026-05-08
+tags: ["design-patterns", "decorator", "open-closed-principle", "java", "foundations"]
+lang: "en"
+category: "foundations"
+series: "head-first-design-patterns"
+seriesOrder: 3
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import LayerStack from '../../../components/mdx/LayerStack.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+
+Chapter 3 of *Head First Design Patterns* makes one claim that sounds contradictory on first read: you can extend a class's behavior without modifying it. The Decorator Pattern delivers that — by wrapping objects in other objects that share the same type. The driving example is a coffee shop ordering system, but the pattern's most visible home is Java's entire I/O library.
+
+<HeroGrid items={[
+  { label: "Class Explosion", sublabel: "Inheritance can't handle condiment combinations", color: "#0891b2" },
+  { label: "Open-Closed", sublabel: "Extend behavior; never modify existing classes", color: "#059669" },
+  { label: "IS-A + HAS-A", sublabel: "Type matching via inheritance, behavior via composition", color: "#d97706" },
+  { label: "Java I/O", sublabel: "FilterInputStream is the canonical Decorator", color: "#be123c" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> The Starbuzz Inheritance Explosion
+
+Starbuzz Coffee sells four base beverages: Espresso, DarkRoast, Decaf, and HouseBlend. Customers can add any combination of four condiments: Milk, Soy, Mocha, and Whip. The first-pass design creates a subclass for every combination: `DarkRoastWithMocha`, `DarkRoastWithMochaAndWhip`, `HouseBlendWithSoyAndMochaAndWhip`, and so on.
+
+With four beverages and four condiments (each potentially added multiple times), the subclass count spirals into the dozens before you account for double-Mocha orders. Maintenance is catastrophic: raising the price of Milk means editing every class that includes Milk. Adding a new condiment like Caramel means adding yet another dimension of subclasses.
+
+The "smart" fix is to pull condiment state into the base class:
+
+```java
+public class Beverage {
+    boolean milk, soy, mocha, whip;  // condiment flags
+    public double cost() {
+        double total = 0;
+        if (hasMilk())  total += 0.10;
+        if (hasMocha()) total += 0.20;
+        if (hasSoy())   total += 0.15;
+        if (hasWhip())  total += 0.10;
+        return total;
+    }
+}
+```
+
+This is worse. Price changes still require editing the superclass. A new condiment adds a field to the base class. Beverages that cannot have certain condiments — iced tea with Whip — still inherit the `hasWhip()` method. And double-Mocha is structurally impossible with a single boolean. The Open-Closed Principle is violated in both directions: the class is wide open for modification, and closed to safe extension.
+
+<Callout color="amber">
+Both failure modes — subclass explosion and condiment-flag superclass — share the same root cause: behavior is locked into the class hierarchy at compile time. No runtime flexibility is possible. The Decorator Pattern moves behavior into object composition, making it runtime-configurable.
+</Callout>
+
+---
+
+## <Label color="teal">2</Label> The Open-Closed Principle
+
+Before introducing Decorator, HFDP states the principle it enforces:
+
+> **Classes should be open for extension, but closed for modification.**
+
+This is not a contradiction. "Open for extension" means new behaviors can be added. "Closed for modification" means the source code of existing, tested classes is not touched to accomplish that. The mechanism that makes both true simultaneously is composition: new behavior is delivered by composing new objects around existing ones, not by rewriting the existing ones.
+
+The principle applies selectively. Locking down every class to extension-via-composition adds unnecessary abstraction. The investment pays off at the areas of a design most likely to change — and "what condiments are available" is exactly that kind of volatile requirement.
+
+---
+
+## <Label color="teal">3</Label> Decorator Pattern Structure
+
+The Decorator Pattern's core insight: a decorator **IS-A** the type it decorates (so it can be used everywhere that type is expected) and **HAS-A** an instance of that type (so it can delegate to it and augment the result).
+
+```java
+// Component — the abstract type
+public abstract class Beverage {
+    String description = "Unknown Beverage";
+    public String getDescription() { return description; }
+    public abstract double cost();
+}
+
+// Abstract Decorator — IS-A Beverage AND HAS-A Beverage
+public abstract class CondimentDecorator extends Beverage {
+    protected Beverage beverage;  // the wrapped component
+    public abstract String getDescription();
+}
+
+// Concrete Decorator
+public class Mocha extends CondimentDecorator {
+    public Mocha(Beverage beverage) {
+        this.beverage = beverage;
+    }
+    public String getDescription() {
+        return beverage.getDescription() + ", Mocha";
+    }
+    public double cost() {
+        return beverage.cost() + 0.20;
+    }
+}
+```
+
+The inheritance here is **for type matching only** — `CondimentDecorator extends Beverage` so that a wrapped drink can be passed wherever a `Beverage` is expected. The behavioral extension (the extra `0.20`) comes entirely from composition, not from inheriting `cost()`.
+
+A double-Mocha dark roast with Whip is constructed by stacking wrappers:
+
+```java
+Beverage drink = new DarkRoast();
+drink = new Mocha(drink);
+drink = new Mocha(drink);
+drink = new Whip(drink);
+System.out.println(drink.getDescription() + " $" + drink.cost());
+// "Dark Roast, Mocha, Mocha, Whip $1.49"
+```
+
+<LayerStack
+  layers={[
+    { tag: "WHIP",     color: "rose",  title: "Whip Decorator",  items: ["cost() → +$0.10", "getDescription() → + ', Whip'", "delegates to ↓"], note: "outermost wrapper" },
+    { tag: "MOCHA",    color: "amber", title: "Mocha Decorator (2nd)", items: ["cost() → +$0.20", "getDescription() → + ', Mocha'", "delegates to ↓"] },
+    { tag: "MOCHA",    color: "amber", title: "Mocha Decorator (1st)", items: ["cost() → +$0.20", "getDescription() → + ', Mocha'", "delegates to ↓"] },
+    { tag: "BASE",     color: "teal",  title: "DarkRoast (ConcreteComponent)", items: ["cost() → $0.99", "getDescription() → 'Dark Roast'"], note: "innermost object" },
+  ]}
+  arrows={["wraps", "wraps", "wraps"]}
+  caption="Each layer IS-A Beverage and HAS-A Beverage. cost() and getDescription() chain inward through every wrapper, accumulating additions, before returning to the caller."
+/>
+
+---
+
+## <Label color="teal">4</Label> How cost() Delegation Chains Back
+
+The wrapping chain is not magic — it is method delegation executed in LIFO order. Starting from the outermost wrapper and drilling inward:
+
+<FlowStep step="1" color="rose" title="Whip.cost() is called">
+Whip does not know its own base cost independently. It calls beverage.cost() — where beverage is the second Mocha — then adds $0.10. Execution passes inward.
+</FlowStep>
+
+<FlowStep step="2" color="amber" title="Mocha(2).cost() executes">
+The outer Mocha calls beverage.cost() on the first Mocha and adds $0.20. Execution continues inward.
+</FlowStep>
+
+<FlowStep step="3" color="amber" title="Mocha(1).cost() executes">
+The first Mocha calls beverage.cost() on DarkRoast and adds $0.20. The innermost delegation.
+</FlowStep>
+
+<FlowStep step="4" color="teal" title="DarkRoast.cost() returns $0.99">
+The ConcreteComponent returns its base price. No delegation — this is the terminal case. The call stack unwinds: $0.99 + $0.20 + $0.20 + $0.10 = $1.49.
+</FlowStep>
+
+Adding a new condiment — say Caramel — is a new class, nothing else. `DarkRoast`, `Whip`, `Mocha`, and every other existing class are untouched. The Open-Closed Principle holds.
+
+---
+
+## <Label color="teal">5</Label> Java I/O: The Decorator Pattern in Production
+
+Java's `java.io` package is the most visible real-world application of this pattern. The mapping to the Starbuzz structure is direct:
+
+<DataTable
+  caption="Java I/O classes mapped to Decorator Pattern roles"
+  accent="teal"
+  headers={["Decorator Role", "Starbuzz Class", "Java I/O Equivalent"]}
+  rows={[
+    { "Decorator Role": "Component (abstract)",      "Starbuzz Class": "Beverage",             "Java I/O Equivalent": "InputStream" },
+    { "Decorator Role": "ConcreteComponent",         "Starbuzz Class": "DarkRoast, HouseBlend", "Java I/O Equivalent": "FileInputStream, StringBufferInputStream, ByteArrayInputStream" },
+    { "Decorator Role": "Decorator (abstract)",      "Starbuzz Class": "CondimentDecorator",   "Java I/O Equivalent": "FilterInputStream" },
+    { "Decorator Role": "ConcreteDecorator",         "Starbuzz Class": "Mocha, Whip, Soy",     "Java I/O Equivalent": "BufferedInputStream, DataInputStream, LineNumberInputStream" },
+  ]}
+/>
+
+A typical I/O construction:
+
+```java
+InputStream in =
+    new LineNumberInputStream(
+        new BufferedInputStream(
+            new FileInputStream("test.txt")));
+```
+
+`FileInputStream` is the ConcreteComponent — the raw byte source. `BufferedInputStream` wraps it and adds buffering (the decorator). `LineNumberInputStream` wraps that and adds line tracking. Each wrapper IS-A `InputStream` and HAS-A `InputStream`. Calling `read()` on the outermost object delegates inward through every layer, exactly like `cost()` in the coffee example.
+
+Writing a custom decorator is equally mechanical — implement `FilterInputStream`, store the wrapped stream, and augment whatever methods you need. HFDP demonstrates a `LowerCaseInputStream` that transforms bytes to lowercase on the fly, without modifying `FileInputStream` or `BufferedInputStream`.
+
+<Callout color="teal">
+The reason Java I/O feels complex to new developers is precisely because it uses Decorator. You must construct the wrapping chain explicitly, and the number of concrete decorator classes is large. This is the pattern's known weakness — many small classes — not a flaw in the pattern's logic.
+</Callout>
+
+---
+
+## <Label color="teal">6</Label> The Dark Side of Decorator
+
+The Decorator Pattern has real costs that HFDP acknowledges directly:
+
+**Many small classes.** A design with four base components and six decorators yields a lot of types. Understanding an existing codebase that uses Decorator heavily requires tracing the wrapping chain mentally, which is not trivial.
+
+**Initialization burden.** Constructing a well-decorated object requires knowing the full wrapping sequence. This is why factories and builders frequently appear alongside Decorator — the Factory Pattern (Chapter 4) is a natural companion for managing decorator construction complexity.
+
+**Type identity.** A `Mocha`-wrapped `DarkRoast` has the type `Mocha` at runtime, not `DarkRoast`. Code that inspects concrete types via `instanceof` breaks down. Decorator assumes you work through the component interface exclusively.
+
+**Ordering matters.** `new Whip(new Mocha(base))` and `new Mocha(new Whip(base))` behave identically for commutative operations like `cost()` summation, but for `getDescription()` they produce different strings. Non-commutative operations make ordering a semantic concern.
+
+These trade-offs are the reason HFDP advises applying Decorator selectively at the areas of a design with volatile extension requirements — not everywhere.
+
+---
+
+**Key takeaways from Chapter 3:**
+
+- Inheritance produces a fixed, compile-time class hierarchy. Decorator produces a runtime-configurable wrapping chain.
+- The Decorator inherits the component's interface **for type compatibility** only — behavioral extension comes entirely from composition and delegation.
+- The Open-Closed Principle is satisfied: adding a new condiment or I/O transformation is a new class; existing classes are not modified.
+- `cost()` and `getDescription()` chain inward through all wrappers before returning — each layer adds its contribution and delegates the rest.
+- Java's `FilterInputStream` hierarchy is Decorator in production code. The wrapping syntax (`new Buf(new File(...))`) is the pattern's signature.
+- Watch for the known weaknesses: many small classes, complex initialization, and ordering sensitivity for non-commutative operations.

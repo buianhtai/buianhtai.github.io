@@ -1,0 +1,232 @@
+---
+title: "HFDP Ch.2 — Observer Pattern"
+description: "How the Observer Pattern replaces hardcoded display updates in WeatherData with a loosely coupled Subject/Observer contract, and why push vs. pull notification matters for real-world event systems."
+pubDate: 2026-05-08
+tags: ["design-patterns", "observer", "loose-coupling", "java", "foundations"]
+lang: "en"
+category: "foundations"
+series: "head-first-design-patterns"
+seriesOrder: 2
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import ArchDiagram from '../../../components/mdx/ArchDiagram.astro';
+
+The Observer Pattern is the mechanism behind every event system you have ever used: DOM listeners, Swing callbacks, reactive streams, message queues. Chapter 2 of *Head First Design Patterns* grounds it in a concrete problem — a weather station whose display updates are hardcoded — and works through the full interface contract, the push-vs-pull trade-off, and where Java's own `Observable` class went wrong.
+
+<HeroGrid items={[
+  { label: "1 Subject", sublabel: "Holds state, notifies all observers", color: "#0891b2" },
+  { label: "N Observers", sublabel: "Register, unregister at runtime", color: "#059669" },
+  { label: "Push vs Pull", sublabel: "Two notification styles, one winner", color: "#d97706" },
+  { label: "OCP Enforced", sublabel: "Add displays without touching WeatherData", color: "#be123c" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> The Weather-O-Rama Problem
+
+Weather-O-Rama needs a `WeatherData` object that tracks temperature, humidity, and barometric pressure, and must update three display panels — current conditions, statistics, and a forecast — every time new measurements arrive. A junior developer might fill in `measurementsChanged()` like this:
+
+```java
+public void measurementsChanged() {
+    float temp     = getTemperature();
+    float humidity = getHumidity();
+    float pressure = getPressure();
+
+    currentConditionsDisplay.update(temp, humidity, pressure);
+    statisticsDisplay.update(temp, humidity, pressure);
+    forecastDisplay.update(temp, humidity, pressure);
+}
+```
+
+This compiles and runs. It also violates four design principles simultaneously.
+
+- **Coding to implementations, not interfaces.** `currentConditionsDisplay` is a concrete type. Any new display means editing this method.
+- **No runtime registration.** Displays are wired at compile time. Removing a display requires a code change and a redeploy.
+- **Open-Closed Principle broken.** Every new display element reopens `WeatherData` for modification.
+- **Change not encapsulated.** The "which displays to notify" concern is tangled into the data-acquisition class.
+
+The pattern exists precisely to separate these concerns.
+
+<Callout color="teal">
+The tell: any time you see a block of hardcoded method calls that all accept the same arguments and all need to be updated in lockstep when requirements change, you are looking at an Observer Pattern candidate.
+</Callout>
+
+---
+
+## <Label color="teal">2</Label> Pattern Structure
+
+The Observer Pattern defines a **one-to-many dependency** between objects: when one object (the Subject) changes state, all its registered dependents (Observers) are notified and updated automatically.
+
+The interface contract is deliberately minimal:
+
+```java
+// Subject side
+public interface Subject {
+    void registerObserver(Observer o);
+    void removeObserver(Observer o);
+    void notifyObservers();
+}
+
+// Observer side
+public interface Observer {
+    void update(float temp, float humidity, float pressure);
+}
+
+// Optional — forces display classes to implement a display contract
+public interface DisplayElement {
+    void display();
+}
+```
+
+`WeatherData` implements `Subject` and maintains a `List<Observer>`. `CurrentConditionsDisplay`, `StatisticsDisplay`, and `ForecastDisplay` each implement `Observer` (and `DisplayElement`). The Subject knows nothing about concrete display types — only the `Observer` interface.
+
+<ArchDiagram
+  title="Observer Pattern — interface structure"
+  zones={[
+    { id: "subject", label: "Subject side", color: "teal" },
+    { id: "observer", label: "Observer side", color: "green" },
+    { id: "concrete", label: "Concrete participants", color: "amber" },
+  ]}
+  nodes={[
+    { id: "subjectIface", label: "«interface»\nSubject",          sub: "registerObserver()\nremoveObserver()\nnotifyObservers()", zone: "subject",  row: 1, col: 1, color: "teal" },
+    { id: "weatherData",  label: "WeatherData",                   sub: "ConcreteSubject\nholds List<Observer>",                   zone: "concrete", row: 1, col: 1, color: "amber" },
+    { id: "observerIface",label: "«interface»\nObserver",          sub: "update(temp, humidity, pressure)",                       zone: "observer", row: 1, col: 1, color: "green" },
+    { id: "current",      label: "CurrentConditionsDisplay",       sub: "ConcreteObserver",                                       zone: "concrete", row: 2, col: 1 },
+    { id: "stats",        label: "StatisticsDisplay",              sub: "ConcreteObserver",                                       zone: "concrete", row: 2, col: 2 },
+    { id: "forecast",     label: "ForecastDisplay",                sub: "ConcreteObserver",                                       zone: "concrete", row: 2, col: 3 },
+  ]}
+  edges={[
+    { from: "weatherData",  to: "subjectIface",  label: "implements",  type: "dashed" },
+    { from: "weatherData",  to: "observerIface", label: "notifies →",  type: "solid" },
+    { from: "current",      to: "observerIface", label: "implements",  type: "dashed" },
+    { from: "stats",        to: "observerIface", label: "implements",  type: "dashed" },
+    { from: "forecast",     to: "observerIface", label: "implements",  type: "dashed" },
+  ]}
+  caption="WeatherData implements Subject and holds a list of Observers. It calls update() on each one during notifyObservers() — never touching concrete display types."
+/>
+
+The `notifyObservers()` implementation is straightforward:
+
+```java
+public void notifyObservers() {
+    for (Observer observer : observers) {
+        observer.update(temperature, humidity, pressure);
+    }
+}
+
+public void measurementsChanged() {
+    notifyObservers();
+}
+```
+
+Adding a fourth display — say, a `HeatIndexDisplay` — requires zero changes to `WeatherData`. Implement `Observer`, call `weatherData.registerObserver(this)`, and the Subject starts sending updates.
+
+---
+
+## <Label color="teal">3</Label> Push vs. Pull Notification
+
+The implementation above uses the **push** model: the Subject packages the data and pushes it into every `update()` call. There is a second approach: the **pull** model, where the Subject passes itself (or nothing) in the notification, and Observers call getters to retrieve whatever data they actually need.
+
+<DataTable
+  caption="Push vs. Pull notification trade-offs"
+  accent="teal"
+  headers={["Dimension", "Push", "Pull"]}
+  rows={[
+    { "Dimension": "Data passed in update()",        "Push": "All relevant values as parameters",          "Pull": "Nothing (or the Subject reference)" },
+    { "Dimension": "Observer coupling to Subject",   "Push": "Observers need no reference to Subject",     "Pull": "Observers must hold a Subject reference to call getters" },
+    { "Dimension": "Unused data",                    "Push": "Observers receive all data whether needed or not", "Pull": "Observers fetch only what they need" },
+    { "Dimension": "Subject interface stability",    "Push": "update() signature changes when data model changes", "Pull": "update() signature stays stable; Subject adds getters instead" },
+    { "Dimension": "HFDP verdict",                   "Push": "Fine for stable, small datasets",            "Pull": "Preferred — Observers pull what they need" },
+  ]}
+/>
+
+HFDP recommends the pull model as "more correct." The reasoning: push hard-codes assumptions about which data every Observer needs. If a new Observer only cares about humidity, it still receives temperature and pressure on every notification. Pull lets each Observer fetch precisely the values it requires, and adding a new measurement to WeatherData does not break any existing `update()` signature.
+
+The pull-style `update()` drops all parameters:
+
+```java
+// Observer interface (pull style)
+public interface Observer {
+    void update();
+}
+
+// ConcreteObserver fetches what it needs
+public void update() {
+    this.temperature = weatherData.getTemperature();
+    this.humidity    = weatherData.getHumidity();
+    display();
+}
+```
+
+---
+
+## <Label color="teal">4</Label> The Loose Coupling Principle
+
+The Observer Pattern is the canonical demonstration of the **Loose Coupling** design principle: strive for loosely coupled designs between objects that interact.
+
+What "loosely coupled" means here in concrete terms:
+
+<FlowStep step="1" color="teal" title="Subject knows only the Observer interface">
+WeatherData never imports CurrentConditionsDisplay, StatisticsDisplay, or any other concrete class. The only type it depends on is the Observer interface. Any class that implements Observer can be registered — including ones written after WeatherData was shipped.
+</FlowStep>
+
+<FlowStep step="2" color="green" title="Observers can be added or removed at any time">
+Registration and deregistration happen at runtime via registerObserver() and removeObserver(). The Subject doesn't need to be recompiled or restarted.
+</FlowStep>
+
+<FlowStep step="3" color="amber" title="Subject and Observer can vary independently">
+You can change the Subject's internal data model without touching Observers (assuming you use pull). You can add new Observer types without touching the Subject. The two hierarchies evolve independently.
+</FlowStep>
+
+<FlowStep step="4" color="rose" title="No knowledge of how many Observers exist">
+WeatherData calls notifyObservers() and iterates its list. Whether there are 0, 3, or 300 Observers is irrelevant to the Subject's implementation.
+</FlowStep>
+
+This is why the pattern shows up in every event-driven framework: the decoupling it provides is structural, not just stylistic.
+
+---
+
+## <Label color="teal">5</Label> Java's Built-in Observable — and Why It's Broken
+
+Java shipped `java.util.Observable` (class) and `java.util.Observer` (interface) as first-class support for this pattern. In practice, both have design defects that make them unsuitable for real use.
+
+**`Observable` is a class, not an interface.** Java allows single inheritance only. If `WeatherData` already extends another class — as real domain objects frequently do — it cannot also extend `Observable`. The pattern becomes inaccessible without composition workarounds that undo the simplicity.
+
+**`setChanged()` is protected.** The method that marks the Subject as having changed, which is necessary before `notifyObservers()` will fire, is `protected`. This means you cannot compose Observable into another object and call `setChanged()` from outside the Observable subclass. You are forced to subclass, which circles back to the inheritance problem.
+
+**The consequence:** the built-in support enforces an inheritance-based design at exactly the point where composition would be cleaner. HFDP's recommendation is to implement the Subject and Observer interfaces yourself — it's four methods and twenty lines.
+
+`java.util.Observable` was formally deprecated in Java 9 for these reasons. The pattern itself is as valid as ever; only the JDK implementation was flawed.
+
+<Callout color="rose">
+When Java 9 deprecated `java.util.Observable`, the deprecation notice cited its design as "limited": Observable is not an interface, and `setChanged()` is protected, making it impossible to use via composition. Build your own Subject/Observer interfaces — the implementation is trivial.
+</Callout>
+
+---
+
+## <Label color="teal">6</Label> Real-World Applications
+
+The Observer Pattern is not academic. Every major Java UI framework and event system is built on it:
+
+- **Swing event listeners** — `ActionListener`, `MouseListener`, `KeyListener` are all Observer interfaces. `JButton` is the Subject. `addActionListener()` is `registerObserver()`.
+- **JavaBeans property change support** — `PropertyChangeListener` and `PropertyChangeSupport` implement Subject/Observer for bean property changes.
+- **Spring ApplicationEvents** — `ApplicationEventPublisher` is the Subject; `@EventListener` methods on beans are Observers.
+- **RxJava / Project Reactor** — Observables and Subscribers are direct extensions of the pattern with backpressure and stream operators layered on top.
+- **DOM `addEventListener`** in browsers — the same contract, different language.
+
+The pattern scales from a two-class weather station to a distributed event bus. The interface contract is identical.
+
+---
+
+**Key takeaways from Chapter 2:**
+
+- The Observer Pattern defines a one-to-many dependency: one Subject, many Observers, automatic notification on state change.
+- The Subject interface needs three methods: `registerObserver`, `removeObserver`, `notifyObservers`. The Observer interface needs one: `update`.
+- Push notification is simple but couples the `update()` signature to the Subject's data model. Pull notification is more flexible — Observers take what they need.
+- Loose coupling between Subject and Observer means the two hierarchies can grow and change independently. The Subject never references concrete Observer types.
+- Java's `java.util.Observable` is deprecated and broken by design. Implement the interfaces yourself — it takes less time than reading the Javadoc.

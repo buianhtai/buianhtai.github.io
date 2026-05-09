@@ -1,0 +1,243 @@
+---
+title: "HFDP Ch.7 — Adapter & Facade Patterns"
+description: "The Adapter converts one interface into another so incompatible classes can collaborate; the Facade hides subsystem complexity behind a single simplified interface — both wrap objects, but for fundamentally different purposes."
+pubDate: 2026-05-08
+tags: ["design-patterns", "adapter", "facade", "structural", "java", "foundations"]
+lang: "en"
+category: "foundations"
+series: "head-first-design-patterns"
+seriesOrder: 7
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import ArchDiagram from '../../../components/mdx/ArchDiagram.astro';
+
+Chapter 7 covers two structural patterns that both wrap objects but serve opposite goals. The Adapter exists because two things need to work together but speak different interface languages — it translates. The Facade exists because a subsystem is too complex to approach directly — it provides a simpler face. Getting the distinction right matters: misidentifying which problem you have leads to the wrong solution.
+
+<HeroGrid items={[
+  { label: "Adapter", sublabel: "Converts interface A → interface B", color: "#0891b2" },
+  { label: "Facade", sublabel: "Simplifies a complex subsystem", color: "#059669" },
+  { label: "Object vs Class", sublabel: "Composition vs multiple inheritance", color: "#d97706" },
+  { label: "Law of Demeter", sublabel: "Talk only to immediate friends", color: "#7c3aed" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> The Adapter Pattern: Making Incompatible Interfaces Cooperate
+
+The canonical example: your system programs against a `Duck` interface (`quack()`, `fly()`). A `WildTurkey` object is available but implements the `Turkey` interface (`gobble()`, `fly()`). You cannot use a `Turkey` where a `Duck` is expected — incompatible types — but you cannot change either class.
+
+The `TurkeyAdapter` solves this without touching either class:
+
+```java
+public class TurkeyAdapter implements Duck {
+    Turkey turkey;
+
+    public TurkeyAdapter(Turkey turkey) {
+        this.turkey = turkey;
+    }
+
+    public void quack() {
+        turkey.gobble();       // translate quack → gobble
+    }
+
+    public void fly() {
+        for (int i = 0; i < 5; i++) {
+            turkey.fly();      // turkeys fly short distances; call 5× to approximate
+        }
+    }
+}
+```
+
+The client calls `quack()` and `fly()` on the adapter, believing it is a `Duck`. The adapter forwards those calls — translated — to the underlying `Turkey`. Neither the client nor the `WildTurkey` knows an adapter is in the middle.
+
+Three invariants hold for every object adapter:
+1. The adapter **implements** the target interface (so the client type-checks)
+2. The adapter **holds a reference** to the adaptee (composition, not inheritance)
+3. All requests from the client are **delegated to the adaptee** (possibly with translation)
+
+<Callout color="teal">
+The Adapter Pattern definition: converts the interface of a class into another interface clients expect. Adapter lets classes work together that couldn't otherwise because of incompatible interfaces.
+</Callout>
+
+---
+
+## <Label color="teal">2</Label> Object Adapter vs Class Adapter
+
+There are two structural variants. Both convert an interface, but they do it differently:
+
+**Object adapter** (what Java always uses): composition. The adapter holds an instance of the adaptee. It can adapt any subclass of the adaptee because it programs to the adaptee's type. This is the standard form.
+
+**Class adapter** (requires multiple inheritance): subclasses both the target and the adaptee simultaneously. No separate adaptee reference needed — it inherits both interfaces directly. Java does not support multiple class inheritance, so class adapters appear in C++ or Python but not Java.
+
+The practical difference: an object adapter can wrap *any* subclass of the adaptee at runtime. A class adapter is bound to one specific adaptee class at compile time but can override adaptee behavior directly.
+
+---
+
+## <Label color="teal">3</Label> The Enumeration-to-Iterator Adapter: A Real Java Case
+
+Java's legacy `Enumeration` interface (`hasMoreElements()`, `nextElement()`) predates the modern `Iterator` interface (`hasNext()`, `next()`, `remove()`). Old libraries return `Enumeration`; new code expects `Iterator`. The solution is a straightforward object adapter:
+
+```java
+public class EnumerationIterator implements Iterator<Object> {
+    Enumeration<?> enumeration;
+
+    public EnumerationIterator(Enumeration<?> enumeration) {
+        this.enumeration = enumeration;
+    }
+
+    public boolean hasNext()  { return enumeration.hasMoreElements(); }
+    public Object  next()     { return enumeration.nextElement(); }
+
+    public void remove() {
+        // Enumeration has no remove concept
+        throw new UnsupportedOperationException();
+    }
+}
+```
+
+The `remove()` case is instructive: when an adaptee does not support an operation that the target interface requires, you must throw an exception. The adapter cannot invent functionality that does not exist in the adaptee. This is an honest acknowledgment of the translation's limits — the best the adapter can do is fail loudly rather than silently.
+
+---
+
+## <Label color="teal">4</Label> The Facade Pattern: Simplifying a Subsystem
+
+The Facade addresses a different problem entirely. The home theater subsystem has many independent classes: `Amplifier`, `DVDPlayer`, `Projector`, `Screen`, `TheaterLights`, `PopcornPopper`, `StreamingPlayer`. Watching a movie requires a specific sequence across all of them:
+
+1. Turn on the popcorn popper and start popping
+2. Dim the lights to 10%
+3. Lower the screen
+4. Turn on the projector, set it to widescreen mode
+5. Set the amplifier to surround sound, set volume to 5
+6. Turn on the DVD player
+7. Start playing the movie
+
+Seven steps across seven objects, in order, every time. A client that does this directly is tightly coupled to the subsystem's implementation details. Change the surround sound setup and every client changes too.
+
+`HomeTheaterFacade` encapsulates this sequence behind one method:
+
+```java
+public class HomeTheaterFacade {
+    Amplifier amp;
+    DVDPlayer dvd;
+    Projector projector;
+    Screen screen;
+    TheaterLights lights;
+    PopcornPopper popper;
+
+    public void watchMovie(String movie) {
+        popper.on(); popper.pop();
+        lights.dim(10);
+        screen.down();
+        projector.on(); projector.wideScreenMode();
+        amp.on(); amp.setSurroundSound(); amp.setVolume(5);
+        dvd.on(); dvd.play(movie);
+    }
+
+    public void endMovie() {
+        popper.off();
+        lights.on();
+        screen.up();
+        projector.off();
+        amp.off();
+        dvd.stop(); dvd.eject(); dvd.off();
+    }
+}
+```
+
+<ArchDiagram
+  title="HomeTheaterFacade — client accesses subsystem through one entry point"
+  zones={[
+    { id: "client", label: "Client", color: "teal" },
+    { id: "facade", label: "Facade layer", color: "blue" },
+    { id: "sub",    label: "Subsystem components", color: "amber" },
+  ]}
+  nodes={[
+    { id: "client",    label: "Client",             sub: "calls watchMovie()",       zone: "client", row: 1, col: 1, color: "teal" },
+    { id: "facade",    label: "HomeTheaterFacade",  sub: "watchMovie() / endMovie()", zone: "facade", row: 1, col: 1, color: "blue" },
+    { id: "amp",       label: "Amplifier",          sub: "on() setVolume()",          zone: "sub",    row: 1, col: 1 },
+    { id: "dvd",       label: "DVDPlayer",          sub: "on() play() eject()",       zone: "sub",    row: 1, col: 2 },
+    { id: "proj",      label: "Projector",          sub: "on() wideScreenMode()",     zone: "sub",    row: 1, col: 3 },
+    { id: "screen",    label: "Screen",             sub: "up() down()",               zone: "sub",    row: 2, col: 1 },
+    { id: "lights",    label: "TheaterLights",      sub: "on() dim()",                zone: "sub",    row: 2, col: 2 },
+    { id: "popper",    label: "PopcornPopper",      sub: "on() pop() off()",          zone: "sub",    row: 2, col: 3 },
+  ]}
+  edges={[
+    { from: "client", to: "facade",  label: "watchMovie(movie)", type: "solid" },
+    { from: "facade", to: "amp",     label: "orchestrates",      type: "solid" },
+    { from: "facade", to: "dvd",     label: "orchestrates",      type: "solid" },
+    { from: "facade", to: "proj",    label: "orchestrates",      type: "solid" },
+    { from: "facade", to: "screen",  label: "orchestrates",      type: "solid" },
+    { from: "facade", to: "lights",  label: "orchestrates",      type: "solid" },
+    { from: "facade", to: "popper",  label: "orchestrates",      type: "solid" },
+  ]}
+  caption="The client never imports Amplifier, Projector, or Screen. If the subsystem changes — say the projector now needs a calibration step — only the Facade changes. All clients are unaffected."
+/>
+
+The key point: the Facade does not lock the client out of the subsystem. If a client needs direct access to `Projector` for advanced configuration, nothing stops it. The Facade is an additive simplification layer, not a barrier.
+
+---
+
+## <Label color="teal">5</Label> Principle of Least Knowledge (Law of Demeter)
+
+The Facade pattern embodies a design principle explicitly stated in this chapter: the **Principle of Least Knowledge** (also called the Law of Demeter). A method should only invoke methods on:
+
+1. The object itself
+2. Objects passed as parameters to the method
+3. Objects the method creates
+4. Components of the object (its fields)
+
+What this rules out: calling a method on an object returned by another method call — the "train wreck" pattern:
+
+```java
+// Violates Least Knowledge — chains through intermediate objects
+float temp = station.getThermometer().getTemperature();
+
+// Compliant — Thermometer knowledge stays inside Station
+float temp = station.getTemperature();
+```
+
+The first form means the caller now depends on `Station`, `Thermometer`, *and* the fact that `Station` returns a `Thermometer`. The second form means the caller depends only on `Station`. One dependency instead of three — and `Station` can change its internal representation without breaking callers.
+
+Facades are a natural expression of this principle: the client talks to the Facade, the Facade talks to the subsystem. The client has zero knowledge of the subsystem's internal structure.
+
+<Callout color="amber">
+Least Knowledge has a cost: to shield the caller from intermediates, you may need to write wrapper methods on every intermediate type. For small systems this overhead is real. Apply the principle where the dependency graph is deep or the subsystem changes often; skip it for simple, stable object chains.
+</Callout>
+
+---
+
+## <Label color="teal">6</Label> Adapter vs Facade vs Decorator — Three Wrappers, Three Purposes
+
+All three patterns wrap an object. The intent is what distinguishes them:
+
+<DataTable
+  caption="Three structural wrappers compared — same mechanism, different intent"
+  accent="teal"
+  headers={["Pattern", "Intent", "Interface change", "Behavior change", "Number of classes wrapped"]}
+  rows={[
+    { "Pattern": "Adapter", "Intent": "Convert interface A to interface B for compatibility", "Interface change": "Yes — target interface replaces adaptee interface", "Behavior change": "No — delegates faithfully (with translation)", "Number of classes wrapped": "Typically one, sometimes a small group" },
+    { "Pattern": "Facade", "Intent": "Simplify access to a complex subsystem", "Interface change": "Yes — new simplified interface added", "Behavior change": "No — orchestrates existing subsystem behavior", "Number of classes wrapped": "Many (entire subsystem)" },
+    { "Pattern": "Decorator", "Intent": "Add responsibilities to an object without subclassing", "Interface change": "No — same interface as wrapped object", "Behavior change": "Yes — extends or modifies behavior", "Number of classes wrapped": "One, but stackable" },
+  ]}
+/>
+
+A quick decision heuristic:
+- If you have **two incompatible interfaces** that need to talk: Adapter
+- If you have **a complex subsystem** with too many classes to navigate: Facade
+- If you want to **add behavior** to an existing object without changing its type: Decorator
+
+The most common confusion is Adapter vs Facade. Remember: Adapter does not simplify — it converts. A `TurkeyAdapter` that wraps five gobbles into one quack is not simpler for the client; the client still calls one method. The *interface* is what changes, not the complexity. Facade explicitly reduces complexity by hiding the orchestration.
+
+---
+
+## What the Patterns Give You
+
+- **Adapter** enables reuse of existing classes that would otherwise be incompatible with a system's expected interfaces — without modifying either the client code or the adaptee.
+- **Facade** reduces the coupling surface between a client and a subsystem. Changes inside the subsystem are absorbed by the Facade; clients are insulated.
+- **Object adapter via composition** is more flexible than class adapter via inheritance: it can wrap any subclass of the adaptee and does not require multiple inheritance.
+- **Least Knowledge** forces you to think about dependency depth, not just dependency count. A chain of three calls to reach a thermometer is three dependencies, not one.
+- Both patterns leave the wrapped object accessible — neither enforces exclusivity. The value is the simplified or translated entry point, not the removal of alternatives.

@@ -1,0 +1,186 @@
+---
+title: "HFDP Ch.11 — The Proxy Pattern"
+description: "The Proxy Pattern places a surrogate in front of a real object to control access — whether that means forwarding calls across a network, deferring expensive creation, or enforcing per-caller permissions."
+pubDate: 2026-05-08
+tags: ["design-patterns", "proxy", "oo-design", "java", "foundations"]
+lang: "en"
+category: "foundations"
+series: "head-first-design-patterns"
+seriesOrder: 11
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import SequenceDiagram from '../../../components/mdx/SequenceDiagram.astro';
+
+Chapter 11 opens with a deceptively ordinary problem — a CEO wants to monitor gumball machines in different cities from his desk — and uses it to develop one of the most structurally versatile patterns in the catalog. The Proxy sits between a client and the real object, implementing the same interface so neither side needs to know it is there. Depending on what the proxy does with that position, you get remote access, lazy initialisation, or fine-grained access control.
+
+<HeroGrid items={[
+  { label: "3 Proxy Types", sublabel: "Remote · Virtual · Protection", color: "#0891b2" },
+  { label: "Same Interface", sublabel: "Client cannot tell proxy from real object", color: "#059669" },
+  { label: "Java RMI", sublabel: "Stubs + skeletons over the network", color: "#d97706" },
+  { label: "Dynamic Proxy", sublabel: "java.lang.reflect.Proxy at runtime", color: "#7c3aed" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> The Remote Proxy
+
+The gumball machine CEO wants a status report — location, gumball count, current state — from machines running in separate JVMs. The `GumballMonitor` already calls `machine.getLocation()`, `machine.getCount()`, `machine.getState()`. The problem: those methods are in a local object; the real machine is on a remote host.
+
+The remote proxy solution: give `GumballMonitor` a **stub** that implements the same `GumballMachine` interface but forwards every call over the network to the real object.
+
+<SequenceDiagram
+  title="Remote Proxy — Java RMI call flow"
+  actors={["GumballMonitor", "Stub (Proxy)", "Network", "Skeleton", "GumballMachine"]}
+  messages={[
+    { from: "GumballMonitor", to: "Stub (Proxy)",   label: "getCount()" },
+    { from: "Stub (Proxy)",   to: "Network",        label: "serialise + send" },
+    { from: "Network",        to: "Skeleton",        label: "receive + deserialise" },
+    { from: "Skeleton",       to: "GumballMachine",  label: "getCount()" },
+    { from: "GumballMachine", to: "Skeleton",        label: "return 112" },
+    { from: "Skeleton",       to: "Network",         label: "serialise + send" },
+    { from: "Network",        to: "Stub (Proxy)",    label: "receive + deserialise" },
+    { from: "Stub (Proxy)",   to: "GumballMonitor",  label: "return 112" },
+  ]}
+/>
+
+Java RMI automates the stub/skeleton generation. The real object extends `UnicastRemoteObject` and every method that may throw network exceptions declares `throws RemoteException`. The service registers itself:
+
+```java
+// Server side
+GumballMachineRemote machine = new GumballMachine("Seattle", 112);
+Naming.rebind("//localhost/gumballmachine", machine);
+
+// Client side
+GumballMachineRemote machine =
+    (GumballMachineRemote) Naming.lookup("//seattle.gumball.com/gumballmachine");
+GumballMonitor monitor = new GumballMonitor(machine);
+monitor.report(); // talks to Seattle, looks local
+```
+
+`GumballMonitor` is unchanged. It holds a `GumballMachineRemote` reference — the same interface the stub implements — and has no idea it is crossing the network.
+
+---
+
+## <Label color="teal">2</Label> The Virtual Proxy
+
+A virtual proxy creates the real (expensive) object only when it is first needed, and stands in as a placeholder until then. The book's example: loading a CD cover image from the internet takes time. While the image loads, the proxy displays "Loading album cover, please wait..." in its place.
+
+```java
+public class ImageProxy implements Icon {
+    ImageIcon realImage;
+    URL imageURL;
+    Thread retrievalThread;
+    boolean retrieving = false;
+
+    public void paintIcon(Component c, Graphics g, int x, int y) {
+        if (realImage != null) {
+            realImage.paintIcon(c, g, x, y);
+        } else {
+            g.drawString("Loading album cover, please wait...", x+300, y+190);
+            if (!retrieving) {
+                retrieving = true;
+                retrievalThread = new Thread(() -> {
+                    realImage = new ImageIcon(imageURL, "Album Cover");
+                    c.repaint();
+                });
+                retrievalThread.start();
+            }
+        }
+    }
+    public int getIconWidth()  { return realImage != null ? realImage.getIconWidth()  : 800; }
+    public int getIconHeight() { return realImage != null ? realImage.getIconHeight() : 600; }
+}
+```
+
+The client code never changes — it always talks to an `Icon`. The proxy makes the creation decision transparently.
+
+<Callout color="amber">
+Virtual proxy is a form of lazy initialisation. The cost: every access goes through the proxy check. For objects that are always needed and cheap to create, the overhead is not worth it. For objects that are expensive and may never be needed, it is a meaningful optimisation.
+</Callout>
+
+---
+
+## <Label color="teal">3</Label> The Protection Proxy (Dynamic Proxy)
+
+A protection proxy gates access based on the caller's identity. The book builds one around a dating service `PersonBean`: the owner can set their own name and interests, but only other users can set the "hot or not" rating (you can't rate yourself).
+
+Java 5+ `java.lang.reflect.Proxy` creates a proxy for any interface at runtime without writing a proxy class:
+
+```java
+PersonBean ownerProxy = (PersonBean) Proxy.newProxyInstance(
+    person.getClass().getClassLoader(),
+    person.getClass().getInterfaces(),
+    new OwnerInvocationHandler(person)
+);
+```
+
+The `InvocationHandler` intercepts every method call:
+
+```java
+public class OwnerInvocationHandler implements InvocationHandler {
+    PersonBean person;
+
+    public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+        if (method.getName().startsWith("get")) {
+            return method.invoke(person, args);        // reads always allowed
+        } else if (method.getName().equals("setHotOrNotRating")) {
+            throw new IllegalAccessException();        // owner cannot self-rate
+        } else if (method.getName().startsWith("set")) {
+            return method.invoke(person, args);        // owner can set their own data
+        }
+        return null;
+    }
+}
+```
+
+A `NonOwnerInvocationHandler` inverts the rules: reads and `setHotOrNotRating` allowed; other setters denied. The same `PersonBean` object is wrapped in two different proxies depending on who is accessing it. No subclassing required; no modification to `PersonBean`.
+
+---
+
+## <Label color="teal">4</Label> The Proxy Zoo
+
+The pattern's core — same interface, controlled access — extends to many access-control scenarios:
+
+<DataTable
+  caption="Proxy type reference"
+  accent="teal"
+  headers={["Proxy type", "Controls", "Real-world example"]}
+  rows={[
+    { "Proxy type": "Remote proxy",         "Controls": "Location — client talks to a local stand-in for a remote object", "Real-world example": "RMI stub, gRPC client stub, GraphQL client" },
+    { "Proxy type": "Virtual proxy",        "Controls": "Creation cost — defers expensive instantiation until first use",   "Real-world example": "Hibernate lazy-loaded entity, image placeholder" },
+    { "Proxy type": "Protection proxy",     "Controls": "Access rights — enforces per-caller permissions on methods",       "Real-world example": "Spring Security method security, dynamic proxy ACL" },
+    { "Proxy type": "Firewall proxy",       "Controls": "Network — prevents clients from accessing harmful resources",       "Real-world example": "Corporate web proxy, API gateway" },
+    { "Proxy type": "Caching proxy",        "Controls": "Repeated work — stores results of expensive operations",           "Real-world example": "HTTP reverse proxy, CDN, query result cache" },
+    { "Proxy type": "Smart reference proxy","Controls": "Lifecycle — adds reference counting, lock management, logging",     "Real-world example": "Smart pointers in C++, JDK WeakReference" },
+    { "Proxy type": "Copy-on-write proxy",  "Controls": "Mutation cost — defers copy until client actually modifies",       "Real-world example": "Java CopyOnWriteArrayList, OS fork()" },
+  ]}
+/>
+
+---
+
+## <Label color="teal">5</Label> Proxy vs Decorator vs Adapter
+
+All three wrap an object and implement the same or a similar interface. The differences are in *purpose*:
+
+<FlowStep steps={[
+  { title: "Decorator — adds behaviour",   body: "Same interface as component. Client gets extra capability (logging, caching, formatting) transparently. The decorator chain can be arbitrarily deep. Client chooses which decorators to apply." },
+  { title: "Adapter — converts interface", body: "Different interface on the output side. Wraps a Turkey to look like a Duck. No behaviour added; only the interface shape changes. One wrapper, no chain." },
+  { title: "Proxy — controls access",     body: "Same interface as real subject. Client cannot distinguish proxy from real object. Controls when, who, or how the real object is reached — but doesn't add domain behaviour." },
+]} />
+
+A common confusion: a caching proxy *does* add behaviour (returning a cached result). The distinction is intent — the caching proxy is still about *access control* (preventing redundant calls), not about enriching the object's capability from the caller's perspective.
+
+---
+
+## What the Pattern Actually Buys You
+
+- **Transparent remote access.** Client code written against a local interface works unchanged when the real object is on another machine, in another JVM, or behind an HTTP endpoint. Stubs can be regenerated; client code stays stable.
+- **Deferred initialisation without client changes.** Virtual proxies absorb the cost of lazy creation without any conditional logic leaking into the client.
+- **Cross-cutting access control.** Java dynamic proxies let you apply security rules to entire method families (all setters, all admin methods) without subclassing or modifying the target class.
+- **Transparent interposition.** Because the proxy implements the same interface as the real subject, it can be introduced into any codebase that already programs to the interface — without changing a line of client code.
+- **Testing via proxies.** A test double is a protection proxy that routes calls to a mock instead of the real implementation — the same structural trick, applied to testability rather than security.

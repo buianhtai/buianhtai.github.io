@@ -1,0 +1,379 @@
+---
+title: "HFDP Appendix — The Leftover Patterns"
+description: "Nine GoF patterns the book didn't have room for: Bridge, Builder, Chain of Responsibility, Flyweight, Interpreter, Mediator, Memento, Prototype, and Visitor — each one a sharp tool for a specific class of problem."
+pubDate: 2026-05-08
+tags: ["design-patterns", "bridge", "builder", "chain-of-responsibility", "flyweight", "interpreter", "mediator", "memento", "prototype", "visitor", "foundations"]
+lang: "en"
+category: "foundations"
+series: "head-first-design-patterns"
+seriesOrder: 14
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import LayerStack from '../../../components/mdx/LayerStack.astro';
+
+The GoF catalogue has 23 patterns. Head First Design Patterns covers 14 in depth — the ones you will encounter most often in everyday work. The remaining 9 are collected in the appendix: less universally applicable, but each one the right tool for a specific situation. This post covers all nine with enough depth to recognise when the problem calls for each one.
+
+<HeroGrid items={[
+  { label: "9 Patterns", sublabel: "Bridge · Builder · CoR · Flyweight · Interpreter · Mediator · Memento · Prototype · Visitor", color: "#0891b2" },
+  { label: "GoF Complete", sublabel: "All 23 patterns now covered", color: "#059669" },
+  { label: "Specialised", sublabel: "Less common, but each solves a real class of problem", color: "#d97706" },
+  { label: "Appendix", sublabel: "Ch.14 of Head First Design Patterns", color: "#7c3aed" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> Bridge
+
+**Problem**: You have an abstraction that can vary independently of its implementation. Extending both through subclassing causes a class explosion — M abstractions × N implementations = M×N subclasses.
+
+**Solution**: Separate the abstraction hierarchy from the implementation hierarchy with a composition relationship. The abstraction holds a reference to an implementor interface.
+
+```java
+// Implementor interface
+public interface TV {
+    void on();
+    void off();
+    void tuneChannel(int channel);
+}
+
+// Abstraction
+public abstract class RemoteControl {
+    protected TV tv;
+    public RemoteControl(TV tv) { this.tv = tv; }
+    abstract void on();
+    abstract void off();
+    abstract void setChannel(int channel);
+}
+
+// Refined abstraction
+public class ConcreteRemote extends RemoteControl {
+    public void on()  { tv.on(); }
+    public void off() { tv.off(); }
+    public void setChannel(int channel) { tv.tuneChannel(channel); }
+}
+```
+
+You can now add new remote types (universal remote, smart remote) and new TV brands independently — no subclass matrix.
+
+**Use when**: Two dimensions of variation exist and both change at their own pace. Common: persistence strategies × domain objects, rendering engines × document formats, drivers × platform APIs.
+
+---
+
+## <Label color="teal">2</Label> Builder
+
+**Problem**: Constructing a complex object step-by-step, where the construction sequence matters or optional parameters make a constructor unwieldy.
+
+**Solution**: Separate the construction algorithm (Director) from the object being built (Builder). The Director calls builder methods in sequence; different builder implementations produce different representations.
+
+```java
+public interface MealBuilder {
+    void buildBurger();
+    void buildDrink();
+    void buildDessert();
+    Meal getMeal();
+}
+
+public class KidsMealBuilder implements MealBuilder {
+    Meal meal = new Meal();
+    public void buildBurger()  { meal.add(new CheeseburgerKids()); }
+    public void buildDrink()   { meal.add(new AppleJuice()); }
+    public void buildDessert() { meal.add(new CookieKids()); }
+    public Meal getMeal()      { return meal; }
+}
+
+public class Waiter {  // Director
+    MealBuilder builder;
+    public void setBuilder(MealBuilder b) { builder = b; }
+    public void constructMeal() {
+        builder.buildBurger();
+        builder.buildDrink();
+        builder.buildDessert();
+    }
+    public Meal getMeal() { return builder.getMeal(); }
+}
+```
+
+In modern Java the "fluent builder" variant is more common: `Person.builder().name("Alice").age(30).build()` — no Director, just a builder object with setters returning `this`.
+
+**Use when**: Complex objects have many optional parts, construction requires validation of partial state, or the same construction steps need to produce different representations (HTML report vs PDF report).
+
+---
+
+## <Label color="teal">3</Label> Chain of Responsibility
+
+**Problem**: A request needs to pass through a series of potential handlers. The sender should not need to know which handler will process it; any handler in the chain can handle or pass it on.
+
+**Solution**: Build a linked list of handlers. Each handler has a reference to the next. When a handler can't or won't process the request, it forwards it.
+
+```java
+public abstract class Handler {
+    Handler successor;
+    public void setSuccessor(Handler s) { successor = s; }
+    public abstract void handleRequest(int request);
+}
+
+public class ConcreteHandler1 extends Handler {
+    public void handleRequest(int request) {
+        if (request >= 0 && request < 10) {
+            System.out.println("Handler1 handled " + request);
+        } else if (successor != null) {
+            successor.handleRequest(request);
+        }
+    }
+}
+```
+
+**Real-world instances**: HTTP middleware pipelines (each middleware either responds or calls `next()`), Java Servlet filters, exception handlers in a catch chain, GUI event propagation (child → parent → window), permission systems that escalate.
+
+**Use when**: Multiple objects may handle a request, the set of handlers isn't known at compile time, or you want to issue a request to one of several handlers without specifying the receiver explicitly.
+
+---
+
+## <Label color="teal">4</Label> Flyweight
+
+**Problem**: A large number of fine-grained objects consume too much memory. Many of them share identical state.
+
+**Solution**: Share the intrinsic state (the part that doesn't vary per instance) across objects. Extrinsic state (the part that does vary) is passed in at the time of use, not stored.
+
+```java
+// Flyweight: the shared, immutable glyph shape
+public class Character {
+    private final char symbol;   // intrinsic — shared
+    private final Font font;     // intrinsic — shared
+    // pointSize, color = extrinsic — passed at draw time
+
+    public void draw(int x, int y, int pointSize, Color color) {
+        // render using shared symbol/font + per-call x,y,pointSize,color
+    }
+}
+
+// Factory maintains the pool
+public class CharacterFactory {
+    Map<Character, Character> pool = new HashMap<>();
+    public Character getCharacter(char c, Font f) {
+        Character key = new Character(c, f);
+        return pool.computeIfAbsent(key, k -> k);
+    }
+}
+```
+
+A word processor rendering a 100,000-character document doesn't create 100,000 glyph objects — it creates one per distinct character+font combination and reuses them.
+
+**Use when**: An application uses a huge number of objects, storage costs are high due to object quantity, most object state is extrinsic (can be passed in), and groups of objects can share state.
+
+<Callout color="amber">
+Flyweight trades memory for CPU: every use of an extrinsic-state object requires passing that state. Don't apply it unless profiling confirms memory is actually the bottleneck.
+</Callout>
+
+---
+
+## <Label color="teal">5</Label> Interpreter
+
+**Problem**: You need to interpret sentences in a language — a grammar. The language could be a regular expression, a query language, a scripting language, or a simple domain-specific language.
+
+**Solution**: Define a class for each grammar symbol (terminal and non-terminal). Each class implements an `interpret()` method. The AST (abstract syntax tree) built from these objects interprets itself by recursive calls.
+
+```java
+public interface Expression {
+    boolean interpret(String context);
+}
+
+public class TerminalExpression implements Expression {
+    private String data;
+    public TerminalExpression(String data) { this.data = data; }
+    public boolean interpret(String context) { return context.contains(data); }
+}
+
+public class OrExpression implements Expression {
+    private Expression e1, e2;
+    public OrExpression(Expression e1, Expression e2) { this.e1 = e1; this.e2 = e2; }
+    public boolean interpret(String context) {
+        return e1.interpret(context) || e2.interpret(context);
+    }
+}
+```
+
+**Use when**: The grammar is simple, performance is not critical, and you want to express grammar rules as objects. Complex grammars produce deep class hierarchies — at that scale, parser generators (ANTLR, PEG.js) are more practical.
+
+---
+
+## <Label color="teal">6</Label> Mediator
+
+**Problem**: A set of objects interact in complex many-to-many ways. Direct object-to-object communication leads to tight coupling — every object needs to know about every other.
+
+**Solution**: Introduce a mediator object that all participants talk to instead of each other. The mediator coordinates the interactions, decoupling the participants.
+
+```java
+public interface Mediator {
+    void colleagueChanged(Colleague c);
+}
+
+public class FontDialogDirector implements Mediator {
+    ListBox fontList;
+    TextField fontField;
+    Button okButton;
+
+    public void colleagueChanged(Colleague c) {
+        if (c == fontList) {
+            fontField.setText(fontList.getSelection());
+            okButton.enable();
+        }
+        // ...
+    }
+}
+```
+
+The font list, text field, and OK button don't reference each other — they all call `mediator.colleagueChanged(this)`. The mediator decides what cascading updates happen.
+
+**Real-world instances**: Air traffic control (planes talk to tower, not each other), chat room server (messages route through the server), UI dialog logic coordination, event bus systems.
+
+**Use when**: A set of objects communicate in well-defined but complex ways, reuse of individual objects is difficult because they reference too many others, or you want centralised control of communication.
+
+---
+
+## <Label color="teal">7</Label> Memento
+
+**Problem**: An object needs to support undo. To restore a previous state, you need to capture the object's internal state — but exposing that state violates encapsulation.
+
+**Solution**: The Originator creates a Memento (a snapshot of its internal state). The Caretaker holds the mementos but never inspects them. To undo, the Caretaker passes a Memento back to the Originator, which restores itself.
+
+```java
+public class GameCharacter {  // Originator
+    private int vitality, agility, magic;
+
+    public GameCharacterMemento saveToMemento() {
+        return new GameCharacterMemento(vitality, agility, magic);
+    }
+    public void restoreFromMemento(GameCharacterMemento m) {
+        vitality = m.getVitality();
+        agility  = m.getAgility();
+        magic    = m.getMagic();
+    }
+    // stats accessor/mutator methods...
+}
+
+public class GameCharacterMemento {  // Memento
+    private final int vitality, agility, magic;
+    // package-private constructor — Caretaker can't inspect
+    GameCharacterMemento(int v, int a, int m) {
+        vitality = v; agility = a; magic = m;
+    }
+    // getters only accessible to Originator (same package)
+}
+```
+
+**Use when**: A snapshot of an object's state needs to be saved so it can be restored later, and direct exposure of that state would break encapsulation. Common: text editor undo, game saves, transaction rollback.
+
+---
+
+## <Label color="teal">8</Label> Prototype
+
+**Problem**: Creating an object is expensive (database lookup, network call, complex computation) and you need many objects that are similar to an existing one.
+
+**Solution**: Clone the existing object instead of constructing from scratch. The prototype interface defines `clone()`.
+
+```java
+public abstract class Monster implements Cloneable {
+    String name;
+    int health;
+    // ... many other expensive-to-initialise fields
+
+    public Monster clone() {
+        try {
+            return (Monster) super.clone();  // shallow copy
+        } catch (CloneNotSupportedException e) {
+            throw new AssertionError();
+        }
+    }
+}
+
+// Usage
+Monster goblin = expensiveMonsterFactory.create("goblin");
+Monster goblin2 = goblin.clone();   // fast — no factory overhead
+goblin2.setName("goblin-variant");
+```
+
+**Use when**: Object creation is expensive and the new object needs only minor variation from an existing one. Common: game entities (clone a baseline monster, tweak stats), document templates (clone a formatted document, replace content), prototype-based OOP languages.
+
+<Callout color="teal">
+Java's `Object.clone()` is notoriously tricky (shallow copy, checked exception, must implement `Cloneable` which is a marker with no methods). Many teams prefer a copy constructor or `fromPrototype(Monster m)` factory method instead.
+</Callout>
+
+---
+
+## <Label color="teal">9</Label> Visitor
+
+**Problem**: You have a stable class hierarchy (rarely changes) but need to frequently add new operations over it. Adding each operation to every class is invasive.
+
+**Solution**: Separate the operations into a Visitor hierarchy. Each element in the original hierarchy accepts a visitor and calls the appropriate visit method. New operations = new visitors; existing classes unchanged.
+
+```java
+public interface CarPartVisitor {
+    void visit(Engine engine);
+    void visit(Wheel wheel);
+    void visit(Car car);
+}
+
+public class Car {
+    List<CarPart> parts;
+    public void accept(CarPartVisitor visitor) {
+        for (CarPart p : parts) p.accept(visitor);
+        visitor.visit(this);
+    }
+}
+
+// New operation: print part details
+public class PrintVisitor implements CarPartVisitor {
+    public void visit(Engine e) { System.out.println("Engine: " + e.getHorsepower() + "hp"); }
+    public void visit(Wheel w)  { System.out.println("Wheel: " + w.getDiameter() + " inches"); }
+    public void visit(Car c)    { System.out.println("Car: " + c.getModel()); }
+}
+
+// New operation: price calculation
+public class PriceVisitor implements CarPartVisitor { /* ... */ }
+```
+
+**Use when**: An object structure is stable and you need to perform many distinct, unrelated operations on it. Common: compilers (AST traversal — type checking, code generation, optimisation are separate visitors), document processing (HTML/text/PDF export), report generation.
+
+**Trade-off**: Adding a new *element type* is invasive — every existing visitor must gain a new `visit()` method. The pattern optimises for "many operations, stable types" and is the wrong choice when types change frequently.
+
+---
+
+## Pattern Quick Reference
+
+<DataTable
+  caption="All 9 appendix patterns at a glance"
+  accent="teal"
+  headers={["Pattern", "Intent", "Signal to use it"]}
+  rows={[
+    { "Pattern": "Bridge",                   "Intent": "Decouple abstraction from implementation so both can vary independently",              "Signal to use it": "Class explosion from two independent dimensions of variation" },
+    { "Pattern": "Builder",                  "Intent": "Separate complex object construction from its representation",                         "Signal to use it": "Constructor with many optional parameters; multi-step creation" },
+    { "Pattern": "Chain of Responsibility", "Intent": "Pass a request along a chain of handlers until one handles it",                        "Signal to use it": "Multiple potential handlers; sender shouldn't know the receiver" },
+    { "Pattern": "Flyweight",                "Intent": "Use sharing to efficiently support large numbers of fine-grained objects",             "Signal to use it": "Memory pressure from millions of similar objects" },
+    { "Pattern": "Interpreter",              "Intent": "Define grammar rules as a class hierarchy; interpret sentences recursively",            "Signal to use it": "Simple DSL, query language, rule engine" },
+    { "Pattern": "Mediator",                 "Intent": "Define an object that encapsulates how a set of objects interact",                     "Signal to use it": "Many-to-many coupling between collaborating objects" },
+    { "Pattern": "Memento",                  "Intent": "Capture and externalise internal state so it can be restored later",                   "Signal to use it": "Undo/redo, save points, transaction rollback" },
+    { "Pattern": "Prototype",                "Intent": "Create new objects by copying an existing one",                                       "Signal to use it": "Expensive initialisation; need many variants of one base object" },
+    { "Pattern": "Visitor",                  "Intent": "Add operations to elements of a stable object structure without modifying them",       "Signal to use it": "Many unrelated operations on a stable class hierarchy" },
+  ]}
+/>
+
+---
+
+## Completing the Catalogue
+
+With these nine patterns, the GoF catalogue is complete. The full 23-pattern vocabulary:
+
+<LayerStack
+  layers={[
+    { tag: "C", color: "teal",  title: "Creational (5)",    items: ["Singleton", "Abstract Factory", "Factory Method", "Builder", "Prototype"] },
+    { tag: "S", color: "green", title: "Structural (7)",    items: ["Adapter", "Bridge", "Composite", "Decorator", "Facade", "Flyweight", "Proxy"] },
+    { tag: "B", color: "amber", title: "Behavioural (11)",  items: ["Chain of Responsibility", "Command", "Interpreter", "Iterator", "Mediator", "Memento", "Observer", "State", "Strategy", "Template Method", "Visitor"] },
+  ]}
+/>
+
+Knowing all 23 patterns does not make you a better programmer. Recognising the 4–5 patterns that recur most often in your domain — and applying them only when the problem genuinely fits — does. The catalogue is a vocabulary, not a checklist. The Head First approach: learn the problems first, then the patterns. The pattern names are labels for problems you've already felt.
