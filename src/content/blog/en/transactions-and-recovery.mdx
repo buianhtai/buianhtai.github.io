@@ -130,6 +130,24 @@ Recovery after a crash proceeds in exactly three phases:
 
 The redo phase's "repeat history" approach is the key insight: it simplifies recovery reasoning enormously. You don't need to know what was and wasn't flushed — just replay everything from the analysis starting point, then undo what shouldn't have committed.
 
+<SequenceDiagram
+  title="ARIES recovery — three phases after a crash"
+  actors={["WAL Log", "Analysis Phase", "Redo Phase", "Undo Phase"]}
+  messages={[
+    { from: "WAL Log", to: "Analysis Phase", label: "scan forward from last checkpoint" },
+    { from: "Analysis Phase", to: "Analysis Phase", label: "build dirty-page table (DPT)" },
+    { from: "Analysis Phase", to: "Analysis Phase", label: "build active-transaction table (ATT)" },
+    { from: "Analysis Phase", to: "Redo Phase", label: "earliest LSN in DPT → redo start point" },
+    { from: "WAL Log", to: "Redo Phase", label: "replay every log record from redo start" },
+    { from: "Redo Phase", to: "Redo Phase", label: "apply redo: DB restored to crash-time state" },
+    { from: "Redo Phase", to: "Redo Phase", label: "(includes uncommitted txns — repeat history)" },
+    { from: "Redo Phase", to: "Undo Phase", label: "ATT: list of txns to roll back" },
+    { from: "Undo Phase", to: "WAL Log", label: "write CLR for each undo step" },
+    { from: "Undo Phase", to: "Undo Phase", label: "roll back uncommitted txns in reverse LSN order" },
+    { from: "Undo Phase", to: "Undo Phase", label: "recovery complete — DB consistent" },
+  ]}
+/>
+
 <Callout color="teal">
 ARIES was described in 1992 and is still the reference algorithm today. Every major relational database (PostgreSQL, MySQL/InnoDB, SQL Server, Oracle) uses a variant of it. The steal/no-force + WAL combination gives maximum write throughput with full ACID guarantees.
 </Callout>

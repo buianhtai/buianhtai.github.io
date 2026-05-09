@@ -126,6 +126,32 @@ The key insight: instead of modifying pages in place (which requires locks), rep
 3. Over time, a page accumulates a chain of delta records: `[delta3] → [delta2] → [delta1] → [base page]`
 4. When the chain grows too long, a **consolidation** operation reads the entire chain, merges all deltas with the base page, writes a new consolidated page, and CAS the Mapping Table to the new page
 
+<ArchDiagram
+  title="Bw-Tree: Mapping Table → delta chain → base page"
+  zones={[
+    { id: "map-zone",   label: "Mapping Table (PID → physical addr)", color: "teal" },
+    { id: "chain-zone", label: "Delta Chain (newest → oldest)", color: "amber" },
+    { id: "base-zone",  label: "Base Page", color: "green" },
+  ]}
+  nodes={[
+    { id: "pid",    label: "Page ID 42",  sub: "logical handle\nnever changes", zone: "map-zone",   row: 1, col: 1, color: "teal" },
+    { id: "d3",     label: "Delta 3",     sub: "insert key=99\n(newest — CAS head)", zone: "chain-zone", row: 1, col: 1, color: "amber" },
+    { id: "d2",     label: "Delta 2",     sub: "delete key=50\n(prev head)", zone: "chain-zone", row: 1, col: 2, color: "amber" },
+    { id: "d1",     label: "Delta 1",     sub: "update key=30→31\n(oldest delta)", zone: "chain-zone", row: 1, col: 3, color: "amber" },
+    { id: "base",   label: "Base Page",   sub: "keys: [10,20,30,50]\nimmutable snapshot", zone: "base-zone",  row: 1, col: 1, color: "green" },
+    { id: "merged", label: "Consolidated",sub: "keys: [10,20,31,99]\nafter consolidation", zone: "base-zone",  row: 1, col: 2, color: "teal" },
+  ]}
+  edges={[
+    { from: "pid",  to: "d3",     label: "CAS ptr", type: "solid" },
+    { from: "d3",   to: "d2",     label: "prev",    type: "solid" },
+    { from: "d2",   to: "d1",     label: "prev",    type: "solid" },
+    { from: "d1",   to: "base",   label: "prev",    type: "solid" },
+    { from: "d3",   to: "merged", label: "consolidate\n→ new page", type: "dashed" },
+    { from: "pid",  to: "merged", label: "CAS update\nafter consolidation", type: "dashed" },
+  ]}
+  caption="Writers never touch the base page. Each write prepends a delta record and CAS-swaps the Mapping Table pointer to it — no lock needed. Readers walk the chain (D3 → D2 → D1 → base) applying deltas in order. When the chain grows long, consolidation reads the full chain, writes a new base page with all changes merged, then CAS-swaps the Mapping Table to it. Old delta records become unreachable and are garbage collected."
+/>
+
 <FlowStep steps={[
   { title: "Delta append (no lock needed)", body: "Writer creates a new delta record, reads the current Mapping Table entry for the page, and attempts to CAS it to the delta. If CAS fails (another writer raced ahead), retry. No lock held during this entire operation." },
   { title: "Read resolution", body: "Readers follow the delta chain from newest to oldest, applying deltas to reconstruct the current record state. Short chains are fast; long chains require traversing all deltas." },
