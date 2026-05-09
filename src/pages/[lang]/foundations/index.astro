@@ -28,8 +28,8 @@ const standalone = allPosts
 
 const totalChapters = allPosts.length;
 
-// All slides: 1 hero + 1 per series + 1 for standalone (if any)
-const totalSlides = 1 + seriesGroups.length + (standalone.length > 0 ? 1 : 0);
+// Rows: 0 = hero, 1..N = series, last = standalone (if any)
+const totalRows = 1 + seriesGroups.length + (standalone.length > 0 ? 1 : 0);
 ---
 
 <BaseLayout
@@ -39,173 +39,278 @@ const totalSlides = 1 + seriesGroups.length + (standalone.length > 0 ? 1 : 0);
 >
   <div class="fl-root" id="fl-root">
 
-    <!-- ── Slide container ── -->
+    <!-- ── 2D deck: vertical rows, each row has horizontal cols ── -->
     <div class="fl-deck" id="fl-deck">
 
-      <!-- ── Slide 0: Hero ── -->
-      <section class="fl-slide fl-slide-hero" data-slide="0">
-        <div class="fl-slide-bg-num">00</div>
-
-        <div class="fl-slide-inner">
-          <div class="fl-hero-badge">Software Foundations</div>
-          <h1 class="fl-hero-title">First principles.<br />Deep understanding.</h1>
-          <p class="fl-hero-desc">
-            A structured reading series covering CS fundamentals, distributed systems internals,
-            data-intensive application design, and the engineering craft beneath every framework
-            and tool. Written to be read — not skimmed.
-          </p>
-
-          <div class="fl-hero-stats">
-            <div class="fl-stat">
-              <span class="fl-stat-num">{totalChapters}</span>
-              <span class="fl-stat-label">chapters</span>
-            </div>
-            <div class="fl-stat">
-              <span class="fl-stat-num">{seriesGroups.length}</span>
-              <span class="fl-stat-label">{seriesGroups.length === 1 ? 'series' : 'series'}</span>
-            </div>
-          </div>
-
-          <button class="fl-hero-cta" id="fl-start-btn">
-            Start reading <span class="fl-cta-arrow">↓</span>
-          </button>
-        </div>
-
-        <div class="fl-slide-hint">scroll or press ↓</div>
-      </section>
-
-      <!-- ── Slides: one per series ── -->
-      {seriesGroups.map(({ id, meta, posts }, si) => (
-        <section class="fl-slide fl-slide-series" data-slide={si + 1} data-series-id={id}>
-          <div class="fl-slide-bg-num">{String(si + 1).padStart(2, '0')}</div>
+      <!-- ── Row 0: Hero (single column) ── -->
+      <div class="fl-row" data-row="0">
+        <section class="fl-slide fl-slide-hero" data-row="0" data-col="0">
+          <div class="fl-slide-bg-num">00</div>
 
           <div class="fl-slide-inner">
-            <!-- Left: series info + chapter list -->
-            <div class="fl-series-left">
-              <div class="fl-series-eyebrow">
-                <span class="fl-series-icon">◈</span>
-                <span class="fl-series-ordinal">Series {si + 1} of {seriesGroups.length}</span>
+            <div class="fl-hero-badge">Software Foundations</div>
+            <h1 class="fl-hero-title">First principles.<br />Deep understanding.</h1>
+            <p class="fl-hero-desc">
+              A structured reading series covering CS fundamentals, distributed systems internals,
+              data-intensive application design, and the engineering craft beneath every framework
+              and tool. Written to be read — not skimmed.
+            </p>
+
+            <div class="fl-hero-stats">
+              <div class="fl-stat">
+                <span class="fl-stat-num">{totalChapters}</span>
+                <span class="fl-stat-label">chapters</span>
               </div>
-
-              <h2 class="fl-series-title">{meta?.title ?? id}</h2>
-
-              {meta?.description && (
-                <p class="fl-series-desc">{meta.description}</p>
-              )}
-
-              <!-- Chapter list — compact, scrollable if many -->
-              <ol class="fl-ch-list">
-                {posts.map((post, idx) => {
-                  const slug = getPostSlug(post);
-                  return (
-                    <li class="fl-ch-item" data-slug={slug}>
-                      <a href={`/${lang}/blog/${slug}`} class="fl-ch-link">
-                        <span class="fl-ch-num">{String(idx + 1).padStart(2, '0')}</span>
-                        <span class="fl-ch-title">{post.data.title}</span>
-                        <span class="fl-ch-arrow">→</span>
-                      </a>
-                    </li>
-                  );
-                })}
-              </ol>
-
-              <!-- CTA: enter first chapter -->
-              <a
-                href={`/${lang}/blog/${getPostSlug(posts[0])}`}
-                class="fl-series-cta"
-              >
-                Enter series →
-              </a>
-            </div>
-
-            <!-- Right: chapter count badge + progress ring -->
-            <div class="fl-series-right">
-              <div class="fl-series-badge">
-                <span class="fl-badge-num">{posts.length}</span>
-                <span class="fl-badge-label">chapters</span>
-              </div>
-              <div class="fl-series-ring" data-series-id={id}>
-                <!-- SVG progress ring — filled by JS from localStorage -->
-                <svg viewBox="0 0 80 80" class="fl-ring-svg" aria-hidden="true">
-                  <circle class="fl-ring-track" cx="40" cy="40" r="34" />
-                  <circle
-                    class="fl-ring-fill"
-                    cx="40" cy="40" r="34"
-                    stroke-dasharray="213.6"
-                    stroke-dashoffset="213.6"
-                    data-total={posts.length}
-                    data-slugs={posts.map(p => getPostSlug(p)).join(',')}
-                  />
-                </svg>
-                <span class="fl-ring-label" data-series-id={id}>0%</span>
+              <div class="fl-stat">
+                <span class="fl-stat-num">{seriesGroups.length}</span>
+                <span class="fl-stat-label">{seriesGroups.length === 1 ? 'series' : 'series'}</span>
               </div>
             </div>
+
+            <button class="fl-hero-cta" id="fl-start-btn">
+              Start reading <span class="fl-cta-arrow">↓</span>
+            </button>
           </div>
+
+          <div class="fl-slide-hint">↑↓ series &nbsp;·&nbsp; ←→ chapters</div>
         </section>
+      </div>
+
+      <!-- ── Rows: one per series ── -->
+      {seriesGroups.map(({ id, meta, posts }, si) => (
+        <div class="fl-row" data-row={si + 1}>
+
+          <!-- Col 0: Series overview -->
+          <section
+            class="fl-slide fl-slide-series"
+            data-row={si + 1}
+            data-col="0"
+            data-series-id={id}
+          >
+            <div class="fl-slide-bg-num">{String(si + 1).padStart(2, '0')}</div>
+
+            <div class="fl-slide-inner">
+              <!-- Left: series info -->
+              <div class="fl-series-left">
+                <div class="fl-series-eyebrow">
+                  <span class="fl-series-icon">◈</span>
+                  <span class="fl-series-ordinal">Series {si + 1} of {seriesGroups.length}</span>
+                </div>
+
+                <h2 class="fl-series-title">{meta?.title ?? id}</h2>
+
+                {meta?.description && (
+                  <p class="fl-series-desc">{meta.description}</p>
+                )}
+
+                <div class="fl-series-ch-preview">
+                  {posts.slice(0, 4).map((post, idx) => {
+                    const slug = getPostSlug(post);
+                    return (
+                      <div class="fl-preview-item" data-slug={slug}>
+                        <span class="fl-preview-num">{String(idx + 1).padStart(2, '0')}</span>
+                        <span class="fl-preview-title">{post.data.title}</span>
+                      </div>
+                    );
+                  })}
+                  {posts.length > 4 && (
+                    <div class="fl-preview-more">+{posts.length - 4} more chapters →</div>
+                  )}
+                </div>
+
+                <div class="fl-series-actions">
+                  <button class="fl-series-enter-btn" data-row={si + 1}>
+                    Browse chapters <span>→</span>
+                  </button>
+                  <a href={`/${lang}/blog/${getPostSlug(posts[0])}`} class="fl-series-cta">
+                    Start reading ↗
+                  </a>
+                </div>
+              </div>
+
+              <!-- Right: badge + progress ring -->
+              <div class="fl-series-right">
+                <div class="fl-series-badge">
+                  <span class="fl-badge-num">{posts.length}</span>
+                  <span class="fl-badge-label">chapters</span>
+                </div>
+                <div class="fl-series-ring" data-series-id={id}>
+                  <svg viewBox="0 0 80 80" class="fl-ring-svg" aria-hidden="true">
+                    <circle class="fl-ring-track" cx="40" cy="40" r="34" />
+                    <circle
+                      class="fl-ring-fill"
+                      cx="40" cy="40" r="34"
+                      stroke-dasharray="213.6"
+                      stroke-dashoffset="213.6"
+                      data-total={posts.length}
+                      data-slugs={posts.map(p => getPostSlug(p)).join(',')}
+                    />
+                  </svg>
+                  <span class="fl-ring-label" data-series-id={id}>0%</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="fl-slide-hint-h">press → or swipe left to browse chapters</div>
+          </section>
+
+          <!-- Cols 1..N: One slide per chapter -->
+          {posts.map((post, idx) => {
+            const slug = getPostSlug(post);
+            return (
+              <section
+                class="fl-slide fl-slide-chapter"
+                data-row={si + 1}
+                data-col={idx + 1}
+                data-series-id={id}
+                data-slug={slug}
+              >
+                <div class="fl-slide-bg-num">{String(idx + 1).padStart(2, '0')}</div>
+
+                <div class="fl-slide-inner fl-ch-slide-inner">
+                  <div class="fl-ch-slide-eyebrow">
+                    <span class="fl-ch-series-label">{meta?.title ?? id}</span>
+                    <span class="fl-ch-sep">·</span>
+                    <span class="fl-ch-pos">Chapter {idx + 1} of {posts.length}</span>
+                  </div>
+
+                  <h2 class="fl-ch-slide-title">{post.data.title}</h2>
+
+                  {post.data.description && (
+                    <p class="fl-ch-slide-desc">{post.data.description}</p>
+                  )}
+
+                  <div class="fl-ch-slide-meta">
+                    {post.data.pubDate && (
+                      <span class="fl-ch-date">{post.data.pubDate.toLocaleDateString('en', { year: 'numeric', month: 'short' })}</span>
+                    )}
+                    <span class="fl-ch-read-badge" data-slug={slug}>—</span>
+                  </div>
+
+                  <a href={`/${lang}/blog/${slug}`} class="fl-ch-read-btn">
+                    Read chapter <span class="fl-cta-arrow">→</span>
+                  </a>
+                </div>
+              </section>
+            );
+          })}
+        </div>
       ))}
 
-      <!-- ── Standalone articles slide (if any) ── -->
+      <!-- ── Standalone articles row (if any) ── -->
       {standalone.length > 0 && (
-        <section class="fl-slide fl-slide-series" data-slide={seriesGroups.length + 1}>
-          <div class="fl-slide-bg-num">{String(seriesGroups.length + 1).padStart(2, '0')}</div>
-          <div class="fl-slide-inner">
-            <div class="fl-series-left">
-              <div class="fl-series-eyebrow">
-                <span class="fl-series-icon">◇</span>
-                <span class="fl-series-ordinal">Standalone articles</span>
+        <div class="fl-row" data-row={seriesGroups.length + 1}>
+          <section
+            class="fl-slide fl-slide-series"
+            data-row={seriesGroups.length + 1}
+            data-col="0"
+          >
+            <div class="fl-slide-bg-num">{String(seriesGroups.length + 1).padStart(2, '0')}</div>
+            <div class="fl-slide-inner">
+              <div class="fl-series-left">
+                <div class="fl-series-eyebrow">
+                  <span class="fl-series-icon">◇</span>
+                  <span class="fl-series-ordinal">Standalone articles</span>
+                </div>
+                <h2 class="fl-series-title">Individual Deep Dives</h2>
+                <p class="fl-series-desc">Focused articles that stand on their own.</p>
+                <div class="fl-series-ch-preview">
+                  {standalone.slice(0, 4).map((post, idx) => {
+                    const slug = getPostSlug(post);
+                    return (
+                      <div class="fl-preview-item" data-slug={slug}>
+                        <span class="fl-preview-num">{String(idx + 1).padStart(2, '0')}</span>
+                        <span class="fl-preview-title">{post.data.title}</span>
+                      </div>
+                    );
+                  })}
+                  {standalone.length > 4 && (
+                    <div class="fl-preview-more">+{standalone.length - 4} more →</div>
+                  )}
+                </div>
               </div>
-              <h2 class="fl-series-title">Individual Deep Dives</h2>
-              <p class="fl-series-desc">Focused articles that stand on their own.</p>
-              <ol class="fl-ch-list">
-                {standalone.map((post, idx) => {
-                  const slug = getPostSlug(post);
-                  return (
-                    <li class="fl-ch-item" data-slug={slug}>
-                      <a href={`/${lang}/blog/${slug}`} class="fl-ch-link">
-                        <span class="fl-ch-num">{String(idx + 1).padStart(2, '0')}</span>
-                        <span class="fl-ch-title">{post.data.title}</span>
-                        <span class="fl-ch-arrow">→</span>
-                      </a>
-                    </li>
-                  );
-                })}
-              </ol>
-            </div>
-            <div class="fl-series-right">
-              <div class="fl-series-badge">
-                <span class="fl-badge-num">{standalone.length}</span>
-                <span class="fl-badge-label">articles</span>
+              <div class="fl-series-right">
+                <div class="fl-series-badge">
+                  <span class="fl-badge-num">{standalone.length}</span>
+                  <span class="fl-badge-label">articles</span>
+                </div>
               </div>
             </div>
-          </div>
-        </section>
+          </section>
+
+          {standalone.map((post, idx) => {
+            const slug = getPostSlug(post);
+            return (
+              <section
+                class="fl-slide fl-slide-chapter"
+                data-row={seriesGroups.length + 1}
+                data-col={idx + 1}
+                data-slug={slug}
+              >
+                <div class="fl-slide-bg-num">{String(idx + 1).padStart(2, '0')}</div>
+                <div class="fl-slide-inner fl-ch-slide-inner">
+                  <div class="fl-ch-slide-eyebrow">
+                    <span class="fl-ch-series-label">Standalone</span>
+                    <span class="fl-ch-sep">·</span>
+                    <span class="fl-ch-pos">Article {idx + 1}</span>
+                  </div>
+                  <h2 class="fl-ch-slide-title">{post.data.title}</h2>
+                  {post.data.description && (
+                    <p class="fl-ch-slide-desc">{post.data.description}</p>
+                  )}
+                  <a href={`/${lang}/blog/${slug}`} class="fl-ch-read-btn">
+                    Read article <span class="fl-cta-arrow">→</span>
+                  </a>
+                </div>
+              </section>
+            );
+          })}
+        </div>
       )}
 
     </div><!-- /fl-deck -->
 
-    <!-- ── Side dot navigation ── -->
-    <nav class="fl-dots" id="fl-dots" aria-label="Slide navigation">
-      {Array.from({ length: totalSlides }).map((_, i) => (
+    <!-- ── Side dot navigation (rows) ── -->
+    <nav class="fl-dots" id="fl-dots" aria-label="Series navigation">
+      {Array.from({ length: totalRows }).map((_, i) => (
         <button
           class={`fl-dot${i === 0 ? ' is-active' : ''}`}
-          data-goto={i}
+          data-goto-row={i}
           aria-label={i === 0 ? 'Intro' : `Series ${i}`}
           title={i === 0 ? 'Intro' : (seriesGroups[i - 1]?.meta?.title ?? `Series ${i}`)}
         />
       ))}
     </nav>
 
-    <!-- ── Slide counter ── -->
+    <!-- ── Bottom chapter pip bar (horizontal position within a row) ── -->
+    <div class="fl-ch-pips" id="fl-ch-pips" aria-hidden="true">
+      <!-- Filled by JS based on current row's column count -->
+    </div>
+
+    <!-- ── Position counter ── -->
     <div class="fl-counter" id="fl-counter" aria-live="polite">
-      <span id="fl-counter-cur">01</span>
+      <span id="fl-counter-row">01</span>
       <span class="fl-counter-sep">/</span>
-      <span id="fl-counter-tot">{String(totalSlides).padStart(2, '0')}</span>
+      <span id="fl-counter-rows">{String(totalRows).padStart(2, '0')}</span>
+      <span class="fl-counter-ch" id="fl-counter-ch" style="display:none">
+        <span class="fl-counter-sep2">·</span>
+        <span id="fl-counter-col">00</span>
+        <span class="fl-counter-sep">/</span>
+        <span id="fl-counter-cols">00</span>
+      </span>
+    </div>
+
+    <!-- ── Nav hint overlay ── -->
+    <div class="fl-nav-hint" id="fl-nav-hint" aria-hidden="true">
+      <span class="fl-hint-key">↑↓</span> series
+      <span class="fl-hint-sep">·</span>
+      <span class="fl-hint-key">←→</span> chapters
     </div>
 
   </div><!-- /fl-root -->
 </BaseLayout>
 
-<!-- Hide global footer — foundations page is full-viewport, no footer needed -->
+<!-- Hide global footer -->
 <style is:global>
   body:has(.fl-root) footer,
   body:has(.fl-root) .site-footer {
@@ -235,7 +340,7 @@ const totalSlides = 1 + seriesGroups.length + (standalone.length > 0 ? 1 : 0);
     overflow: hidden;
   }
 
-  /* ── Deck: vertical scroll-snap container ── */
+  /* ── Vertical deck: snaps between rows ── */
   .fl-deck {
     width: 100%;
     height: 100%;
@@ -246,12 +351,28 @@ const totalSlides = 1 + seriesGroups.length + (standalone.length > 0 ? 1 : 0);
   }
   .fl-deck::-webkit-scrollbar { display: none; }
 
+  /* ── Each row: horizontal scroll-snap container ── */
+  .fl-row {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    overflow-x: scroll;
+    scroll-snap-type: x mandatory;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    flex-shrink: 0;
+  }
+  .fl-row::-webkit-scrollbar { display: none; }
+
   /* ── Each slide ── */
   .fl-slide {
     scroll-snap-align: start;
     scroll-snap-stop: always;
     width: 100%;
     height: 100%;
+    flex-shrink: 0;
     position: relative;
     display: flex;
     align-items: center;
@@ -259,7 +380,7 @@ const totalSlides = 1 + seriesGroups.length + (standalone.length > 0 ? 1 : 0);
     border-bottom: 1px solid var(--f-border);
   }
 
-  /* Left accent line */
+  /* Left accent line on active */
   .fl-slide::before {
     content: '';
     position: absolute;
@@ -271,7 +392,14 @@ const totalSlides = 1 + seriesGroups.length + (standalone.length > 0 ? 1 : 0);
   }
   .fl-slide.is-active::before { opacity: 1; }
 
-  /* Large ghosted chapter/slide number in background */
+  /* Chapter slides: right accent instead */
+  .fl-slide-chapter::before {
+    top: 0; right: 0; left: auto;
+    background: linear-gradient(180deg, var(--f-accent) 0%, transparent 100%);
+  }
+  .fl-slide-chapter.is-active::before { opacity: 1; }
+
+  /* Large ghosted number in background */
   .fl-slide-bg-num {
     position: absolute;
     right: -0.05em;
@@ -300,7 +428,6 @@ const totalSlides = 1 + seriesGroups.length + (standalone.length > 0 ? 1 : 0);
     gap: 3rem;
   }
 
-  /* Hero slide: single column, no row layout */
   .fl-slide-hero .fl-slide-inner {
     flex-direction: column;
     max-width: 680px;
@@ -407,7 +534,7 @@ const totalSlides = 1 + seriesGroups.length + (standalone.length > 0 ? 1 : 0);
   }
   .fl-hero-cta:hover .fl-cta-arrow { transform: translateY(3px); }
 
-  /* "scroll or press ↓" hint at bottom center */
+  /* Hints */
   .fl-slide-hint {
     position: absolute;
     bottom: 1.5rem;
@@ -416,6 +543,18 @@ const totalSlides = 1 + seriesGroups.length + (standalone.length > 0 ? 1 : 0);
     font-family: 'IBM Plex Mono', monospace;
     font-size: 0.58rem;
     letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--f-text-muted);
+    animation: hint-pulse 2.4s ease-in-out infinite;
+    white-space: nowrap;
+  }
+  .fl-slide-hint-h {
+    position: absolute;
+    bottom: 1.5rem;
+    right: 3rem;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.58rem;
+    letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--f-text-muted);
     animation: hint-pulse 2.4s ease-in-out infinite;
@@ -466,80 +605,80 @@ const totalSlides = 1 + seriesGroups.length + (standalone.length > 0 ? 1 : 0);
     font-size: 0.9rem;
     line-height: 1.65;
     color: var(--f-text-dim);
-    margin: 0 0 1.5rem;
+    margin: 0 0 1.25rem;
     max-width: 52ch;
     font-style: italic;
   }
 
-  /* Chapter list */
-  .fl-ch-list {
-    list-style: none;
-    margin: 0 0 1.5rem;
-    padding: 0;
+  /* Chapter preview (replaces full list — use → to drill in) */
+  .fl-series-ch-preview {
+    margin-bottom: 1.5rem;
     border-top: 1px solid var(--f-border);
-    max-height: 260px;
-    overflow-y: auto;
-    scrollbar-width: thin;
-    scrollbar-color: var(--f-border) transparent;
   }
-
-  .fl-ch-item {
-    border-bottom: 1px solid color-mix(in srgb, var(--f-border) 60%, transparent);
+  .fl-preview-item {
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    padding: 0.45rem 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--f-border) 50%, transparent);
   }
-  .fl-ch-item:last-child { border-bottom: none; }
-
-  .fl-ch-link {
-    display: grid;
-    grid-template-columns: 2rem 1fr auto;
-    align-items: center;
-    gap: 0;
-    padding: 0.55rem 0.5rem 0.55rem 0;
-    text-decoration: none;
-    color: inherit;
-    transition: background 0.12s;
-  }
-  .fl-ch-link:hover {
-    background: color-mix(in srgb, var(--f-accent) 5%, transparent);
-  }
-  .fl-ch-item.is-read .fl-ch-link {
-    border-left: 2px solid color-mix(in srgb, var(--f-accent) 35%, transparent);
-    padding-left: 0.35rem;
-  }
-
-  .fl-ch-num {
+  .fl-preview-num {
     font-family: 'IBM Plex Mono', monospace;
-    font-size: 0.62rem;
+    font-size: 0.6rem;
     color: var(--f-text-muted);
     flex-shrink: 0;
+    width: 1.5rem;
   }
-  .fl-ch-item.is-read .fl-ch-num { color: var(--f-accent); }
-
-  .fl-ch-title {
+  .fl-preview-title {
     font-family: 'IBM Plex Sans', system-ui, sans-serif;
-    font-size: 0.82rem;
+    font-size: 0.8rem;
     color: var(--f-text-dim);
-    line-height: 1.35;
-    transition: color 0.12s;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  .fl-ch-link:hover .fl-ch-title { color: var(--f-accent); }
-
-  .fl-ch-arrow {
-    font-size: 0.7rem;
+  .fl-preview-item.is-read .fl-preview-num { color: var(--f-accent); }
+  .fl-preview-more {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.62rem;
     color: var(--f-text-muted);
-    flex-shrink: 0;
-    padding-left: 0.5rem;
-    opacity: 0;
-    transition: opacity 0.12s, transform 0.12s;
-  }
-  .fl-ch-link:hover .fl-ch-arrow {
-    opacity: 1;
-    transform: translateX(2px);
+    padding: 0.45rem 0;
+    letter-spacing: 0.04em;
   }
 
-  /* Enter series CTA */
+  .fl-series-actions {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+  }
+
+  /* "Browse chapters →" button */
+  .fl-series-enter-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--f-accent);
+    background: transparent;
+    border: 1px solid color-mix(in srgb, var(--f-accent) 40%, transparent);
+    padding: 0.55rem 1.1rem;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .fl-series-enter-btn:hover {
+    background: color-mix(in srgb, var(--f-accent) 10%, transparent);
+    border-color: var(--f-accent);
+  }
+  .fl-series-enter-btn span {
+    display: inline-block;
+    transition: transform 0.2s;
+  }
+  .fl-series-enter-btn:hover span { transform: translateX(3px); }
+
   .fl-series-cta {
     display: inline-flex;
     align-items: center;
@@ -547,15 +686,15 @@ const totalSlides = 1 + seriesGroups.length + (standalone.length > 0 ? 1 : 0);
     font-size: 0.68rem;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: var(--f-accent);
+    color: var(--f-text-muted);
     text-decoration: none;
-    border-bottom: 1px solid color-mix(in srgb, var(--f-accent) 35%, transparent);
+    border-bottom: 1px solid color-mix(in srgb, var(--f-text-muted) 35%, transparent);
     padding-bottom: 1px;
     transition: border-color 0.15s, color 0.15s;
   }
   .fl-series-cta:hover {
-    color: #a0c4ff;
-    border-color: #a0c4ff;
+    color: var(--f-accent);
+    border-color: var(--f-accent);
   }
 
   /* Right: badge + ring */
@@ -632,7 +771,90 @@ const totalSlides = 1 + seriesGroups.length + (standalone.length > 0 ? 1 : 0);
     color: var(--f-text-dim);
   }
 
-  /* ────────────────────── DOT NAV ── */
+  /* ────────────────────── CHAPTER SLIDE ── */
+  .fl-ch-slide-inner {
+    flex-direction: column;
+    max-width: 680px;
+    padding-left: clamp(2rem, 8vw, 6rem);
+  }
+
+  .fl-ch-slide-eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+  .fl-ch-series-label { color: var(--f-accent); }
+  .fl-ch-sep          { color: var(--f-border-bright); }
+  .fl-ch-pos          { color: var(--f-text-muted); }
+
+  .fl-ch-slide-title {
+    font-family: 'IBM Plex Serif', Georgia, serif;
+    font-size: clamp(1.5rem, 4vw, 2.75rem);
+    font-weight: 300;
+    line-height: 1.15;
+    letter-spacing: -0.025em;
+    color: var(--f-text);
+    margin: 0 0 1rem;
+  }
+
+  .fl-ch-slide-desc {
+    font-family: 'IBM Plex Serif', Georgia, serif;
+    font-size: 0.95rem;
+    line-height: 1.7;
+    color: var(--f-text-dim);
+    margin: 0 0 1.75rem;
+    max-width: 52ch;
+    font-style: italic;
+  }
+
+  .fl-ch-slide-meta {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.75rem;
+  }
+  .fl-ch-date {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.62rem;
+    color: var(--f-text-muted);
+    letter-spacing: 0.06em;
+  }
+  .fl-ch-read-badge {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.62rem;
+    letter-spacing: 0.06em;
+    color: var(--f-text-muted);
+  }
+  .fl-ch-read-badge.is-read {
+    color: var(--f-accent);
+  }
+
+  .fl-ch-read-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--f-accent);
+    text-decoration: none;
+    border: 1px solid color-mix(in srgb, var(--f-accent) 40%, transparent);
+    padding: 0.55rem 1.1rem;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .fl-ch-read-btn:hover {
+    background: color-mix(in srgb, var(--f-accent) 10%, transparent);
+    border-color: var(--f-accent);
+  }
+  .fl-ch-read-btn:hover .fl-cta-arrow { transform: translateX(3px); }
+
+  /* ────────────────────── DOT NAV (rows) ── */
   .fl-dots {
     position: fixed;
     right: 1.25rem;
@@ -661,6 +883,33 @@ const totalSlides = 1 + seriesGroups.length + (standalone.length > 0 ? 1 : 0);
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--f-accent) 25%, transparent);
   }
 
+  /* ────────────────────── CHAPTER PIPS (cols) ── */
+  .fl-ch-pips {
+    position: fixed;
+    bottom: 1.25rem;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 0.4rem;
+    z-index: 50;
+    transition: opacity 0.3s;
+  }
+  .fl-pip {
+    width: 18px;
+    height: 4px;
+    background: var(--f-border-bright);
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.15s;
+    border-radius: 2px;
+  }
+  .fl-pip:hover { background: var(--f-text-dim); transform: scaleX(1.15); }
+  .fl-pip.is-active {
+    background: var(--f-accent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--f-accent) 30%, transparent);
+  }
+
   /* ────────────────────── COUNTER ── */
   .fl-counter {
     position: fixed;
@@ -675,36 +924,84 @@ const totalSlides = 1 + seriesGroups.length + (standalone.length > 0 ? 1 : 0);
     gap: 0.25rem;
     letter-spacing: 0.04em;
   }
-  #fl-counter-cur { color: var(--f-accent); font-weight: 600; }
+  #fl-counter-row { color: var(--f-accent); font-weight: 600; }
   .fl-counter-sep { color: var(--f-border-bright); }
+  .fl-counter-sep2 { color: var(--f-border-bright); margin: 0 0.15rem; }
+  .fl-counter-ch { display: flex; align-items: center; gap: 0.25rem; }
+  #fl-counter-col { color: var(--f-accent); font-weight: 600; }
+
+  /* ────────────────────── NAV HINT ── */
+  .fl-nav-hint {
+    position: fixed;
+    top: calc(100% - 3rem);  /* hidden by default */
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.58rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--f-text-muted);
+    background: color-mix(in srgb, var(--f-surface) 90%, transparent);
+    border: 1px solid var(--f-border);
+    padding: 0.3rem 0.75rem;
+    z-index: 60;
+    white-space: nowrap;
+    pointer-events: none;
+    transition: top 0.4s ease, opacity 0.4s;
+    opacity: 0;
+  }
+  .fl-nav-hint.visible {
+    top: 5rem;
+    opacity: 1;
+  }
+  .fl-hint-key {
+    color: var(--f-accent);
+    font-weight: 600;
+  }
+  .fl-hint-sep { margin: 0 0.4rem; color: var(--f-border-bright); }
 </style>
 
 <script>
-  const deck     = document.getElementById('fl-deck')!;
-  const dots     = document.querySelectorAll<HTMLElement>('.fl-dot');
-  const slides   = document.querySelectorAll<HTMLElement>('.fl-slide');
-  const counterCur = document.getElementById('fl-counter-cur')!;
+  // ── State ──────────────────────────────────────────────
+  const deck   = document.getElementById('fl-deck')!;
+  const dots   = document.querySelectorAll<HTMLElement>('.fl-dot');
+  const rows   = document.querySelectorAll<HTMLElement>('.fl-row');
+  const pipsEl = document.getElementById('fl-ch-pips')!;
 
-  let current = 0;
-  const total = slides.length;
+  // pos = { row, col }
+  let pos = { row: 0, col: 0 };
 
-  // ── Restore read state from localStorage ──
-  document.querySelectorAll<HTMLElement>('.fl-ch-item[data-slug]').forEach(el => {
+  // Pre-compute slides per row: rowSlides[row] = NodeList of .fl-slide in that row
+  const rowSlides = Array.from(rows).map(r =>
+    Array.from(r.querySelectorAll<HTMLElement>('.fl-slide'))
+  );
+
+  // ── Read state from localStorage ──────────────────────
+  document.querySelectorAll<HTMLElement>('.fl-preview-item[data-slug]').forEach(el => {
     if (localStorage.getItem(`f-read:${el.dataset.slug}`) === '1') {
       el.classList.add('is-read');
     }
   });
 
-  // ── Progress rings ──
+  document.querySelectorAll<HTMLElement>('.fl-ch-read-badge[data-slug]').forEach(el => {
+    const slug = el.dataset.slug!;
+    if (localStorage.getItem(`f-read:${slug}`) === '1') {
+      el.textContent = '✓ read';
+      el.classList.add('is-read');
+    } else {
+      el.textContent = 'unread';
+    }
+  });
+
+  // ── Progress rings ──────────────────────────────────────
   document.querySelectorAll<SVGCircleElement>('.fl-ring-fill').forEach(circle => {
-    const slugs   = (circle.dataset.slugs ?? '').split(',').filter(Boolean);
-    const total   = parseInt(circle.dataset.total ?? '0', 10);
-    const read    = slugs.filter(s => localStorage.getItem(`f-read:${s}`) === '1').length;
-    const pct     = total > 0 ? read / total : 0;
-    const circum  = 2 * Math.PI * 34; // r=34 → ~213.6
+    const slugs  = (circle.dataset.slugs ?? '').split(',').filter(Boolean);
+    const total  = parseInt(circle.dataset.total ?? '0', 10);
+    const read   = slugs.filter(s => localStorage.getItem(`f-read:${s}`) === '1').length;
+    const pct    = total > 0 ? read / total : 0;
+    const circum = 2 * Math.PI * 34;
     circle.style.strokeDashoffset = String(circum * (1 - pct));
 
-    // Update text label
     const seriesEl = circle.closest('[data-series-id]');
     if (seriesEl) {
       const label = seriesEl.querySelector<HTMLElement>('.fl-ring-label');
@@ -712,67 +1009,216 @@ const totalSlides = 1 + seriesGroups.length + (standalone.length > 0 ? 1 : 0);
     }
   });
 
-  // ── Sync active slide state ──
-  function setSlide(idx: number, smooth = true) {
-    current = Math.max(0, Math.min(idx, total - 1));
-
-    slides.forEach((s, i) => s.classList.toggle('is-active', i === current));
-    dots.forEach((d, i) => d.classList.toggle('is-active', i === current));
-    counterCur.textContent = String(current + 1).padStart(2, '0');
-
-    // Scroll deck
-    const target = slides[current];
-    if (target) {
-      target.scrollIntoView({ behavior: smooth ? 'smooth' : 'instant', block: 'start' });
+  // ── Pip bar ─────────────────────────────────────────────
+  function buildPips(rowIdx: number) {
+    const count = rowSlides[rowIdx]?.length ?? 1;
+    pipsEl.innerHTML = '';
+    if (count <= 1) { pipsEl.style.opacity = '0'; return; }
+    pipsEl.style.opacity = '1';
+    for (let i = 0; i < count; i++) {
+      const btn = document.createElement('button');
+      btn.className = `fl-pip${i === pos.col ? ' is-active' : ''}`;
+      btn.dataset.col = String(i);
+      btn.setAttribute('aria-label', i === 0 ? 'Series overview' : `Chapter ${i}`);
+      btn.addEventListener('click', () => goTo(rowIdx, i));
+      pipsEl.appendChild(btn);
     }
   }
 
-  // ── Dot clicks ──
+  function updatePips(col: number) {
+    document.querySelectorAll<HTMLElement>('.fl-pip').forEach((p, i) => {
+      p.classList.toggle('is-active', i === col);
+    });
+  }
+
+  // ── Counter ─────────────────────────────────────────────
+  const counterRow  = document.getElementById('fl-counter-row')!;
+  const counterRows = document.getElementById('fl-counter-rows')!;
+  const counterCh   = document.getElementById('fl-counter-ch')!;
+  const counterCol  = document.getElementById('fl-counter-col')!;
+  const counterCols = document.getElementById('fl-counter-cols')!;
+
+  function updateCounter() {
+    counterRow.textContent  = String(pos.row + 1).padStart(2, '0');
+    const colCount = rowSlides[pos.row]?.length ?? 1;
+    if (colCount > 1) {
+      counterCh.style.display = 'flex';
+      counterCol.textContent  = String(pos.col + 1).padStart(2, '0');
+      counterCols.textContent = String(colCount).padStart(2, '0');
+    } else {
+      counterCh.style.display = 'none';
+    }
+  }
+
+  // ── Go to position ──────────────────────────────────────
+  function goTo(row: number, col: number, smooth = true) {
+    const totalRows = rows.length;
+    row = Math.max(0, Math.min(row, totalRows - 1));
+    const colCount = rowSlides[row]?.length ?? 1;
+    col = Math.max(0, Math.min(col, colCount - 1));
+
+    // If changing rows, reset col to 0 (series overview)
+    if (row !== pos.row) col = 0;
+
+    pos = { row, col };
+
+    // Vertical scroll (row)
+    rows[row].scrollIntoView({ behavior: smooth ? 'smooth' : 'instant', block: 'start' });
+
+    // Horizontal scroll within row (col)
+    const targetSlide = rowSlides[row]?.[col];
+    if (targetSlide) {
+      targetSlide.scrollIntoView({ behavior: smooth ? 'smooth' : 'instant', inline: 'start' });
+    }
+
+    // Mark active slide
+    document.querySelectorAll<HTMLElement>('.fl-slide').forEach(s => {
+      s.classList.toggle('is-active',
+        parseInt(s.dataset.row ?? '-1') === row &&
+        parseInt(s.dataset.col ?? '-1') === col
+      );
+    });
+
+    // Update dot nav (rows)
+    dots.forEach((d, i) => d.classList.toggle('is-active', i === row));
+
+    // Update pips (cols within row)
+    buildPips(row);
+    updatePips(col);
+
+    // Update counter
+    updateCounter();
+  }
+
+  // ── Dot clicks (rows) ───────────────────────────────────
   dots.forEach(dot => {
     dot.addEventListener('click', () => {
-      const idx = parseInt(dot.dataset.goto ?? '0', 10);
-      setSlide(idx);
+      const r = parseInt(dot.dataset.gotoRow ?? '0', 10);
+      goTo(r, 0);
     });
   });
 
-  // ── Hero CTA ──
-  document.getElementById('fl-start-btn')?.addEventListener('click', () => setSlide(1));
+  // ── "Browse chapters →" buttons ────────────────────────
+  document.querySelectorAll<HTMLElement>('.fl-series-enter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const r = parseInt(btn.dataset.row ?? '1', 10);
+      goTo(r, 1); // jump to first chapter slide
+    });
+  });
 
-  // ── Keyboard navigation ──
+  // ── Hero CTA ────────────────────────────────────────────
+  document.getElementById('fl-start-btn')?.addEventListener('click', () => goTo(1, 0));
+
+  // ── Keyboard ────────────────────────────────────────────
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'ArrowDown' || e.key === 'PageDown' || e.key === ' ') {
-      e.preventDefault();
-      setSlide(current + 1);
-    } else if (e.key === 'ArrowUp' || e.key === 'PageUp') {
-      e.preventDefault();
-      setSlide(current - 1);
-    } else if (e.key === 'Home') {
-      e.preventDefault();
-      setSlide(0);
-    } else if (e.key === 'End') {
-      e.preventDefault();
-      setSlide(total - 1);
+    const tag = (document.activeElement as HTMLElement)?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+    switch (e.key) {
+      case 'ArrowDown':
+      case 'PageDown':
+        e.preventDefault();
+        goTo(pos.row + 1, 0);
+        break;
+      case 'ArrowUp':
+      case 'PageUp':
+        e.preventDefault();
+        goTo(pos.row - 1, 0);
+        break;
+      case 'ArrowRight':
+        e.preventDefault();
+        goTo(pos.row, pos.col + 1);
+        break;
+      case 'ArrowLeft':
+        e.preventDefault();
+        goTo(pos.row, pos.col - 1);
+        break;
+      case 'Home':
+        e.preventDefault();
+        goTo(0, 0);
+        break;
+      case 'End':
+        e.preventDefault();
+        goTo(rows.length - 1, 0);
+        break;
     }
   });
 
-  // ── Sync dots on native scroll ──
-  let scrollTimer: ReturnType<typeof setTimeout>;
-  deck.addEventListener('scroll', () => {
-    clearTimeout(scrollTimer);
-    scrollTimer = setTimeout(() => {
-      const scrolled = deck.scrollTop;
-      const height   = deck.clientHeight;
-      const idx = Math.round(scrolled / height);
-      if (idx !== current) {
-        current = idx;
-        slides.forEach((s, i) => s.classList.toggle('is-active', i === current));
-        dots.forEach((d, i) => d.classList.toggle('is-active', i === current));
-        counterCur.textContent = String(current + 1).padStart(2, '0');
-      }
-    }, 60);
+  // ── Touch / swipe ───────────────────────────────────────
+  let touchStartX = 0;
+  let touchStartY = 0;
+  const SWIPE_THRESHOLD = 40;
+
+  document.addEventListener('touchstart', (e) => {
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
   }, { passive: true });
 
-  // ── Offset fl-root below the sticky navbar ──
+  document.addEventListener('touchend', (e) => {
+    const dx = e.changedTouches[0].clientX - touchStartX;
+    const dy = e.changedTouches[0].clientY - touchStartY;
+    const adx = Math.abs(dx);
+    const ady = Math.abs(dy);
+
+    if (Math.max(adx, ady) < SWIPE_THRESHOLD) return;
+
+    if (ady > adx) {
+      // Vertical swipe → change row
+      if (dy < 0) goTo(pos.row + 1, 0);      // swipe up = next series
+      else        goTo(pos.row - 1, 0);      // swipe down = prev series
+    } else {
+      // Horizontal swipe → change col
+      if (dx < 0) goTo(pos.row, pos.col + 1); // swipe left = next chapter
+      else        goTo(pos.row, pos.col - 1); // swipe right = prev chapter
+    }
+  }, { passive: true });
+
+  // ── Sync on native scroll (fallback) ────────────────────
+  let vTimer: ReturnType<typeof setTimeout>;
+  deck.addEventListener('scroll', () => {
+    clearTimeout(vTimer);
+    vTimer = setTimeout(() => {
+      const scrolled = deck.scrollTop;
+      const height   = deck.clientHeight;
+      const newRow   = Math.round(scrolled / height);
+      if (newRow !== pos.row) goTo(newRow, 0, false);
+    }, 80);
+  }, { passive: true });
+
+  rows.forEach((row, ri) => {
+    let hTimer: ReturnType<typeof setTimeout>;
+    row.addEventListener('scroll', () => {
+      clearTimeout(hTimer);
+      hTimer = setTimeout(() => {
+        const scrolled = row.scrollLeft;
+        const width    = row.clientWidth;
+        const newCol   = Math.round(scrolled / width);
+        if (ri === pos.row && newCol !== pos.col) {
+          pos.col = newCol;
+          updatePips(newCol);
+          updateCounter();
+          document.querySelectorAll<HTMLElement>('.fl-slide').forEach(s => {
+            s.classList.toggle('is-active',
+              parseInt(s.dataset.row ?? '-1') === ri &&
+              parseInt(s.dataset.col ?? '-1') === newCol
+            );
+          });
+        }
+      }, 80);
+    }, { passive: true });
+  });
+
+  // ── Nav hint (show once, fade after 3s) ─────────────────
+  const hint = document.getElementById('fl-nav-hint');
+  if (hint && !sessionStorage.getItem('fl-hint-shown')) {
+    setTimeout(() => {
+      hint.classList.add('visible');
+      setTimeout(() => { hint.classList.remove('visible'); }, 3000);
+      sessionStorage.setItem('fl-hint-shown', '1');
+    }, 1200);
+  }
+
+  // ── Offset fl-root below sticky navbar ──────────────────
   function offsetBelowNav() {
     const nav = document.querySelector<HTMLElement>('header.sticky, header[class*="sticky"]');
     if (nav) {
@@ -784,6 +1230,6 @@ const totalSlides = 1 + seriesGroups.length + (standalone.length > 0 ? 1 : 0);
   offsetBelowNav();
   window.addEventListener('resize', offsetBelowNav);
 
-  // ── Init first slide ──
-  setSlide(0, false);
+  // ── Init ─────────────────────────────────────────────────
+  goTo(0, 0, false);
 </script>
