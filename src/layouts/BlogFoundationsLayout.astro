@@ -656,7 +656,7 @@ const seriesTitle = series ? (seriesMeta[series]?.title ?? series) : null;
 <script>
   // ── Foundations palette switcher ──────────────────────────────────
 
-  const F_PALETTES = ['indigo', 'slate', 'sage', 'amber'] as const;
+  const F_PALETTES = ['indigo', 'slate', 'sage', 'amber', 'light', 'infographic'] as const;
   type FPalette = typeof F_PALETTES[number];
 
   function applyFPalette(palette: FPalette) {
