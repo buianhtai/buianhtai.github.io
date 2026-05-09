@@ -15,6 +15,7 @@ import Callout from '../../../components/mdx/Callout.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
 import LayerStack from '../../../components/mdx/LayerStack.astro';
+import ArchDiagram from '../../../components/mdx/ArchDiagram.astro';
 
 `new` is the most common form of tight coupling. When a class says `new ChicagoPizza()` it is hardwired to that concrete type — it cannot be tested with a mock pizza or extended to add a new style without touching the original code. Factory patterns encapsulate the decision of *which concrete class to instantiate*, making that decision a seam you can vary independently.
 
@@ -97,6 +98,32 @@ public class NYPizzaStore extends PizzaStore {
 ```
 
 > **Factory Method Pattern** — defines an interface for creating an object, but lets subclasses decide which class to instantiate. Factory Method lets a class defer instantiation to subclasses.
+
+<ArchDiagram
+  title="Factory Method — Creator and Product hierarchies"
+  zones={[
+    { id: "creator", label: "Creator hierarchy", color: "teal" },
+    { id: "product", label: "Product hierarchy", color: "amber" },
+  ]}
+  nodes={[
+    { id: "pizzaStore", label: "PizzaStore (abstract)", sub: "orderPizza(type)\ncreatePizza(type) ← abstract", zone: "creator", row: 1, col: 1, color: "teal" },
+    { id: "nyStore",    label: "NYPizzaStore",          sub: "createPizza() → NYStyle*",                       zone: "creator", row: 2, col: 1 },
+    { id: "chiStore",   label: "ChicagoPizzaStore",     sub: "createPizza() → ChicagoStyle*",                  zone: "creator", row: 2, col: 2 },
+    { id: "pizza",      label: "Pizza (abstract)",      sub: "prepare() / bake()\ncut() / box()",              zone: "product", row: 1, col: 1, color: "amber" },
+    { id: "nyCheese",   label: "NYStyleCheesePizza",    sub: "ConcreteProduct",                                zone: "product", row: 2, col: 1 },
+    { id: "chiCheese",  label: "ChicagoStyleCheesePizza", sub: "ConcreteProduct",                              zone: "product", row: 2, col: 2 },
+  ]}
+  edges={[
+    { from: "nyStore",    to: "pizzaStore", label: "extends",         type: "dashed" },
+    { from: "chiStore",   to: "pizzaStore", label: "extends",         type: "dashed" },
+    { from: "nyCheese",   to: "pizza",      label: "extends",         type: "dashed" },
+    { from: "chiCheese",  to: "pizza",      label: "extends",         type: "dashed" },
+    { from: "nyStore",    to: "nyCheese",   label: "creates →",       type: "solid" },
+    { from: "chiStore",   to: "chiCheese",  label: "creates →",       type: "solid" },
+    { from: "pizzaStore", to: "pizza",      label: "uses (abstract)", type: "dashed" },
+  ]}
+  caption="Creator and Product form parallel hierarchies. NYPizzaStore creates NYStyle products; ChicagoPizzaStore creates ChicagoStyle products. The abstract PizzaStore only knows the abstract Pizza type."
+/>
 
 <FlowStep steps={[
   { title: "Creator defines the skeleton", body: "PizzaStore declares createPizza() abstract and implements the common preparation steps. It programs to the Pizza interface." },

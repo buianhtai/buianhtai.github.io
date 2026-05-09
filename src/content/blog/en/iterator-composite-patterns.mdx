@@ -144,6 +144,35 @@ allMenus.print();                  // prints the whole tree recursively
 
 > **Composite Pattern** — composes objects into tree structures to represent part-whole hierarchies. Composite lets clients treat individual objects and compositions of objects uniformly.
 
+<ArchDiagram
+  title="Composite — tree structure and class roles"
+  zones={[
+    { id: "component", label: "Component (shared interface)", color: "teal" },
+    { id: "concrete",  label: "Concrete implementations",    color: "amber" },
+    { id: "tree",      label: "Runtime tree structure",      color: "green" },
+  ]}
+  nodes={[
+    { id: "component",  label: "MenuComponent (abstract)",  sub: "add() / remove() / getChild()\ngetName() / getPrice() / print()",     zone: "component", row: 1, col: 1, color: "teal" },
+    { id: "menuItem",   label: "MenuItem (Leaf)",            sub: "getName() / getPrice()\nisVegetarian() / print()",                    zone: "concrete",  row: 1, col: 1 },
+    { id: "menu",       label: "Menu (Composite)",           sub: "add() / remove() / getChild()\nprint() — iterates children",          zone: "concrete",  row: 1, col: 2 },
+    { id: "allMenus",   label: "ALL MENUS",                  sub: "root Menu",                                                            zone: "tree",      row: 1, col: 2, color: "green" },
+    { id: "pancake",    label: "Pancake House Menu",         sub: "Menu (composite node)",                                               zone: "tree",      row: 2, col: 1 },
+    { id: "diner",      label: "Diner Menu",                 sub: "Menu (composite node)",                                               zone: "tree",      row: 2, col: 2 },
+    { id: "pancakeItem",label: "Oatmeal / Waffles",          sub: "MenuItem (leaf)",                                                      zone: "tree",      row: 3, col: 1 },
+    { id: "dinerItem",  label: "Soup / BLT / Dessert Menu",  sub: "MenuItem + sub-Menu (leaf or composite)",                              zone: "tree",      row: 3, col: 2 },
+  ]}
+  edges={[
+    { from: "menuItem",    to: "component", label: "extends",     type: "dashed" },
+    { from: "menu",        to: "component", label: "extends",     type: "dashed" },
+    { from: "menu",        to: "component", label: "children: List<MenuComponent>", type: "solid" },
+    { from: "allMenus",    to: "pancake",   label: "contains",    type: "solid" },
+    { from: "allMenus",    to: "diner",     label: "contains",    type: "solid" },
+    { from: "pancake",     to: "pancakeItem", label: "contains",  type: "solid" },
+    { from: "diner",       to: "dinerItem",   label: "contains",  type: "solid" },
+  ]}
+  caption="Composite lets Menu and MenuItem share the MenuComponent interface. Printing the root recursively prints the whole tree — client code handles both leaf and composite identically."
+/>
+
 ---
 
 ## <Label color="teal">5</Label> The Trade-off: Safety vs. Uniformity

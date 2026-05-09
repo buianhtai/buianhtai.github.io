@@ -15,6 +15,7 @@ import Callout from '../../../components/mdx/Callout.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
 import SequenceDiagram from '../../../components/mdx/SequenceDiagram.astro';
+import ArchDiagram from '../../../components/mdx/ArchDiagram.astro';
 
 If one object's state change should trigger updates in others — and the set of "others" will grow, shrink, or be unknown at compile time — you have a one-to-many dependency problem. The Observer pattern solves it with a subscribe/notify contract that keeps the subject blissfully ignorant of who is listening.
 
@@ -64,6 +65,31 @@ public interface Observer {
 ```
 
 `WeatherData` implements `Subject`, stores a list of observers, and notifies them on data change. Each display implements `Observer`, receives the update, and renders itself.
+
+<ArchDiagram
+  title="Observer Pattern — interface structure"
+  zones={[
+    { id: "subject", label: "Subject side", color: "teal" },
+    { id: "observer", label: "Observer side", color: "green" },
+    { id: "concrete", label: "Concrete participants", color: "amber" },
+  ]}
+  nodes={[
+    { id: "subjectIface", label: "«interface»\nSubject",         sub: "registerObserver()\nremoveObserver()\nnotifyObservers()", zone: "subject",  row: 1, col: 1, color: "teal" },
+    { id: "weatherData",  label: "WeatherData",                  sub: "ConcreteSubject\nholds List<Observer>",                   zone: "concrete", row: 1, col: 1, color: "amber" },
+    { id: "observerIface",label: "«interface»\nObserver",         sub: "update(temp, humidity, pressure)",                       zone: "observer", row: 1, col: 1, color: "green" },
+    { id: "current",      label: "CurrentConditionsDisplay",      sub: "ConcreteObserver",                                       zone: "concrete", row: 2, col: 1 },
+    { id: "stats",        label: "StatisticsDisplay",             sub: "ConcreteObserver",                                       zone: "concrete", row: 2, col: 2 },
+    { id: "forecast",     label: "ForecastDisplay",               sub: "ConcreteObserver",                                       zone: "concrete", row: 2, col: 3 },
+  ]}
+  edges={[
+    { from: "weatherData",  to: "subjectIface",  label: "implements",  type: "dashed" },
+    { from: "weatherData",  to: "observerIface", label: "notifies →",  type: "solid" },
+    { from: "current",      to: "observerIface", label: "implements",  type: "dashed" },
+    { from: "stats",        to: "observerIface", label: "implements",  type: "dashed" },
+    { from: "forecast",     to: "observerIface", label: "implements",  type: "dashed" },
+  ]}
+  caption="WeatherData implements Subject and holds a list of Observers. It calls update() on each one during notifyObservers() — never touching concrete display types."
+/>
 
 <SequenceDiagram
   title="Observer notification flow"
@@ -123,10 +149,14 @@ public void update() {
 
 Observer encodes the fourth design principle: **strive for loosely coupled designs between interacting objects**.
 
+<FlowStep steps={[
+  { title: "Subject knows only the Observer interface", body: "WeatherData never imports CurrentConditionsDisplay, StatisticsDisplay, or any other concrete class. The only type it depends on is the Observer interface. Any class that implements Observer can be registered — including ones written after WeatherData was shipped." },
+  { title: "Observers can be added or removed at any time", body: "Registration and deregistration happen at runtime via registerObserver() and removeObserver(). The Subject doesn't need to be recompiled or restarted." },
+  { title: "Subject and Observer can vary independently", body: "You can change the Subject's internal data model without touching Observers (using pull). You can add new Observer types without touching the Subject. The two hierarchies evolve independently." },
+  { title: "No knowledge of how many Observers exist", body: "Whether one display is registered or fifty, notifyObservers() iterates and calls update() on each one. The Subject is completely unaware of the count." },
+]} />
+
 Loose coupling here means:
-- The subject knows only that observers implement `Observer`. It never imports display classes.
-- Observers can be added, removed, or replaced at runtime — the subject doesn't restart.
-- Subject and observer can evolve independently. Changing how the weather station records data doesn't touch any display. Adding a new display type doesn't touch the weather station.
 
 <Callout color="teal">
 Loose coupling is the difference between a system you can modify in one place and one where every change ripples unpredictably. Observer is the canonical example of what loose coupling looks like in practice.

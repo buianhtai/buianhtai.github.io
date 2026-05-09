@@ -14,6 +14,7 @@ import HeroGrid from '../../../components/mdx/HeroGrid.astro';
 import Callout from '../../../components/mdx/Callout.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
+import LayerStack from '../../../components/mdx/LayerStack.astro';
 
 Inheritance is a blunt tool for feature combination. If you have three beverage bases and five condiment add-ons, inheritance leads to 3×2⁵ = 96 subclasses. The Decorator pattern composes features at runtime instead, keeping the class count at 3 + 5 = 8.
 
@@ -71,6 +72,26 @@ System.out.println(beverage.getDescription() + " $" + beverage.cost());
 ```
 
 The wrapping stack is a chain. Each layer calls the layer beneath it. The final cost sums all layers. Add a new condiment: add one class, touch nothing else.
+
+<LayerStack
+  layers={[
+    { tag: "WHIP",  color: "rose",  title: "Whip Decorator",                   items: ["cost() → +$0.10", "getDescription() → + ', Whip'", "delegates to ↓"], note: "outermost wrapper" },
+    { tag: "MOCHA", color: "amber", title: "Mocha Decorator (2nd)",             items: ["cost() → +$0.20", "getDescription() → + ', Mocha'", "delegates to ↓"] },
+    { tag: "MOCHA", color: "amber", title: "Mocha Decorator (1st)",             items: ["cost() → +$0.20", "getDescription() → + ', Mocha'", "delegates to ↓"] },
+    { tag: "BASE",  color: "teal",  title: "DarkRoast (ConcreteComponent)",     items: ["cost() → $0.99", "getDescription() → 'Dark Roast'"], note: "innermost object" },
+  ]}
+  arrows={["wraps", "wraps", "wraps"]}
+  caption="Each layer IS-A Beverage and HAS-A Beverage. cost() and getDescription() chain inward through every wrapper, accumulating additions, before returning to the caller."
+/>
+
+How `cost()` chains back — from outermost to innermost then back:
+
+<FlowStep steps={[
+  { title: "Whip.cost() is called", body: "Whip does not know its own base cost independently. It calls beverage.cost() — where beverage is the second Mocha — then adds $0.10. Execution passes inward." },
+  { title: "Mocha(2).cost() executes", body: "The outer Mocha calls beverage.cost() on the first Mocha and adds $0.20. Execution continues inward." },
+  { title: "Mocha(1).cost() executes", body: "The first Mocha calls beverage.cost() on DarkRoast and adds $0.20. The innermost delegation." },
+  { title: "DarkRoast.cost() returns $0.99", body: "The ConcreteComponent returns its base price. No delegation — this is the terminal case. The call stack unwinds: $0.99 + $0.20 + $0.20 + $0.10 = $1.49." },
+]} />
 
 ---
 

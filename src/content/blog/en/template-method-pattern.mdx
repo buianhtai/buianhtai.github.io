@@ -14,6 +14,7 @@ import HeroGrid from '../../../components/mdx/HeroGrid.astro';
 import Callout from '../../../components/mdx/Callout.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
+import LayerStack from '../../../components/mdx/LayerStack.astro';
 
 Coffee and tea are brewed differently in their details but share the same structure: boil water, brew the drink in the cup, pour it, and optionally add condiments. Template Method extracts that skeleton into the base class and leaves the variable steps to subclasses.
 
@@ -92,6 +93,18 @@ public class Tea extends CaffeineBeverage {
 > **Template Method Pattern** — defines the skeleton of an algorithm in a method, deferring some steps to subclasses. Template Method lets subclasses redefine certain steps of an algorithm without changing the algorithm's structure.
 
 The pattern is behavioral: it's about how an algorithm executes, not about how objects are created or composed.
+
+<LayerStack
+  caption="Algorithm skeleton — step responsibilities"
+  layers={[
+    { tag: "final",    color: "teal",  title: "Invariant steps (defined in base class)",
+      items: ["boilWater() — identical for Coffee and Tea", "pourInCup() — identical for both", "Sequence is final — no subclass can reorder"] },
+    { tag: "abstract", color: "amber", title: "Variable steps (overridden by subclass)",
+      items: ["brew() — Coffee: drip through filter / Tea: steep bag", "addCondiments() — Coffee: sugar+milk / Tea: lemon"] },
+    { tag: "hook",     color: "green", title: "Hook steps (optional override)",
+      items: ["customerWantsCondiments() — default true, Tea overrides to ask user", "Hooks let subclasses influence the algorithm without providing a full step"] },
+  ]}
+/>
 
 ---
 

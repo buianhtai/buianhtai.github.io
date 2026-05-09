@@ -232,7 +232,61 @@ public class WordCountVisitor implements DocumentVisitor {
 
 ---
 
-## <Label color="teal">10</Label> Pattern Selection Cheat Sheet
+## <Label color="teal">10</Label> The Full GoF Catalog
+
+<LayerStack
+  caption="All 23 GoF patterns by category"
+  layers={[
+    {
+      tag: "Creational",
+      color: "teal",
+      title: "Object creation — how objects come into existence",
+      items: [
+        "Abstract Factory — families of related objects without specifying concrete classes",
+        "Builder — complex object construction step by step",
+        "Factory Method — subclass decides which class to instantiate",
+        "Prototype — clone an existing object as the basis for new ones",
+        "Singleton — guarantee exactly one instance with a global access point"
+      ]
+    },
+    {
+      tag: "Structural",
+      color: "green",
+      title: "Object composition — how classes and objects form larger structures",
+      items: [
+        "Adapter — convert an interface into another interface clients expect",
+        "Bridge — decouple abstraction from implementation so both can vary",
+        "Composite — compose objects into trees for part-whole hierarchies",
+        "Decorator — attach additional responsibilities to an object dynamically",
+        "Facade — simplified interface to a complex subsystem",
+        "Flyweight — share fine-grained objects to reduce memory when many instances exist",
+        "Proxy — surrogate that controls access to another object"
+      ]
+    },
+    {
+      tag: "Behavioral",
+      color: "amber",
+      title: "Object interaction — how objects communicate and distribute responsibility",
+      items: [
+        "Chain of Responsibility — pass requests along a chain of handlers",
+        "Command — encapsulate a request as an object for undo, queue, and log",
+        "Interpreter — grammar rules as objects; evaluate sentences in a language",
+        "Iterator — sequential access to aggregate elements without exposing internals",
+        "Mediator — central object encapsulates how other objects interact",
+        "Memento — capture and restore object state without exposing internals",
+        "Observer — one-to-many dependency: notify all dependents on state change",
+        "State — object changes behavior when its internal state changes",
+        "Strategy — define a family of algorithms; make them interchangeable",
+        "Template Method — algorithm skeleton in base class; subclasses fill steps",
+        "Visitor — operations on object structure elements without changing their classes"
+      ]
+    }
+  ]}
+/>
+
+---
+
+## <Label color="teal">11</Label> Pattern Selection Cheat Sheet
 
 <DataTable
   caption="When to reach for which pattern"

@@ -124,7 +124,17 @@ The four roles:
 
 ---
 
-## <Label color="teal">4</Label> The Null Object: NoCommand
+## <Label color="teal">4</Label> Undo — How Commands Reverse Themselves
+
+<FlowStep steps={[
+  { title: "execute() stores enough state to reverse", body: "LightOnCommand.execute() turns the light on. LightOnCommand.undo() turns it off. StereoOnWithCDCommand.execute() sets volume to 11 and CD mode; undo() turns the stereo off. Each command is self-contained — it knows how to undo exactly what it did." },
+  { title: "The invoker tracks the last command", body: "RemoteControl keeps a lastCommand field. Every time onButtonWasPushed() fires, it stores the command. When the undo button is pressed, it calls lastCommand.undo() — no special undo stack needed for single-level undo." },
+  { title: "Multi-level undo uses a stack", body: "Replace lastCommand with a Deque<Command>. Every execute() pushes onto the stack. Every undo() call pops and reverses. This is how text editors implement Ctrl+Z chains — the same Command interface works for both execution and history." },
+]} />
+
+---
+
+## <Label color="teal">5</Label> The Null Object: NoCommand
 
 Slots 4–6 on the remote are unassigned. Without the Null Object idiom:
 
@@ -147,7 +157,7 @@ Now every slot always has a valid `Command`. The null check disappears. Adding a
 
 ---
 
-## <Label color="teal">5</Label> Macro Commands
+## <Label color="teal">6</Label> Macro Commands
 
 Group a list of commands into one composite command:
 
@@ -184,7 +194,7 @@ Macros compose cleanly because every command speaks the same interface.
 
 ---
 
-## <Label color="teal">6</Label> Real-World Applications
+## <Label color="teal">7</Label> Real-World Applications
 
 <DataTable
   caption="Command pattern in practice"

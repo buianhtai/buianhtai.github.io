@@ -15,6 +15,7 @@ import Callout from '../../../components/mdx/Callout.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
 import SequenceDiagram from '../../../components/mdx/SequenceDiagram.astro';
+import ArchDiagram from '../../../components/mdx/ArchDiagram.astro';
 
 Two patterns, one theme: interface mismatch. Adapter fixes a square peg / round hole problem between two existing interfaces. Facade creates a new simplified interface in front of a complex one. Neither changes the underlying behavior — both change the shape of how you access it.
 
@@ -122,6 +123,34 @@ HomeTheaterFacade theater = new HomeTheaterFacade(amp, tuner, dvd, ...);
 theater.watchMovie("Inception");
 theater.endMovie();
 ```
+
+<ArchDiagram
+  title="HomeTheaterFacade — subsystem structure"
+  zones={[
+    { id: "facade", label: "Facade", color: "teal" },
+    { id: "subsystem", label: "Subsystem components", color: "amber" },
+  ]}
+  nodes={[
+    { id: "client",     label: "Client",                sub: "theater.watchMovie()\ntheater.endMovie()",         zone: "facade",    row: 1, col: 1, color: "teal" },
+    { id: "facade",     label: "HomeTheaterFacade",      sub: "watchMovie(movie)\nendMovie()",                    zone: "facade",    row: 2, col: 1, color: "teal" },
+    { id: "amp",        label: "Amplifier",              sub: "on() / off()\nsetVolume() / setSurroundSound()",  zone: "subsystem", row: 1, col: 1 },
+    { id: "dvd",        label: "DvdPlayer",              sub: "on() / off()\nplay() / stop()",                   zone: "subsystem", row: 1, col: 2 },
+    { id: "projector",  label: "Projector",              sub: "on() / off()\nwideScreenMode()",                  zone: "subsystem", row: 2, col: 1 },
+    { id: "screen",     label: "Screen",                 sub: "up() / down()",                                   zone: "subsystem", row: 2, col: 2 },
+    { id: "lights",     label: "TheaterLights",          sub: "on() / dim(level)",                               zone: "subsystem", row: 3, col: 1 },
+    { id: "popper",     label: "PopcornPopper",          sub: "on() / off() / pop()",                            zone: "subsystem", row: 3, col: 2 },
+  ]}
+  edges={[
+    { from: "client",    to: "facade",    label: "calls",   type: "solid" },
+    { from: "facade",    to: "amp",       label: "uses",    type: "solid" },
+    { from: "facade",    to: "dvd",       label: "uses",    type: "solid" },
+    { from: "facade",    to: "projector", label: "uses",    type: "solid" },
+    { from: "facade",    to: "screen",    label: "uses",    type: "solid" },
+    { from: "facade",    to: "lights",    label: "uses",    type: "solid" },
+    { from: "facade",    to: "popper",    label: "uses",    type: "solid" },
+  ]}
+  caption="HomeTheaterFacade orchestrates 6 subsystem components. The client calls two methods — watchMovie() and endMovie(). The subsystem components can still be used directly if needed."
+/>
 
 > **Facade Pattern** — provides a simplified interface to a library, framework, or any other complex set of classes.
 

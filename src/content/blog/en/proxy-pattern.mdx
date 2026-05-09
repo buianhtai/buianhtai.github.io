@@ -132,7 +132,17 @@ The handler intercepts every method call. You inspect the method name, decide wh
 
 ---
 
-## <Label color="teal">5</Label> Proxy vs. Decorator — The Key Distinction
+## <Label color="teal">5</Label> Three Proxy Flavors — Decision Guide
+
+<FlowStep steps={[
+  { title: "Remote Proxy — location transparency", body: "The real object lives in a different JVM, machine, or process. The proxy looks identical to the real object from the client's perspective. Java RMI generates the stub (proxy) and skeleton automatically. Use when you want to call a method without knowing or caring where the object lives." },
+  { title: "Virtual Proxy — creation deferral", body: "The real object is expensive to create or load. The proxy stands in, showing a placeholder (a loading message, a thumbnail) until the real thing is ready. Construction is lazy — only triggered on first meaningful use. Use when object creation has significant cost and not all created objects are actually used." },
+  { title: "Protection Proxy — access control", body: "The real object exists but different callers should see different capabilities. Java's dynamic proxy (Proxy.newProxyInstance + InvocationHandler) intercepts every method call and applies rules: allow this getter, block that setter, throw on restricted operations. Use when the same object needs multiple access levels without code duplication." },
+]} />
+
+---
+
+## <Label color="teal">6</Label> Proxy vs. Decorator — The Key Distinction
 
 <DataTable
   caption="Proxy vs. Decorator"
@@ -148,7 +158,7 @@ The handler intercepts every method call. You inspect the method name, decide wh
 
 ---
 
-## <Label color="teal">6</Label> Proxy in the Wild
+## <Label color="teal">7</Label> Proxy in the Wild
 
 | Context | Proxy type | Example |
 |---|---|---|

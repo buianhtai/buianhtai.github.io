@@ -98,6 +98,12 @@ public void turnCrank()     { state.turnCrank(); state.dispense(); }
 
 Adding `WinnerState` requires one new class — no edits to any existing state.
 
+<FlowStep steps={[
+  { title: "Context holds the current state object", body: "GumballMachine stores a State reference. It delegates every action — insertQuarter(), ejectQuarter(), turnCrank(), dispense() — to whatever state object it currently holds." },
+  { title: "State classes manage transitions", body: "Each concrete state knows which state comes next. HasQuarterState.turnCrank() decides between SoldState (normal) and WinnerState (1-in-10 chance) and calls gumballMachine.setState() to switch." },
+  { title: "Adding a state means adding a class", body: "WinnerState is a new class implementing State. Zero edits to NoQuarterState, HasQuarterState, SoldState, or SoldOutState. The OCP holds: closed for modification, open for extension." },
+]} />
+
 ---
 
 ## <Label color="teal">3</Label> The State Machine Visualized
