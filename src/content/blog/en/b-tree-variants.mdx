@@ -1,0 +1,116 @@
+---
+title: "B-Tree Variants: Copy-on-Write, Lazy, and Lock-Free"
+description: "Copy-on-write B-Trees for simpler concurrency, lazy buffered B-Trees for write batching, FD-Trees with fractional cascading, and Bw-Trees with lock-free delta updates — the design space beyond standard B-Trees."
+pubDate: 2026-05-08
+tags: ["database-internals", "b-tree", "storage-engines", "foundations"]
+lang: "en"
+category: "foundations"
+series: "software-foundations"
+seriesOrder: 25
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+
+Standard B-Trees dominate because they work well across a wide range of workloads. But "works well across many workloads" means "optimal for none." When your workload is specific — write-heavy, concurrency-heavy, or memory-heavy — the standard design has real costs that variants can reduce.
+
+<HeroGrid items={[
+  { label: "CoW B-Tree", sublabel: "Immutable pages — no in-place overwrites", color: "#0891b2" },
+  { label: "Lazy B-Trees", sublabel: "In-memory buffers per node (WiredTiger)", color: "#059669" },
+  { label: "FD-Trees", sublabel: "Fractional cascading + log-structured runs", color: "#d97706" },
+  { label: "Bw-Trees", sublabel: "Delta chains + CAS for lock-free updates", color: "#7c3aed" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> Copy-on-Write B-Trees
+
+Standard B-Trees modify pages in place. Copy-on-write (CoW) B-Trees never modify an existing page — they always write a new page, then update the parent to point to the new page (which itself requires a new parent page, recursively up to the root).
+
+The consequence: every write produces a new path from the modified leaf to the root. The old path's pages are now orphaned and can be garbage-collected.
+
+**Why CoW simplifies concurrency**: readers always see a consistent snapshot. A reader following the old root pointer sees the old tree; a writer creates a new root atomically. There is no window where a page is partially updated. Readers need no locks — they follow immutable pages.
+
+**LMDB** (Lightning Memory-Mapped Database) is the reference implementation: memory-mapped CoW B-Tree, single-writer/multiple-reader via MVCC snapshots. The active root is a single pointer swap.
+
+**The cost**: write amplification. Modifying one leaf rewrites O(height) pages — typically 3–5 pages. Standard B-Trees may rewrite only 1 page for a point update that doesn't cause a split.
+
+---
+
+## <Label color="teal">2</Label> Lazy B-Trees
+
+A lazy B-Tree adds a **write buffer to each internal node**. Instead of propagating writes immediately through the tree, modifications are held in the node's buffer. They are flushed down to children only when the buffer fills up.
+
+This pattern amortizes the cost of many small updates into fewer, larger writes. The effect on write amplification: instead of one leaf write triggering O(height) page writes, many modifications to the same subtree can be flushed together in one pass.
+
+**WiredTiger** (MongoDB's storage engine) uses a lazy B-Tree variant. Internal nodes buffer reconciled updates; the reconciliation process flushes buffers when nodes fill, doing a merge of buffered updates with the existing page contents.
+
+<DataTable
+  caption="B-Tree vs Lazy B-Tree trade-offs"
+  accent="teal"
+  headers={["Property", "Standard B-Tree", "Lazy B-Tree"]}
+  rows={[
+    { "Property": "Write path", "Standard B-Tree": "Immediate update to leaf + possible splits", "Lazy B-Tree": "Buffer at internal node; deferred propagation" },
+    { "Property": "Write amplification", "Standard B-Tree": "Higher for random point writes", "Lazy B-Tree": "Lower — batching amortizes cost" },
+    { "Property": "Read latency", "Standard B-Tree": "Always reads committed leaf state", "Lazy B-Tree": "Must check all node buffers on read path" },
+    { "Property": "Concurrency", "Standard B-Tree": "Page-level locking; latch crabbing", "Lazy B-Tree": "More complex — buffer + page both need synchronization" },
+    { "Property": "Space", "Standard B-Tree": "Minimal — no per-node buffers", "Lazy B-Tree": "Extra memory for in-node write buffers" },
+  ]}
+/>
+
+---
+
+## <Label color="teal">3</Label> FD-Trees
+
+FD-Trees (Fractal Dimension Trees) combine a small mutable B-Tree at the top with a series of immutable **logarithmic runs** below it. Writes go into the small mutable component. When it fills, its contents are merged into the first run. When a run fills, it cascades into the next, larger run.
+
+This is structurally similar to an LSM Tree but applied within the B-Tree paradigm.
+
+**Fractional cascading** is the indexing technique that makes range reads through multiple runs efficient. Instead of binary-searching each run independently for the same key, fractional cascading pre-builds inter-level pointers that allow the search to cascade through levels in O(log N + K) total rather than O(K log N).
+
+```
+Level 0 (mutable):  [small B-Tree]
+Level 1 (immutable run): [sorted file, with fractional cascade pointers into Level 2]
+Level 2 (immutable run): [larger sorted file, with fractional cascade pointers into Level 3]
+...
+```
+
+FD-Trees improve write throughput over standard B-Trees while keeping read performance acceptable via fractional cascading. The trade-off: space amplification from multiple copies of the same key across levels during compaction.
+
+---
+
+## <Label color="teal">4</Label> Bw-Trees
+
+Bw-Trees (Buzzword Trees, Microsoft Research, 2013) are a lock-free B-Tree variant designed for modern multi-core hardware with large main memory.
+
+The key insight: instead of modifying pages in place (which requires locks), represent modifications as **delta records** that are prepended to a chain attached to the target page.
+
+**How it works**:
+1. Each logical page has a **page ID** → **physical address** mapping in the Mapping Table
+2. To update a page, write a new delta record describing the change and CAS (compare-and-swap) the Mapping Table entry to point to the new delta record
+3. Over time, a page accumulates a chain of delta records: `[delta3] → [delta2] → [delta1] → [base page]`
+4. When the chain grows too long, a **consolidation** operation reads the entire chain, merges all deltas with the base page, writes a new consolidated page, and CAS the Mapping Table to the new page
+
+<FlowStep steps={[
+  { title: "Delta append (no lock needed)", body: "Writer creates a new delta record, reads the current Mapping Table entry for the page, and attempts to CAS it to the delta. If CAS fails (another writer raced ahead), retry. No lock held during this entire operation." },
+  { title: "Read resolution", body: "Readers follow the delta chain from newest to oldest, applying deltas to reconstruct the current record state. Short chains are fast; long chains require traversing all deltas." },
+  { title: "Consolidation", body: "Background or on-demand: traverse the full chain, merge all changes with the base page, write a new consolidated page, update the Mapping Table. Reclaim old delta records." },
+  { title: "Structural Modification Operations (SMOs)", body: "Splits and merges are two-phase: post an SMO delta, then complete the structural change. Readers that encounter an incomplete SMO help complete it before proceeding (helping protocol)." },
+]} />
+
+<Callout color="amber">
+Bw-Trees are complex to implement correctly — the helping protocol for incomplete SMOs, the garbage collection of consolidated pages, and the Mapping Table itself all add substantial implementation overhead. They are best suited for workloads with very high concurrency on many-core machines where lock contention dominates. For most workloads, a well-implemented standard B-Tree with optimized latch crabbing outperforms Bw-Trees at lower implementation cost.
+</Callout>
+
+---
+
+## <Label color="teal">5</Label> Cache-Oblivious B-Trees
+
+Standard B-Trees are designed with a specific page size in mind (matching the OS page or disk block). Cache-oblivious B-Trees are designed to be optimal for *any* cache hierarchy — L1, L2, L3, RAM, disk — without knowing the cache size or line size at design time.
+
+The **van Emde Boas layout** arranges a complete binary tree's nodes in a recursive layout that is cache-oblivious optimal. The tree is recursively split at the midpoint height; each half is laid out contiguously in memory. This guarantees that any contiguous subtree of height h occupies at most 2 cache lines regardless of cache line size.
+
+Cache-oblivious B-Trees achieve provably optimal I/O complexity for any block size — without any block size parameter. The practical impact is mainly for in-memory structures accessed with diverse hardware; disk-resident structures still need explicit page size tuning.

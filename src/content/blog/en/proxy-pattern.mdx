@@ -1,0 +1,163 @@
+---
+title: "The Proxy Pattern: Controlling Access to Objects"
+description: "Proxy places a surrogate in front of a real object to control access — whether forwarding calls across a network, deferring expensive creation, enforcing permissions, or caching results."
+pubDate: 2026-05-08
+tags: ["design-patterns", "proxy", "oo-design", "java", "foundations"]
+lang: "en"
+category: "foundations"
+series: "software-foundations"
+seriesOrder: 44
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import SequenceDiagram from '../../../components/mdx/SequenceDiagram.astro';
+
+The Proxy pattern puts an intermediary between a client and a real object. The intermediary implements the same interface, so the client can't tell whether it's talking to the real object or a surrogate. What the proxy does with that position — forward across a network, defer construction, enforce permissions — defines which flavor of proxy it is.
+
+<HeroGrid items={[
+  { label: "3 Proxy Types", sublabel: "Remote · Virtual · Protection", color: "#0891b2" },
+  { label: "Same Interface", sublabel: "Client cannot tell proxy from real object", color: "#059669" },
+  { label: "Java RMI", sublabel: "Stubs + skeletons over the network", color: "#d97706" },
+  { label: "Dynamic Proxy", sublabel: "java.lang.reflect.Proxy at runtime", color: "#7c3aed" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> The Remote Proxy
+
+A monitoring system wants to query gumball machines in different cities — objects running in separate JVMs. The `GumballMonitor` calls `machine.getCount()`, `machine.getState()`. The problem: those methods are on a local interface; the real machine is remote.
+
+The remote proxy solution: give `GumballMonitor` a **stub** that implements the same interface but forwards every call over the network.
+
+<SequenceDiagram
+  title="Remote Proxy — Java RMI call flow"
+  actors={["GumballMonitor", "Stub (Proxy)", "Network", "Skeleton", "GumballMachine"]}
+  messages={[
+    { from: "GumballMonitor", to: "Stub (Proxy)",    label: "getCount()" },
+    { from: "Stub (Proxy)",   to: "Network",          label: "serialise + send" },
+    { from: "Network",        to: "Skeleton",          label: "receive + deserialise" },
+    { from: "Skeleton",       to: "GumballMachine",    label: "getCount()" },
+    { from: "GumballMachine", to: "Skeleton",          label: "return 112" },
+    { from: "Skeleton",       to: "Network",           label: "serialise + send" },
+    { from: "Network",        to: "Stub (Proxy)",      label: "receive + deserialise" },
+    { from: "Stub (Proxy)",   to: "GumballMonitor",    label: "return 112" },
+  ]}
+/>
+
+Java RMI automates the stub/skeleton generation. The real object registers itself; the monitor looks it up by name. `GumballMonitor` is unchanged — it holds a `GumballMachineRemote` reference and has no idea it is crossing a network.
+
+---
+
+## <Label color="teal">2</Label> The Virtual Proxy
+
+A virtual proxy creates the expensive real object only when it is first needed, standing in as a placeholder until then.
+
+```java
+public class ImageProxy implements Icon {
+    ImageIcon realImage;
+    URL imageURL;
+    boolean retrieving = false;
+
+    public void paintIcon(Component c, Graphics g, int x, int y) {
+        if (realImage != null) {
+            realImage.paintIcon(c, g, x, y);  // real image ready
+        } else {
+            g.drawString("Loading album cover, please wait...", x+300, y+190);
+            if (!retrieving) {
+                retrieving = true;
+                new Thread(() -> {
+                    try {
+                        realImage = new ImageIcon(imageURL, "Album Cover");
+                        c.repaint();
+                    } catch (Exception e) { e.printStackTrace(); }
+                }).start();
+            }
+        }
+    }
+}
+```
+
+The proxy shows a loading message until the download completes. The client never changed — it always holds an `Icon` reference.
+
+---
+
+## <Label color="teal">3</Label> The Protection Proxy
+
+A protection proxy adds access control. Different callers get different views of the same underlying object:
+
+```java
+// The real PersonBean stores and retrieves personal data
+// An OwnerInvocationHandler allows all reads and writes
+// A NonOwnerInvocationHandler allows reads but blocks writes
+
+PersonBean personOwnerProxy = (PersonBean)
+    Proxy.newProxyInstance(
+        person.getClass().getClassLoader(),
+        person.getClass().getInterfaces(),
+        new OwnerInvocationHandler(person));
+```
+
+The owner's proxy delegates all method calls. A non-owner's proxy allows getters but throws `IllegalAccessException` on any setter. The client code doesn't know which proxy it received — it just calls methods on `PersonBean`.
+
+---
+
+## <Label color="teal">4</Label> Java Dynamic Proxy
+
+Java's `java.lang.reflect.Proxy` creates a proxy object at runtime without writing a concrete proxy class. You supply an `InvocationHandler`:
+
+```java
+public class OwnerInvocationHandler implements InvocationHandler {
+    PersonBean person;
+
+    public Object invoke(Object proxy, Method method, Object[] args)
+            throws IllegalAccessException {
+        // Allow all getters; allow setter for own HotOrNot score only
+        if (method.getName().startsWith("get")) {
+            return method.invoke(person, args);
+        } else if (method.getName().equals("setHotOrNotRating")) {
+            throw new IllegalAccessException();  // owner can't rate themselves
+        } else if (method.getName().startsWith("set")) {
+            return method.invoke(person, args);  // owner can set their own data
+        }
+        return null;
+    }
+}
+```
+
+The handler intercepts every method call. You inspect the method name, decide what to allow, and either invoke the real method or block it. The proxy class is generated at runtime — zero boilerplate per proxied method.
+
+---
+
+## <Label color="teal">5</Label> Proxy vs. Decorator — The Key Distinction
+
+<DataTable
+  caption="Proxy vs. Decorator"
+  accent="teal"
+  headers={["Dimension", "Proxy", "Decorator"]}
+  rows={[
+    { "Dimension": "Purpose",         "Proxy": "Control access to the real object",          "Decorator": "Add behavior to the real object" },
+    { "Dimension": "Who creates it",  "Proxy": "Factory or framework creates the proxy",      "Decorator": "Client composes decorators explicitly" },
+    { "Dimension": "Relationship",    "Proxy": "Represents the real object; client may not know", "Decorator": "Wraps the real object; client knows it's wrapped" },
+    { "Dimension": "Object lifetime", "Proxy": "May control or delay creation of the real object", "Decorator": "Always wraps an already-existing object" },
+  ]}
+/>
+
+---
+
+## <Label color="teal">6</Label> Proxy in the Wild
+
+| Context | Proxy type | Example |
+|---|---|---|
+| RPC / gRPC stubs | Remote | Client calls a generated stub; network is transparent |
+| Hibernate lazy loading | Virtual | Entity fields load from DB only on first access |
+| Spring `@Transactional` | Protection / aspect | Method calls wrapped with transaction boundary |
+| CDN / reverse proxy | Remote | Nginx forwards to origin; client sees cache |
+| Java `Proxy.newProxyInstance` | All types | InvocationHandler intercepts any interface method |
+
+<Callout color="teal">
+Proxy's deepest strength: it makes the interface the unit of trust. The client programs to an interface and the proxy silently adds access control, caching, remoting, or lazy-loading behind that interface. Changing which proxy is injected changes system behavior without touching client code.
+</Callout>

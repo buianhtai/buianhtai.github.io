@@ -1,0 +1,71 @@
+---
+title: "Software Design Is Engineering, Not Art"
+description: "Software breaks because programmers fail to reduce complexity. The core talent in programming isn't cleverness — it's turning incomprehensible systems into understandable ones."
+pubDate: 2026-05-08
+tags: ["software-design", "complexity", "foundations"]
+lang: "en"
+category: "foundations"
+series: "software-foundations"
+seriesOrder: 101
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+
+Here's something I keep coming back to: most software failures aren't caused by hard problems. They're caused by programmers — including smart, well-intentioned ones — producing solutions that work *for them right now* without reducing complexity for the next person. The engineer who rigs up pulleys and magnets to drive a nail isn't unintelligent. They're just not solving the actual problem, which is: make it easy for the *next* person to drive a nail too.
+
+<HeroGrid items={[
+  { label: "1 Root Cause", sublabel: "Complexity — always complexity", color: "#0891b2" },
+  { label: "2 Definitions", sublabel: "Program as instructions vs program as actions", color: "#059669" },
+  { label: "The Skill", sublabel: "Reducing complexity to simplicity", color: "#d97706" },
+  { label: "The Test", sublabel: "Can another human understand it?", color: "#7c3aed" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> Why Software Breaks
+
+Computers break all the time, and the root cause is almost always bad programming. Not bad management. Not bad customers. Not insufficient budget. Bad programming — specifically, programming that adds complexity without reducing it for the next reader.
+
+As a program grows, this failure compounds. Every piece of unexplained complexity one programmer adds becomes the foundation for more complexity added by the next. A program approaching infinite complexity becomes impossible to fully debug. The economics don't allow for it: jet planes cost billions and get that level of scrutiny; most software costs $50–100 and doesn't.
+
+<Callout color="teal">
+The complexity of a program is particularly confounding because there's nothing physical to examine. When it breaks, you can't pick up something solid and look inside. It's entirely abstract — which is what makes managing complexity the core discipline, not an optional nice-to-have.
+</Callout>
+
+---
+
+## <Label color="teal">2</Label> The Core Skill
+
+Programming has to become the act of reducing complexity to simplicity.
+
+A "bad programmer" is someone who fails to reduce complexity. A "good programmer" creates things that are easy to understand — easy enough that other programmers can find all the bugs. The test isn't whether the code works. The test is whether *someone else* can understand it, modify it, and keep it working.
+
+This reframing matters. It shifts the measure of programming quality from "does it run?" to "can another human being comprehend it?" The first question is binary; the second is a spectrum. Great programs stagnate not because they stop running but because they become too complex to safely change.
+
+---
+
+## <Label color="teal">3</Label> A Common Misunderstanding About Simplicity
+
+Simplicity doesn't mean:
+- Less code (sometimes more code is clearer)
+- Avoiding advanced technology (advanced tools often *produce* simpler results once learned)
+- Taking shortcuts
+
+Simplicity means: a reader who is new to your code can understand it. The complexity you're reducing is the cognitive complexity imposed on *other programmers*, not the technical complexity of the problem being solved.
+
+The claim that "writing simple code takes more time" turns out to be empirically false when measured over the whole project lifetime. Complex code is fast to write and slow to maintain forever. Simple code costs slightly more upfront and saves enormous amounts of time later.
+
+---
+
+## <Label color="teal">4</Label> What a Program Actually Is
+
+A program is **two things simultaneously**:
+1. The instructions the programmer writes
+2. The actions the computer takes in response
+
+Programmers live in definition 1. Users live in definition 2. The purpose of definition 1 is entirely to produce definition 2 — without the actions, the instructions are meaningless. But unlike a grocery list (which you can write sloppily and still shop), disorganized code causes *cascading* difficulty because programs are large, complex, and maintained for years or decades.
+
+The quality of the end result depends on three things: the machine, the ideas, and the code. Of these, the quality of the code is the largest problem in software today.

@@ -1,0 +1,126 @@
+---
+title: "The Strategy Pattern: Encapsulating Algorithms"
+description: "When inheritance forces behavior into class hierarchies that resist change, Strategy pulls the variable parts out as composable objects — making algorithms interchangeable at runtime and independently testable."
+pubDate: 2026-05-08
+tags: ["design-patterns", "strategy", "oo-design", "java", "foundations"]
+lang: "en"
+category: "foundations"
+series: "software-foundations"
+seriesOrder: 34
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import LayerStack from '../../../components/mdx/LayerStack.astro';
+
+Every developer hits the same wall. You have a working inheritance hierarchy, a new requirement arrives, and the cleanest way to satisfy it quietly plants a grenade in every subclass. Let's derive Strategy from first principles — starting with the failure.
+
+<HeroGrid items={[
+  { label: "3 OO Principles", sublabel: "Encapsulate · Compose · Program to interface", color: "#0891b2" },
+  { label: "Strategy Pattern", sublabel: "Family of algorithms, interchangeable at runtime", color: "#059669" },
+  { label: "HAS-A > IS-A", sublabel: "Composition beats inheritance for variable behavior", color: "#7c3aed" },
+  { label: "Test Isolation", sublabel: "Each strategy is a standalone unit", color: "#d97706" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> The Inheritance Trap
+
+Consider a `Duck` base class with `quack()` and `display()`. You add `fly()` to the base class to make ducks fly. Now `RubberDuck` (which shouldn't fly) overrides `fly()` to do nothing. Then `DecoyDuck` needs to not fly *and* not quack. Two more overrides. Every new variant requires auditing every method in every subclass.
+
+The problem is not "you forgot to override." The problem is that the base class is making a promise — *I fly, I quack* — that some subclasses cannot honestly keep.
+
+Using interfaces (`Flyable`, `Quackable`) seems to help, but now every flying duck duplicates the same `fly()` body. You've traded a fragile inheritance hierarchy for fragile copy-paste.
+
+The real diagnosis: flying and quacking are *behaviors that vary*. Inheritance bakes them into the type. The fix is to pull them out entirely.
+
+---
+
+## <Label color="teal">2</Label> The Three Principles
+
+<LayerStack
+  caption="Three OO Design Principles"
+  layers={[
+    { tag: "P1", color: "teal",  title: "Encapsulate what varies", items: ["Identify aspects that change with each requirement", "Extract them so they can be altered without affecting the rest"] },
+    { tag: "P2", color: "green", title: "Program to an interface, not an implementation", items: ["Code to a supertype (interface or abstract class)", "Runtime objects can be any concrete implementation"] },
+    { tag: "P3", color: "amber", title: "Favor composition over inheritance", items: ["HAS-A can be better than IS-A", "Behaviors become composable first-class objects", "Enables runtime reconfiguration of object capabilities"] },
+  ]}
+  arrows={["grounds", "enables"]}
+/>
+
+These three principles work together: P1 identifies *what* to extract (`FlyBehavior` and `QuackBehavior`). P2 says to reference them as interfaces so the concrete implementation can swap at runtime. P3 says to put them in `Duck` as fields, not in a class hierarchy.
+
+---
+
+## <Label color="teal">3</Label> The Strategy Pattern Applied
+
+```java
+public abstract class Duck {
+    FlyBehavior  flyBehavior;
+    QuackBehavior quackBehavior;
+
+    public void performFly()   { flyBehavior.fly(); }
+    public void performQuack() { quackBehavior.quack(); }
+
+    // Change behavior at runtime — impossible with inheritance
+    public void setFlyBehavior(FlyBehavior fb)    { flyBehavior = fb; }
+    public void setQuackBehavior(QuackBehavior qb) { quackBehavior = qb; }
+}
+```
+
+`MallardDuck` is initialised with `FlyWithWings` and `Quack`. `RubberDuck` gets `FlyNoWay` and `Squeak`. A duck that starts grounded can be upgraded mid-simulation:
+
+```java
+Duck model = new ModelDuck();          // FlyNoWay by default
+model.setFlyBehavior(new FlyRocketPowered()); // runtime swap
+model.performFly();                    // → I'm flying with a rocket!
+```
+
+No subclass touched. No override written. The behavior swapped at the call site.
+
+---
+
+## <Label color="teal">4</Label> The Formal Definition
+
+> **Strategy Pattern** — defines a family of algorithms, encapsulates each one, and makes them interchangeable. Strategy lets the algorithm vary independently from clients that use it.
+
+<FlowStep steps={[
+  { title: "Context", body: "The Duck. Holds a reference to a Strategy interface. Delegates the variable behavior to it. Does not care which concrete implementation runs." },
+  { title: "Strategy interface", body: "FlyBehavior / QuackBehavior. Declares the contract all concrete strategies must satisfy. The context programs to this, never to a concrete class." },
+  { title: "Concrete Strategy", body: "FlyWithWings, MuteQuack, etc. Implements the algorithm. Swappable at construction time or runtime via the setter. New variants add a class, change nothing else." },
+]} />
+
+---
+
+## <Label color="teal">5</Label> What the Pattern Actually Prevents
+
+<DataTable
+  caption="Inheritance vs. Strategy — change impact"
+  accent="teal"
+  headers={["Change", "With inheritance", "With Strategy"]}
+  rows={[
+    { "Change": "Add a new fly variant",             "With inheritance": "Add method + audit all subclasses",                  "With Strategy": "Add one FlyBehavior class" },
+    { "Change": "Fix a bug in fly logic",            "With inheritance": "Fix N overrides or base + verify no subclass breaks", "With Strategy": "Fix one FlyBehavior impl" },
+    { "Change": "Swap behavior at runtime",          "With inheritance": "Impossible without re-instantiation",                 "With Strategy": "Call setFlyBehavior() anywhere" },
+    { "Change": "Test fly logic in isolation",       "With inheritance": "Must instantiate a Duck subclass",                    "With Strategy": "Instantiate FlyBehavior directly" },
+  ]}
+/>
+
+The pattern is not just about flexibility — it makes the code *testable*. Each strategy is a standalone unit. You can test `FlyWithWings` without touching a single duck.
+
+---
+
+## <Label color="teal">6</Label> What Makes Strategy Different from Simple Polymorphism
+
+- **Behavior is a first-class object.** It can be stored, passed, returned, and swapped. Polymorphism via subclass cannot do that cleanly.
+- **The context and the algorithm are separately evolvable.** Adding a new duck variant does not touch the fly hierarchy. Adding a new fly style does not touch the duck hierarchy.
+- **Runtime reconfiguration.** An inheritance override is baked in at construction time. A Strategy setter fires at any point in the object lifecycle.
+- **Test isolation.** Each concrete Strategy is a pure unit — just instantiate it and call the method.
+- **Composition chains.** Strategies can wrap other strategies (a preview of Decorator and Chain of Responsibility).
+
+<Callout color="teal">
+Every time the Gang of Four says "encapsulate what varies," this is what they mean. The pattern encodes a design philosophy that scales to every other pattern in the catalog.
+</Callout>

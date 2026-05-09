@@ -1,0 +1,163 @@
+---
+title: "Adapter and Facade: Shaping Interfaces"
+description: "Adapter converts one interface into another so incompatible classes can work together. Facade simplifies a complex subsystem into a single clean entry point. Both patterns are about interface design — not behavior."
+pubDate: 2026-05-08
+tags: ["design-patterns", "adapter", "facade", "law-of-demeter", "java", "foundations"]
+lang: "en"
+category: "foundations"
+series: "software-foundations"
+seriesOrder: 40
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import SequenceDiagram from '../../../components/mdx/SequenceDiagram.astro';
+
+Two patterns, one theme: interface mismatch. Adapter fixes a square peg / round hole problem between two existing interfaces. Facade creates a new simplified interface in front of a complex one. Neither changes the underlying behavior — both change the shape of how you access it.
+
+<HeroGrid items={[
+  { label: "Adapter", sublabel: "Converts interface A → interface B", color: "#0891b2" },
+  { label: "Facade", sublabel: "One simple interface over many complex ones", color: "#059669" },
+  { label: "Object vs Class Adapter", sublabel: "Composition vs inheritance", color: "#d97706" },
+  { label: "Law of Demeter", sublabel: "Talk only to friends, not friends-of-friends", color: "#7c3aed" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> Adapter: The Square Peg Problem
+
+Your system expects a `Duck` (with `quack()` and `fly()`), but you have a `Turkey` (with `gobble()` and `fly()`). You cannot change either class, but you need turkeys to work where ducks are expected.
+
+```java
+public class TurkeyAdapter implements Duck {
+    private Turkey turkey;
+
+    public TurkeyAdapter(Turkey turkey) {
+        this.turkey = turkey;
+    }
+
+    public void quack() { turkey.gobble(); }  // adapt quack → gobble
+
+    public void fly() {
+        // Turkeys fly short distances — simulate by flying 5 times
+        for (int i = 0; i < 5; i++) turkey.fly();
+    }
+}
+```
+
+```java
+// Client code expects Duck — never knows it's talking to a Turkey
+Duck turkeyDuck = new TurkeyAdapter(new WildTurkey());
+turkeyDuck.quack();   // → Gobble gobble!
+turkeyDuck.fly();     // → Turkey flying (5 times)
+```
+
+> **Adapter Pattern** — converts the interface of a class into another interface clients expect. Adapter lets classes work together that couldn't otherwise because of incompatible interfaces.
+
+---
+
+## <Label color="teal">2</Label> Object Adapter vs. Class Adapter
+
+<DataTable
+  caption="Two adapter implementations"
+  accent="teal"
+  headers={["Type", "How it works", "Limitation"]}
+  rows={[
+    { "Type": "Object Adapter", "How it works": "Adapter holds an instance of the Adaptee (composition). Delegates to it.", "Limitation": "Cannot override Adaptee behavior easily." },
+    { "Type": "Class Adapter",  "How it works": "Adapter extends both Target and Adaptee (multiple inheritance). Only possible in some languages (C++, Python).", "Limitation": "Not possible in Java. Commits to one concrete Adaptee class." },
+  ]}
+/>
+
+Object Adapter is the standard form in Java. It's more flexible: you can adapt any subclass of the Adaptee without changing the Adapter.
+
+---
+
+## <Label color="teal">3</Label> Facade: Simplifying a Subsystem
+
+A home theater has an Amplifier, Tuner, DVD Player, CD Player, Projector, Lights, Screen, PopcornPopper. Watching a movie requires orchestrating all of them in sequence.
+
+Without Facade:
+
+```java
+popper.on(); popper.pop();
+lights.dim(10);
+screen.down();
+projector.on(); projector.wideScreenMode();
+amp.on(); amp.setDVD(dvd); amp.setSurroundSound(); amp.setVolume(5);
+dvd.on(); dvd.play(movie);
+```
+
+Eight objects, eleven calls, called in the right order, every time you want to watch a movie. Facade wraps this into one clean method:
+
+```java
+public class HomeTheaterFacade {
+    // holds references to all the subsystem components
+
+    public void watchMovie(String movie) {
+        popper.on(); popper.pop();
+        lights.dim(10);
+        screen.down();
+        projector.on(); projector.wideScreenMode();
+        amp.on(); amp.setDVD(dvd); amp.setSurroundSound(); amp.setVolume(5);
+        dvd.on(); dvd.play(movie);
+    }
+
+    public void endMovie() {
+        dvd.stop(); dvd.off();
+        amp.off();
+        projector.off();
+        screen.up();
+        lights.on();
+        popper.off();
+    }
+}
+```
+
+```java
+// Client now has a simple interface
+HomeTheaterFacade theater = new HomeTheaterFacade(amp, tuner, dvd, ...);
+theater.watchMovie("Inception");
+theater.endMovie();
+```
+
+> **Facade Pattern** — provides a simplified interface to a library, framework, or any other complex set of classes.
+
+---
+
+## <Label color="teal">4</Label> Facade vs. Adapter — The Key Distinction
+
+| Question | Adapter | Facade |
+|---|---|---|
+| Purpose | Convert interface A to interface B | Simplify a complex interface |
+| Number of classes | Wraps one class (usually) | Wraps a whole subsystem |
+| Does it hide the original? | No — client can still use Adaptee directly | Yes — preferred but optional |
+| Introduces new interface? | Yes — the Target interface | Yes — the simplified facade interface |
+
+Adapter is about *compatibility*. Facade is about *simplicity*. Both shape interfaces without changing underlying behavior.
+
+---
+
+## <Label color="teal">5</Label> The Law of Demeter (Principle of Least Knowledge)
+
+Facade embodies a broader design principle: talk only to your immediate friends.
+
+> **Law of Demeter** — only call methods on: the object itself, objects passed as parameters, objects created or instantiated in the method, or components of the object.
+
+Avoid chains like `station.getWeather().getThermometer().getTemperature()`. This reaches through two intermediate objects to get a value — tightly coupling you to the internal structure of `Weather` and `Thermometer`. If either changes, this call breaks.
+
+```java
+// Violates Law of Demeter
+float temp = station.getWeather().getThermometer().getTemperature();
+
+// Respects it — Weather provides what you need
+float temp = station.getTemperature();
+```
+
+The Facade does exactly this: it mediates between client and subsystem, so the client never reaches deep into the subsystem's object graph.
+
+<Callout color="teal">
+The downside of strict Law of Demeter adherence: you end up writing wrapper methods at every layer. The law trades method proliferation for coupling reduction. Like all trade-offs, apply it where the coupling risk is real — don't turn it into a dogma that buries simple code under layers of forwarding.
+</Callout>

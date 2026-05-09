@@ -1,0 +1,83 @@
+---
+title: "Testing as a Design Signal, Not Just a Safety Net"
+description: "The degree to which you know how your software behaves is the degree to which you have accurately tested it. What tests actually tell you — and what they don't."
+pubDate: 2026-05-08
+tags: ["software-design", "testing", "foundations"]
+lang: "en"
+category: "foundations"
+series: "software-foundations"
+seriesOrder: 109
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+
+Here's the honest truth about testing: every engineer has at some point been certain that a piece of code was correct, only to discover it wasn't. No amount of code review, no amount of mathematical reasoning, no amount of experience changes this. The only thing that actually tells you code works is running it — and the only thing that keeps telling you is running it repeatedly, automatically, after every change.
+
+<HeroGrid items={[
+  { label: "Law of Testing", sublabel: "You know behavior = degree you've tested it", color: "#0891b2" },
+  { label: "Not Certainty", sublabel: "Tests confirm present behavior, not future", color: "#059669" },
+  { label: "Accurate Tests", sublabel: "False positives are worse than no tests", color: "#d97706" },
+  { label: "Automated", sublabel: "The only way to keep degree-of-knowledge high", color: "#7c3aed" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> The Law of Testing
+
+> **The degree to which you know how your software behaves is the degree to which you have accurately tested it.**
+
+Given that change is inevitable, that defect probability increases with change size, and that even the simplest code can have bugs — how do you *know* anything is working?
+
+The answer: you only know what you've tested, and you only know it to the degree of accuracy of your tests.
+
+The strongest form:
+
+> **Unless you've tried it, you don't know that it works.**
+
+This doesn't mean code review is useless. It means testing is the irreplaceable final verification that no other practice can substitute for.
+
+---
+
+## <Label color="teal">2</Label> What Tests Actually Tell You
+
+Tests don't tell you "the software works." They tell you: **your software behaves as you intended, for the specific inputs and conditions you tested**.
+
+This distinction matters for several reasons:
+
+- A test that passes on your machine may fail in a different environment, on a different OS, with a different timezone, or with different input data
+- A test that passes today may fail after the environment around it changes
+- A test that was comprehensive last month may be incomplete now, after new code was added
+
+The "degree" of testing is multi-dimensional:
+1. **Completeness** — how many distinct behaviors are covered
+2. **Recency** — how recently was this code path verified to work
+3. **Environment breadth** — how many different environments has it been verified in
+
+Every time you change a piece of code, the degree-of-knowledge goes to zero for that piece. The change may have introduced a bug. Every connected piece is also now uncertain, because the piece they depend on has changed.
+
+---
+
+## <Label color="teal">3</Label> Accuracy Is Not Optional
+
+Tests must be accurate. An inaccurate test is worse than no test:
+
+- A test that reports passing when the code is broken gives *false confidence* — you think you have coverage but you don't
+- A test that reports failing when the code is fine causes *false alarms* — you waste time investigating non-bugs
+
+Inaccurate tests also erode trust in the test suite over time. Once developers start ignoring test failures because "the tests are flaky," the entire suite loses its protective value. Maintaining test accuracy is as important as maintaining the code the tests cover.
+
+<Callout color="teal">
+A test that never fails is a suspicious test. It may be testing nothing, or testing only the happy path with inputs that always succeed. Regularly verify that your tests can fail when the behavior they test is broken — by temporarily introducing the bug yourself and confirming the test catches it.
+</Callout>
+
+---
+
+## <Label color="teal">4</Label> The Practical Application: Automated Tests
+
+The law's practical implication in modern development is automated tests. Manual testing at the moment of writing is not sufficient — you don't know the code works *unless you've tried it*, but "trying it once" doesn't protect you from future changes.
+
+Automated tests allow you to re-verify every piece of the system after every change, at near-zero marginal cost per run. This is the mechanism that keeps the degree-of-knowledge high despite the constant changes that the Law of Change predicts.
+
+The specific approach — TDD, specific testing frameworks, coverage targets, integration vs unit — is implementation detail. The law just tells you why testing is necessary and what it is actually telling you. Whatever approach you use, it must satisfy: you have actually run the behavior you claim to know works, recently, in conditions representative of production, with tests that fail when the behavior is broken.

@@ -1,0 +1,176 @@
+---
+title: "Factory Patterns: Encapsulating Object Creation"
+description: "Simple Factory, Factory Method, and Abstract Factory all address the same root problem — keeping client code isolated from the concrete classes it instantiates — but at different scales."
+pubDate: 2026-05-08
+tags: ["design-patterns", "factory", "abstract-factory", "dependency-inversion", "java", "foundations"]
+lang: "en"
+category: "foundations"
+series: "software-foundations"
+seriesOrder: 37
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import LayerStack from '../../../components/mdx/LayerStack.astro';
+
+`new` is the most common form of tight coupling. When a class says `new ChicagoPizza()` it is hardwired to that concrete type — it cannot be tested with a mock pizza or extended to add a new style without touching the original code. Factory patterns encapsulate the decision of *which concrete class to instantiate*, making that decision a seam you can vary independently.
+
+<HeroGrid items={[
+  { label: "Simple Factory", sublabel: "Idiom: centralise creation in one class", color: "#0891b2" },
+  { label: "Factory Method", sublabel: "Pattern: subclass decides which class to create", color: "#059669" },
+  { label: "Abstract Factory", sublabel: "Pattern: interface for families of related objects", color: "#d97706" },
+  { label: "DIP", sublabel: "Depend on abstractions, not concretions", color: "#7c3aed" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> The Creation Problem
+
+A `PizzaStore` prepares, bakes, cuts, and boxes pizzas. When you inline construction:
+
+```java
+public Pizza orderPizza(String type) {
+    Pizza pizza;
+    if (type.equals("cheese"))    pizza = new CheesePizza();
+    else if (type.equals("greek")) pizza = new GreekPizza();
+    else if (type.equals("pepperoni")) pizza = new PepperoniPizza();
+    // ...
+    pizza.prepare(); pizza.bake(); pizza.cut(); pizza.box();
+    return pizza;
+}
+```
+
+Adding a new pizza type, or changing which types are available for Chicago vs. New York, means editing `PizzaStore`. The creation logic is tangled with the preparation logic.
+
+---
+
+## <Label color="teal">2</Label> Simple Factory (Idiom)
+
+Extract the `if/else` into a dedicated factory class:
+
+```java
+public class SimplePizzaFactory {
+    public Pizza createPizza(String type) {
+        if (type.equals("cheese"))     return new CheesePizza();
+        if (type.equals("pepperoni"))  return new PepperoniPizza();
+        // ...
+        return null;
+    }
+}
+```
+
+`PizzaStore` takes a `SimplePizzaFactory` in its constructor. Now the creation decision is in one place. Multiple callers can use the same factory; changing available types means editing one class.
+
+This is called a *simple factory idiom*, not a pattern — it doesn't use inheritance to vary the concrete class. But it's the conceptual foundation for the two actual patterns.
+
+---
+
+## <Label color="teal">3</Label> Factory Method Pattern
+
+When different PizzaStore franchises (New York, Chicago) need to produce different pizzas, but share the same preparation process, Factory Method is the answer.
+
+**Define the abstract creator with an abstract factory method. Each subclass implements it:**
+
+```java
+public abstract class PizzaStore {
+    // Factory Method — subclasses override this
+    protected abstract Pizza createPizza(String type);
+
+    // Template method — uses the factory method
+    public final Pizza orderPizza(String type) {
+        Pizza pizza = createPizza(type);   // subclass decides which pizza
+        pizza.prepare(); pizza.bake(); pizza.cut(); pizza.box();
+        return pizza;
+    }
+}
+
+public class NYPizzaStore extends PizzaStore {
+    protected Pizza createPizza(String type) {
+        if (type.equals("cheese"))    return new NYStyleCheesePizza();
+        if (type.equals("pepperoni")) return new NYStylePepperoniPizza();
+        return null;
+    }
+}
+```
+
+> **Factory Method Pattern** — defines an interface for creating an object, but lets subclasses decide which class to instantiate. Factory Method lets a class defer instantiation to subclasses.
+
+<FlowStep steps={[
+  { title: "Creator defines the skeleton", body: "PizzaStore declares createPizza() abstract and implements the common preparation steps. It programs to the Pizza interface." },
+  { title: "Subclass fills in the concrete type", body: "NYPizzaStore and ChicagoPizzaStore each implement createPizza() differently. The superclass never mentions NYStyleCheesePizza." },
+  { title: "Client code stays stable", body: "A caller holds a PizzaStore reference. Whether it's NY or Chicago is resolved at the subclass — the client's orderPizza() call is identical." },
+]} />
+
+---
+
+## <Label color="teal">4</Label> Abstract Factory Pattern
+
+When you need to create *families* of related objects that must be consistent together, Abstract Factory provides an interface for the entire family.
+
+New York pizzas use thin-crust dough, marinara sauce, and shredded mozzarella. Chicago uses thick-crust dough, plum-tomato sauce, and fresh mozzarella. These ingredients must go together — you can't mix NY dough with Chicago sauce and call it authentic.
+
+```java
+public interface PizzaIngredientFactory {
+    Dough   createDough();
+    Sauce   createSauce();
+    Cheese  createCheese();
+    Veggies[] createVeggies();
+    Pepperoni createPepperoni();
+    Clams   createClam();
+}
+
+public class NYPizzaIngredientFactory implements PizzaIngredientFactory {
+    public Dough  createDough()    { return new ThinCrustDough(); }
+    public Sauce  createSauce()    { return new MarinaraSauce(); }
+    public Cheese createCheese()   { return new ReggianoCheese(); }
+    // ...
+}
+```
+
+Each `Pizza` receives a `PizzaIngredientFactory` at construction time and uses it to build itself — with no knowledge of whether it's NY or Chicago ingredients.
+
+> **Abstract Factory Pattern** — provides an interface for creating families of related or dependent objects without specifying their concrete classes.
+
+---
+
+## <Label color="teal">5</Label> Factory Method vs. Abstract Factory
+
+<DataTable
+  caption="Comparison"
+  accent="teal"
+  headers={["Dimension", "Factory Method", "Abstract Factory"]}
+  rows={[
+    { "Dimension": "Mechanism",      "Factory Method": "Inheritance (subclass overrides)",       "Abstract Factory": "Composition (factory passed in)" },
+    { "Dimension": "Scope",          "Factory Method": "One product type",                       "Abstract Factory": "Family of related products" },
+    { "Dimension": "Extension",      "Factory Method": "Add subclass of creator",               "Abstract Factory": "Add new factory implementation" },
+    { "Dimension": "Client knows",   "Factory Method": "Which creator class to instantiate",    "Abstract Factory": "Which factory interface to inject" },
+    { "Dimension": "Good for",       "Factory Method": "Single product with per-subclass logic", "Abstract Factory": "Consistent families (theme, platform, region)" },
+  ]}
+/>
+
+---
+
+## <Label color="teal">6</Label> The Dependency Inversion Principle
+
+> **Depend on abstractions. Don't depend on concrete classes.**
+
+Without factories, a `PizzaStore` that directly instantiates `NYStyleCheesePizza` has a dependency that flows downward through the class hierarchy — high-level policy code depends on low-level implementation detail.
+
+Factory patterns invert this: the creation logic is pushed to a factory (interface or abstract method), and both the client and the concrete classes depend on the abstraction in the middle.
+
+<LayerStack
+  caption="Dependency Inversion"
+  layers={[
+    { tag: "High", color: "teal",  title: "PizzaStore",             items: ["Depends on Pizza (abstract)", "Depends on PizzaIngredientFactory (interface)"] },
+    { tag: "Mid",  color: "green", title: "Pizza / Ingredient Factory",  items: ["Abstractions that both sides depend on"] },
+    { tag: "Low",  color: "amber", title: "CheesePizza, ThinCrustDough", items: ["Concrete classes", "Depend only on their own abstractions"] },
+  ]}
+  arrows={["inverts"]}
+/>
+
+<Callout color="teal">
+The principle says "depend on abstractions" — not "never use new." Every program instantiates concrete objects somewhere. The goal is to confine those instantiation decisions to factory classes and constructors, keeping the rest of the system clean.
+</Callout>

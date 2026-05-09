@@ -1,0 +1,159 @@
+---
+title: "The Observer Pattern: Loose Coupling for Event-Driven Systems"
+description: "Observer solves the one-to-many notification problem without tangling subjects and observers in hard dependencies — any number of listeners can subscribe and unsubscribe freely without the publisher caring who they are."
+pubDate: 2026-05-08
+tags: ["design-patterns", "observer", "event-driven", "java", "foundations"]
+lang: "en"
+category: "foundations"
+series: "software-foundations"
+seriesOrder: 35
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import SequenceDiagram from '../../../components/mdx/SequenceDiagram.astro';
+
+If one object's state change should trigger updates in others — and the set of "others" will grow, shrink, or be unknown at compile time — you have a one-to-many dependency problem. The Observer pattern solves it with a subscribe/notify contract that keeps the subject blissfully ignorant of who is listening.
+
+<HeroGrid items={[
+  { label: "One-to-many", sublabel: "Subject notifies any number of observers", color: "#0891b2" },
+  { label: "Loose coupling", sublabel: "Subject only knows the Observer interface", color: "#059669" },
+  { label: "Push vs Pull", sublabel: "Subject can push data or observers pull it", color: "#d97706" },
+  { label: "Open-Closed", sublabel: "Add observers without modifying the subject", color: "#7c3aed" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> The Problem
+
+Consider a weather station that measures temperature, humidity, and pressure. Several display units — a current-conditions display, a statistics display, a forecast display — need to update whenever the sensor data changes. The naïve implementation:
+
+```java
+public void measurementsChanged() {
+    currentConditionsDisplay.update(temp, humidity, pressure);
+    statisticsDisplay.update(temp, humidity, pressure);
+    forecastDisplay.update(temp, humidity, pressure);
+    // Adding a fourth display means editing this method
+}
+```
+
+Three problems surface immediately:
+1. Adding a display requires editing `WeatherData` — it's not closed to modification.
+2. Displays cannot be added or removed at runtime.
+3. `WeatherData` is tightly coupled to every concrete display class.
+
+---
+
+## <Label color="teal">2</Label> The Observer Pattern
+
+Extract the subscription logic into a `Subject` interface and the notification responsibility into an `Observer` interface:
+
+```java
+public interface Subject {
+    void registerObserver(Observer o);
+    void removeObserver(Observer o);
+    void notifyObservers();
+}
+
+public interface Observer {
+    void update(float temp, float humidity, float pressure);
+}
+```
+
+`WeatherData` implements `Subject`, stores a list of observers, and notifies them on data change. Each display implements `Observer`, receives the update, and renders itself.
+
+<SequenceDiagram
+  title="Observer notification flow"
+  actors={["WeatherData", "List<Observer>", "CurrentConditionsDisplay", "StatisticsDisplay"]}
+  messages={[
+    { from: "WeatherData",            to: "List<Observer>",             label: "measurementsChanged() → notifyObservers()" },
+    { from: "List<Observer>",         to: "CurrentConditionsDisplay",   label: "update(temp, humidity, pressure)" },
+    { from: "List<Observer>",         to: "StatisticsDisplay",          label: "update(temp, humidity, pressure)" },
+  ]}
+/>
+
+```java
+// At runtime — subject never touches DisplayDevice class directly
+weatherData.registerObserver(currentDisplay);
+weatherData.registerObserver(statisticsDisplay);
+weatherData.registerObserver(new ForecastDisplay());  // add freely
+weatherData.removeObserver(currentDisplay);           // remove freely
+```
+
+---
+
+## <Label color="teal">3</Label> Formal Definition
+
+> **Observer Pattern** — defines a one-to-many dependency between objects so that when one object changes state, all its dependents are notified and updated automatically.
+
+The dependency is *one-to-many*: one subject, many observers. The coupling is *loose*: the subject holds a list of `Observer` interface references, knows nothing about their concrete types.
+
+---
+
+## <Label color="teal">4</Label> Push vs. Pull
+
+Two styles of delivering data to observers:
+
+<DataTable
+  caption="Push vs. Pull"
+  accent="teal"
+  headers={["Style", "How it works", "When to prefer"]}
+  rows={[
+    { "Style": "Push",  "How it works": "Subject passes current values as parameters in update()",   "When to prefer": "All observers need the same data; simpler call sites" },
+    { "Style": "Pull",  "How it works": "Subject passes itself (or nothing); observer calls getters", "When to prefer": "Observers need different subsets; avoids bloated update() signatures" },
+  ]}
+/>
+
+The pull model makes the `DisplayElement` call `weatherData.getTemperature()` instead of accepting the value as a parameter. Observers import only what they need. The subject's notification call becomes:
+
+```java
+// Pull: observers pull specific values from the subject
+public void update() {
+    float temp = weatherData.getTemperature();
+    // use only what this display needs
+}
+```
+
+---
+
+## <Label color="teal">5</Label> The OO Principle at Work
+
+Observer encodes the fourth design principle: **strive for loosely coupled designs between interacting objects**.
+
+Loose coupling here means:
+- The subject knows only that observers implement `Observer`. It never imports display classes.
+- Observers can be added, removed, or replaced at runtime — the subject doesn't restart.
+- Subject and observer can evolve independently. Changing how the weather station records data doesn't touch any display. Adding a new display type doesn't touch the weather station.
+
+<Callout color="teal">
+Loose coupling is the difference between a system you can modify in one place and one where every change ripples unpredictably. Observer is the canonical example of what loose coupling looks like in practice.
+</Callout>
+
+---
+
+## <Label color="teal">6</Label> Java Observable and Why It Was Deprecated
+
+Java's standard library included `java.util.Observable` and `java.util.Observer` for decades. Both were deprecated in Java 9 for concrete design reasons:
+
+- `Observable` is a *class*, not an interface. You cannot use it if your class already extends something else.
+- `setChanged()` is `protected` — you cannot compose an `Observable` into another class and call `setChanged()` on it; you must subclass.
+- The method signature `update(Observable o, Object arg)` is weakly typed — forces casting.
+
+The lesson: even sound patterns can be implemented poorly. When you encounter a framework's Observer-alike, check whether it avoids the `Observable` class pitfalls: use an interface, keep the API strongly typed, and don't force extension.
+
+---
+
+## <Label color="teal">7</Label> Observer in the Wild
+
+| Context | Subject | Observers |
+|---------|---------|-----------|
+| GUI toolkits | Button, TextField | ActionListener, ChangeListener |
+| Reactive streams | Publisher | Subscriber |
+| State management (Redux/Vuex) | Store | React components |
+| Message queues | Topic/Channel | Consumer groups |
+| OS event system | Kernel event source | User-space handlers |
+
+Every GUI framework ever built implements Observer. So does every reactive system, every message broker, and every state management library. The pattern is foundational to event-driven programming.

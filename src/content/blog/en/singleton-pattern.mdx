@@ -1,0 +1,127 @@
+---
+title: "The Singleton Pattern: One Instance, Global Access"
+description: "Singleton guarantees exactly one instance of a class and provides a global access point to it — but getting it right in multithreaded environments requires careful treatment of visibility and initialization."
+pubDate: 2026-05-08
+tags: ["design-patterns", "singleton", "multithreading", "java", "foundations"]
+lang: "en"
+category: "foundations"
+series: "software-foundations"
+seriesOrder: 38
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+
+Some objects should only ever exist once — a thread pool, a logging service, a device driver, a configuration store. The Singleton pattern enforces that uniqueness at the class level and provides a single access point. The implementation is deceptively simple; the multithreading correctness is not.
+
+<HeroGrid items={[
+  { label: "One Instance", sublabel: "Class enforces uniqueness — not the caller", color: "#0891b2" },
+  { label: "Global Access", sublabel: "getInstance() is the controlled entry point", color: "#059669" },
+  { label: "Thread Safety", sublabel: "Lazy init + DCL + volatile all matter", color: "#dc2626" },
+  { label: "Enum Singleton", sublabel: "The JVM guarantees uniqueness for you", color: "#d97706" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> The Basic Structure
+
+The private constructor prevents external instantiation. The static `getInstance()` method is the only door in:
+
+```java
+public class Singleton {
+    private static Singleton instance;
+
+    private Singleton() {}  // no external instantiation
+
+    public static Singleton getInstance() {
+        if (instance == null) {             // lazy initialisation
+            instance = new Singleton();
+        }
+        return instance;
+    }
+}
+```
+
+This works perfectly — in a single-threaded world. Two threads entering `getInstance()` simultaneously can each see `instance == null` and each call `new Singleton()`, producing two instances and violating the pattern's entire purpose.
+
+---
+
+## <Label color="teal">2</Label> Three Solutions for Thread Safety
+
+<FlowStep steps={[
+  { title: "Option 1: Synchronized getInstance()", body: "Add `synchronized` to `getInstance()`. Correct, but carries a lock acquisition on every call — even when the instance already exists. Fine if getInstance() is not called in a tight loop; expensive if it is." },
+  { title: "Option 2: Eager initialization", body: "Create the instance as a static field initializer: `private static Singleton instance = new Singleton();`. The JVM class loader guarantees this runs exactly once before any thread can call getInstance(). Zero synchronization overhead at call time. Only drawback: the instance is created even if never used." },
+  { title: "Option 3: Double-Checked Locking (DCL)", body: "Check once without locking, lock only when instance is null, then check again inside the lock. Requires the `volatile` keyword to prevent the JVM from reordering the assignment before the constructor finishes." },
+]} />
+
+```java
+// Option 3: DCL with volatile — correct on Java 5+
+public class Singleton {
+    private volatile static Singleton instance;
+
+    public static Singleton getInstance() {
+        if (instance == null) {                  // Check 1 — no lock
+            synchronized (Singleton.class) {
+                if (instance == null) {          // Check 2 — inside lock
+                    instance = new Singleton();
+                }
+            }
+        }
+        return instance;
+    }
+}
+```
+
+Without `volatile`, the JVM may partially publish the `Singleton` object — a thread can observe `instance != null` while the object's fields are not yet fully initialized. `volatile` inserts a memory barrier, ensuring all writes complete before the assignment becomes visible to other threads.
+
+---
+
+## <Label color="teal">3</Label> The Enum Singleton (Recommended)
+
+Java enum types are guaranteed by the JVM spec to be instantiated exactly once, thread-safely, without any synchronization code you have to write:
+
+```java
+public enum Singleton {
+    INSTANCE;
+
+    public void doSomething() {
+        // singleton behavior here
+    }
+}
+
+// Usage
+Singleton.INSTANCE.doSomething();
+```
+
+This is not a hack. The JVM enforces enum uniqueness even across serialization/deserialization and even under reflection. No private constructor required. No volatile required. Joshua Bloch (Effective Java) named this the best Singleton implementation.
+
+---
+
+## <Label color="teal">4</Label> When Not to Use Singleton
+
+<DataTable
+  caption="Singleton red flags"
+  accent="teal"
+  headers={["Signal", "Better approach"]}
+  rows={[
+    { "Signal": "You want shared state but not strict uniqueness",  "Better approach": "Dependency injection — pass one instance to all callers" },
+    { "Signal": "Testing is hard (can't substitute a mock)",        "Better approach": "Program to an interface; inject via constructor or factory" },
+    { "Signal": "Singleton holds mutable state across test cases",  "Better approach": "Reset state in setUp/tearDown, or prefer stateless utilities" },
+    { "Signal": "You're using it to avoid passing objects around",  "Better approach": "Reconsider your architecture; global state hides coupling" },
+  ]}
+/>
+
+<Callout color="teal">
+Singleton is often over-applied. The pattern is appropriate when one-and-only-one instance is a genuine system constraint — a device driver, a connection pool manager, a class loader. If the real requirement is "one instance per application" and you're using DI infrastructure, the container can enforce that without you writing a Singleton at all.
+</Callout>
+
+---
+
+## <Label color="teal">5</Label> Multiple Class Loaders
+
+In some Java environments (application servers, OSGi containers), the same class may be loaded by multiple class loaders, producing one `Singleton` instance per class loader. Each loader's `instance` is a separate static variable.
+
+The fix: specify which class loader should load the Singleton class, or use a registry pattern where classes are looked up by name from a central location. This is rare in modern development but relevant in plugin-based architectures.

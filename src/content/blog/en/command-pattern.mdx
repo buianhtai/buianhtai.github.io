@@ -1,0 +1,204 @@
+---
+title: "The Command Pattern: Encapsulating Actions as Objects"
+description: "Command turns a method call into a first-class object — enabling undo, queues, macro recording, and logging by separating the requester of an action from the object that performs it."
+pubDate: 2026-05-08
+tags: ["design-patterns", "command", "undo", "behavioral", "java", "foundations"]
+lang: "en"
+category: "foundations"
+series: "software-foundations"
+seriesOrder: 39
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import SequenceDiagram from '../../../components/mdx/SequenceDiagram.astro';
+
+A remote control has 7 buttons. Each button controls a different device: lights, stereo, fan, garage door. The naïve implementation couples the remote directly to every device class. The Command pattern interposes an object between the remote and the device, encapsulating the action so the remote never has to know what it's controlling.
+
+<HeroGrid items={[
+  { label: "Decoupled invoker", sublabel: "Remote knows only execute() — never the device", color: "#0891b2" },
+  { label: "Undo support", sublabel: "Commands store enough state to reverse themselves", color: "#059669" },
+  { label: "NoCommand idiom", sublabel: "Null Object eliminates null checks everywhere", color: "#d97706" },
+  { label: "Macro commands", sublabel: "MacroCommand executes a list of commands", color: "#7c3aed" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> The Remote Control Problem
+
+```java
+// Without Command — remote is coupled to every device
+public class RemoteControl {
+    Light light;
+    Stereo stereo;
+    GarageDoor garageDoor;
+
+    public void lightOnButtonPushed()    { light.on(); }
+    public void stereoOnButtonPushed()   { stereo.on(); stereo.setCD(); stereo.setVolume(11); }
+    public void garageOpenButtonPushed() { garageDoor.up(); }
+    // Every new device = edit this class
+}
+```
+
+The `RemoteControl` becomes a dependency dump. Any change to how a device is activated requires opening the remote class. Testing a specific slot requires instantiating the device. Undo requires storing previous state inside the remote — for every device separately.
+
+---
+
+## <Label color="teal">2</Label> The Command Object
+
+Extract every action into a `Command` object that encapsulates both the receiver and what to call on it:
+
+```java
+public interface Command {
+    void execute();
+    void undo();
+}
+
+public class LightOnCommand implements Command {
+    private Light light;
+
+    public LightOnCommand(Light light) { this.light = light; }
+
+    public void execute() { light.on(); }
+    public void undo()    { light.off(); }
+}
+
+public class StereoOnWithCDCommand implements Command {
+    private Stereo stereo;
+
+    public void execute() {
+        stereo.on();
+        stereo.setCD();
+        stereo.setVolume(11);
+    }
+    public void undo() {
+        stereo.off();
+    }
+}
+```
+
+The remote now holds a `Command[]` and calls `execute()` — knowing nothing about lights or stereos:
+
+```java
+public class RemoteControl {
+    Command[] onCommands  = new Command[7];
+    Command[] offCommands = new Command[7];
+    Command lastCommand;
+
+    public void onButtonWasPushed(int slot) {
+        onCommands[slot].execute();
+        lastCommand = onCommands[slot];
+    }
+
+    public void undoButtonWasPushed() {
+        lastCommand.undo();
+    }
+}
+```
+
+---
+
+## <Label color="teal">3</Label> Formal Definition
+
+> **Command Pattern** — encapsulates a request as an object, thereby letting you parameterize clients with different requests, queue or log requests, and support undoable operations.
+
+<SequenceDiagram
+  title="Command execution flow"
+  actors={["Client", "RemoteControl (Invoker)", "LightOnCommand", "Light (Receiver)"]}
+  messages={[
+    { from: "Client",               to: "RemoteControl (Invoker)", label: "setCommand(slot, lightOnCmd)" },
+    { from: "Client",               to: "RemoteControl (Invoker)", label: "onButtonWasPushed(0)" },
+    { from: "RemoteControl (Invoker)", to: "LightOnCommand",       label: "execute()" },
+    { from: "LightOnCommand",       to: "Light (Receiver)",        label: "on()" },
+  ]}
+/>
+
+The four roles:
+- **Client** — creates the `Command`, wires it to the invoker
+- **Invoker** — holds a `Command` reference, calls `execute()` at the right moment
+- **Command** — the encapsulated action, knows its receiver
+- **Receiver** — the object that actually does the work (`Light.on()`)
+
+---
+
+## <Label color="teal">4</Label> The Null Object: NoCommand
+
+Slots 4–6 on the remote are unassigned. Without the Null Object idiom:
+
+```java
+if (onCommands[slot] != null) {
+    onCommands[slot].execute();
+}
+```
+
+Seven slots × two arrays = fourteen null checks. The fix: initialize all slots to a `NoCommand` that does nothing:
+
+```java
+public class NoCommand implements Command {
+    public void execute() {}
+    public void undo()    {}
+}
+```
+
+Now every slot always has a valid `Command`. The null check disappears. Adding a device later means replacing a `NoCommand` — no refactoring required.
+
+---
+
+## <Label color="teal">5</Label> Macro Commands
+
+Group a list of commands into one composite command:
+
+```java
+public class MacroCommand implements Command {
+    Command[] commands;
+
+    public MacroCommand(Command[] commands) {
+        this.commands = commands;
+    }
+
+    public void execute() {
+        for (Command c : commands) c.execute();
+    }
+
+    public void undo() {
+        // Undo in reverse
+        for (int i = commands.length - 1; i >= 0; i--) {
+            commands[i].undo();
+        }
+    }
+}
+
+// Assign to a single slot: one button → party mode
+Command partyOn = new MacroCommand(new Command[]{
+    new LightOnCommand(light),
+    new StereoOnWithCDCommand(stereo),
+    new TVOnCommand(tv),
+});
+remote.setCommand(0, partyOn, partyOff);
+```
+
+Macros compose cleanly because every command speaks the same interface.
+
+---
+
+## <Label color="teal">6</Label> Real-World Applications
+
+<DataTable
+  caption="Command pattern in practice"
+  accent="teal"
+  headers={["Context", "Invoker", "Command", "Receiver"]}
+  rows={[
+    { "Context": "Text editor",    "Invoker": "Edit menu / keyboard shortcut", "Command": "BoldCommand",        "Receiver": "TextBuffer" },
+    { "Context": "Job queue",      "Invoker": "Queue worker thread",            "Command": "Runnable / Job",     "Receiver": "Task processor" },
+    { "Context": "GUI toolkit",    "Invoker": "Button click event",             "Command": "ActionListener",     "Receiver": "Application logic" },
+    { "Context": "Transaction log","Invoker": "Transaction manager",            "Command": "LoggedOperation",    "Receiver": "Database / file" },
+    { "Context": "Smart home",     "Invoker": "Voice assistant",               "Command": "DeviceCommand",      "Receiver": "IoT device" },
+  ]}
+/>
+
+<Callout color="teal">
+Command's deepest insight: when you treat actions as objects, you get undo, queuing, logging, and serialization almost for free. The pattern turns "what the invoker wants done" into a value that can be stored, replayed, reversed, or handed to a different executor entirely.
+</Callout>

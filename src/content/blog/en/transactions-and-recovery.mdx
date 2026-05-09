@@ -1,0 +1,148 @@
+---
+title: "Transactions, WAL, and ARIES Recovery"
+description: "Buffer management, write-ahead logging, steal/no-force policies, and the ARIES recovery algorithm — the interlocked mechanisms that make transactions durable and concurrent without sacrificing each other."
+pubDate: 2026-05-08
+tags: ["database-internals", "transactions", "aries", "concurrency", "foundations"]
+lang: "en"
+category: "foundations"
+series: "software-foundations"
+seriesOrder: 24
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+
+Here is the question: your database just crashed mid-write. Power failed. Disk controller threw an error. The process was killed. When it comes back up, what state is the data in?
+
+The answer is "correct" — if and only if the storage engine was built right. Three interlocked mechanisms make this possible: buffer management, write-ahead logging, and recovery. Understanding one requires understanding all three.
+
+<HeroGrid items={[
+  { label: "Buffer Pool", sublabel: "Page cache with LRU/CLOCK eviction", color: "#0891b2" },
+  { label: "WAL", sublabel: "Write-ahead log before every page flush", color: "#059669" },
+  { label: "ARIES", sublabel: "Steal/no-force with 3-phase recovery", color: "#d97706" },
+  { label: "Isolation Levels", sublabel: "Read Committed · Repeatable Read · Serializable", color: "#7c3aed" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> Buffer Management
+
+The buffer pool (page cache) sits between the storage engine and disk. Reading or writing a page always goes through the buffer pool — the physical disk is only touched when a page is loaded from disk (cache miss) or flushed back (dirty page eviction).
+
+**Cache semantics**:
+- On read: if the page is in cache (cache hit), return it immediately. If not (cache miss), load from disk, add to cache, return.
+- On write: modify the in-memory copy (marking it *dirty*). The actual disk write is deferred.
+
+<DataTable
+  caption="Buffer pool eviction policies"
+  accent="teal"
+  headers={["Policy", "Mechanism", "Weakness"]}
+  rows={[
+    { "Policy": "FIFO",  "Mechanism": "Evict the page that has been in cache longest",                           "Weakness": "Evicts hot pages that were loaded early" },
+    { "Policy": "LRU",   "Mechanism": "Evict the least recently accessed page",                                  "Weakness": "Sequential scans pollute cache (each page accessed once, displacing hot pages)" },
+    { "Policy": "CLOCK", "Mechanism": "Circular buffer with 'recently used' bit; reset bit on access, evict when bit is 0 on second pass", "Weakness": "Approximation of LRU; less accurate but O(1) overhead" },
+    { "Policy": "LFU",   "Mechanism": "Evict the least frequently accessed page",                                "Weakness": "Slow to adapt to changing access patterns" },
+  ]}
+/>
+
+**Pinned pages**: some pages must not be evicted (e.g., a page with an active transaction). The buffer manager reference-counts pins; a page is only eviction-eligible when its pin count drops to zero.
+
+---
+
+## <Label color="teal">2</Label> Write-Ahead Log (WAL)
+
+The WAL rule is simple and non-negotiable:
+
+> **Before any page change is written to disk, the log record describing that change must be written to disk first.**
+
+The log is an append-only sequence of records, written sequentially to a dedicated log file. Sequential writes are orders of magnitude faster than random writes — the log is the fast path; actual page writes are the slow path.
+
+Why WAL provides durability:
+1. A transaction commits when its **commit log record** reaches disk
+2. At commit time, the actual page modifications may still be in the buffer pool (not yet flushed)
+3. If the system crashes, the log contains everything needed to redo all committed modifications
+
+**Log Sequence Number (LSN)**: each log record has a monotonically increasing LSN. Each page header stores the LSN of the most recent modification to that page. During recovery, LSNs determine which log records have already been applied and which still need to be.
+
+---
+
+## <Label color="teal">3</Label> Steal and Force Policies
+
+These two orthogonal policies control when dirty pages are flushed to disk:
+
+**Steal policy**: Can a dirty page be flushed to disk *before* the transaction that dirtied it commits?
+- **Steal**: yes — the buffer manager can evict any dirty page, even if its transaction is still running
+- **No-steal**: no — dirty pages from in-progress transactions cannot be evicted
+
+**Force policy**: Must all dirty pages of a transaction be flushed *before* the transaction commits?
+- **Force**: yes — commit blocks until all dirty pages are on disk
+- **No-force**: no — commit can succeed before dirty pages hit disk
+
+<DataTable
+  caption="Steal/Force policy combinations"
+  accent="teal"
+  headers={["Policy", "Redo needed?", "Undo needed?", "Performance", "Used by"]}
+  rows={[
+    { "Policy": "No-steal / Force", "Redo needed?": "No", "Undo needed?": "No",  "Performance": "Worst (commit flushes all)", "Used by": "Early systems; shadow paging" },
+    { "Policy": "No-steal / No-force", "Redo needed?": "Yes", "Undo needed?": "No", "Performance": "Better write throughput", "Used by": "Some embedded systems" },
+    { "Policy": "Steal / Force", "Redo needed?": "No",  "Undo needed?": "Yes", "Performance": "Good commit latency", "Used by": "Some OLTP systems" },
+    { "Policy": "Steal / No-force", "Redo needed?": "Yes", "Undo needed?": "Yes", "Performance": "Best overall", "Used by": "PostgreSQL, InnoDB, ARIES" },
+  ]}
+/>
+
+ARIES uses **steal/no-force** — the combination with best performance but requiring both redo and undo during recovery.
+
+---
+
+## <Label color="teal">4</Label> ARIES Recovery
+
+ARIES (Algorithm for Recovery and Isolation Exploiting Semantics, 1992) is the recovery algorithm used by most modern databases. It uses WAL with physical redo and logical undo.
+
+Recovery after a crash proceeds in exactly three phases:
+
+<FlowStep steps={[
+  { title: "Analysis phase", body: "Scan the log forward from the last checkpoint. Reconstruct the set of dirty pages (pages modified but not yet flushed) and the set of active transactions (transactions that were running at crash time). These two sets determine the starting point for redo and the list of transactions to undo." },
+  { title: "Redo phase", body: "Repeat history exactly as it happened, starting from the earliest dirty page. Apply every redo log record to its target page. After redo, the database is in the exact state it was at the moment of crash — including all in-progress transactions, even uncommitted ones." },
+  { title: "Undo phase", body: "Roll back all transactions that were active (uncommitted) at the time of crash, in reverse chronological order. Each undo operation writes a Compensation Log Record (CLR) to the log, so that if the system crashes again during recovery, already-undone operations are not re-undone." },
+]} />
+
+The redo phase's "repeat history" approach is the key insight: it simplifies recovery reasoning enormously. You don't need to know what was and wasn't flushed — just replay everything from the analysis starting point, then undo what shouldn't have committed.
+
+<Callout color="teal">
+ARIES was described in 1992 and is still the reference algorithm today. Every major relational database (PostgreSQL, MySQL/InnoDB, SQL Server, Oracle) uses a variant of it. The steal/no-force + WAL combination gives maximum write throughput with full ACID guarantees.
+</Callout>
+
+---
+
+## <Label color="teal">5</Label> Concurrency Control and Isolation Levels
+
+SQL defines four isolation levels, each providing different protections against read anomalies:
+
+<DataTable
+  caption="SQL isolation levels and their anomaly protections"
+  accent="teal"
+  headers={["Isolation Level", "Dirty Read", "Non-repeatable Read", "Phantom Read"]}
+  rows={[
+    { "Isolation Level": "Read Uncommitted", "Dirty Read": "Possible",   "Non-repeatable Read": "Possible",   "Phantom Read": "Possible" },
+    { "Isolation Level": "Read Committed",   "Dirty Read": "Prevented",  "Non-repeatable Read": "Possible",   "Phantom Read": "Possible" },
+    { "Isolation Level": "Repeatable Read",  "Dirty Read": "Prevented",  "Non-repeatable Read": "Prevented",  "Phantom Read": "Possible" },
+    { "Isolation Level": "Serializable",     "Dirty Read": "Prevented",  "Non-repeatable Read": "Prevented",  "Phantom Read": "Prevented" },
+  ]}
+/>
+
+**Three concurrency control approaches**:
+
+**Optimistic (OCC)**: transactions execute without locks, record their read/write sets, and validate at commit time. If a conflict is detected, one transaction is aborted and retried. Best for low-contention workloads.
+
+**Multiversion (MVCC)**: each record has multiple timestamped versions. Readers see the version current at their transaction's start time; writers create new versions. Readers never block writers; writers never block readers. PostgreSQL and InnoDB use MVCC.
+
+**Pessimistic/Lock-based**: transactions acquire locks before accessing data. Two-phase locking (2PL) guarantees serializability: in the growing phase, locks are acquired; in the shrinking phase, locks are released and no new locks are acquired.
+
+**Latches vs Locks**: a critical distinction:
+- **Locks**: logical, held for the duration of a transaction, managed by the transaction manager
+- **Latches**: physical, held only for the duration of a page operation (read/write), managed by the buffer manager
+
+Latch crabbing allows concurrent B-Tree traversal: hold a latch on the parent until you've confirmed the child doesn't need to split/merge, then release the parent and acquire a child latch.

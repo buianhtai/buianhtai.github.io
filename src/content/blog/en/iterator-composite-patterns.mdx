@@ -1,0 +1,171 @@
+---
+title: "Iterator and Composite: Traversal and Tree Structures"
+description: "Iterator hides collection implementation behind a uniform traversal interface. Composite lets individual objects and whole trees be treated identically. Together they untangle menus, file trees, and any recursive structure."
+pubDate: 2026-05-08
+tags: ["design-patterns", "iterator", "composite", "behavioral", "java", "foundations"]
+lang: "en"
+category: "foundations"
+series: "software-foundations"
+seriesOrder: 42
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import ArchDiagram from '../../../components/mdx/ArchDiagram.astro';
+
+Two patterns that solve different problems but compound well in practice. Iterator answers: how does a client traverse a collection without knowing whether it's an `ArrayList`, an `Array`, or a `Hashtable`? Composite answers: how do you treat a single leaf object and a whole tree uniformly, so clients don't need to know which one they have?
+
+<HeroGrid items={[
+  { label: "Iterator", sublabel: "hasNext() / next() — one interface, any collection", color: "#0891b2" },
+  { label: "Composite", sublabel: "Leaf and composite share one interface", color: "#059669" },
+  { label: "Single Responsibility", sublabel: "Iteration extracted from the collection class", color: "#d97706" },
+  { label: "Null Operations", sublabel: "Unsupported ops throw UnsupportedOperationException", color: "#7c3aed" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> The Iterator Problem
+
+Two menus: a Pancake House stores items in an `ArrayList`; a Diner stores them in a fixed-size `MenuItem[]` array. When the two merge, the Waitress must print all items from both. Without abstraction:
+
+```java
+ArrayList breakfastItems = pancakeMenu.getMenuItems();   // ArrayList
+MenuItem[] lunchItems = dinerMenu.getMenuItems();        // Array
+
+for (int i = 0; i < breakfastItems.size(); i++) {
+    MenuItem item = (MenuItem) breakfastItems.get(i);
+}
+for (int i = 0; i < lunchItems.length; i++) {
+    MenuItem item = lunchItems[i];
+}
+```
+
+Two loops with different termination conditions, both in the Waitress. Every new menu type (a third restaurant using a `Hashtable`) adds a third loop to every method in the Waitress.
+
+---
+
+## <Label color="teal">2</Label> Iterator Pattern
+
+Each menu produces an `Iterator`. The Waitress writes against the iterator interface only:
+
+```java
+public interface Iterator {
+    boolean hasNext();
+    Object  next();
+}
+
+// DinerMenu creates its own Iterator over the array
+public class DinerMenuIterator implements Iterator {
+    MenuItem[] items;
+    int position = 0;
+
+    public boolean hasNext() {
+        return position < items.length && items[position] != null;
+    }
+    public Object next() {
+        return items[position++];
+    }
+}
+```
+
+The Waitress receives an `Iterator` and traverses uniformly:
+
+```java
+public void printMenu(Iterator iterator) {
+    while (iterator.hasNext()) {
+        MenuItem item = (MenuItem) iterator.next();
+        System.out.println(item.getName() + " — " + item.getPrice());
+    }
+}
+```
+
+> **Iterator Pattern** — provides a way to access the elements of an aggregate object sequentially without exposing its underlying representation.
+
+The **Single Responsibility Principle** benefit: iterating is now the responsibility of the iterator class, not the collection class. The collection manages storage; the iterator manages traversal.
+
+---
+
+## <Label color="teal">3</Label> The Composite Problem
+
+Menus now contain sub-menus (Breakfast menu has a Dessert sub-menu). The Waitress must print the full tree. If menu items and menus are different types, every printing method needs two code paths: one for items, one for menus.
+
+Composite collapses both into one component interface:
+
+---
+
+## <Label color="teal">4</Label> Composite Pattern
+
+```java
+// Component — both MenuComponent and MenuItem implement this
+public abstract class MenuComponent {
+    // Operations for composite nodes (sub-menus)
+    public void add(MenuComponent c)    { throw new UnsupportedOperationException(); }
+    public void remove(MenuComponent c) { throw new UnsupportedOperationException(); }
+    public MenuComponent getChild(int i){ throw new UnsupportedOperationException(); }
+
+    // Operations for leaf nodes (items)
+    public String getName()        { throw new UnsupportedOperationException(); }
+    public String getDescription() { throw new UnsupportedOperationException(); }
+    public double getPrice()       { throw new UnsupportedOperationException(); }
+    public boolean isVegetarian()  { throw new UnsupportedOperationException(); }
+
+    // Both nodes and items implement print
+    public void print() { throw new UnsupportedOperationException(); }
+}
+```
+
+`MenuItem` (leaf) implements `getName`, `getDescription`, `getPrice`, `isVegetarian`, `print`.
+`Menu` (composite) implements `add`, `remove`, `getChild`, `print` — where `print` iterates children and calls `print()` on each.
+
+```java
+public class Menu extends MenuComponent {
+    List<MenuComponent> children = new ArrayList<>();
+
+    public void add(MenuComponent c) { children.add(c); }
+
+    public void print() {
+        System.out.println(getName() + " — " + getDescription());
+        for (MenuComponent c : children) c.print();  // recursive
+    }
+}
+```
+
+```java
+// Client code — treats trees and leaves identically
+MenuComponent allMenus = new Menu("ALL MENUS", "All menus combined");
+allMenus.add(pancakeHouseMenu);    // Menu (composite)
+allMenus.add(dinerMenu);           // Menu (composite)
+allMenus.add(cafeMenu);            // Menu (composite)
+allMenus.print();                  // prints the whole tree recursively
+```
+
+> **Composite Pattern** — composes objects into tree structures to represent part-whole hierarchies. Composite lets clients treat individual objects and compositions of objects uniformly.
+
+---
+
+## <Label color="teal">5</Label> The Trade-off: Safety vs. Uniformity
+
+The `UnsupportedOperationException` approach means both `Menu` and `MenuItem` expose every method in the component interface — even ones they don't support. A leaf will throw if you call `add()` on it.
+
+The alternative: separate `Leaf` and `Composite` interfaces with no shared unsupported methods. Callers are then forced to type-check (`instanceof`) before calling composite-only methods — which defeats the uniformity that makes Composite valuable.
+
+There is no free lunch: you choose between uniformity (single interface, runtime exceptions for unsupported ops) or safety (two interfaces, compile-time checking but `instanceof` in client code).
+
+---
+
+## <Label color="teal">6</Label> Where Iterator and Composite Combine
+
+A Composite tree often needs to be traversed. An Iterator that traverses a Composite tree is a natural combination:
+
+<FlowStep steps={[
+  { title: "Composite provides the tree structure", body: "Menus and items form a part-whole hierarchy with a uniform component interface." },
+  { title: "Iterator provides the traversal order", body: "CompositeMenuIterator wraps the tree and flattens it into a sequential stream using a stack, making tree traversal look like a simple hasNext/next loop." },
+  { title: "Client sees only the Iterator interface", body: "Whether the underlying structure is a flat array or a deeply nested menu tree is invisible to the printing code." },
+]} />
+
+<Callout color="teal">
+Composite and Iterator together are the foundation of every file system browser, every DOM tree walker, every scene graph renderer, and every nested list renderer. The patterns are independently useful but exceptionally powerful in combination.
+</Callout>

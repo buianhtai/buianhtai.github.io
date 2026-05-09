@@ -1,0 +1,129 @@
+---
+title: "Why B-Trees Dominate Database Storage"
+description: "Binary search trees work beautifully in memory. On disk, they're catastrophically slow. B-Trees solve both problems — high fanout collapses tree height, and page-aligned nodes eliminate random seeks."
+pubDate: 2026-05-08
+tags: ["database-internals", "b-tree", "storage-engines", "foundations"]
+lang: "en"
+category: "foundations"
+series: "software-foundations"
+seriesOrder: 21
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+
+B-Trees are over 50 years old — introduced in 1971 — and remain the dominant storage structure in relational databases, key-value stores, and filesystems. To understand why, you need to understand what came before them and exactly where it broke down.
+
+<HeroGrid items={[
+  { label: "O(log N) height", sublabel: "B-Tree lookup complexity", color: "#0891b2" },
+  { label: "High Fanout", sublabel: "Hundreds of children per node, not 2", color: "#059669" },
+  { label: "Separator Keys", sublabel: "Internal nodes guide, not store data", color: "#d97706" },
+  { label: "Split + Merge", sublabel: "How the tree stays balanced", color: "#7c3aed" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> Why Binary Search Trees Fail on Disk
+
+A binary search tree (BST) gives O(log₂ N) lookups in memory. For in-memory data structures, this is fine. For disk-based storage, it has two critical problems:
+
+**Problem 1 — Locality**: Nodes are inserted in arbitrary order. A newly created node may be written anywhere on disk, far from its parent. Following a child pointer often requires seeking to a random disk location. With a binary tree of height 30 over 10⁹ elements, a lookup requires 30 random seeks. On spinning disk, each seek takes ~10ms. 300ms for one lookup is unusable.
+
+**Problem 2 — Height**: BST fanout is 2. To store N elements with O(log₂ N) height, the tree needs log₂ N levels. For 1 billion records: log₂(10⁹) ≈ 30 levels, 30 disk seeks per lookup.
+
+The fix is obvious once stated: **increase fanout**. If each node can hold hundreds of children, the tree height drops to log₁₀₀(10⁹) = 4.5 — five seeks maximum. And because large nodes fit in disk pages, adjacent keys in a node have excellent locality.
+
+<DataTable
+  caption="BST vs B-Tree disk performance"
+  accent="teal"
+  headers={["Property", "Binary Search Tree", "B-Tree (order 100)"]}
+  rows={[
+    { "Property": "Fanout",          "Binary Search Tree": "2",           "B-Tree (order 100)": "~100-200" },
+    { "Property": "Height for 1B",   "Binary Search Tree": "~30 levels",  "B-Tree (order 100)": "~5 levels" },
+    { "Property": "Disk seeks",      "Binary Search Tree": "~30",         "B-Tree (order 100)": "~5" },
+    { "Property": "Node size",       "Binary Search Tree": "~40 bytes",   "B-Tree (order 100)": "~4-16 KB (one page)" },
+    { "Property": "Key locality",    "Binary Search Tree": "Poor (nodes scattered)", "B-Tree (order 100)": "Good (siblings on same page)" },
+  ]}
+/>
+
+---
+
+## <Label color="teal">2</Label> B-Tree Hierarchy
+
+A B-Tree is an N-ary tree that maintains sorted key order. It has three node types:
+
+- **Root**: the topmost node, may have 2 to N children
+- **Internal nodes**: hold separator keys that partition the key space; have M children where ⌈N/2⌉ ≤ M ≤ N
+- **Leaf nodes**: hold actual data records (or pointers to them); no children
+
+**Separator keys** in internal nodes are *routing keys* — each separator key K means "all keys in the left subtree are < K; all keys in the right subtree are ≥ K." The separator key may or may not actually exist as a data record.
+
+In a **B+ Tree** (the variant most databases use), all data records live in leaf nodes. Internal nodes contain only separator keys and child pointers. This means:
+
+1. Internal nodes can hold more keys — no data payload means more keys per page
+2. Range scans are efficient: leaf nodes are linked in a doubly-linked list
+3. Lookup always reaches a leaf: predictable I/O cost
+
+---
+
+## <Label color="teal">3</Label> Lookup Algorithm
+
+B-Tree lookup is a simple top-down traversal:
+
+```
+lookup(key):
+  node = root
+  while node is not leaf:
+    i = find rightmost separator key ≤ key in node
+    node = node.children[i]
+  return node.search(key)
+```
+
+The complexity at each level is O(log(fanout)) for the binary search within a node. Tree height is O(log_fanout(N)). Total: O(log N).
+
+---
+
+## <Label color="teal">4</Label> Node Splits
+
+When a node fills up (reaches its maximum key count), it must split before a new key can be inserted:
+
+<FlowStep steps={[
+  { title: "Identify the full node", body: "The leaf (or internal node) has reached its maximum capacity. An insert cannot proceed without splitting first." },
+  { title: "Split at the median key", body: "Divide the node's keys at the midpoint. The lower half stays in the original node; the upper half moves to a new sibling node. The median key is promoted to the parent as a new separator key." },
+  { title: "Update the parent", body: "The parent gains one new separator key and one new child pointer (to the new sibling). If the parent is also full, the split propagates upward." },
+  { title: "Split the root if needed", body: "If the root splits, a new root is created with one separator key (the median) and two children. This is the only way tree height increases." },
+]} />
+
+Splits always propagate upward and always terminate, because the root is the only node that can't push overflows up further — instead, it creates a new root.
+
+---
+
+## <Label color="teal">5</Label> Node Merges
+
+Deletes can cause nodes to fall below their minimum occupancy (⌈N/2⌉−1 keys). When this happens, the node must be merged:
+
+- **Borrow from a sibling**: if an adjacent sibling has more than the minimum keys, rotate one key through the parent
+- **Merge with a sibling**: if no sibling has surplus keys, merge the two siblings and pull the separator key down from the parent
+
+Merges can propagate upward just like splits. If merging reduces the root to zero keys, the single remaining child becomes the new root — tree height decreases.
+
+<Callout color="teal">
+B-Trees maintain their balance invariants through splits and merges, never through rotations (unlike AVL or red-black trees). The cost: splits and merges may require multiple page writes in one operation. The benefit: the structure stays naturally suited for on-disk page management, where the cost model rewards sequential within-page operations over pointer-chasing.
+</Callout>
+
+---
+
+## <Label color="teal">6</Label> Why B-Trees Are Ubiquitous
+
+The design elegantly solves the disk storage problem:
+
+1. **High fanout** (typically 100–500 per node) keeps the tree shallow — 3–5 levels for billions of records
+2. **Node = page**: one disk read loads an entire internal node with all its separator keys
+3. **Predictable I/O**: lookups always cost O(height) disk reads; height is predictable from record count and fanout
+4. **Range scans**: leaf-level linked list makes range queries efficient
+5. **In-place updates**: records update in their existing location; no log or compaction required for stable data
+
+The trade-off: B-Trees are **mutable**. In-place updates mean write amplification, and concurrent writers need careful locking. The next post covers the alternative: LSM Trees, which flip the trade-off by making everything immutable at the cost of read amplification.

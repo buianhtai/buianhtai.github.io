@@ -1,0 +1,128 @@
+---
+title: "Replication and Consistency Models"
+description: "Replication adds redundancy but forces a consistency trade-off. CAP theorem, linearizability, sequential consistency, causal consistency via vector clocks, session models, eventual consistency, tunable consistency, and CRDTs — the full spectrum."
+pubDate: 2026-05-08
+tags: ["database-internals", "distributed-systems", "consistency", "cap-theorem", "foundations"]
+lang: "en"
+category: "foundations"
+series: "software-foundations"
+seriesOrder: 30
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import LayerStack from '../../../components/mdx/LayerStack.astro';
+
+Replication — maintaining multiple copies of data across different nodes — is the fundamental mechanism for fault tolerance in distributed systems. But as soon as there are two copies of the same data, they can diverge. And the moment they diverge, you must decide: which one is "right"?
+
+This is the consistency problem. It is not a single problem — it is a family of problems, with a spectrum of answers ranging from "completely correct but slow" to "very fast but possibly stale."
+
+<HeroGrid items={[
+  { label: "Linearizability", sublabel: "Strongest: every operation appears instantaneous and globally ordered", color: "#0891b2" },
+  { label: "Causal Consistency", sublabel: "Operations that have a causal relationship are ordered", color: "#059669" },
+  { label: "Eventual Consistency", sublabel: "Weakest: replicas converge eventually if no new updates", color: "#d97706" },
+  { label: "CRDTs", sublabel: "Data types that merge deterministically without coordination", color: "#7c3aed" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> The CAP Theorem
+
+The CAP conjecture states that a distributed system cannot simultaneously provide all three of:
+
+- **C**onsistency: every read returns the most recent write (linearizable)
+- **A**vailability: every request to a non-failed node receives a response
+- **P**artition tolerance: the system continues operating despite network partitions
+
+In the presence of a partition, a system must choose between consistency (CP) and availability (AP):
+
+- **CP systems** prefer to fail requests rather than serve potentially stale data. An example: a consensus-based database that requires a quorum to proceed — it is unavailable if the partition means a quorum is impossible.
+- **AP systems** serve potentially stale data rather than fail requests. An example: a database that accepts writes and serves reads on any single replica — always available, but possibly serving outdated values.
+
+<Callout color="amber">
+CAP is often misunderstood. Consistency in CAP means linearizability — not ACID consistency (which is about transaction invariants). Availability in CAP means every nonfailed node responds to every request — not high availability in the SLA sense. Partition tolerance is not a choice you can trade away: partitions happen in real networks. The real trade-off is between linearizability and availability when partitions occur.
+</Callout>
+
+---
+
+## <Label color="teal">2</Label> Consistency Model Spectrum
+
+<LayerStack
+  layers={[
+    { tag: "C1", color: "teal",  title: "Linearizability (Strict)",    items: ["Every operation appears to execute instantaneously at some point between its start and completion", "Global total order exists; distributed system appears as a single sequential machine", "Most expensive: requires coordination for every operation", "Used in: etcd, ZooKeeper, Google Spanner"] },
+    { tag: "C2", color: "green", title: "Sequential Consistency",        items: ["All operations appear in some global order", "Each process's operations appear in program order within that global sequence", "Does NOT require real-time correspondence — can appear out of real time order across processes", "Weaker than linearizability; no concept of 'last write' in absolute terms"] },
+    { tag: "C3", color: "amber", title: "Causal Consistency",            items: ["Causally related operations (write-then-read) are seen in order by all nodes", "Concurrent operations (no causal link) may be seen in different orders by different nodes", "Vector clocks track causal dependencies", "Used in: Riak (with vector clocks), COPS, Bayou"] },
+    { tag: "C4", color: "rose",  title: "Eventual Consistency",          items: ["If no new updates, all replicas converge to the same state eventually", "Makes no ordering guarantees between concurrent operations", "Stale reads are possible and expected", "Used in: Cassandra (default), DynamoDB, Riak"] },
+  ]}
+  caption="Consistency model hierarchy: stronger = more coordination cost. Weaker = more availability."
+/>
+
+---
+
+## <Label color="teal">3</Label> Vector Clocks and Causal Consistency
+
+**Vector clocks** are the mechanism for tracking causal relationships in a distributed system. Each process maintains a vector of counters — one per process in the system. On each operation, the process increments its own counter. When sending a message, the current vector clock is attached. On receiving a message, the receiver merges (takes the max) of each component.
+
+Given two events A and B:
+- A happened-before B (A → B) if A's vector clock is strictly less than B's in all components
+- A and B are concurrent if neither's vector clock dominates the other's
+
+Causal consistency uses this to guarantee: if write W1 happened-before write W2, then any process that sees W2 must also have seen W1.
+
+<DataTable
+  caption="Consistency models and their trade-offs"
+  accent="teal"
+  headers={["Model", "Ordering guarantee", "Coordination cost", "Stale reads", "Typical use"]}
+  rows={[
+    { "Model": "Linearizability",       "Ordering guarantee": "Total real-time order",     "Coordination cost": "High",   "Stale reads": "Never",    "Typical use": "Metadata stores, leader election" },
+    { "Model": "Sequential",             "Ordering guarantee": "Total logical order",       "Coordination cost": "Medium", "Stale reads": "Never",    "Typical use": "Multi-core memory models" },
+    { "Model": "Causal",                 "Ordering guarantee": "Partial (causal chains)",   "Coordination cost": "Low",    "Stale reads": "Sometimes", "Typical use": "Social feeds, collaborative editing" },
+    { "Model": "Read-your-writes (session)", "Ordering guarantee": "Per-session",           "Coordination cost": "Low",    "Stale reads": "No (self)", "Typical use": "User profile updates" },
+    { "Model": "Eventual",               "Ordering guarantee": "None",                      "Coordination cost": "None",   "Stale reads": "Yes",      "Typical use": "DNS, shopping carts, counters" },
+  ]}
+/>
+
+---
+
+## <Label color="teal">4</Label> Session Models
+
+Between strong global consistency and eventual consistency, there are **session-level guarantees** that are often practical for user-facing applications:
+
+- **Read-your-writes**: a client always sees its own writes, even if replicas haven't synchronized yet.
+- **Monotonic reads**: once a client reads a value V, subsequent reads return V or something more recent — never an older value. Prevents "reading the past."
+- **Monotonic writes**: writes from a single client are executed in order by the system.
+- **Writes-follow-reads**: if a client reads V and then writes W, W is placed after V in the causal order.
+
+These session models are weaker than linearizability but stronger than pure eventual consistency. They give users a coherent experience (no going back in time) while allowing the system to scale by serving reads from replicas.
+
+---
+
+## <Label color="teal">5</Label> Tunable Consistency
+
+Systems like Apache Cassandra implement **tunable consistency**: clients specify the consistency level per operation using quorum parameters.
+
+Given N replicas, a write with consistency level W succeeds when W replicas acknowledge. A read with level R succeeds when R replicas respond. The key relationship:
+
+> **If W + R > N, reads and writes overlap on at least one replica — strongly consistent.**
+
+Common configurations:
+- **N=3, W=1, R=1**: maximum availability, minimum consistency (eventual)
+- **N=3, W=2, R=2**: quorum reads and writes (W+R=4 > N=3, strongly consistent)
+- **N=3, W=3, R=1**: all replicas must acknowledge writes (max durability, slow writes)
+- **N=3, W=1, R=3**: all replicas must respond to reads (max read freshness, slow reads)
+
+---
+
+## <Label color="teal">6</Label> Strong Eventual Consistency and CRDTs
+
+**Conflict-Free Replicated Data Types (CRDTs)** are data structures specifically designed to be safely merged from multiple replicas without coordination. The key insight: if the merge operation is commutative, associative, and idempotent (a join-semilattice), then any order of merging produces the same final state.
+
+Examples of CRDTs:
+- **G-Counter** (grow-only): a set of per-node counters; merge = take max of each. No conflicts possible.
+- **PN-Counter** (positive/negative): two G-counters; total = sum of positives minus sum of negatives.
+- **OR-Set** (observed-remove set): tracks unique tags per element; concurrent adds and removes resolve by keeping adds.
+- **LWW-Element-Set** (last-write-wins): attaches timestamps; merge = keep the higher timestamp.
+
+CRDTs provide **strong eventual consistency**: replicas that receive the same updates (in any order) converge to the same state. No coordination, locking, or consensus required. Used in Redis (CRDT module), Riak (PN-Counters, OR-Sets), and collaborative editing tools like Figma.

@@ -1,0 +1,119 @@
+---
+title: "Failure Detection in Distributed Systems"
+description: "Failure detection is the distributed system's immune system. How do you know a node is dead if it might just be slow? Heartbeats, pings, the phi-accrual algorithm, and gossip-based detection — each with different false-positive trade-offs."
+pubDate: 2026-05-08
+tags: ["database-internals", "distributed-systems", "failure-detection", "foundations"]
+lang: "en"
+category: "foundations"
+series: "software-foundations"
+seriesOrder: 28
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+
+> If a tree falls in a forest and no one is around to hear it, does it make a sound?
+
+This is exactly the problem failure detection solves: how does a distributed system reliably determine that a process has failed, when the only observable evidence is the absence of messages?
+
+<HeroGrid items={[
+  { label: "Completeness", sublabel: "Every failed process must eventually be detected", color: "#0891b2" },
+  { label: "Accuracy", sublabel: "No live process should be wrongly suspected", color: "#059669" },
+  { label: "Efficiency", sublabel: "Detection latency should be minimized", color: "#d97706" },
+  { label: "Gossip-based", sublabel: "Distribute detection across the cluster to avoid central failures", color: "#7c3aed" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> The Core Challenge
+
+Detecting failures in an asynchronous distributed system is fundamentally impossible with certainty (a consequence of FLP impossibility). The system cannot distinguish between:
+- A process that has crashed
+- A process that is running slowly
+- A message that was delayed on the network
+
+This means failure detectors must make a **trade-off**:
+- **False positives**: suspecting a live process as dead → triggers unnecessary failovers
+- **False negatives**: failing to detect a dead process → increases latency, blocks progress
+
+A failure detector is a local subsystem on each node that monitors other nodes and maintains a list of suspected or confirmed failures. All practical failure detectors accept the possibility of false positives in exchange for bounded detection time.
+
+---
+
+## <Label color="teal">2</Label> Heartbeats and Pings
+
+The simplest approach: processes periodically send "I'm alive" messages (heartbeats) or respond to "are you alive?" queries (pings).
+
+**Ping-based detection**:
+1. Process P1 sends a ping to P2 every T seconds
+2. P2 must respond within timeout D
+3. If P2 fails to respond after R consecutive pings, P1 marks P2 as suspected
+
+**Heartbeat-based detection**:
+1. P2 proactively sends heartbeats to P1 every T seconds
+2. P1 tracks last heartbeat timestamp for P2
+3. If no heartbeat arrives within deadline D from last seen, P1 suspects P2
+
+Both approaches have strong completeness (every actual failure will eventually be detected). The main weakness is **precision**: the timeout must be carefully tuned. Too short → false positives from network jitter. Too long → slow detection of real failures.
+
+<Callout color="amber">
+Akka, the popular distributed actor framework, uses a deadline failure detector: a process is declared dead if it fails to send a heartbeat within a fixed time window. This is simple but not adaptive — a temporarily overloaded node generating GC pauses can be incorrectly marked as failed.
+</Callout>
+
+---
+
+## <Label color="teal">3</Label> Timeout-Free Failure Detector
+
+The Heartbeat algorithm avoids timeouts entirely. Instead of declaring a process dead after a timeout, it maintains **heartbeat counters** — each process keeps a vector of the most recent heartbeat count it has received from each other process.
+
+Applications can detect process failures by observing that a counter has stopped incrementing. This approach is completely asynchronous — no timing assumptions are made. The trade-off is that the application must tolerate uncertainty: it can never be definitively sure a process is dead, only that it has stopped producing heartbeats.
+
+---
+
+## <Label color="teal">4</Label> Phi-Accrual Failure Detector
+
+The phi-accrual failure detector replaces binary (suspected/not-suspected) with a continuous **suspicion level φ (phi)**.
+
+The algorithm works by:
+1. Sampling the inter-arrival time distribution of heartbeats from each peer
+2. Computing the probability that a heartbeat that hasn't arrived yet represents a failure, given the observed distribution
+3. Expressing this as φ: a value that increases the longer no heartbeat arrives
+
+Rather than triggering failure at a fixed timeout, applications can set their own threshold φ_threshold:
+- Low threshold (φ < 3): declare failure quickly, accept more false positives
+- High threshold (φ > 8): wait longer, fewer false positives but slower detection
+
+**Key advantage**: the algorithm automatically adapts to changing network conditions. In a network with high variance in latency, the failure detector widens its thresholds automatically. This is what Apache Cassandra uses for its failure detection.
+
+<DataTable
+  caption="Failure detector comparison"
+  accent="teal"
+  headers={["Algorithm", "Binary/Continuous", "Adaptive", "FP risk", "Used in"]}
+  rows={[
+    { "Algorithm": "Ping/Heartbeat timeout", "Binary/Continuous": "Binary",     "Adaptive": "No",  "FP risk": "High under load",    "Used in": "Akka, many simple systems" },
+    { "Algorithm": "Phi-Accrual",            "Binary/Continuous": "Continuous", "Adaptive": "Yes", "FP risk": "Low (self-adjusting)", "Used in": "Apache Cassandra" },
+    { "Algorithm": "Gossip-based",           "Binary/Continuous": "Binary",     "Adaptive": "No",  "FP risk": "Medium",              "Used in": "Riak, ScyllaDB" },
+  ]}
+/>
+
+---
+
+## <Label color="teal">5</Label> Outsourced Heartbeats and Gossip
+
+A weakness of direct ping/heartbeat detection: process P1 can only report on the health of processes it directly contacts. P1's own failure removes one source of monitoring from the cluster.
+
+**Outsourced heartbeats**: instead of checking P2 directly, P1 asks a third party (P3) to check P2 on P1's behalf. If P3 can reach P2 but P1 cannot, it is likely a P1-P2 link failure rather than P2 having crashed.
+
+**Gossip-based failure detection**: failure information is propagated using epidemic (gossip) protocols rather than direct pings. Each process maintains a failure vector for the entire cluster, and periodically exchanges this vector with random peers. Failures propagate logarithmically — in a cluster of N nodes, information reaches all nodes in O(log N) rounds.
+
+This approach eliminates the single point of failure present in centralized monitoring, but introduces eventual consistency in the failure information: at any moment, different nodes may have slightly different views of which nodes are alive.
+
+---
+
+## <Label color="teal">6</Label> Reversing the Problem
+
+Rather than a central process detecting failures in others, we can reverse the statement. The SWIM protocol (Scalable Weakly-consistent Infection-style process group Membership) uses a combination of pings, indirect pings, and gossip to achieve failure detection without any central coordinator.
+
+SWIM detects failures in O(log N) time with high probability while keeping the message overhead per node constant — a major improvement over pairwise heartbeats which require O(N) messages per round. Systems like HashiCorp Consul and Serf use SWIM-based membership for production cluster management.

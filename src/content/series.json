@@ -26,26 +26,5 @@
     "description": "First-principles coverage of CS fundamentals, systems internals, distributed systems, design patterns, and engineering craft — the bedrock beneath every framework and tool.",
     "lang": "multi",
     "link": null
-  },
-  {
-    "id": "head-first-design-patterns",
-    "title": "Head First Design Patterns",
-    "description": "Chapter-by-chapter notes on the classic Freeman & Freeman text — Strategy, Observer, Decorator, Factory, Singleton, Command, Adapter, Template Method, Iterator, Composite, State, Proxy, and compound patterns.",
-    "lang": "Java",
-    "link": null
-  },
-  {
-    "id": "code-simplicity",
-    "title": "Code Simplicity",
-    "description": "Notes on Max Kanat-Alexander's science of software design — the equation of software design, change management, simplicity vs complexity, and the laws every programmer should know.",
-    "lang": "multi",
-    "link": null
-  },
-  {
-    "id": "database-internals",
-    "title": "Database Internals",
-    "description": "Chapter-by-chapter deep dives into Alex Petrov's Database Internals — B-Trees, LSM trees, file formats, transaction recovery, and distributed consensus algorithms.",
-    "lang": "multi",
-    "link": null
   }
 ]

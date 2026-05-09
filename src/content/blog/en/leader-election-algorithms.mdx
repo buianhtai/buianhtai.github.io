@@ -1,0 +1,123 @@
+---
+title: "Leader Election Algorithms Explained"
+description: "Distributed systems need a coordinator. Leader election designates one. This covers the Bully algorithm, next-in-line failover, ring election, the invitation algorithm — each with different safety and liveness trade-offs."
+pubDate: 2026-05-08
+tags: ["database-internals", "distributed-systems", "leader-election", "foundations"]
+lang: "en"
+category: "foundations"
+series: "software-foundations"
+seriesOrder: 29
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+
+Leader election is the process by which a group of distributed nodes selects one member to act as coordinator. The leader makes decisions, orders messages, and drives the system forward — reducing the expensive peer-to-peer coordination that would otherwise be required for every operation.
+
+<HeroGrid items={[
+  { label: "Liveness", sublabel: "An election must eventually complete and produce a leader", color: "#0891b2" },
+  { label: "Safety", sublabel: "At most one leader at a time (split-brain prevention)", color: "#dc2626" },
+  { label: "Determinism", sublabel: "Exactly one leader must emerge from each election", color: "#059669" },
+  { label: "Notification", sublabel: "All nodes must learn who the new leader is", color: "#d97706" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> Why Leader Election?
+
+Distributed systems without a leader must coordinate every decision peer-to-peer. This is expensive: a decision involving N participants requires O(N²) messages in the worst case. With a leader, many decisions can be made with O(N) messages (leader broadcasts to all) or even O(1) (client sends to leader, leader responds).
+
+A leader process typically:
+- Holds the authoritative global state
+- Orders and sequences operations (important for consistency)
+- Coordinates recovery after node failures
+- Drives consensus rounds in algorithms like Paxos and Raft
+
+The leader role is not permanent — leaders eventually crash or become unreachable. When this happens, an election must be triggered to choose a successor. Election algorithms must be both **live** (eventually produce a new leader) and, ideally, **safe** (avoid a period with two leaders).
+
+<Callout color="amber">
+Leader election and distributed locking look similar but have an important difference: a lock holder doesn't need to be known to other processes — only that the lock is eventually released. A leader must be known to all processes and remains in its role until it stops. Long-lived leaders are preferred (reducing re-election overhead), while lock holders should release locks quickly.
+</Callout>
+
+---
+
+## <Label color="teal">2</Label> Bully Algorithm
+
+The Bully algorithm (Garcia-Molina, 1982) elects the process with the highest ID as leader ("bullying" lower-ID processes into submission).
+
+**Protocol**:
+1. Process P notices the current leader has failed (via failure detector)
+2. P sends an ELECTION message to all processes with higher IDs
+3. If any higher-ID process responds, P stops — the responder takes over
+4. If no higher-ID process responds (timeout), P declares itself leader and sends COORDINATOR messages to all lower-ID processes
+
+**Properties**:
+- Guarantees the highest-ID alive process always wins
+- Simple to understand and implement
+- Problem: generates O(N²) messages in the worst case
+- Problem: a process recovering from a temporary failure may repeatedly trigger elections, causing instability
+
+---
+
+## <Label color="teal">3</Label> Next-In-Line Failover
+
+A simpler approach: the leader maintains a pre-ordered list of candidates. When the leader fails, the next candidate on the list takes over immediately — no election required.
+
+**Advantages**: minimal election latency, no message overhead during normal operation
+
+**Disadvantages**: the candidate list must be maintained and agreed upon in advance; if candidates also fail in order, multiple rapid failovers may be needed
+
+This is the approach used in many primary/replica database setups: a designated replica is pre-configured as the next leader.
+
+---
+
+## <Label color="teal">4</Label> Candidate/Ordinary Optimization
+
+An optimization for large clusters: divide nodes into **candidates** (nodes eligible for leadership) and **ordinary** nodes (follower-only). Only candidates participate in elections, dramatically reducing the message complexity.
+
+Candidates are typically chosen for reliability properties (e.g., nodes with the most up-to-date logs in Raft). Ordinary nodes simply follow whoever is declared leader without participating in the election protocol.
+
+---
+
+## <Label color="teal">5</Label> Ring Algorithm
+
+Nodes are logically arranged in a ring. When a leader failure is detected:
+1. The detecting node sends an ELECTION message with its own ID around the ring
+2. Each node that receives the message appends its own ID if its ID is higher than the current maximum in the message
+3. When the message completes a full circuit and returns to the initiator, the highest ID in the message is the new leader
+4. A COORDINATOR message with the new leader's ID is sent around the ring
+
+**Properties**: O(N) messages per election (much better than Bully's O(N²)), but requires a known ring topology. Multiple nodes detecting the leader failure simultaneously can trigger concurrent elections, which must be resolved.
+
+---
+
+## <Label color="teal">6</Label> Invitation Algorithm
+
+Rather than a single election, the Invitation algorithm allows nodes to form groups and then merge groups together:
+
+1. Each node that hasn't joined a group starts as a group-of-one and invites neighbors to join its group
+2. Groups merge by negotiating which group's leader becomes the new merged group's leader
+3. This continues until all nodes are in a single group with a single leader
+
+**Key property**: the algorithm can make progress even if not all nodes are reachable at once. Partial groups can elect leaders and merge later as connectivity is restored. This makes it more resilient in scenarios with intermittent network partitions.
+
+---
+
+## <Label color="teal">7</Label> Comparison
+
+<DataTable
+  caption="Leader election algorithm comparison"
+  accent="teal"
+  headers={["Algorithm", "Message complexity", "Safety (at most 1 leader)", "Topology requirement"]}
+  rows={[
+    { "Algorithm": "Bully",                    "Message complexity": "O(N²)",      "Safety (at most 1 leader)": "No (possible split-brain)",    "Topology requirement": "None" },
+    { "Algorithm": "Next-in-line",             "Message complexity": "O(1)",       "Safety (at most 1 leader)": "Yes (pre-ordered list)",        "Topology requirement": "None" },
+    { "Algorithm": "Ring",                     "Message complexity": "O(N)",       "Safety (at most 1 leader)": "No (concurrent elections)",    "Topology requirement": "Ring" },
+    { "Algorithm": "Invitation",               "Message complexity": "O(N log N)", "Safety (at most 1 leader)": "Yes (group merging guarantees)", "Topology requirement": "None" },
+    { "Algorithm": "Raft (consensus-based)",   "Message complexity": "O(N)",       "Safety (at most 1 leader)": "Yes (term-based guarantees)",   "Topology requirement": "None" },
+  ]}
+/>
+
+Most production distributed databases don't use standalone leader election algorithms — instead they embed election into a consensus algorithm like Raft, which provides both safety guarantees (terms prevent two leaders in the same term) and log consistency guarantees (only the most up-to-date candidate can become leader).

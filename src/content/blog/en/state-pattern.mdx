@@ -1,0 +1,154 @@
+---
+title: "The State Pattern: Objects That Behave Differently by State"
+description: "State extracts each behavioral mode into its own class, turning a fragile nest of conditionals into a clean object graph where adding new states means adding classes — not editing existing ones."
+pubDate: 2026-05-08
+tags: ["design-patterns", "state", "oo-design", "behavioral", "java", "foundations"]
+lang: "en"
+category: "foundations"
+series: "software-foundations"
+seriesOrder: 43
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import StateMachine from '../../../components/mdx/StateMachine.astro';
+
+When an object's behavior depends on its current state — and it has several states — the naïve implementation is a nest of conditionals that punishes every future change. State pattern replaces those conditionals with a set of classes, one per state, that each know what to do when called.
+
+<HeroGrid items={[
+  { label: "One class per state", sublabel: "All behavior for a state lives in one place", color: "#0891b2" },
+  { label: "OCP win", sublabel: "Add new state = new class, zero edits to existing", color: "#059669" },
+  { label: "Context delegates", sublabel: "GumballMachine holds current state, calls it", color: "#d97706" },
+  { label: "State ≠ Strategy", sublabel: "Transitions managed inside, not by the client", color: "#7c3aed" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> The Conditional Explosion
+
+A gumball machine has four states: `NO_QUARTER`, `HAS_QUARTER`, `SOLD`, `SOLD_OUT`. The first implementation uses integer constants and branches every action method across every state:
+
+```java
+public void insertQuarter() {
+    if (state == HAS_QUARTER) {
+        System.out.println("You can't insert another quarter");
+    } else if (state == SOLD_OUT) {
+        System.out.println("You can't insert a quarter, the machine is sold out");
+    } else if (state == SOLD) {
+        System.out.println("Please wait, we're already giving you a gumball");
+    } else if (state == NO_QUARTER) {
+        state = HAS_QUARTER;
+        System.out.println("You inserted a quarter");
+    }
+}
+```
+
+Multiply four actions (`insertQuarter`, `ejectQuarter`, `turnCrank`, `dispense`) by four states and you have sixteen branches to maintain. Now a new requirement arrives: 1-in-10 chance of winning two gumballs — a fifth state (`WINNER`). Every existing method needs a fifth branch audited. The conditional approach doesn't just resist change — it punishes it.
+
+---
+
+## <Label color="teal">2</Label> The State Pattern
+
+Extract each state into its own class. Define a `State` interface with one method per action. The context (`GumballMachine`) holds a reference to the current state object and delegates:
+
+```java
+public interface State {
+    void insertQuarter();
+    void ejectQuarter();
+    void turnCrank();
+    void dispense();
+}
+
+public class HasQuarterState implements State {
+    private GumballMachine gumballMachine;
+
+    public void insertQuarter() {
+        System.out.println("You can't insert another quarter");
+    }
+    public void ejectQuarter() {
+        System.out.println("Quarter returned");
+        gumballMachine.setState(gumballMachine.getNoQuarterState());
+    }
+    public void turnCrank() {
+        System.out.println("You turned...");
+        Random random = new Random(System.currentTimeMillis());
+        int winner = random.nextInt(10);
+        if (winner == 0 && gumballMachine.getCount() > 1) {
+            gumballMachine.setState(gumballMachine.getWinnerState());
+        } else {
+            gumballMachine.setState(gumballMachine.getSoldState());
+        }
+    }
+    public void dispense() {
+        System.out.println("No gumball dispensed");
+    }
+}
+```
+
+The `GumballMachine` context just delegates every action to the current state:
+
+```java
+public void insertQuarter() { state.insertQuarter(); }
+public void ejectQuarter()  { state.ejectQuarter(); }
+public void turnCrank()     { state.turnCrank(); state.dispense(); }
+```
+
+Adding `WinnerState` requires one new class — no edits to any existing state.
+
+---
+
+## <Label color="teal">3</Label> The State Machine Visualized
+
+<StateMachine
+  title="Gumball Machine — state transitions"
+  states={[
+    { id: "no_q",     label: "No Quarter",   sub: "waiting for coin",    row: 1, col: 2 },
+    { id: "has_q",    label: "Has Quarter",  sub: "ready to dispense",   row: 2, col: 3 },
+    { id: "sold",     label: "Gumball Sold", sub: "dispensing",          row: 2, col: 1 },
+    { id: "sold_out", label: "Sold Out",     sub: "empty machine",       row: 3, col: 2 },
+    { id: "winner",   label: "Winner!",      sub: "dispense 2 gumballs", row: 1, col: 4 },
+  ]}
+  transitions={[
+    { from: "no_q",    to: "has_q",    label: "insertQuarter()" },
+    { from: "has_q",   to: "no_q",    label: "ejectQuarter()" },
+    { from: "has_q",   to: "sold",    label: "turnCrank() [normal]" },
+    { from: "has_q",   to: "winner",  label: "turnCrank() [1-in-10]" },
+    { from: "sold",    to: "no_q",    label: "dispense() [count > 0]" },
+    { from: "sold",    to: "sold_out",label: "dispense() [count == 0]" },
+    { from: "winner",  to: "no_q",    label: "dispense() 2 gumballs [count > 1]" },
+    { from: "winner",  to: "sold_out",label: "dispense() [count <= 1]" },
+  ]}
+/>
+
+---
+
+## <Label color="teal">4</Label> Formal Definition
+
+> **State Pattern** — allows an object to alter its behavior when its internal state changes. The object will appear to change its class.
+
+The appearance of changing class comes from the runtime dispatch: the same method call on the same object returns completely different behavior when the state field holds a different object.
+
+---
+
+## <Label color="teal">5</Label> State vs. Strategy — The Critical Difference
+
+State and Strategy are structurally identical (context + interface + concrete implementations). What separates them:
+
+<DataTable
+  caption="State vs. Strategy"
+  accent="teal"
+  headers={["Dimension", "State", "Strategy"]}
+  rows={[
+    { "Dimension": "Who drives transitions",    "State": "The state classes themselves (internal)", "Strategy": "The client code (external)" },
+    { "Dimension": "When does it swap",         "State": "When the object's lifecycle progresses",  "Strategy": "At construction time or explicit client call" },
+    { "Dimension": "Do states know each other", "State": "Yes — HasQuarterState transitions to SoldState", "Strategy": "No — strategies are interchangeable, independent" },
+    { "Dimension": "Primary goal",              "State": "Eliminate conditionals for state-dependent behavior", "Strategy": "Make algorithms interchangeable" },
+  ]}
+/>
+
+<Callout color="teal">
+State is the right tool when you have an object whose behavior changes predictably based on a lifecycle — orders, traffic lights, vending machines, workflows, document approval chains. If the object doesn't have a natural state lifecycle — it just needs a pluggable algorithm — Strategy fits better.
+</Callout>

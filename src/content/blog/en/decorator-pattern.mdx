@@ -1,0 +1,137 @@
+---
+title: "The Decorator Pattern: Extending Behavior Without Subclassing"
+description: "When inheritance for adding features causes a class explosion, Decorator wraps objects at runtime — composing behaviors like LEGO blocks rather than baking them in at compile time."
+pubDate: 2026-05-08
+tags: ["design-patterns", "decorator", "open-closed", "java", "foundations"]
+lang: "en"
+category: "foundations"
+series: "software-foundations"
+seriesOrder: 36
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+
+Inheritance is a blunt tool for feature combination. If you have three beverage bases and five condiment add-ons, inheritance leads to 3×2⁵ = 96 subclasses. The Decorator pattern composes features at runtime instead, keeping the class count at 3 + 5 = 8.
+
+<HeroGrid items={[
+  { label: "Open-Closed Principle", sublabel: "Open for extension, closed for modification", color: "#0891b2" },
+  { label: "Composition > Inheritance", sublabel: "Wrap objects rather than subclass them", color: "#059669" },
+  { label: "Transparent wrapping", sublabel: "Decorator IS-A what it wraps", color: "#d97706" },
+  { label: "Java I/O", sublabel: "Decorator throughout java.io", color: "#7c3aed" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> The Subclass Explosion
+
+A coffee shop sells Espresso, HouseBlend, and DarkRoast. Add condiments — milk, soy, mocha, whip — and the menu explodes if you subclass for every combination: EspressoWithMilk, EspressoWithMilkAndMocha, HouseBlendWithSoy... You cannot add a new condiment without touching the hierarchy.
+
+Worse: maintenance becomes impossible. Changing the price of mocha means finding every class that bakes mocha into its name.
+
+The inheritance approach encodes what should be *runtime configuration* into *compile-time class structure*.
+
+---
+
+## <Label color="teal">2</Label> The Decorator Solution
+
+A Decorator wraps an existing object, implements the same interface, and adds behavior before or after delegating:
+
+```java
+public abstract class CondimentDecorator extends Beverage {
+    protected Beverage beverage;  // the thing being wrapped
+    public abstract String getDescription();
+}
+
+public class Mocha extends CondimentDecorator {
+    public Mocha(Beverage beverage) {
+        this.beverage = beverage;
+    }
+    public String getDescription() {
+        return beverage.getDescription() + ", Mocha";
+    }
+    public double cost() {
+        return beverage.cost() + 0.20;
+    }
+}
+```
+
+Composing at runtime:
+
+```java
+Beverage beverage = new Espresso();
+beverage = new Mocha(beverage);         // wrap with Mocha
+beverage = new Mocha(beverage);         // double mocha
+beverage = new Whip(beverage);          // and whip
+System.out.println(beverage.getDescription() + " $" + beverage.cost());
+// → "Espresso, Mocha, Mocha, Whip $1.99"
+```
+
+The wrapping stack is a chain. Each layer calls the layer beneath it. The final cost sums all layers. Add a new condiment: add one class, touch nothing else.
+
+---
+
+## <Label color="teal">3</Label> The Open-Closed Principle
+
+> **Classes should be open for extension, but closed for modification.**
+
+Decorator is the canonical example. Adding Soy as a condiment extends behavior (open for extension) without editing `Espresso`, `HouseBlend`, or any existing decorator (closed for modification).
+
+The principle is not about locking code — it's about identifying where your extension points are and building them explicitly. Extension through wrapping is safer than extension through editing, because you can add a wrapper without fear of breaking existing behavior.
+
+---
+
+## <Label color="teal">4</Label> Why Decorator Works: The IS-A Trick
+
+The key structural requirement: **a decorator must implement the same type as the component it wraps**. `Mocha extends Beverage`. That means a `Mocha`-wrapped `Espresso` is itself a `Beverage` — so it can be wrapped again by another decorator.
+
+This IS-A relationship is *not* for polymorphism in the traditional sense. It's for type compatibility with the wrapping mechanism. The runtime dispatch flows through the delegation chain (`beverage.cost()`), not through virtual dispatch on the decorator itself.
+
+---
+
+## <Label color="teal">5</Label> Java I/O: Decorator Everywhere
+
+`java.io` is built on Decorator. Every reader/writer wraps another:
+
+```java
+InputStream in = new FileInputStream("data.txt");
+in = new BufferedInputStream(in);    // add buffering
+in = new DataInputStream(in);        // add typed reads
+
+DataInputStream data = new DataInputStream(
+    new BufferedInputStream(
+        new FileInputStream("data.txt")));
+int value = data.readInt();  // reads a 4-byte int, buffered, from file
+```
+
+| Wrapper class | Behavior added |
+|---|---|
+| `BufferedInputStream` | Reads chunks into a buffer, reduces I/O calls |
+| `DataInputStream` | Reads primitive types (`readInt`, `readDouble`) |
+| `GZIPInputStream` | Decompresses on the fly |
+| `CipherInputStream` | Decrypts on the fly |
+
+You could write a `LowercaseInputStream` that converts bytes to lowercase, wrapping any existing `InputStream` — without touching a single existing class.
+
+---
+
+## <Label color="teal">6</Label> Decorator Trade-offs
+
+<DataTable
+  caption="Decorator — benefits and costs"
+  accent="teal"
+  headers={["Benefit", "Cost"]}
+  rows={[
+    { "Benefit": "Add features without editing existing classes",     "Cost": "More objects in the system; wrapping chains can be deep" },
+    { "Benefit": "Compose arbitrary feature combinations at runtime", "Cost": "Instantiation code (new A(new B(new C()))) can look noisy" },
+    { "Benefit": "Each layer is independently testable",             "Cost": "instanceof checks break (you see Decorator, not component)" },
+    { "Benefit": "Open-Closed Principle satisfied",                  "Cost": "Easy to mis-apply when subclassing would be simpler" },
+  ]}
+/>
+
+<Callout color="teal">
+Decorator is the right tool when your features are independent dimensions that can combine freely. If features are not independent — if adding milk changes what mocha means — the composition model breaks down and you need a different approach.
+</Callout>

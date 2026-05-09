@@ -1,0 +1,146 @@
+---
+title: "Compound Patterns and MVC"
+description: "Patterns work best in combination. MVC assembles Observer, Strategy, and Composite into the compound pattern that powers nearly every interactive application ever built."
+pubDate: 2026-05-08
+tags: ["design-patterns", "mvc", "compound-patterns", "observer", "strategy", "composite", "foundations"]
+lang: "en"
+category: "foundations"
+series: "software-foundations"
+seriesOrder: 45
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import ArchDiagram from '../../../components/mdx/ArchDiagram.astro';
+import SequenceDiagram from '../../../components/mdx/SequenceDiagram.astro';
+
+No pattern exists in isolation. Real systems combine them — and the combinations develop their own character. The most important compound pattern in software is MVC: Model, View, Controller. It bundles Observer, Strategy, and Composite into an architectural pattern that cleanly separates state, display, and input handling.
+
+<HeroGrid items={[
+  { label: "MVC = 3 Patterns", sublabel: "Observer + Strategy + Composite", color: "#0891b2" },
+  { label: "Separation", sublabel: "Model never imports View or Controller", color: "#059669" },
+  { label: "Multiple Views", sublabel: "Any number of views observe the same model", color: "#d97706" },
+  { label: "Swappable Controller", sublabel: "Strategy: change controller, change behavior", color: "#7c3aed" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> Patterns Combining: The Duck Simulator
+
+Before MVC, consider a Duck Simulator that accumulates patterns naturally as requirements grow:
+
+<FlowStep steps={[
+  { title: "Duck interface + concrete ducks", body: "Simple Mallard, Redhead, Duck Call quacks. Strategy: quackable behavior encapsulated as Quackable." },
+  { title: "Geese want to join", body: "Goose honks, not quacks. Adapter: GooseAdapter wraps Goose and implements Quackable. No goose class modified." },
+  { title: "Count all quacks", body: "Decorator: QuackCounter wraps any Quackable and increments a static counter. No duck class touched." },
+  { title: "Control creation", body: "Abstract Factory: DuckFactory and CountingDuckFactory produce Quackables — factory decides whether to wrap with QuackCounter." },
+  { title: "Manage flocks", body: "Composite: Flock implements Quackable and holds a list of Quackables. quack() iterates all. Flocks nest inside other flocks." },
+  { title: "Observe individual quacks", body: "Observer: Quackologist registers on specific Quackables. Each concrete duck notifies its observers on every quack." },
+]} />
+
+Six patterns. One simulator. The key insight: they didn't fight each other. Observer, Decorator, Composite, and Adapter layer without interference because they target orthogonal concerns.
+
+---
+
+## <Label color="teal">2</Label> MVC as a Compound Pattern
+
+<ArchDiagram
+  title="MVC — pattern responsibilities"
+  direction="horizontal"
+  nodes={[
+    { id: "model",      label: "Model",      sub: "domain state + logic",           color: "teal"  },
+    { id: "view",       label: "View",       sub: "displays state, captures input",  color: "amber" },
+    { id: "controller", label: "Controller", sub: "translates input → model calls",  color: "blue"  },
+  ]}
+  edges={[
+    { from: "model",      to: "view",       label: "Observer (notifies)" },
+    { from: "view",       to: "controller", label: "user gestures" },
+    { from: "controller", to: "model",      label: "Strategy (acts on)" },
+    { from: "view",       to: "model",      label: "reads state" },
+  ]}
+/>
+
+| Pattern | Role in MVC |
+|---|---|
+| **Observer** | Model notifies View(s) of state changes. Multiple views can observe one model. Model never imports the view. |
+| **Strategy** | The controller is the view's strategy for responding to user input. Swap the controller and the view behaves differently without a line change in the view itself. |
+| **Composite** | Complex views are trees of nested UI components (panels, buttons, text fields). Each implements the same display interface. |
+
+---
+
+## <Label color="teal">3</Label> A Concrete MVC Example: BPM Controller
+
+A BPM (beats per minute) controller: a Model generates a heartbeat at a configurable BPM, a View displays controls and current BPM, a Controller translates button clicks into model calls.
+
+**Model** exposes:
+```java
+public interface BeatModelInterface {
+    void initialize();
+    void on(); void off();
+    void setBPM(int bpm);
+    int getBPM();
+    void registerObserver(BeatObserver o);
+    void removeObserver(BeatObserver o);
+}
+```
+
+**View** registers as an Observer. On notification it pulls current BPM and redraws:
+```java
+public void updateBPM() {
+    int bpm = model.getBPM();
+    bpmOutputLabel.setText("Current BPM: " + bpm);
+}
+```
+
+**Controller** receives user input and calls the model:
+```java
+public void actionPerformed(ActionEvent event) {
+    if (event.getSource() == setBPMButton) {
+        model.setBPM(Integer.parseInt(bpmTextField.getText()));
+    } else if (event.getSource() == increaseBPMButton) {
+        model.setBPM(model.getBPM() + 1);
+    }
+}
+```
+
+The Model never mentions `bpmOutputLabel`. The View never contains business logic. The Controller never reaches into `bpmOutputLabel` directly. Three clean boundaries.
+
+---
+
+## <Label color="teal">4</Label> Request Flow Through MVC
+
+<SequenceDiagram
+  title="User increments BPM"
+  actors={["User", "View", "Controller", "Model", "View (observer)"]}
+  messages={[
+    { from: "User",           to: "View",            label: "clicks '+' button" },
+    { from: "View",           to: "Controller",      label: "actionPerformed(event)" },
+    { from: "Controller",     to: "Model",           label: "setBPM(current + 1)" },
+    { from: "Model",          to: "View (observer)", label: "notifyObservers()" },
+    { from: "View (observer)",to: "Model",           label: "getBPM() [pull]" },
+    { from: "View (observer)",to: "View (observer)", label: "redraw label with new BPM" },
+  ]}
+/>
+
+The model changes → observers are notified → views pull the updated state → display updates. The controller is just a pass-through; it handles no display logic. The view handles no business logic.
+
+---
+
+## <Label color="teal">5</Label> MVC and the Web
+
+Web MVC (Spring MVC, Rails, Django, Laravel) follows the same structure:
+
+| Desktop MVC | Web MVC |
+|---|---|
+| View: Swing panel | View: HTML template |
+| Controller: ActionListener | Controller: HTTP handler (servlet, action) |
+| Model: Java object | Model: database-backed domain object |
+| Observer notification | HTTP redirect / re-render |
+
+The Observer mechanism is replaced by the request-response cycle (the browser re-requests the page), but the separation of concerns is identical. The controller receives the request, calls the model, then tells the view to render with the updated model state.
+
+<Callout color="teal">
+MVC is old — it originated in Smalltalk in the late 1970s — and it is still the dominant architecture for interactive applications because the separation it enforces is genuinely correct. Keeping model state, display logic, and input handling in separate layers means you can change any one without touching the others. That's not a pattern; it's a fact about the independence of those concerns.
+</Callout>

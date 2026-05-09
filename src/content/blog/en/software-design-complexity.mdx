@@ -1,0 +1,94 @@
+---
+title: "Complexity: The Enemy of Maintainable Code"
+description: "Complexity builds on complexity non-linearly. Here are the seven sources of complexity in software systems, criteria for evaluating technology choices, and the three conditions that justify a full rewrite."
+pubDate: 2026-05-08
+tags: ["software-design", "complexity", "foundations"]
+lang: "en"
+category: "foundations"
+series: "software-foundations"
+seriesOrder: 108
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+
+The horror stories in software are almost always the same: "we've been working on this for five years and it's still not done," "we can't ship fast enough to keep up." These aren't caused by bad luck or difficult requirements. They're caused by complexity building on complexity, compounding non-linearly until forward progress becomes nearly impossible. I've seen it happen. The strange thing is how predictable it is once you understand the mechanism.
+
+<HeroGrid items={[
+  { label: "Non-linear", sublabel: "Adding 1 feature costs N×existing features to coordinate", color: "#0891b2" },
+  { label: "7 Sources", sublabel: "Feature creep, bad tech, reinvention, and more", color: "#059669" },
+  { label: "Bad Technology", sublabel: "4 criteria for avoiding lock-in", color: "#d97706" },
+  { label: "Rewrite Criteria", sublabel: "3 conditions that justify a full rewrite", color: "#7c3aed" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> Why Complexity Compounds
+
+Adding one new feature to a system with 10 features doesn't cost 10% more. It costs *interacting* with all 10 existing features. If the feature takes 10 hours to implement, it may take another 10 hours to ensure it interacts correctly with everything else. The more features already present, the higher the cost of the next one.
+
+This is why complexity is not linear. A simple project that takes one month becomes a three-month project when you add complexity, and a nine-month project when you make each piece of that more complex. The compound effect of complexity is the mechanism behind "The Never-Shipping Product" pattern that kills so many software efforts.
+
+<Callout color="amber">
+Some projects start so complex that they never get a first version out. If you're in that situation: trim features. A first version that ships and helps users is worth infinitely more than a theoretically complete version that never ships.
+</Callout>
+
+---
+
+## <Label color="teal">2</Label> Seven Sources of Complexity
+
+<FlowStep steps={[
+  { title: "Expanding the purpose", body: "Every time you add features that fulfill some other purpose than the software's primary one, complexity multiplies. The word processor that also reads email is absurd in the user interface alone. Stick to the purpose. Marketing's enthusiasm for a 'single platform that does everything' is not a design requirement." },
+  { title: "Adding programmers", body: "Adding more people to a project adds complexity. Every new person requires grooming-in from existing members plus grooming-in from each other. The Mythical Man Month documents this precisely. A small team of experts consistently outperforms a large team of less experienced developers." },
+  { title: "Changing things that don't need changing", body: "Every change — to requirements, design, or code — has costs beyond its immediate scope: decision time, implementation time, interaction validation, change tracking, testing. Changes compound. The rule: only make changes that are genuinely necessary." },
+  { title: "Lock-in to bad technologies", body: "A technology is 'bad' if: it doesn't allow easy switching, it won't be flexible enough for future needs, or it lacks the quality required to design simple software with it. Once locked in, you pay the complexity cost for the entire lifetime of the dependency." },
+  { title: "Misunderstanding", body: "Programmers who don't fully understand their tools, systems, or problem domain develop complex designs to handle the cases they're uncertain about. Understanding produces simplicity; misunderstanding produces complexity as a hedge." },
+  { title: "Poor design or no design", body: "Without design work, every new feature multiplies complexity instead of adding linearly to it. You need to design well at the start and keep designing as the system grows." },
+  { title: "Reinventing the wheel", body: "Inventing your own protocol, web server, or major library — when good ones exist — trades focused development for infrastructure maintenance. There are four valid exceptions (see below); all others are complexity with no benefit." },
+]} />
+
+---
+
+## <Label color="teal">3</Label> Evaluating Technology Choices
+
+<DataTable
+  caption="Technology evaluation criteria"
+  accent="teal"
+  headers={["Criterion", "Question to ask", "Red flag"]}
+  rows={[
+    { "Criterion": "Survival potential", "Question to ask": "Is this technology likely to still be actively maintained in 5 years?", "Red flag": "Small community, single maintainer, no clear sponsor, rapidly losing adoption" },
+    { "Criterion": "Interoperability", "Question to ask": "Does it work well with other technologies you use?", "Red flag": "Requires custom bridges to everything; doesn't implement standards" },
+    { "Criterion": "Attention to quality", "Question to ask": "Does the technology itself have good design and low defect rate?", "Red flag": "Known bugs unfixed for years, poor documentation, frequent breaking changes" },
+    { "Criterion": "Lock-in risk", "Question to ask": "How hard would it be to switch away if needed?", "Red flag": "Proprietary format, vendor-specific APIs, no migration tooling" },
+  ]}
+/>
+
+---
+
+## <Label color="teal">4</Label> When Reinvention Is Justified
+
+You should almost never build your own version of a foundational dependency (web server, protocol, database, major library) unless it is your *product*. The four valid exceptions:
+
+1. What you need doesn't exist yet
+2. All existing solutions are bad technologies that would lock you in
+3. Existing solutions are fundamentally incapable of handling your needs
+4. Existing solutions aren't maintained and you can't take over their maintenance
+
+All four are rare in practice. Most reinvention is driven by a preference for control or a belief that "we'll do it better" — both of which produce complexity without proportionate benefit.
+
+---
+
+## <Label color="teal">5</Label> When to Rewrite
+
+Three conditions that together justify a rewrite:
+
+<FlowStep steps={[
+  { title: "The system is completely unmaintainable", body: "Not 'hard to maintain' — unmaintainable. Changes require understanding so much of the system simultaneously that even experienced developers make constant mistakes when touching it." },
+  { title: "A redesign won't fix it", body: "Incremental redesign is always preferred to a full rewrite. If the fundamental design is so wrong that no amount of refactoring can fix it — if the problem is architectural, not cosmetic — a rewrite becomes the only path forward." },
+  { title: "You can write the new system incrementally", body: "Rewrites that replace a running system all at once are extremely high-risk. The viable path is replacing pieces while the old system remains in service — a strangler fig migration. If you can't do this, reconsider whether a rewrite is actually feasible." },
+]} />
+
+All three conditions must hold. A system that is merely complex but maintainable doesn't qualify. A system where redesign would fix the core problems doesn't qualify. A rewrite that requires a "big bang" cutover is not a solution — it just defers the reckoning.

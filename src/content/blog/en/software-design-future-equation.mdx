@@ -1,0 +1,122 @@
+---
+title: "The Equation That Predicts Good Software Design"
+description: "The desirability of any change is proportional to its value and inversely proportional to its effort. An equation that forces you to think about all four variables — and explains why maintenance cost matters more than implementation cost."
+pubDate: 2026-05-08
+tags: ["software-design", "foundations"]
+lang: "en"
+category: "foundations"
+series: "software-foundations"
+seriesOrder: 104
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+
+Most design debates are about which option is "better." The problem is that "better" usually means different things to different people — one person optimizes for speed to ship, another for long-term maintainability. I've found it useful to have an equation that forces the whole conversation into the open by requiring you to think about *all four* variables at once.
+
+<HeroGrid items={[
+  { label: "D = V / E", sublabel: "Desirability = Value / Effort", color: "#0891b2" },
+  { label: "Future Value", sublabel: "Probability × potential, not just immediate", color: "#059669" },
+  { label: "Maintenance > Impl", sublabel: "Long-run, Em dominates Ei", color: "#d97706" },
+  { label: "Quality ∝ Lifetime", sublabel: "Design quality should match how long it lives", color: "#7c3aed" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> The Equation
+
+> **D = (Vn + Vf) / (Ei + Em)**
+
+Where:
+- **D** = desirability of a change
+- **Vn** = value now (how much this helps users immediately)
+- **Vf** = future value (how much this will help in the future)
+- **Ei** = effort of implementation (how much work to build it)
+- **Em** = effort of maintenance (ongoing work to keep it working)
+
+This is the **primary equation of software design**. It doesn't say which decisions are absolutely right or wrong — it gives you a way to *rank* options. A change that delivers high value with low effort is more desirable than one with low value and high effort. That sounds obvious, but having it as an equation forces you to think about *all four* variables, not just the ones that are easiest to estimate.
+
+Even "stay the same and don't change" is a valid answer to the equation: what is the value of not changing? What is the effort of not changing? Compare to the alternative.
+
+---
+
+## <Label color="teal">2</Label> Breaking Down Value
+
+Value is not just "how many users will use this feature." It has two components:
+
+**Probability of value**: How likely is it that this change will actually help someone?
+
+**Potential value**: How much will it help when it does?
+
+These combine multiplicatively. A feature that could save someone's life, even with a one-in-a-million probability, may have enormous value. A feature that mildly irritates 100% of users on every action has high probability and significant potential.
+
+Consider accessibility features for users with disabilities. Low probability (small percentage of users) but very high potential (without the feature, those users can't use the software at all). High value, despite the numbers looking small.
+
+Value also includes users you don't have yet. A feature that makes your software appeal to a much larger user base has high value even if your current user count is small.
+
+<Callout color="amber">
+Value does not mean "what users ask for." Users ask for what they think they want. The job of software design is to understand what will actually help them — which sometimes means building something they didn't ask for and not building something they did.
+</Callout>
+
+---
+
+## <Label color="teal">3</Label> Why Maintenance Dominates
+
+The critical insight of the equation is what happens as time goes on. Implementation effort (Ei) is a one-time cost. Maintenance effort (Em) is a recurring cost that compounds over the life of the software.
+
+As time goes to infinity:
+
+> **D ≈ Vf / Em**
+
+Implementation effort becomes relatively negligible compared to the accumulated maintenance burden. This means:
+
+> **It is more important to reduce the effort of maintenance than it is to reduce the effort of implementation.**
+
+This is the single most counterintuitive claim in software design, and also the most consequential. The entire programming culture is optimized around "ship it fast" — reducing Ei. But Ei is the wrong variable to minimize for long-lived software. The thing that actually determines the long-term trajectory of a software project is how much each new change *costs* in terms of understanding, modifying, and testing the existing system.
+
+---
+
+## <Label color="teal">4</Label> Quality Proportional to Lifetime
+
+From the equation, a practical rule emerges:
+
+> **The quality level of your design should be proportional to the length of future time during which your system will continue to help people.**
+
+A quick weekend hack that will be thrown away in a week doesn't need beautiful architecture. A library that will be used by thousands of developers for a decade does. The equation tells you this: if Em is applied over a short time, even high maintenance cost doesn't accumulate much. Over a long time, it becomes the dominant term.
+
+<DataTable
+  caption="How time horizon changes what matters"
+  accent="teal"
+  headers={["Time horizon", "What matters most", "Common mistake"]}
+  rows={[
+    { "Time horizon": "Hours / throwaway", "What matters most": "Implementation speed (Ei)", "Common mistake": "Over-engineering a script that runs once" },
+    { "Time horizon": "Months / product launch", "What matters most": "Balance — ship, but keep it changeable", "Common mistake": "Tech debt so severe the second version is a rewrite" },
+    { "Time horizon": "Years / platform", "What matters most": "Maintenance effort (Em) dominates", "Common mistake": "Never investing in simplification; complexity compounds" },
+    { "Time horizon": "Decades / infrastructure", "What matters most": "Em is almost everything; design is survival", "Common mistake": "Code that works but that no living person fully understands" },
+  ]}
+/>
+
+---
+
+## <Label color="teal">5</Label> Unforeseeable Consequences
+
+The most common and disastrous error programmers make is predicting something about the future when they cannot know it. This shows up as:
+
+- Adding code "for a feature we'll need someday"
+- Making something abstract "in case we need multiple implementations"
+- Building infrastructure for scale that won't arrive for years, if ever
+
+The implication of the equation:
+
+> **You are safest if you don't attempt to predict the future at all, and instead make all design decisions based on immediately known present-time information.**
+
+This doesn't mean ignoring the future — it means designing code that is *easy to change*, so that when the future arrives (in the form you couldn't predict), you can adapt without paying the full cost of a rewrite.
+
+<FlowStep steps={[
+  { title: "Avoid prediction", body: "Don't add features or abstractions for things you think will be needed someday. Build what is needed now." },
+  { title: "Optimize for changeability", body: "The best design is the one that allows the most change in the environment with the least change in the software. Flexibility is not prediction." },
+  { title: "Reduce Em continuously", body: "Regularly simplify and refactor. Each simplification reduces the maintenance effort for every future change." },
+]} />

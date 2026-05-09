@@ -1,0 +1,96 @@
+---
+title: "Software Design Needs Laws, Not Just Opinions"
+description: "Software design has plenty of knowledge and even organization — what it lacks is laws. Clearly stated, eternally true principles that let you predict outcomes and derive new truths."
+pubDate: 2026-05-08
+tags: ["software-design", "foundations"]
+lang: "en"
+category: "foundations"
+series: "software-foundations"
+seriesOrder: 102
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+
+There's a question I keep returning to: why does software design feel like an art when it's practiced, but feel like it *should* have rules? Every other engineering discipline has laws — physics, electrical engineering, civil engineering all have first principles you can apply. Software is the exception. Or so it seems.
+
+The truth is that software design has plenty of knowledge. It even has organization — books, patterns, principles. What it lacks is **laws**: clearly stated, eternally true principles that let you *predict* what will happen and *derive* other truths. Without laws, even experienced developers can't reliably explain *why* a given decision is right in a way that transfers to new situations.
+
+<HeroGrid items={[
+  { label: "Laws Missing", sublabel: "The gap between craft and science", color: "#0891b2" },
+  { label: "Every Dev Designs", sublabel: "Design happens at every level", color: "#059669" },
+  { label: "4 Categories", sublabel: "Definitions · Facts · Rules · Laws", color: "#d97706" },
+  { label: "Not Democracy", sublabel: "Design authority must be individual", color: "#7c3aed" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> What Software Design Actually Is
+
+The word "design" applies in three ways:
+
+- **As a verb**: planning — deciding on structure, technology, architecture before or while writing
+- **As a noun (plan)**: the result of that planning — written documents, diagrams, or decisions held in mind
+- **As a noun (description)**: the structure an existing piece of code has or appears to follow
+
+All three apply in software. Code that was never consciously designed still has a design — usually an actively bad one. Software design is: anything that involves the architecture of your software system or the technical decisions you make while creating the system.
+
+This deliberately excludes: org structure, team meetings, performance reviews, work schedules. Those are management problems. Software design is strictly the technical decisions about the software itself.
+
+---
+
+## <Label color="teal">2</Label> Every Programmer Is a Designer
+
+Every programmer on a team is involved in design. The lead architect makes system-level decisions. Senior engineers make subsystem decisions. Junior engineers make file-level and function-level decisions. Even writing a single line of code involves a design decision.
+
+This means nobody on a software team can ignore software design. The problem is that most training focuses on *programming* — syntax, algorithms, tools — not on *design*. The missing body of principles is precisely what would guide those decisions at every level.
+
+Design is not a democracy, however. Design-by-committee produces actively bad results. Each programmer should have authority over their own area, with senior developers having veto power over poor decisions — but the decision must ultimately be made by *an individual*, not by a group vote.
+
+---
+
+## <Label color="teal">3</Label> What Makes a Science
+
+To have a science, you need:
+
+1. **Collected knowledge** — facts, not opinions, put together somewhere
+2. **Organization** — categories, hierarchy, correct relationships between pieces
+3. **General truths / basic laws** — not just advice, but provably true statements
+4. **Applicability** — it must tell you how to do something in the real world
+5. **Verification** — ideally through the scientific method: observe, theorize, experiment, verify
+
+Software design today has 1 and 2. It lacks 3 — and without laws, you can't reliably derive new truths or predict outcomes. Experienced developers *know* the right thing to do, but they usually can't explain *why* it's right in a way that would be convincing to someone else or transferable to new situations.
+
+<Callout color="teal">
+The missing piece isn't more advice. Advice is cheap and plentiful. The missing piece is laws — fundamental truths from which correct advice can be derived. Laws let you predict; advice only instructs.
+</Callout>
+
+---
+
+## <Label color="teal">4</Label> The Four Categories of Knowledge
+
+A precise vocabulary helps distinguish types of claims:
+
+<DataTable
+  caption="Types of knowledge in software design"
+  accent="teal"
+  headers={["Category", "What it does", "Example"]}
+  rows={[
+    { "Category": "Definition", "What it does": "Tells you what something is and how it's used", "Example": "A program is: instructions + the actions those instructions produce" },
+    { "Category": "Fact", "What it does": "A true statement about something; any true piece of information", "Example": "Every programmer is a designer" },
+    { "Category": "Rule", "What it does": "True advice about a specific situation; guides decisions but doesn't predict the future", "Example": "Don't write code until you actually need it" },
+    { "Category": "Law", "What it does": "A broad fact that is always true; helps derive other truths and predict outcomes", "Example": "The longer your program exists, the more probable any piece will change" },
+  ]}
+/>
+
+The distinction matters. Rules tell you what to do. Laws tell you *why* — and let you figure out what to do in situations the rules don't cover.
+
+When you read something that seems obvious, the test isn't whether you've heard it before. The test is:
+- Did you know it was *provably* true?
+- Did you know how *important* it was relative to other things?
+- Could you *communicate* it clearly to another person?
+- Did you understand how it *related* to other knowledge in the field?
+
+A science makes all four of those possible. A collection of opinions does not.

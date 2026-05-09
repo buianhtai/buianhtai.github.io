@@ -1,0 +1,159 @@
+---
+title: "The Template Method Pattern: Reusing Algorithm Skeletons"
+description: "Template Method defines the steps of an algorithm in a base class and lets subclasses fill in only the parts that vary — sharing structure without duplicating code and without sacrificing per-subclass customization."
+pubDate: 2026-05-08
+tags: ["design-patterns", "template-method", "hollywood-principle", "behavioral", "java", "foundations"]
+lang: "en"
+category: "foundations"
+series: "software-foundations"
+seriesOrder: 41
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+
+Coffee and tea are brewed differently in their details but share the same structure: boil water, brew the drink in the cup, pour it, and optionally add condiments. Template Method extracts that skeleton into the base class and leaves the variable steps to subclasses.
+
+<HeroGrid items={[
+  { label: "Algorithm Skeleton", sublabel: "Base class owns the sequence, subclasses fill steps", color: "#0891b2" },
+  { label: "Hollywood Principle", sublabel: "Don't call us, we'll call you", color: "#059669" },
+  { label: "Hook Methods", sublabel: "Optional override points with default behavior", color: "#d97706" },
+  { label: "Code Reuse", sublabel: "Common steps defined once, not duplicated", color: "#7c3aed" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> The Duplication Problem
+
+```java
+// Coffee recipe
+public void prepareRecipe() {
+    boilWater();
+    brewCoffeeGrinds();
+    pourInCup();
+    addSugarAndMilk();
+}
+
+// Tea recipe
+public void prepareRecipe() {
+    boilWater();
+    steepTeaBag();
+    pourInCup();
+    addLemon();
+}
+```
+
+`boilWater()` and `pourInCup()` are identical. The structure is identical — step 1, step 2, step 3, step 4. Only steps 2 and 4 differ. Duplicating the full method in both classes means any change to the recipe structure (add a step, reorder) must be applied in both places.
+
+---
+
+## <Label color="teal">2</Label> The Template Method Solution
+
+Generalize the differing steps into abstract methods. Define the invariant sequence in the base class as `final` (no override allowed):
+
+```java
+public abstract class CaffeineBeverage {
+
+    // The template method — final so no subclass can change the algorithm
+    final void prepareRecipe() {
+        boilWater();
+        brew();          // abstract — subclass decides
+        pourInCup();
+        addCondiments(); // abstract — subclass decides
+    }
+
+    abstract void brew();
+    abstract void addCondiments();
+
+    void boilWater()  { System.out.println("Boiling water"); }
+    void pourInCup()  { System.out.println("Pouring into cup"); }
+}
+
+public class Coffee extends CaffeineBeverage {
+    void brew()          { System.out.println("Dripping coffee through filter"); }
+    void addCondiments() { System.out.println("Adding sugar and milk"); }
+}
+
+public class Tea extends CaffeineBeverage {
+    void brew()          { System.out.println("Steeping the tea"); }
+    void addCondiments() { System.out.println("Adding lemon"); }
+}
+```
+
+`prepareRecipe()` is written once. Subclasses fill in the variable steps. Neither can change the order.
+
+---
+
+## <Label color="teal">3</Label> Formal Definition
+
+> **Template Method Pattern** — defines the skeleton of an algorithm in a method, deferring some steps to subclasses. Template Method lets subclasses redefine certain steps of an algorithm without changing the algorithm's structure.
+
+The pattern is behavioral: it's about how an algorithm executes, not about how objects are created or composed.
+
+---
+
+## <Label color="teal">4</Label> Hook Methods
+
+Abstract steps *must* be overridden. Hooks are optional — they have a default (usually no-op) implementation that subclasses can override if they need to:
+
+```java
+public abstract class CaffeineBeverage {
+    final void prepareRecipe() {
+        boilWater();
+        brew();
+        pourInCup();
+        if (customerWantsCondiments()) {  // hook controls step 4
+            addCondiments();
+        }
+    }
+
+    // Hook — base class provides a default; subclass can override
+    boolean customerWantsCondiments() { return true; }
+}
+
+public class Coffee extends CaffeineBeverage {
+    // Override the hook to ask the user
+    boolean customerWantsCondiments() {
+        String answer = getUserInput();
+        return answer.toLowerCase().startsWith("y");
+    }
+}
+```
+
+Hooks give subclasses a fine-grained way to influence the algorithm at specific points, without requiring them to provide a complete step implementation.
+
+---
+
+## <Label color="teal">5</Label> The Hollywood Principle
+
+> **Don't call us, we'll call you.**
+
+In Template Method, the base class drives the algorithm. Subclasses don't call the algorithm — they respond when the algorithm calls them. The base class is in control; the subclass fills in the blanks on request.
+
+This is the Hollywood Principle: higher-level components call lower-level components, not the other way around. It prevents "dependency rot" — a tangle of calls going in every direction.
+
+<DataTable
+  caption="Hollywood Principle in practice"
+  accent="teal"
+  headers={["Pattern", "Who drives", "Who responds"]}
+  rows={[
+    { "Pattern": "Template Method", "Who drives": "Base class (high-level)", "Who responds": "Subclass overrides (low-level)" },
+    { "Pattern": "Observer",        "Who drives": "Subject (high-level event)", "Who responds": "Observer implementations" },
+    { "Pattern": "Factory Method",  "Who drives": "Creator (high-level)",       "Who responds": "Concrete creator (low-level)" },
+  ]}
+/>
+
+---
+
+## <Label color="teal">6</Label> Template Method in the JDK
+
+`java.util.AbstractList`, `java.util.AbstractSet`, and the rest of the `Abstract*` collection classes use Template Method extensively. You override `get(index)` and `size()`, and the abstract base class implements `indexOf`, `lastIndexOf`, `contains`, `iterator`, and more in terms of those two primitives.
+
+Sorting is another instance: `Arrays.sort()` and `Collections.sort()` define the algorithm skeleton; the per-element comparison is delegated to `Comparator.compare()` — a functional variant of the same idea.
+
+<Callout color="teal">
+Template Method and Strategy solve a similar problem — varying part of an algorithm — with opposite mechanisms. Template Method uses inheritance: the algorithm lives in a superclass, variation goes in a subclass. Strategy uses composition: the algorithm is an object, swapped in from outside. Template Method is simpler when the algorithm is tightly cohesive and you have a fixed class hierarchy. Strategy is more flexible when you need runtime swap or the variation is an independent axis.
+</Callout>

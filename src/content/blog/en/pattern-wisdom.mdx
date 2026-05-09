@@ -1,0 +1,124 @@
+---
+title: "Pattern Wisdom: When to Use Patterns (and When Not To)"
+description: "Patterns are tools, not laws. The meta-skill is knowing when to apply them, when to resist, and how to keep simple solutions simple — because over-engineering is the most common pattern mistake."
+pubDate: 2026-05-08
+tags: ["design-patterns", "oo-design", "principles", "meta", "foundations"]
+lang: "en"
+category: "foundations"
+series: "software-foundations"
+seriesOrder: 46
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+
+Learning patterns is easy. Knowing when not to use them is hard. Every pattern before this one was a tool; this post is about the judgment that tells you which tool to pick — and when to put them all down.
+
+<HeroGrid items={[
+  { label: "Pattern Mindset", sublabel: "Shared vocabulary, not a rulebook", color: "#0891b2" },
+  { label: "Over-Engineering", sublabel: "The primary failure mode — pattern-itis", color: "#dc2626" },
+  { label: "Design Principles", sublabel: "More durable than the patterns themselves", color: "#059669" },
+  { label: "GoF Catalogue", sublabel: "23 patterns — sharp tools for specific problems", color: "#d97706" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> What Patterns Are (and Are Not)
+
+A design pattern is a named solution to a recurring design problem in a given context. The **name** matters as much as the structure: calling something a "Strategy" tells every reader of the code exactly what the intent is — algorithmic encapsulation, family of interchangeable behaviors, client configures which one runs.
+
+What patterns are *not*:
+
+- **Not a law.** No codebase is required to use patterns. Simple problems deserve simple solutions.
+- **Not a silver bullet.** Patterns solve specific classes of problems. The wrong pattern applied to a problem is worse than no pattern.
+- **Not a substitute for understanding.** You can't look at a UML diagram for Observer and know when to use it. You need to understand the coupling problem it solves to recognize when you have it.
+
+<Callout color="teal">
+Patterns are a shared vocabulary for experienced designers. The value of calling something a Facade is that every team member immediately knows: this is a simplified interface over a complex subsystem. The vocabulary compresses design discussions. That's the primary value — not the structure itself.
+</Callout>
+
+---
+
+## <Label color="teal">2</Label> The Over-Engineering Trap
+
+The most common mistake with design patterns is applying them eagerly, before the problem requires them. The symptoms:
+
+<DataTable
+  caption="Over-engineering signals"
+  accent="teal"
+  headers={["Signal", "What it looks like", "The cost"]}
+  rows={[
+    { "Signal": "Unnecessary abstraction",   "What it looks like": "Interface with one implementation added 'for extensibility'",    "The cost": "Future readers must ask: where are the other implementations?" },
+    { "Signal": "Premature delegation",      "What it looks like": "Strategy extracted before a second strategy exists",            "The cost": "Harder to read; no concrete benefit yet" },
+    { "Signal": "Class explosion",           "What it looks like": "12 classes for what could be 1 class + a map",                  "The cost": "Navigation overhead; harder onboarding; more bug surfaces" },
+    { "Signal": "Pattern-first design",      "What it looks like": "Architecture chosen to use a pattern; problem bent to fit",     "The cost": "Impedance mismatch between pattern and actual problem" },
+    { "Signal": "Patterns as status signal", "What it looks like": "Patterns used to demonstrate sophistication, not solve problems", "The cost": "Complexity mistaken for quality; simplicity undervalued" },
+  ]}
+/>
+
+The antidote: *What problem does this pattern solve here?* If you cannot give a specific, concrete answer — a current pain, not a hypothetical future one — don't add the pattern.
+
+---
+
+## <Label color="teal">3</Label> Three Conditions That Justify a Pattern
+
+<FlowStep steps={[
+  { title: "The problem is actually present", body: "Not 'we might need this later'. The design problem — tight coupling, rigid algorithm, monolithic object — already exists and causes friction. Evidence: duplicated code, difficult tests, a change that required editing six files." },
+  { title: "The pattern solves that problem", body: "The pattern matches the context. You've identified the recurring problem the pattern was designed to solve and verified your problem is an instance of it — not a superficially similar but structurally different one." },
+  { title: "The trade-offs are acceptable", body: "Every pattern has costs: added classes, indirection, vocabulary requirements. Strategy adds an interface and N concrete classes. Observer adds notification coupling and potential notification storms. Are those costs acceptable in this context, at this scale?" },
+]} />
+
+If all three hold: apply the pattern. If any one fails: don't.
+
+---
+
+## <Label color="teal">4</Label> Principles vs. Patterns
+
+Design principles are more durable than patterns because they explain *why* patterns work, not just *what* they are:
+
+| Principle | What it prevents | Patterns that embody it |
+|---|---|---|
+| Encapsulate what varies | Tight coupling of variable parts to stable parts | Strategy, State, Template Method |
+| Program to interfaces | Concrete-class coupling | Almost every pattern |
+| Favor composition | Fragile inheritance hierarchies | Decorator, Strategy, Composite |
+| Strive for loose coupling | Change propagation through object graphs | Observer |
+| Open-Closed | Modification risk when extending | Decorator, Observer, Strategy |
+| Depend on abstractions | High-level code coupled to low-level details | Factory Method, Abstract Factory |
+| Single Responsibility | Mixed concerns colliding when one changes | Iterator, Command |
+
+When you understand the principles, you can derive appropriate structures for problems that don't match any named pattern. The patterns are the examples; the principles are the lesson.
+
+---
+
+## <Label color="teal">5</Label> How to Think About a Design Problem
+
+A diagnostic flow for deciding whether and which pattern applies:
+
+1. **Name the pain.** What is actually hard to do? Change, test, extend, understand?
+2. **Identify the coupling.** What depends on what that shouldn't? What changes together that should change independently?
+3. **Look for the principle.** Which design principle — encapsulate what varies, program to interfaces, etc. — is being violated?
+4. **Find the pattern.** Which pattern was designed to resolve this violation in this type of context?
+5. **Verify the fit.** Does the pattern's intent description match your problem's structure? If not, keep looking.
+6. **Weigh the cost.** Are the added classes / indirection / vocabulary worth the coupling reduction? For a three-class utility used in one place: probably not. For a thirty-class system with five extension points: probably yes.
+
+---
+
+## <Label color="teal">6</Label> The Growth Trajectory
+
+A healthy relationship with patterns evolves:
+
+| Stage | Behavior | Risk |
+|---|---|---|
+| Novice | Doesn't know patterns exist | Reinvents solutions from scratch; misses well-known traps |
+| Pattern enthusiast | Applies patterns everywhere; looks for excuses to use them | Over-engineering; code harder to read than if patterns were absent |
+| Experienced | Uses patterns where they fit; prefers simplicity otherwise | None — this is the target |
+| Expert | Derives patterns from principles; adapts or combines them for novel problems | None |
+
+The enthusiast stage is the dangerous one. It's also the most common for developers who've just learned patterns for the first time. The solution is the same question: *What problem does this pattern solve here?*
+
+<Callout color="teal">
+Simplicity is not the absence of craft — it's the highest form of it. A solution that requires no patterns because the problem genuinely doesn't need them is better than the same solution wrapped in unnecessary abstraction. Patterns are for the problems that are actually hard. Keep them in reserve for those.
+</Callout>
