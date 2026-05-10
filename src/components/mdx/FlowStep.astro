@@ -1,7 +1,11 @@
 ---
 interface StepItem {
-  title: string;
-  body: string;
+  // Primary props
+  title?: string;
+  body?: string;
+  // Aliases (label/description)
+  label?: string;
+  description?: string;
   color?: string;
 }
 
@@ -46,8 +50,8 @@ function resolveColor(c: string) { return colorMap[c] ?? colorMap['teal']; }
         <div class="flow-step" style={`--step-color: ${resolveColor(itemColor)};`}>
           <div class="flow-step-num">{i + 1}</div>
           <div class="flow-step-body">
-            <strong class="flow-step-title">{s.title}</strong>
-            <div class="flow-step-content">{s.body}</div>
+            <strong class="flow-step-title">{s.title ?? s.label}</strong>
+            <div class="flow-step-content">{s.body ?? s.description}</div>
           </div>
         </div>
       );
