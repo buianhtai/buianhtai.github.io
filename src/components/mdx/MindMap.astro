@@ -58,6 +58,7 @@ interface Leaf {
 interface Branch {
   label: string;
   color?: string;
+  icon?: string;  // Iconify name: "lucide:database", "simple-icons:postgresql"
   leaves?: Leaf[];
 }
 
@@ -68,6 +69,8 @@ interface Props {
   caption?: string;
   size?: number; // canvas diameter, default 520
 }
+
+import { resolveIcon } from '../../lib/icons';
 
 const { root, branches, title, caption, size = 520 } = Astro.props;
 
@@ -81,6 +84,16 @@ const COLORS: Record<string, { fill: string; stroke: string; text: string; leaf:
   default: { fill: 'var(--color-surface-2)', stroke: 'var(--color-border)',        text: 'var(--color-text)',       leaf: 'var(--color-surface)',   line: 'var(--color-border)' },
 };
 function cc(branch: Branch) { return COLORS[branch.color ?? 'default'] ?? COLORS['default']; }
+
+// Resolve branch icons at build time
+const MM_ICON_SIZE = 12;
+const branchIcons: Record<number, ReturnType<typeof resolveIcon>> = {};
+branches.forEach((branch, bi) => {
+  if (branch.icon) {
+    const col = cc(branch);
+    branchIcons[bi] = resolveIcon(branch.icon, MM_ICON_SIZE, col.text);
+  }
+});
 
 const CX = size / 2;
 const CY = size / 2;
@@ -216,21 +229,38 @@ function wrapText(text: string, maxChars = 14): string[] {
         return (
           <>
             {/* Branch node (rounded rect) */}
-            <rect
-              x={bx - BRANCH_R} y={by - BRANCH_H}
-              width={BRANCH_R * 2} height={BRANCH_H * 2}
-              rx="8"
-              fill={col.fill} stroke={col.stroke} stroke-width="1.5"
-            />
-            {lines.map((line, i) => (
-              <text
-                x={bx} y={by + (i - (lines.length - 1) / 2) * 10 + 4}
-                text-anchor="middle"
-                font-family="var(--font-mono,'IBM Plex Mono',monospace)"
-                font-size="9" font-weight="700"
-                fill={col.text}
-              >{line}</text>
-            ))}
+            {(() => {
+              const icon = branchIcons[bi];
+              const hasIcon = !!icon;
+              // Make the rect taller when icon present
+              const rectH = hasIcon ? BRANCH_H + 8 : BRANCH_H;
+              const iconCY = hasIcon ? by - rectH + 10 : 0;
+              const labelCY = hasIcon ? by + 5 : by;
+              return (
+                <>
+                  <rect
+                    x={bx - BRANCH_R} y={by - rectH}
+                    width={BRANCH_R * 2} height={rectH * 2}
+                    rx="8"
+                    fill={col.fill} stroke={col.stroke} stroke-width="1.5"
+                  />
+                  {hasIcon && icon && (
+                    <g transform={`translate(${bx - icon.width / 2}, ${iconCY - icon.height / 2})`}>
+                      <Fragment set:html={icon.body} />
+                    </g>
+                  )}
+                  {lines.map((line, i) => (
+                    <text
+                      x={bx} y={labelCY + (i - (lines.length - 1) / 2) * 10 + 4}
+                      text-anchor="middle"
+                      font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+                      font-size="9" font-weight="700"
+                      fill={col.text}
+                    >{line}</text>
+                  ))}
+                </>
+              );
+            })()}
 
             {/* Leaf nodes */}
             {leaves.map((leaf, li) => {

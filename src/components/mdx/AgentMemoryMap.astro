@@ -49,6 +49,7 @@ interface AgentNode {
   y: number;         // 0–100 grid
   shape: 'hexagon' | 'circle' | 'cylinder' | 'rect' | 'oval' | 'diamond' | 'cloud';
   color?: string;
+  icon?: string;     // Iconify name: "lucide:brain", "simple-icons:openai", "logos:docker"
   sub?: string;
   badge?: string;
 }
@@ -68,6 +69,8 @@ interface Props {
   legend?: boolean;
   height?: number;
 }
+
+import { resolveIcon } from '../../lib/icons';
 
 const { nodes, edges = [], title, caption, legend = true, height = 380 } = Astro.props;
 
@@ -89,6 +92,16 @@ const NODE_COLORS: Record<string, { fill: string; stroke: string; text: string }
   default: { fill: 'var(--color-surface-2)', stroke: 'var(--color-border)', text: 'var(--color-text)' },
 };
 function nc(n: AgentNode) { return NODE_COLORS[n.color ?? 'default'] ?? NODE_COLORS['default']; }
+
+// Resolve all node icons at build time
+const AMM_ICON_SIZE = 14;
+const nodeIcons: Record<string, ReturnType<typeof resolveIcon>> = {};
+for (const node of nodes) {
+  if (node.icon) {
+    const col = nc(node);
+    nodeIcons[node.id] = resolveIcon(node.icon, AMM_ICON_SIZE, col.text);
+  }
+}
 
 const EDGE_STYLES: Record<string, { stroke: string; dash?: string; label: string }> = {
   call:     { stroke: 'var(--color-text-muted)',         label: 'call' },
@@ -260,24 +273,47 @@ const legendItems = [
               </>
             )}
 
-            {/* Label */}
-            {node.label.split('\n').map((line, i, arr) => (
-              <text
-                x={cx} y={cy + (i - (arr.length - 1) / 2) * 11 + (node.sub ? -5 : 4)}
-                text-anchor="middle"
-                font-family="var(--font-mono,'IBM Plex Mono',monospace)"
-                font-size="9.5" font-weight="700"
-                fill={col.text}
-              >{line}</text>
-            ))}
-            {node.sub && (
-              <text
-                x={cx} y={cy + (node.label.split('\n').length * 10) / 2 + 3}
-                text-anchor="middle"
-                font-family="var(--font-mono,'IBM Plex Mono',monospace)"
-                font-size="7.5" fill="var(--color-text-muted)"
-              >{node.sub}</text>
-            )}
+            {/* Icon + Label */}
+            {(() => {
+              const icon = node.icon ? nodeIcons[node.id] : null;
+              const hasIcon = !!icon;
+              const lines = node.label.split('\n');
+              const hasSub = !!node.sub;
+              // vertical offsets shift up when icon present
+              const iconOffsetY = hasIcon ? cy - (hasSub ? 13 : 10) : 0;
+              const labelBaseY = hasIcon
+                ? cy + (hasSub ? 1 : 5)
+                : cy + (hasSub ? -5 : 4);
+              const subBaseY = hasSub
+                ? (hasIcon ? cy + 14 : cy + (lines.length * 10) / 2 + 3)
+                : 0;
+              return (
+                <>
+                  {hasIcon && icon && (
+                    <g transform={`translate(${cx - icon.width / 2}, ${iconOffsetY - icon.height / 2})`}>
+                      <Fragment set:html={icon.body} />
+                    </g>
+                  )}
+                  {lines.map((line, i, arr) => (
+                    <text
+                      x={cx} y={labelBaseY + (i - (arr.length - 1) / 2) * 11}
+                      text-anchor="middle"
+                      font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+                      font-size="9.5" font-weight="700"
+                      fill={col.text}
+                    >{line}</text>
+                  ))}
+                  {hasSub && (
+                    <text
+                      x={cx} y={subBaseY}
+                      text-anchor="middle"
+                      font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+                      font-size="7.5" fill="var(--color-text-muted)"
+                    >{node.sub}</text>
+                  )}
+                </>
+              );
+            })()}
             {node.badge && (
               <>
                 <rect x={cx + RW - 14} y={cy - RH - 2} width="18" height="11" rx="3"

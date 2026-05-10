@@ -49,6 +49,7 @@ interface Step {
   label: string;
   sub?: string;
   focal?: boolean;
+  icon?: string;      // Iconify name: "lucide:database", "simple-icons:docker"
 }
 
 interface Arrow {
@@ -67,6 +68,8 @@ interface Props {
   direction?: 'horizontal' | 'vertical'; // default: horizontal
 }
 
+import { resolveIcon } from '../../lib/icons';
+
 const { lanes, steps, arrows = [], title, caption, direction = 'horizontal' } = Astro.props;
 
 const LANE_COLORS: Record<string, { fill: string; stroke: string; text: string; header: string }> = {
@@ -79,6 +82,17 @@ const LANE_COLORS: Record<string, { fill: string; stroke: string; text: string; 
   default:{ fill: 'rgba(100,116,139,0.04)', stroke: 'var(--color-border)', text: 'var(--color-text-muted)', header: 'var(--color-surface-2)' },
 };
 function lc(lane: Lane) { return LANE_COLORS[lane.color ?? 'default'] ?? LANE_COLORS['default']; }
+
+// Resolve step icons at build time
+const SL_ICON_SIZE = 11;
+const stepIcons: Record<string, ReturnType<typeof resolveIcon>> = {};
+for (const step of steps) {
+  if (step.icon) {
+    const lane = lanes.find(l => l.id === step.lane);
+    const col = lane ? lc(lane) : LANE_COLORS['default'];
+    stepIcons[step.id] = resolveIcon(step.icon, SL_ICON_SIZE, col.text);
+  }
+}
 
 const STEP_W    = 120;
 const STEP_H    = 44;
@@ -261,6 +275,18 @@ const stepMap = Object.fromEntries(steps.map(s => [s.id, s]));
         const stroke = step.focal ? 'var(--color-accent)' : col.stroke;
         const textC  = step.focal ? 'var(--color-accent)' : 'var(--color-text)';
 
+        const icon = step.icon ? stepIcons[step.id] : null;
+        const cx = x + STEP_W / 2;
+        const hasIcon = !!icon;
+        const hasSub  = !!step.sub;
+        const iconY = y + (hasSub ? 8 : 10);
+        const labelY = hasIcon
+          ? (hasSub ? y + STEP_H / 2 + 2 : y + STEP_H / 2 + 8)
+          : (hasSub ? y + STEP_H / 2 - 5 : y + STEP_H / 2 + 4);
+        const subY = hasSub
+          ? (hasIcon ? y + STEP_H - 6 : y + STEP_H / 2 + 9)
+          : 0;
+
         return (
           <>
             <rect
@@ -269,19 +295,24 @@ const stepMap = Object.fromEntries(steps.map(s => [s.id, s]));
               rx="6"
               fill={fill} stroke={stroke} stroke-width={strokeW}
             />
+            {hasIcon && icon && (
+              <g transform={`translate(${cx - icon.width / 2}, ${iconY - icon.height / 2})`}>
+                <Fragment set:html={icon.body} />
+              </g>
+            )}
             <text
-              x={x + STEP_W / 2} y={y + (step.sub ? STEP_H / 2 - 5 : STEP_H / 2 + 4)}
+              x={cx} y={labelY}
               text-anchor="middle" dominant-baseline="middle"
               font-family="var(--font-mono,'IBM Plex Mono',monospace)"
-              font-size="10" font-weight="700"
+              font-size="9" font-weight="700"
               fill={textC}
             >{step.label}</text>
-            {step.sub && (
+            {hasSub && (
               <text
-                x={x + STEP_W / 2} y={y + STEP_H / 2 + 9}
+                x={cx} y={subY}
                 text-anchor="middle"
                 font-family="var(--font-mono,'IBM Plex Mono',monospace)"
-                font-size="8" fill="var(--color-text-muted)"
+                font-size="7.5" fill="var(--color-text-muted)"
               >{step.sub}</text>
             )}
           </>
