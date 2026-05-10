@@ -17,6 +17,7 @@ import FlowStep from '../../../components/mdx/FlowStep.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
 import SequenceDiagram from '../../../components/mdx/SequenceDiagram.astro';
 import ArchDiagram from '../../../components/mdx/ArchDiagram.astro';
+import Flowchart from '../../../components/mdx/Flowchart.astro';
 
 Two patterns, one theme: interface mismatch. Adapter fixes a square peg / round hole problem between two existing interfaces. Facade creates a new simplified interface in front of a complex one. Neither changes the underlying behavior — both change the shape of how you access it.
 
@@ -57,6 +58,47 @@ turkeyDuck.quack();   // → Gobble gobble!
 turkeyDuck.fly();     // → Turkey flying (5 times)
 ```
 
+<ArchDiagram
+  title="Adapter — structure"
+  zones={[
+    { id: "client-zone", label: "Client side",  color: "teal" },
+    { id: "adaptee-zone", label: "Adaptee side", color: "amber" },
+  ]}
+  nodes={[
+    { id: "client",  label: "Client",         sub: "duck.quack()\nduck.fly()",           zone: "client-zone",  row: 1, col: 1, color: "teal" },
+    { id: "target",  label: "«interface»\nDuck", sub: "quack()\nfly()",                  zone: "client-zone",  row: 2, col: 1, color: "teal" },
+    { id: "adapter", label: "TurkeyAdapter",  sub: "quack() → gobble()\nfly() × 5",     zone: "client-zone",  row: 3, col: 1, color: "teal" },
+    { id: "adaptee", label: "WildTurkey",     sub: "gobble()\nfly()",                   zone: "adaptee-zone", row: 3, col: 1 },
+  ]}
+  edges={[
+    { from: "client",  to: "target",  label: "uses",      type: "dashed" },
+    { from: "adapter", to: "target",  label: "implements", type: "dashed" },
+    { from: "client",  to: "adapter", label: "calls",      type: "solid" },
+    { from: "adapter", to: "adaptee", label: "wraps",      type: "solid" },
+  ]}
+  caption="Client talks to Duck interface. TurkeyAdapter implements Duck and delegates to WildTurkey. The client never sees the Turkey."
+/>
+
+<SequenceDiagram
+  title="Adapter — call flow"
+  actors={[
+    { id: "client",  label: "Client" },
+    { id: "adapter", label: "TurkeyAdapter" },
+    { id: "turkey",  label: "WildTurkey" },
+  ]}
+  messages={[
+    { from: "client",  to: "adapter", label: "quack()",          type: "sync" },
+    { from: "adapter", to: "turkey",  label: "gobble()",         type: "sync" },
+    { from: "turkey",  to: "adapter", label: "Gobble gobble!",   type: "reply" },
+    { from: "adapter", to: "client",  label: "",                 type: "reply" },
+    { from: "client",  to: "adapter", label: "fly()",            type: "sync" },
+    { from: "adapter", to: "turkey",  label: "fly() [× 5]",      type: "sync" },
+    { from: "turkey",  to: "adapter", label: "Turkey flying…",   type: "reply" },
+    { from: "adapter", to: "client",  label: "",                 type: "reply" },
+  ]}
+  caption="Client calls Duck methods. TurkeyAdapter translates each call into the Turkey API. The interface mismatch is hidden entirely inside the adapter."
+/>
+
 > **Adapter Pattern** — converts the interface of a class into another interface clients expect. Adapter lets classes work together that couldn't otherwise because of incompatible interfaces.
 
 ---
@@ -74,6 +116,29 @@ turkeyDuck.fly();     // → Turkey flying (5 times)
 />
 
 Object Adapter is the standard form in Java. It's more flexible: you can adapt any subclass of the Adaptee without changing the Adapter.
+
+<ArchDiagram
+  title="Object Adapter vs Class Adapter"
+  zones={[
+    { id: "obj", label: "Object Adapter (composition)", color: "teal" },
+    { id: "cls", label: "Class Adapter (inheritance)",  color: "violet" },
+  ]}
+  nodes={[
+    { id: "oa-target",  label: "«interface»\nDuck",    sub: "quack() / fly()",          zone: "obj", row: 1, col: 1, color: "teal" },
+    { id: "oa-adapter", label: "TurkeyAdapter",        sub: "implements Duck\nholds Turkey",  zone: "obj", row: 2, col: 1, color: "teal" },
+    { id: "oa-adaptee", label: "WildTurkey",           sub: "gobble() / fly()",         zone: "obj", row: 2, col: 2 },
+    { id: "ca-target",  label: "«abstract»\nDuck",     sub: "quack() / fly()",          zone: "cls", row: 1, col: 1, color: "violet" },
+    { id: "ca-adaptee", label: "WildTurkey",           sub: "gobble() / fly()",         zone: "cls", row: 1, col: 2, color: "violet" },
+    { id: "ca-adapter", label: "TurkeyAdapter",        sub: "extends Duck\nextends Turkey", zone: "cls", row: 2, col: 1, color: "violet" },
+  ]}
+  edges={[
+    { from: "oa-adapter", to: "oa-target",  label: "implements", type: "dashed" },
+    { from: "oa-adapter", to: "oa-adaptee", label: "holds ref",  type: "solid" },
+    { from: "ca-adapter", to: "ca-target",  label: "extends",    type: "solid" },
+    { from: "ca-adapter", to: "ca-adaptee", label: "extends",    type: "solid" },
+  ]}
+  caption="Object Adapter (left): adapter holds a reference to the adaptee — works in Java. Class Adapter (right): adapter inherits from both target and adaptee — requires multiple inheritance, not possible in Java."
+/>
 
 ---
 
