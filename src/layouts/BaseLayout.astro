@@ -58,6 +58,13 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site);
         if (theme !== 'terminal') {
           document.documentElement.classList.add('theme-' + theme);
         }
+        // Apply f-light-palette class if a light foundations palette is saved
+        // (prevents FOUC on foundations pages with light palettes)
+        var LIGHT_PALETTES = ['light', 'infographic', 'material-light'];
+        var savedPalette = localStorage.getItem('f-palette');
+        if (savedPalette && LIGHT_PALETTES.indexOf(savedPalette) !== -1) {
+          document.documentElement.classList.add('f-light-palette');
+        }
       })();
     </script>
   </head>

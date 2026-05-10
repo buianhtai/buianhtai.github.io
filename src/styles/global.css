@@ -252,29 +252,20 @@ body > * {
 
 /* Shiki dual-theme switching — must come AFTER .astro-code base rule */
 
-/* Dark Shiki: all dark global themes */
-html:not(.theme-light):not(.theme-material-light) .astro-code,
-html:not(.theme-light):not(.theme-material-light) .astro-code span {
+/* Dark Shiki: all dark global themes and dark foundations palettes */
+html:not(.theme-light):not(.theme-material-light):not(.f-light-palette) .astro-code,
+html:not(.theme-light):not(.theme-material-light):not(.f-light-palette) .astro-code span {
   color: var(--shiki-dark) !important;
   background-color: var(--shiki-dark-bg) !important;
 }
 
-/* Light Shiki: light global themes */
+/* Light Shiki: light global themes + foundations light palettes (all keyed off html classes) */
 html.theme-light .astro-code,
 html.theme-light .astro-code span,
 html.theme-material-light .astro-code,
-html.theme-material-light .astro-code span {
-  color: var(--shiki-light) !important;
-  background-color: var(--shiki-light-bg) !important;
-}
-
-/* Light Shiki: Foundations light palettes (light, infographic, material-light) */
-.f-root.f-palette-light .astro-code,
-.f-root.f-palette-light .astro-code span,
-.f-root.f-palette-infographic .astro-code,
-.f-root.f-palette-infographic .astro-code span,
-.f-root.f-palette-material-light .astro-code,
-.f-root.f-palette-material-light .astro-code span {
+html.theme-material-light .astro-code span,
+html.f-light-palette .astro-code,
+html.f-light-palette .astro-code span {
   color: var(--shiki-light) !important;
   background-color: var(--shiki-light-bg) !important;
 }

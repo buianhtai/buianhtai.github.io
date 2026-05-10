@@ -731,6 +731,9 @@ const seriesTitle = series ? (seriesMeta[series]?.title ?? series) : null;
   const F_PALETTES = ['indigo', 'slate', 'sage', 'amber', 'light', 'infographic', 'material', 'material-light', 'tokyo', 'tokyo-storm'] as const;
   type FPalette = typeof F_PALETTES[number];
 
+  // Palettes with light backgrounds — code blocks need github-light Shiki theme
+  const LIGHT_PALETTES = new Set(['light', 'infographic', 'material-light']);
+
   function applyFPalette(palette: FPalette) {
     const root = document.querySelector<HTMLElement>('.f-root');
     if (!root) return;
@@ -738,6 +741,10 @@ const seriesTitle = series ? (seriesMeta[series]?.title ?? series) : null;
     F_PALETTES.forEach(p => root.classList.remove(`f-palette-${p}`));
     if (palette !== 'indigo') root.classList.add(`f-palette-${palette}`);
     localStorage.setItem('f-palette', palette);
+
+    // Toggle html.f-light-palette so Shiki CSS can key off it (same mechanism as theme-light)
+    document.documentElement.classList.toggle('f-light-palette', LIGHT_PALETTES.has(palette));
+
     // Sync active state in dropdown if it's already open
     document.querySelectorAll<HTMLElement>('[data-f-palette]').forEach(el => {
       el.classList.toggle('is-active', el.dataset.fPalette === palette);
