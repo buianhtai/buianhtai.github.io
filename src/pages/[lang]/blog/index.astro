@@ -17,75 +17,305 @@ const posts = (await getCollection('blog', (p) => {
   .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
 
 const groups = groupPostsBySeries(posts);
+
+// Collect all unique tags across posts
+const allTags = [...new Set(posts.flatMap(p => p.data.tags ?? []))].sort();
+
+// Build flat post data for search/filter (serialized to JSON for client JS)
+const postData = posts.map(p => ({
+  id: p.id,
+  title: p.data.title,
+  description: p.data.description ?? '',
+  tags: p.data.tags ?? [],
+  series: p.data.series ?? null,
+  url: `/${lang}/blog/${getPostSlug(p)}`,
+  date: p.data.pubDate.toISOString().slice(0, 10),
+  order: p.data.seriesOrder ?? null,
+  draft: p.data.draft ?? false,
+}));
+
+const groupData = groups.map(g => ({
+  series: g.series,
+  label: g.series ? (seriesMeta[g.series]?.title ?? g.series) : 'standalone',
+  count: g.posts.length,
+}));
 ---
 
 <BaseLayout title={t(lang, 'allPosts')} lang={lang}>
-  <div class="max-w-3xl mx-auto px-4 py-10">
+  <div class="max-w-3xl mx-auto px-4 py-10" id="blog-root">
 
     <!-- Page header -->
     <div class="page-header">
       <span class="page-prompt">$</span>
       <h1 class="page-title">ls -lR ~/blog/{lang}/</h1>
+      <span class="post-count-badge" id="post-count">{posts.length} posts</span>
     </div>
 
-    {groups.map((group) => {
-      const meta = group.series ? seriesMeta[group.series] : null;
-      const heading = meta?.title ?? 'standalone';
-      const desc = meta?.description;
-      const count = group.posts.length;
+    <!-- Search + filter toolbar -->
+    <div class="toolbar">
+      <!-- Search -->
+      <div class="search-wrap">
+        <span class="search-icon">⌕</span>
+        <input
+          id="search-input"
+          type="search"
+          class="search-input"
+          placeholder="search posts…"
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <kbd class="search-hint">ESC to clear</kbd>
+      </div>
 
-      return (
-        <section class="group-section">
-          <!-- Group header -->
-          <div class="group-header">
-            <span class="group-prompt">{group.series ? 'series' : 'misc'}/</span>
-            <span class="group-name">{heading}</span>
-            <span class="group-count">[{count}]</span>
-          </div>
-          {desc && <p class="group-desc">{desc}</p>}
+      <!-- Series filter pills -->
+      <div class="filter-row" id="series-pills">
+        <button class="pill pill-active" data-filter="all">all</button>
+        {groupData.map(g => (
+          <button class="pill" data-filter={`series:${g.series ?? 'standalone'}`}>
+            {g.label}
+            <span class="pill-count">{g.count}</span>
+          </button>
+        ))}
+      </div>
 
-          <!-- Post rows -->
-          <ul class="group-list">
-            {group.posts.map((post) => (
-              <li class="group-item">
-                <a href={`/${lang}/blog/${getPostSlug(post)}`} class="group-row">
-                  {post.data.seriesOrder != null && (
-                    <span class="group-order">{String(post.data.seriesOrder).padStart(2,'0')}.</span>
-                  )}
-                  <div class="group-content">
-                    <div class="group-row-top">
-                      <span class="group-post-title">
-                        {post.data.title}
-                        {post.data.draft && <span class="draft-badge">DRAFT</span>}
-                      </span>
-                      <time class="group-post-date">{post.data.pubDate.toISOString().slice(0, 10)}</time>
-                    </div>
-                    <p class="group-post-desc">{post.data.description}</p>
-                    {post.data.tags?.length > 0 && (
-                      <div class="group-tags">
-                        {post.data.tags.map((tag: string) => (
-                          <span class="group-tag">#{tag}</span>
-                        ))}
-                      </div>
+      <!-- Tag filter pills (collapsed by default, shown when tags exist) -->
+      {allTags.length > 0 && (
+        <div class="filter-row tag-row" id="tag-pills">
+          <span class="tag-label">tags:</span>
+          {allTags.map(tag => (
+            <button class="pill pill-tag" data-tag={tag}>#{tag}</button>
+          ))}
+        </div>
+      )}
+    </div>
+
+    <!-- No results message -->
+    <div class="no-results" id="no-results" hidden>
+      <span class="no-results-icon">∅</span>
+      <span>no posts match</span>
+    </div>
+
+    <!-- Groups -->
+    <div id="groups-container">
+      {groups.map((group) => {
+        const meta = group.series ? seriesMeta[group.series] : null;
+        const heading = meta?.title ?? 'standalone';
+        const desc = meta?.description;
+        const count = group.posts.length;
+        const seriesKey = group.series ?? 'standalone';
+
+        return (
+          <section class="group-section" data-series={seriesKey} id={`section-${seriesKey}`}>
+            <!-- Group header (clickable to collapse) -->
+            <button class="group-header" data-collapse-toggle={seriesKey} aria-expanded="true">
+              <span class="group-prompt">{group.series ? 'series' : 'misc'}/</span>
+              <span class="group-name">{heading}</span>
+              <span class="group-count" data-count-label={seriesKey}>[{count}]</span>
+              <span class="collapse-icon" aria-hidden="true">▾</span>
+            </button>
+            {desc && <p class="group-desc">{desc}</p>}
+
+            <!-- Post list (collapsible) -->
+            <ul class="group-list" id={`list-${seriesKey}`} data-series-list={seriesKey}>
+              {group.posts.map((post) => (
+                <li class="group-item" data-post-id={post.id}>
+                  <a href={`/${lang}/blog/${getPostSlug(post)}`} class="group-row">
+                    {post.data.seriesOrder != null && (
+                      <span class="group-order">{String(post.data.seriesOrder).padStart(2,'0')}.</span>
                     )}
-                  </div>
-                </a>
-              </li>
-            ))}
-          </ul>
-        </section>
-      );
-    })}
+                    <div class="group-content">
+                      <div class="group-row-top">
+                        <span class="group-post-title">
+                          {post.data.title}
+                          {post.data.draft && <span class="draft-badge">DRAFT</span>}
+                        </span>
+                        <time class="group-post-date">{post.data.pubDate.toISOString().slice(0, 10)}</time>
+                      </div>
+                      <p class="group-post-desc">{post.data.description}</p>
+                      {post.data.tags?.length > 0 && (
+                        <div class="group-tags">
+                          {post.data.tags.map((tag: string) => (
+                            <span class="group-tag" data-post-tag={tag}>#{tag}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </section>
+        );
+      })}
+    </div>
   </div>
 </BaseLayout>
 
+<script define:vars={{ postData, groupData }}>
+  // ─── State ────────────────────────────────────────────────────────────────
+  let activeFilter = 'all';   // 'all' | 'series:<key>'
+  let activeTag    = null;     // string | null
+  let searchQuery  = '';
+
+  // ─── DOM refs ─────────────────────────────────────────────────────────────
+  const searchInput   = document.getElementById('search-input');
+  const postCountEl   = document.getElementById('post-count');
+  const noResults     = document.getElementById('no-results');
+  const seriesPills   = document.querySelectorAll('#series-pills .pill');
+  const tagPills      = document.querySelectorAll('#tag-pills .pill-tag');
+
+  // collapse state: series key → boolean (true = open)
+  const collapseState = {};
+  groupData.forEach(g => { collapseState[g.series ?? 'standalone'] = true; });
+
+  // ─── Helpers ──────────────────────────────────────────────────────────────
+  function normalize(str) {
+    return str.toLowerCase().replace(/[^a-z0-9\s]/g, '');
+  }
+
+  function matches(post, query) {
+    if (!query) return true;
+    const needle = normalize(query);
+    return normalize(post.title).includes(needle)
+      || normalize(post.description).includes(needle)
+      || post.tags.some(t => normalize(t).includes(needle));
+  }
+
+  // ─── Render ───────────────────────────────────────────────────────────────
+  function applyFilters() {
+    let visible = 0;
+
+    groupData.forEach(g => {
+      const key     = g.series ?? 'standalone';
+      const section = document.getElementById(`section-${key}`);
+      const list    = document.getElementById(`list-${key}`);
+      if (!section || !list) return;
+
+      // series filter: skip whole section if mismatched
+      const seriesMatch = activeFilter === 'all' || activeFilter === `series:${key}`;
+
+      let sectionVisible = 0;
+      const items = list.querySelectorAll('.group-item');
+      items.forEach(li => {
+        const postId = li.dataset.postId;
+        const post   = postData.find(p => p.id === postId);
+        if (!post) return;
+
+        const tagMatch    = !activeTag || post.tags.includes(activeTag);
+        const searchMatch = matches(post, searchQuery);
+        const show        = seriesMatch && tagMatch && searchMatch;
+
+        li.hidden = !show;
+        if (show) sectionVisible++;
+      });
+
+      visible += sectionVisible;
+
+      // hide/show entire section
+      section.hidden = sectionVisible === 0;
+
+      // update visible count badge in header
+      const countLabel = section.querySelector('[data-count-label]');
+      if (countLabel) countLabel.textContent = `[${sectionVisible}]`;
+
+      // apply collapse state (only when section is visible)
+      if (!section.hidden) {
+        applyCollapse(key, list, section);
+      }
+    });
+
+    // update total counter
+    if (postCountEl) {
+      postCountEl.textContent = `${visible} post${visible === 1 ? '' : 's'}`;
+    }
+    if (noResults) noResults.hidden = visible > 0;
+  }
+
+  function applyCollapse(key, list, section) {
+    const open = collapseState[key] ?? true;
+    const btn  = section.querySelector('[data-collapse-toggle]');
+    const icon = btn?.querySelector('.collapse-icon');
+    const desc = section.querySelector('.group-desc');
+
+    list.classList.toggle('collapsed', !open);
+    if (btn) btn.setAttribute('aria-expanded', String(open));
+    if (icon) icon.textContent = open ? '▾' : '▸';
+  }
+
+  // ─── Search ───────────────────────────────────────────────────────────────
+  let searchTimer;
+  searchInput?.addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      searchQuery = searchInput.value.trim();
+      // when typing, expand all sections so results are visible
+      if (searchQuery) {
+        groupData.forEach(g => { collapseState[g.series ?? 'standalone'] = true; });
+      }
+      applyFilters();
+    }, 120);
+  });
+
+  searchInput?.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      searchInput.value = '';
+      searchQuery = '';
+      applyFilters();
+    }
+  });
+
+  // ─── Series pills ─────────────────────────────────────────────────────────
+  seriesPills.forEach(btn => {
+    btn.addEventListener('click', () => {
+      activeFilter = btn.dataset.filter;
+      seriesPills.forEach(b => b.classList.toggle('pill-active', b === btn));
+      // expand targeted section
+      if (activeFilter !== 'all') {
+        const key = activeFilter.replace('series:', '');
+        collapseState[key] = true;
+      }
+      applyFilters();
+    });
+  });
+
+  // ─── Tag pills ────────────────────────────────────────────────────────────
+  tagPills.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tag = btn.dataset.tag;
+      if (activeTag === tag) {
+        activeTag = null;
+        btn.classList.remove('pill-active');
+      } else {
+        activeTag = tag;
+        tagPills.forEach(b => b.classList.toggle('pill-active', b === btn));
+        // when filtering by tag, expand all sections
+        groupData.forEach(g => { collapseState[g.series ?? 'standalone'] = true; });
+      }
+      applyFilters();
+    });
+  });
+
+  // ─── Collapse toggles ─────────────────────────────────────────────────────
+  document.querySelectorAll('[data-collapse-toggle]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      // Don't trigger if click was actually on a filter pill child
+      const key = btn.dataset.collapseToggle;
+      collapseState[key] = !collapseState[key];
+      applyFilters();
+    });
+  });
+
+  // ─── Initial render ───────────────────────────────────────────────────────
+  applyFilters();
+</script>
+
 <style>
-  /* Page header */
+  /* ── Page header ─────────────────────────────────────────────────────────── */
   .page-header {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    margin-bottom: 2rem;
+    margin-bottom: 1.25rem;
     padding-bottom: 0.75rem;
     border-bottom: 1px solid var(--color-border);
   }
@@ -96,24 +326,144 @@ const groups = groupPostsBySeries(posts);
     color: var(--color-text-dim);
     font-weight: 400;
     margin: 0;
+    flex: 1;
+  }
+  .post-count-badge {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    color: var(--color-text-muted);
+    border: 1px solid var(--color-border);
+    padding: 0.1rem 0.45rem;
+    flex-shrink: 0;
   }
 
-  /* Group section */
-  .group-section { margin-bottom: 2.5rem; }
+  /* ── Toolbar ─────────────────────────────────────────────────────────────── */
+  .toolbar {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    margin-bottom: 1.5rem;
+  }
+
+  /* Search */
+  .search-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    padding: 0.35rem 0.65rem;
+  }
+  .search-icon {
+    font-size: 1rem;
+    color: var(--color-text-muted);
+    line-height: 1;
+    flex-shrink: 0;
+  }
+  .search-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    color: var(--color-text);
+    min-width: 0;
+  }
+  .search-input::placeholder { color: var(--color-text-muted); opacity: 0.6; }
+  .search-input::-webkit-search-cancel-button { display: none; }
+  .search-hint {
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    color: var(--color-text-muted);
+    border: 1px solid var(--color-border);
+    padding: 0.1rem 0.3rem;
+    opacity: 0.5;
+    flex-shrink: 0;
+  }
+
+  /* Filter rows */
+  .filter-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    align-items: center;
+  }
+  .tag-label {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    color: var(--color-text-muted);
+    flex-shrink: 0;
+  }
+  .tag-row { padding-top: 0.1rem; }
+
+  /* Pills */
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    padding: 0.2rem 0.55rem;
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text-dim);
+    cursor: pointer;
+    transition: background 0.1s, color 0.1s, border-color 0.1s;
+    line-height: 1.4;
+  }
+  .pill:hover { border-color: var(--color-accent); color: var(--color-accent); }
+  .pill-active {
+    background: var(--color-accent-glow);
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+  }
+  .pill-count {
+    font-size: 0.6rem;
+    color: var(--color-text-muted);
+    transition: color 0.1s;
+  }
+  .pill-active .pill-count { color: var(--color-accent); opacity: 0.7; }
+
+  .pill-tag { padding: 0.15rem 0.45rem; }
+
+  /* ── No results ───────────────────────────────────────────────────────────── */
+  .no-results {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 1.5rem;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    border: 1px dashed var(--color-border);
+  }
+  .no-results-icon { font-size: 1.1rem; }
+
+  /* ── Group section ────────────────────────────────────────────────────────── */
+  .group-section { margin-bottom: 2rem; }
+
   .group-header {
     display: flex;
     align-items: center;
     gap: 0.35rem;
+    width: 100%;
     padding: 0.4rem 0.75rem;
     background: var(--color-surface-2);
     border: 1px solid var(--color-border);
     border-bottom: none;
     font-family: var(--font-mono);
     font-size: 0.7rem;
+    cursor: pointer;
+    text-align: left;
+    color: inherit;
+    transition: background 0.1s;
   }
+  .group-header:hover { background: var(--color-accent-glow); }
   .group-prompt { color: var(--color-text-muted); }
   .group-name { color: var(--color-accent); font-weight: 600; }
   .group-count { margin-left: auto; color: var(--color-text-muted); }
+  .collapse-icon { color: var(--color-text-muted); font-size: 0.7rem; margin-left: 0.25rem; }
 
   .group-desc {
     padding: 0.5rem 0.875rem;
@@ -126,12 +476,13 @@ const groups = groupPostsBySeries(posts);
     margin: 0;
   }
 
-  /* Post list */
+  /* ── Post list + collapse ─────────────────────────────────────────────────── */
   .group-list { list-style: none; margin: 0; padding: 0; }
-  .group-item {
-    border: 1px solid var(--color-border);
-    border-top: none;
-  }
+  .group-list.collapsed { display: none; }
+  /* When collapsed, give the header a bottom border so it looks closed */
+  .group-header[aria-expanded="false"] { border-bottom: 1px solid var(--color-border); }
+
+  .group-item { border: 1px solid var(--color-border); border-top: none; }
   .group-row {
     display: flex;
     align-items: flex-start;
@@ -183,11 +534,7 @@ const groups = groupPostsBySeries(posts);
     line-height: 1.5;
   }
 
-  .group-tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.3rem;
-  }
+  .group-tags { display: flex; flex-wrap: wrap; gap: 0.3rem; }
   .group-tag {
     font-family: var(--font-mono);
     font-size: 0.65rem;
