@@ -87,14 +87,15 @@ turkeyDuck.fly();     // → Turkey flying (5 times)
     { id: "turkey",  label: "WildTurkey" },
   ]}
   messages={[
-    { from: "client",  to: "adapter", label: "quack()",          type: "sync" },
-    { from: "adapter", to: "turkey",  label: "gobble()",         type: "sync" },
-    { from: "turkey",  to: "adapter", label: "Gobble gobble!",   type: "reply" },
-    { from: "adapter", to: "client",  label: "",                 type: "reply" },
-    { from: "client",  to: "adapter", label: "fly()",            type: "sync" },
-    { from: "adapter", to: "turkey",  label: "fly() [× 5]",      type: "sync" },
-    { from: "turkey",  to: "adapter", label: "Turkey flying…",   type: "reply" },
-    { from: "adapter", to: "client",  label: "",                 type: "reply" },
+    { from: "client",  to: "adapter", label: "quack()",          type: "request" },
+    { from: "adapter", to: "turkey",  label: "gobble()",         type: "request" },
+    { from: "turkey",  to: "adapter", label: "Gobble gobble!",   type: "response" },
+    { from: "adapter", to: "client",  label: "→ done",           type: "response" },
+    { divider: "fly()" },
+    { from: "client",  to: "adapter", label: "fly()",            type: "request" },
+    { from: "adapter", to: "turkey",  label: "fly() [× 5]",      type: "async" },
+    { from: "turkey",  to: "adapter", label: "Turkey flying…",   type: "response" },
+    { from: "adapter", to: "client",  label: "→ done",           type: "response" },
   ]}
   caption="Client calls Duck methods. TurkeyAdapter translates each call into the Turkey API. The interface mismatch is hidden entirely inside the adapter."
 />

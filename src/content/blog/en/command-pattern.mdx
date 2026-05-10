@@ -129,21 +129,30 @@ The four roles:
 
 <SequenceDiagram
   title="Multi-level undo — execute() pushes, undo() pops and reverses"
-  actors={["User", "RemoteControl", "Undo Stack", "LightOnCommand", "StereoOnCmd"]}
-  messages={[
-    { from: "User",          to: "RemoteControl",  label: "onButtonPushed(0) — light on" },
-    { from: "RemoteControl", to: "LightOnCommand",  label: "execute() → light.on()" },
-    { from: "RemoteControl", to: "Undo Stack",      label: "push(LightOnCommand)" },
-    { from: "User",          to: "RemoteControl",   label: "onButtonPushed(1) — stereo on" },
-    { from: "RemoteControl", to: "StereoOnCmd",     label: "execute() → stereo.on() + vol=11" },
-    { from: "RemoteControl", to: "Undo Stack",      label: "push(StereoOnCmd)" },
-    { from: "User",          to: "RemoteControl",   label: "undoButtonPushed() — Ctrl+Z" },
-    { from: "RemoteControl", to: "Undo Stack",      label: "pop() → StereoOnCmd" },
-    { from: "RemoteControl", to: "StereoOnCmd",     label: "undo() → stereo.off()" },
-    { from: "User",          to: "RemoteControl",   label: "undoButtonPushed() — Ctrl+Z again" },
-    { from: "RemoteControl", to: "Undo Stack",      label: "pop() → LightOnCommand" },
-    { from: "RemoteControl", to: "LightOnCommand",  label: "undo() → light.off()" },
+  actors={[
+    { id: "user",    label: "User",            color: "amber" },
+    { id: "remote",  label: "RemoteControl",   color: "teal" },
+    { id: "command", label: "Command (stack)", color: "violet" },
   ]}
+  messages={[
+    { divider: "execute phase — building history" },
+    { from: "user",    to: "remote",  label: "onButtonPushed(0)",      type: "request" },
+    { from: "remote",  to: "command", label: "LightOnCmd.execute()",   type: "request", highlight: true },
+    { from: "command", to: "remote",  label: "light.on() ✓ push",     type: "response" },
+    { from: "user",    to: "remote",  label: "onButtonPushed(1)",      type: "request" },
+    { from: "remote",  to: "command", label: "StereoOnCmd.execute()",  type: "request", highlight: true },
+    { from: "command", to: "remote",  label: "stereo.on()+vol=11 ✓ push", type: "response" },
+    { note: "Stack: [LightOnCmd, StereoOnCmd] — top = StereoOnCmd" },
+    { divider: "undo phase — Ctrl+Z × 2" },
+    { from: "user",    to: "remote",  label: "undoButtonPushed() ⌘Z",  type: "request" },
+    { from: "remote",  to: "command", label: "pop() → StereoOnCmd.undo()", type: "request", highlight: true },
+    { from: "command", to: "remote",  label: "stereo.off() ✓",        type: "response" },
+    { from: "user",    to: "remote",  label: "undoButtonPushed() ⌘Z",  type: "request" },
+    { from: "remote",  to: "command", label: "pop() → LightOnCmd.undo()", type: "request", highlight: true },
+    { from: "command", to: "remote",  label: "light.off() ✓",         type: "response" },
+    { note: "Stack: [] — empty. Further undo is a no-op (NoCommand)" },
+  ]}
+  caption="Each execute() pushes onto the stack. Each undo() pops the top command and calls its undo(). Reversal order is automatic — last-in, first-out."
 />
 
 <FlowStep steps={[
