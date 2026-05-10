@@ -2,7 +2,7 @@
 interface StepItem {
   title: string;
   body: string;
-  color?: 'teal' | 'green' | 'amber' | 'rose';
+  color?: string;
 }
 
 interface Props {
@@ -10,18 +10,31 @@ interface Props {
   steps?: StepItem[];
   // Single-step API (legacy)
   step?: string | number;
-  color?: 'teal' | 'green' | 'amber' | 'rose';
+  color?: string;
   title?: string;
 }
 
 const { steps, step, color = 'teal', title } = Astro.props;
 
-const cssVars = {
-  teal:  '--color-accent',
-  green: '--color-green',
-  amber: '--color-amber',
-  rose:  '--color-rose',
+const colorMap: Record<string, string> = {
+  teal:    'var(--color-accent)',
+  green:   'var(--color-green)',
+  amber:   'var(--color-amber)',
+  rose:    'var(--color-rose)',
+  purple:  '#7c3aed',
+  violet:  '#7c3aed',
+  blue:    '#2563eb',
+  sky:     '#0ea5e9',
+  cyan:    '#06b6d4',
+  orange:  '#ea580c',
+  fuchsia: '#c026d3',
+  pink:    '#db2777',
+  indigo:  '#4f46e5',
+  red:     '#dc2626',
+  yellow:  '#ca8a04',
+  lime:    '#65a30d',
 };
+function resolveColor(c: string) { return colorMap[c] ?? colorMap['teal']; }
 ---
 
 {steps ? (
@@ -29,9 +42,8 @@ const cssVars = {
   <div class="flow-steps-wrap">
     {steps.map((s, i) => {
       const itemColor = s.color ?? color;
-      const cssVar = cssVars[itemColor];
       return (
-        <div class="flow-step" style={`--step-color: var(${cssVar});`}>
+        <div class="flow-step" style={`--step-color: ${resolveColor(itemColor)};`}>
           <div class="flow-step-num">{i + 1}</div>
           <div class="flow-step-body">
             <strong class="flow-step-title">{s.title}</strong>
@@ -43,7 +55,7 @@ const cssVars = {
   </div>
 ) : (
   <!-- Single-step slot mode (legacy) -->
-  <div class="flow-step" style={`--step-color: var(${cssVars[color]});`}>
+  <div class="flow-step" style={`--step-color: ${resolveColor(color)};`}>
     <div class="flow-step-num">{step}</div>
     <div class="flow-step-body">
       <strong class="flow-step-title">{title}</strong>

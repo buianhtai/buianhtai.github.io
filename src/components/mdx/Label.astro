@@ -1,20 +1,35 @@
 ---
 interface Props {
-  color?: 'teal' | 'green' | 'amber' | 'rose';
+  color?: string;
 }
 const { color = 'teal' } = Astro.props;
 
-const styles = {
-  teal:  'background: rgba(8,145,178,0.12); color: #0891b2;',
-  green: 'background: rgba(5,150,105,0.12); color: #059669;',
-  amber: 'background: rgba(217,119,6,0.12); color: #d97706;',
-  rose:  'background: rgba(190,18,60,0.12); color: #be123c;',
+const styles: Record<string, string> = {
+  teal:    'background: rgba(8,145,178,0.12); color: #0891b2;',
+  green:   'background: rgba(5,150,105,0.12); color: #059669;',
+  amber:   'background: rgba(217,119,6,0.12); color: #d97706;',
+  rose:    'background: rgba(190,18,60,0.12); color: #be123c;',
+  purple:  'background: rgba(124,58,237,0.12); color: #7c3aed;',
+  violet:  'background: rgba(124,58,237,0.12); color: #7c3aed;',
+  blue:    'background: rgba(37,99,235,0.12); color: #2563eb;',
+  sky:     'background: rgba(14,165,233,0.12); color: #0ea5e9;',
+  cyan:    'background: rgba(6,182,212,0.12); color: #06b6d4;',
+  orange:  'background: rgba(234,88,12,0.12); color: #ea580c;',
+  fuchsia: 'background: rgba(192,38,211,0.12); color: #c026d3;',
+  pink:    'background: rgba(219,39,119,0.12); color: #db2777;',
+  indigo:  'background: rgba(79,70,229,0.12); color: #4f46e5;',
+  red:     'background: rgba(220,38,38,0.12); color: #dc2626;',
+  yellow:  'background: rgba(202,138,4,0.12); color: #ca8a04;',
+  lime:    'background: rgba(101,163,13,0.12); color: #65a30d;',
+  slate:   'background: rgba(100,116,139,0.12); color: #64748b;',
 };
+// Fallback for any unknown color name — use teal
+const style = styles[color] ?? styles['teal'];
 ---
 
 <span
   class="inline-block rounded px-2 py-0.5 font-mono text-xs font-semibold uppercase tracking-wider"
-  style={styles[color]}
+  style={style}
 >
   <slot />
 </span>

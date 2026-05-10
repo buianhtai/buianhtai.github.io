@@ -1,21 +1,37 @@
 ---
 interface Props {
-  color?: 'teal' | 'green' | 'amber' | 'rose';
+  color?: string;
 }
 const { color = 'teal' } = Astro.props;
 
-const icons = { teal: '▶', green: '✔', amber: '⚠', rose: '✖' };
-const cssVars = {
-  teal:  '--color-accent',
-  green: '--color-green',
-  amber: '--color-amber',
-  rose:  '--color-rose',
+const icons: Record<string, string> = {
+  teal: '▶', green: '✔', amber: '⚠', rose: '✖',
+  sky: '▶', cyan: '▶', blue: '▶', purple: '▶', violet: '▶',
+  indigo: '▶', fuchsia: '✦', pink: '✦', orange: '⚠', red: '✖',
 };
-const icon = icons[color];
-const cssVar = cssVars[color];
+const colorMap: Record<string, string> = {
+  teal:    'var(--color-accent)',
+  green:   'var(--color-green)',
+  amber:   'var(--color-amber)',
+  rose:    'var(--color-rose)',
+  sky:     '#0ea5e9',
+  cyan:    '#06b6d4',
+  blue:    '#2563eb',
+  purple:  '#7c3aed',
+  violet:  '#7c3aed',
+  indigo:  '#4f46e5',
+  fuchsia: '#c026d3',
+  pink:    '#db2777',
+  orange:  '#ea580c',
+  red:     '#dc2626',
+  yellow:  '#ca8a04',
+  lime:    '#65a30d',
+};
+const icon = icons[color] ?? '▶';
+const calloutColor = colorMap[color] ?? colorMap['teal'];
 ---
 
-<div class="callout" style={`--callout-color: var(${cssVar});`}>
+<div class="callout" style={`--callout-color: ${calloutColor};`}>
   <span class="callout-icon">{icon}</span>
   <div class="callout-body"><slot /></div>
 </div>

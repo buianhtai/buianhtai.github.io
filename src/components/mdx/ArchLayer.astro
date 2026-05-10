@@ -1,22 +1,35 @@
 ---
 interface Props {
   badge: string;
-  badgeColor?: 'teal' | 'amber' | 'green' | 'rose';
+  badgeColor?: string;
   label: string;
   items: string[];
 }
 const { badge, badgeColor = 'teal', label, items } = Astro.props;
 
-const cssVars = {
-  teal:  '--color-accent',
-  green: '--color-green',
-  amber: '--color-amber',
-  rose:  '--color-rose',
+// Map color names to CSS variables or hex fallbacks
+const colorMap: Record<string, string> = {
+  teal:    'var(--color-accent)',
+  green:   'var(--color-green)',
+  amber:   'var(--color-amber)',
+  rose:    'var(--color-rose)',
+  purple:  '#7c3aed',
+  violet:  '#7c3aed',
+  blue:    '#2563eb',
+  sky:     '#0ea5e9',
+  cyan:    '#06b6d4',
+  orange:  '#ea580c',
+  fuchsia: '#c026d3',
+  pink:    '#db2777',
+  indigo:  '#4f46e5',
+  red:     '#dc2626',
+  yellow:  '#ca8a04',
+  lime:    '#65a30d',
 };
-const cssVar = cssVars[badgeColor];
+const layerColor = colorMap[badgeColor] ?? colorMap['teal'];
 ---
 
-<div class="arch-layer" style={`--layer-color: var(${cssVar});`}>
+<div class="arch-layer" style={`--layer-color: ${layerColor};`}>
   <span class="arch-badge">{badge}</span>
   <span class="arch-label">{label}</span>
   <div class="arch-chips">
