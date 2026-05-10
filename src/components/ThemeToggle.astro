@@ -15,24 +15,49 @@
 
 
 <script>
-  const ALL_THEMES = ['terminal', 'light', 'dracula', 'nord', 'gruvbox', 'solarized'];
+  const ALL_THEMES = ['terminal', 'light', 'dracula', 'nord', 'gruvbox', 'solarized', 'material', 'material-light', 'tokyo-night', 'tokyo-storm'];
 
   const THEMES = [
-    { id: 'terminal',  label: 'terminal-dark', dot: '#00d9ff' },
-    { id: 'light',     label: 'light',         dot: '#0070a8' },
-    { id: 'dracula',   label: 'dracula',        dot: '#bd93f9' },
-    { id: 'nord',      label: 'nord',           dot: '#88c0d0' },
-    { id: 'gruvbox',   label: 'gruvbox',        dot: '#fabd2f' },
-    { id: 'solarized', label: 'solarized-dark', dot: '#268bd2' },
+    // ── Classic ──
+    { id: 'terminal',      label: 'terminal-dark',   dot: '#00d9ff', group: 'classic' },
+    { id: 'light',         label: 'light',           dot: '#0070a8', group: 'classic' },
+    { id: 'dracula',       label: 'dracula',         dot: '#bd93f9', group: 'classic' },
+    { id: 'nord',          label: 'nord',            dot: '#88c0d0', group: 'classic' },
+    { id: 'gruvbox',       label: 'gruvbox',         dot: '#fabd2f', group: 'classic' },
+    { id: 'solarized',     label: 'solarized-dark',  dot: '#268bd2', group: 'classic' },
+    // ── Material ──
+    { id: 'material',      label: 'material dark',   dot: '#bb86fc', group: 'material' },
+    { id: 'material-light',label: 'material light',  dot: '#6200ee', group: 'material' },
+    // ── Tokyo Night ──
+    { id: 'tokyo-night',   label: 'tokyo night',     dot: '#7aa2f7', group: 'tokyo' },
+    { id: 'tokyo-storm',   label: 'tokyo storm',     dot: '#bb9af7', group: 'tokyo' },
   ];
 
+  // Palette that auto-applies when a theme is selected (palette-follows-theme)
+  const THEME_PALETTE_MAP: Record<string, string> = {
+    'terminal':       'indigo',
+    'light':          'light',
+    'dracula':        'slate',
+    'nord':           'sage',
+    'gruvbox':        'amber',
+    'solarized':      'indigo',
+    'material':       'material',
+    'material-light': 'material-light',
+    'tokyo-night':    'tokyo',
+    'tokyo-storm':    'tokyo-storm',
+  };
+
   const F_PALETTES = [
-    { id: 'indigo',      label: 'indigo',      dot: '#4589ff' },
-    { id: 'slate',       label: 'slate',       dot: '#a78bfa' },
-    { id: 'sage',        label: 'sage',        dot: '#5eead4' },
-    { id: 'amber',       label: 'amber',       dot: '#f59e0b' },
-    { id: 'light',       label: 'light',       dot: '#1d4ed8' },
-    { id: 'infographic', label: 'infographic', dot: '#e8441a' },
+    { id: 'indigo',         label: 'indigo',         dot: '#4589ff' },
+    { id: 'slate',          label: 'slate',          dot: '#a78bfa' },
+    { id: 'sage',           label: 'sage',           dot: '#5eead4' },
+    { id: 'amber',          label: 'amber',          dot: '#f59e0b' },
+    { id: 'light',          label: 'light',          dot: '#1d4ed8' },
+    { id: 'infographic',    label: 'infographic',    dot: '#e8441a' },
+    { id: 'material',       label: 'material dark',  dot: '#bb86fc' },
+    { id: 'material-light', label: 'material light', dot: '#6200ee' },
+    { id: 'tokyo',          label: 'tokyo night',    dot: '#7aa2f7' },
+    { id: 'tokyo-storm',    label: 'tokyo storm',    dot: '#bb9af7' },
   ];
 
   // Build the dropdown once and append to body (escapes any overflow:hidden ancestor)
@@ -45,7 +70,7 @@
     div.setAttribute('role', 'menu');
     div.style.display = 'none';
 
-    // ── Terminal theme section ──
+    // ── Theme section ──
     const header = document.createElement('div');
     header.style.cssText = 'padding:0.3rem 0.6rem;font-size:0.62rem;color:var(--color-text-muted);border-bottom:1px solid var(--color-border);letter-spacing:0.08em;text-transform:uppercase;';
     header.textContent = '$ select theme';
@@ -54,7 +79,16 @@
     const ul = document.createElement('ul');
     ul.style.cssText = 'list-style:none;margin:0;padding:0.25rem 0;';
 
+    let lastGroup = '';
     THEMES.forEach(t => {
+      // Insert sub-group separator when group changes (skip first group)
+      if (t.group !== lastGroup && lastGroup !== '') {
+        const sep = document.createElement('li');
+        sep.style.cssText = 'height:1px;background:var(--color-border);margin:0.2rem 0.5rem;';
+        ul.appendChild(sep);
+      }
+      lastGroup = t.group;
+
       const li = document.createElement('li');
       li.className = 'theme-option';
       li.dataset.theme = t.id;
@@ -152,6 +186,19 @@
     });
 
     document.dispatchEvent(new CustomEvent('theme-change', { detail: { theme } }));
+
+    // ── Palette-follows-theme: auto-switch foundations palette ──
+    const linkedPalette = THEME_PALETTE_MAP[theme];
+    if (linkedPalette) {
+      localStorage.setItem('f-palette', linkedPalette);
+      // If on a foundations page, apply immediately
+      const fn = (window as any).__applyFPalette;
+      if (fn) fn(linkedPalette);
+      // Sync active dots in dropdown
+      document.querySelectorAll<HTMLElement>('[data-f-palette]').forEach(el => {
+        el.classList.toggle('is-active', el.dataset.fPalette === linkedPalette);
+      });
+    }
   }
 
   function openDropdown() {

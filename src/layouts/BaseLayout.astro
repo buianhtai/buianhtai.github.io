@@ -50,7 +50,7 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site);
     <!-- Theme init: prevent FOUC -->
     <script is:inline>
       (function() {
-        var ALL_THEMES = ['terminal', 'light', 'dracula', 'nord', 'gruvbox', 'solarized'];
+        var ALL_THEMES = ['terminal', 'light', 'dracula', 'nord', 'gruvbox', 'solarized', 'material', 'material-light', 'tokyo-night', 'tokyo-storm'];
         var saved = localStorage.getItem('theme');
         var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
         var theme = saved || (prefersDark ? 'terminal' : 'light');

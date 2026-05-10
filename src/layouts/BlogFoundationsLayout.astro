@@ -273,6 +273,78 @@ const seriesTitle = series ? (seriesMeta[series]?.title ?? series) : null;
     --f-c6:           #ec4899;   /* pink         */
   }
 
+  /* Material Dark — M3 dark scheme: deep grey surfaces, purple primary */
+  .f-root.f-palette-material {
+    --f-bg:           #121212;
+    --f-surface:      #1e1e1e;
+    --f-surface-2:    #2c2c2c;
+    --f-border:       #3a3a3a;
+    --f-border-bright:#555555;
+    --f-text:         #e0e0e0;
+    --f-text-dim:     #9e9e9e;
+    --f-text-muted:   #616161;
+    --f-accent:       #bb86fc;
+    --f-accent-dim:   #9a5ef5;
+    --f-accent-glow:  rgba(187, 134, 252, 0.15);
+    /* categorical — M3 tonal palette */
+    --f-c1: #bb86fc; --f-c2: #03dac6; --f-c3: #cf6679;
+    --f-c4: #ffb74d; --f-c5: #4dd0e1; --f-c6: #a5d6a7;
+  }
+
+  /* Material Light — M3 light scheme: white surfaces, deep purple primary */
+  .f-root.f-palette-material-light {
+    --f-bg:           #fafafa;
+    --f-surface:      #ffffff;
+    --f-surface-2:    #f5f5f5;
+    --f-border:       #e0e0e0;
+    --f-border-bright:#bdbdbd;
+    --f-text:         #212121;
+    --f-text-dim:     #757575;
+    --f-text-muted:   #bdbdbd;
+    --f-accent:       #6200ee;
+    --f-accent-dim:   #3700b3;
+    --f-accent-glow:  rgba(98, 0, 238, 0.10);
+    /* categorical — M3 light tonal */
+    --f-c1: #6200ee; --f-c2: #018786; --f-c3: #b00020;
+    --f-c4: #f57c00; --f-c5: #0288d1; --f-c6: #388e3c;
+  }
+
+  /* Tokyo Night — midnight blue, sapphire accents */
+  .f-root.f-palette-tokyo {
+    --f-bg:           #1a1b26;
+    --f-surface:      #16161e;
+    --f-surface-2:    #1f2335;
+    --f-border:       #2f3549;
+    --f-border-bright:#414868;
+    --f-text:         #c0caf5;
+    --f-text-dim:     #565f89;
+    --f-text-muted:   #3b4261;
+    --f-accent:       #7aa2f7;
+    --f-accent-dim:   #5a8af0;
+    --f-accent-glow:  rgba(122, 162, 247, 0.15);
+    /* categorical — Tokyo Night palette */
+    --f-c1: #7aa2f7; --f-c2: #9ece6a; --f-c3: #f7768e;
+    --f-c4: #e0af68; --f-c5: #bb9af7; --f-c6: #73daca;
+  }
+
+  /* Tokyo Storm — stormy indigo, violet accents */
+  .f-root.f-palette-tokyo-storm {
+    --f-bg:           #24283b;
+    --f-surface:      #1f2335;
+    --f-surface-2:    #292e42;
+    --f-border:       #3b4261;
+    --f-border-bright:#545c7e;
+    --f-text:         #c0caf5;
+    --f-text-dim:     #737aa2;
+    --f-text-muted:   #3b4261;
+    --f-accent:       #bb9af7;
+    --f-accent-dim:   #9d7ee8;
+    --f-accent-glow:  rgba(187, 154, 247, 0.15);
+    /* categorical — Tokyo Storm palette */
+    --f-c1: #bb9af7; --f-c2: #9ece6a; --f-c3: #f7768e;
+    --f-c4: #e0af68; --f-c5: #7aa2f7; --f-c6: #73daca;
+  }
+
   /* ── Top bar ── */
   .f-topbar {
     position: sticky;
@@ -656,7 +728,7 @@ const seriesTitle = series ? (seriesMeta[series]?.title ?? series) : null;
 <script>
   // ── Foundations palette switcher ──────────────────────────────────
 
-  const F_PALETTES = ['indigo', 'slate', 'sage', 'amber', 'light', 'infographic'] as const;
+  const F_PALETTES = ['indigo', 'slate', 'sage', 'amber', 'light', 'infographic', 'material', 'material-light', 'tokyo', 'tokyo-storm'] as const;
   type FPalette = typeof F_PALETTES[number];
 
   function applyFPalette(palette: FPalette) {
