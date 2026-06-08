@@ -95,11 +95,19 @@ const posts = (await getCollection('blog', (p) => p.data.lang === lang && !p.dat
   .post-item:last-child { border-bottom: none; }
   .post-row {
     display: flex;
-    align-items: baseline;
-    gap: 1rem;
-    padding: 0.7rem 0.875rem;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding: 0.8rem 0.875rem;
     text-decoration: none;
     transition: background 0.12s;
+  }
+  @media (min-width: 640px) {
+    .post-row {
+      flex-direction: row;
+      align-items: baseline;
+      gap: 1rem;
+      padding: 0.7rem 0.875rem;
+    }
   }
   .post-row:hover { background: var(--color-accent-glow); }
   .post-date {

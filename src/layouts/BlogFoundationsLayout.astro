@@ -358,9 +358,15 @@ const seriesTitle = series ? (seriesMeta[series]?.title ?? series) : null;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 1.5rem;
-    padding: 0.55rem 1.5rem;
+    gap: 1rem;
+    padding: 0.55rem 1rem;
     max-width: 100%;
+  }
+  @media (min-width: 640px) {
+    .f-topbar-inner {
+      padding: 0.55rem 1.5rem;
+      gap: 1.5rem;
+    }
   }
 
   /* Breadcrumb */
@@ -371,7 +377,7 @@ const seriesTitle = series ? (seriesMeta[series]?.title ?? series) : null;
     font-family: 'IBM Plex Mono', monospace;
     font-size: 0.68rem;
     min-width: 0;
-    flex-shrink: 1;
+    flex: 1;
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
@@ -391,8 +397,13 @@ const seriesTitle = series ? (seriesMeta[series]?.title ?? series) : null;
 
   .f-topbar-progress {
     flex-shrink: 0;
-    min-width: 160px;
+    min-width: 100px;
     max-width: 240px;
+  }
+  @media (min-width: 640px) {
+    .f-topbar-progress {
+      min-width: 160px;
+    }
   }
 
   /* ── 3-column grid ── */
@@ -676,11 +687,16 @@ const seriesTitle = series ? (seriesMeta[series]?.title ?? series) : null;
 
   .f-footer-chapters {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
     gap: 1px;
     background: var(--f-border);
     border: 1px solid var(--f-border);
     margin-bottom: 1.5rem;
+  }
+  @media (min-width: 640px) {
+    .f-footer-chapters {
+      grid-template-columns: 1fr 1fr;
+    }
   }
 
   .f-footer-chap {

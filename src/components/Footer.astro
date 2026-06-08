@@ -4,8 +4,8 @@ const year = new Date().getFullYear();
 
 <footer style="border-top: 1px solid var(--color-border); margin-top: 4rem; background: var(--color-surface);">
   <!-- Status bar row -->
-  <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.4rem 1.25rem; border-bottom: 1px solid var(--color-border); font-family: var(--font-mono); font-size: 0.63rem; color: var(--color-text-muted);">
-    <span>
+  <div class="footer-status-bar" style="display: flex; align-items: center; justify-content: space-between; padding: 0.4rem 1.25rem; border-bottom: 1px solid var(--color-border); font-family: var(--font-mono); font-size: 0.63rem; color: var(--color-text-muted);">
+    <span class="footer-brand">
       <span style="color: var(--color-green);">●</span>
       &nbsp;tai.bui &mdash; learn in public
     </span>
@@ -22,3 +22,16 @@ const year = new Date().getFullYear();
     <span style="opacity: 0.5;">built with astro</span>
   </div>
 </footer>
+
+<style>
+  @media (max-width: 480px) {
+    .footer-status-bar {
+      flex-direction: column;
+      gap: 0.5rem;
+      align-items: flex-start !important;
+    }
+    .footer-brand {
+      display: none;
+    }
+  }
+</style>

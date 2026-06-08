@@ -337,7 +337,12 @@ const groupData = groups.map(g => ({
   .hero {
     border-bottom: 1px solid var(--color-border);
     background: linear-gradient(180deg, var(--color-surface-2) 0%, var(--color-bg) 100%);
-    padding: 3.5rem 2rem 2.5rem;
+    padding: 2.5rem 1.5rem 2rem;
+  }
+  @media (min-width: 768px) {
+    .hero {
+      padding: 3.5rem 2rem 2.5rem;
+    }
   }
   .hero-inner {
     max-width: 64rem;
@@ -403,6 +408,23 @@ const groupData = groups.map(g => ({
     display: flex;
     flex-direction: column;
     gap: 1.75rem;
+  }
+  @media (max-width: 768px) {
+    .sidebar {
+      position: static;
+      gap: 1.25rem;
+    }
+    .series-list {
+      flex-direction: row;
+      overflow-x: auto;
+      padding-bottom: 0.5rem;
+      scrollbar-width: none;
+    }
+    .series-list::-webkit-scrollbar { display: none; }
+    .series-btn {
+      white-space: nowrap;
+      width: auto;
+    }
   }
   .sidebar-block {
     display: flex;
@@ -605,9 +627,16 @@ const groupData = groups.map(g => ({
     font-weight: 700;
     color: var(--color-text);
     transition: color 0.12s;
-    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+  @media (max-width: 640px) {
+    .section-title {
+      white-space: normal;
+      word-break: break-word;
+    }
   }
   .section-header-right {
     display: flex;
@@ -648,7 +677,7 @@ const groupData = groups.map(g => ({
   .post-list.collapsed { display: none; }
 
   /* ── Post card ────────────────────────────────────────────────────────── */
-  .post-item { display: block; }
+  .post-item { display: block; min-width: 0; overflow: hidden; }
   .post-card {
     display: flex;
     align-items: stretch;
@@ -659,6 +688,9 @@ const groupData = groups.map(g => ({
     border-radius: 8px;
     overflow: hidden;
     transition: border-color 0.15s, box-shadow 0.15s, transform 0.1s;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
   }
   .post-card:hover {
     border-color: var(--color-accent);
@@ -720,6 +752,8 @@ const groupData = groups.map(g => ({
     margin: 0 0 0.3rem;
     line-height: 1.4;
     transition: color 0.12s;
+    word-break: break-word;
+    overflow-wrap: break-word;
   }
   .post-card:hover .post-title { color: var(--color-accent); }
 
@@ -734,6 +768,8 @@ const groupData = groups.map(g => ({
     display: flex;
     flex-wrap: wrap;
     gap: 0.3rem;
+    max-width: 100%;
+    overflow: hidden;
   }
   .post-tag {
     font-family: var(--font-mono);
@@ -743,6 +779,10 @@ const groupData = groups.map(g => ({
     border-radius: 3px;
     padding: 0.1rem 0.4rem;
     transition: color 0.12s;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .post-card:hover .post-tag { color: var(--color-text-dim); }
 
