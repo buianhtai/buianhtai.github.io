@@ -37,18 +37,18 @@ An MCP server should not expose your API structure. It should expose the tasks a
 
 REST APIs are usually built around resources:
 
-- `GET /entities/{id}`
-- `POST /schemas`
-- `GET /activity-history`
-- `POST /imports/{id}/retry`
+- `GET /projects/{id}`
+- `POST /documents`
+- `GET /reports/{id}`
+- `POST /tickets/{id}/comments`
 
 Agents do not naturally think in endpoint paths.
 They think in tasks:
 
-- find the entity related to this ticket
-- explain why this import failed
-- validate this payload against the schema
-- summarize recent changes for this workspace
+- find the project related to this ticket
+- explain why this report generation failed
+- validate this document payload before submission
+- summarize recent changes for this account
 - create a safe draft change, but do not apply it yet
 
 That difference matters.
@@ -63,7 +63,7 @@ If we expose raw REST endpoints directly, the model has to solve too many proble
   headers={["Problem", "What the agent now has to infer"]}
   rows={[
     { Problem: "Endpoint discovery", "What the agent now has to infer": "Which path maps to the user's intent" },
-    { Problem: "Parameter semantics", "What the agent now has to infer": "Which IDs, filters, tenants, and pagination fields are required" },
+    { Problem: "Parameter semantics", "What the agent now has to infer": "Which IDs, filters, account context, and pagination fields are required" },
     { Problem: "Safety", "What the agent now has to infer": "Whether a call is read-only, destructive, or irreversible" },
     { Problem: "Error handling", "What the agent now has to infer": "Whether a 400 is user input, expired auth, missing scope, or platform failure" },
     { Problem: "Context bloat", "What the agent now has to infer": "How much JSON to fetch without flooding the conversation" },
@@ -96,21 +96,21 @@ That is the first important lesson.
 Large platforms should not start with one global MCP tool catalog. They should start with domain-focused surfaces.
 </Callout>
 
-For an internal REST platform, that suggests a shape like this:
+For a generic REST platform, that suggests a shape like this:
 
-<ArchLayer badge="ENTITY" badgeColor="teal" label="Entity MCP" items={["search_entities", "get_entity", "get_entity_relationships", "summarize_entity"]} />
+<ArchLayer badge="PROJECT" badgeColor="teal" label="Project MCP" items={["search_projects", "get_project", "get_project_activity", "summarize_project"]} />
 
-<ArchLayer badge="SCHEMA" badgeColor="green" label="Schema MCP" items={["search_schemas", "get_schema", "validate_payload", "explain_schema_field"]} />
+<ArchLayer badge="DOCS" badgeColor="green" label="Document MCP" items={["search_documents", "get_document", "validate_document", "explain_document_field"]} />
 
-<ArchLayer badge="AUDIT" badgeColor="amber" label="Audit MCP" items={["search_activity", "summarize_recent_changes", "find_actor_changes"]} />
+<ArchLayer badge="REPORT" badgeColor="amber" label="Reporting MCP" items={["list_reports", "get_report_status", "summarize_report", "explain_report_error"]} />
 
-<ArchLayer badge="IMPORT" badgeColor="rose" label="Migration / Import MCP" items={["get_import_status", "explain_import_error", "list_failed_rows", "suggest_retry_plan"]} />
+<ArchLayer badge="SUPPORT" badgeColor="rose" label="Support MCP" items={["search_tickets", "summarize_ticket", "draft_ticket_reply", "list_customer_updates"]} />
 
 Each surface can have its own auth scopes, rate limits, logging policy, and deployment posture.
 The agent sees a smaller and more meaningful tool set.
 
 This also helps humans.
-When a platform team owns `Schema MCP`, it can evolve that surface without coordinating every other product area.
+When a product team owns `Document MCP`, it can evolve that surface without coordinating every other product area.
 
 ---
 
@@ -135,9 +135,9 @@ If it sees 8 tools for the current task, the probability of a correct tool call 
   accent="amber"
   headers={["Mode", "Example", "Why it matters"]}
   rows={[
-    { Mode: "Read-only", Example: "entity,schema,audit", "Why it matters": "Safe default for exploration, support, and documentation agents" },
-    { Mode: "Operator", Example: "entity-write,import-retry", "Why it matters": "Write tools are only exposed to trusted workflows" },
-    { Mode: "Debug", Example: "logs,audit,import-status", "Why it matters": "Focused tools for incident or RCA workflows" },
+    { Mode: "Read-only", Example: "projects,documents,reports", "Why it matters": "Safe default for exploration, support, and documentation agents" },
+    { Mode: "Operator", Example: "document-write,ticket-update", "Why it matters": "Write tools are only exposed to trusted workflows" },
+    { Mode: "Debug", Example: "logs,reports,status", "Why it matters": "Focused tools for incident or RCA workflows" },
     { Mode: "Docs", Example: "search_docs,get_api_example", "Why it matters": "Lets agents answer questions without touching production data" },
   ]}
 />
@@ -147,13 +147,13 @@ If it sees 8 tools for the current task, the probability of a correct tool call 
 For our platform, I would make read-only the default:
 
 ```text
-platform-mcp --toolsets entity,schema,audit --read-only
+platform-mcp --toolsets projects,documents,reports --read-only
 ```
 
 Then expose write tools only when explicitly enabled:
 
 ```text
-platform-mcp --toolsets entity,schema --tools create_schema_draft,submit_entity_update
+platform-mcp --toolsets projects,documents --tools create_document_draft,submit_project_update
 ```
 
 The rule is simple:
@@ -192,7 +192,7 @@ Before calling a write endpoint, the agent can inspect the docs, fetch an exampl
 <Pipeline
   nodes={[
     { title: 'Understand', subtitle: 'Search docs + operation metadata' },
-    { title: 'Validate', subtitle: 'Check schema, scopes, tenant, and payload' },
+    { title: 'Validate', subtitle: 'Check format, scopes, account context, and payload' },
     { title: 'Preview', subtitle: 'Return a human-readable plan' },
     { title: 'Execute', subtitle: 'Call REST API only after guardrails pass' },
     { title: 'Summarize', subtitle: 'Normalize result + next steps' },
@@ -214,7 +214,7 @@ The architecture I would start with has five layers.
 
 <ArchLayer badge="MCP" badgeColor="teal" label="Tool Surface" items={["Task-oriented tools", "JSON schemas", "Toolsets", "Read-only filtering"]} />
 
-<ArchLayer badge="AUTH" badgeColor="green" label="Identity and Scope Layer" items={["User token", "Service token", "Tenant/workspace context", "Permission checks"]} />
+<ArchLayer badge="AUTH" badgeColor="green" label="Identity and Scope Layer" items={["User token", "Service token", "Account/project context", "Permission checks"]} />
 
 <ArchLayer badge="API" badgeColor="amber" label="REST Client Layer" items={["Typed clients", "Pagination helpers", "Retries", "Rate-limit handling"]} />
 
@@ -237,18 +237,18 @@ The safety layer decides whether a requested action is allowed.
 Good:
 
 ```text
-search_entities
-summarize_entity_history
-validate_payload_against_schema
-explain_import_failure
+search_projects
+summarize_project_history
+validate_document_payload
+explain_report_failure
 ```
 
 Weak:
 
 ```text
-get_entity_by_id_endpoint
-post_schema_endpoint
-call_activity_history_api
+get_project_by_id_endpoint
+post_document_endpoint
+call_report_status_api
 ```
 
 The tool name should describe the job, not the route.
@@ -258,11 +258,11 @@ The tool name should describe the job, not the route.
 REST APIs often return large JSON documents.
 Agents do not always need the full object.
 
-For example, `get_entity` can support:
+For example, `get_project` can support:
 
 ```json
 {
-  "entityId": "...",
+  "projectId": "...",
   "includeRaw": false
 }
 ```
@@ -270,7 +270,7 @@ For example, `get_entity` can support:
 Default response:
 
 ```text
-Entity summary, type, lifecycle, key attributes, relationship count, last modified time.
+Project summary, status, owner, key attributes, recent activity, last modified time.
 ```
 
 Raw response only when explicitly requested.
@@ -280,23 +280,23 @@ Raw response only when explicitly requested.
 Instead of forcing the model to manage `offset`, `limit`, `nextPageToken`, and partial results, expose tools like:
 
 ```text
-search_activity(query, maxResults)
+search_reports(query, maxResults)
 ```
 
 Internally the MCP server can page through the REST API safely up to a limit.
 
 ### 4. Normalize errors
 
-Do not leak raw platform errors directly.
+Do not leak raw backend errors directly.
 Return a consistent envelope:
 
 ```json
 {
   "ok": false,
   "kind": "missing_permission",
-  "message": "The token lacks schema:read for this workspace.",
+  "message": "The token lacks document:read for this account.",
   "retryable": false,
-  "nextAction": "Ask for a token with schema:read or switch to a read-authorized workspace."
+  "nextAction": "Ask for a token with document:read or switch to an authorized account."
 }
 ```
 
@@ -309,9 +309,9 @@ For writes, I would avoid tools that immediately mutate state when a safer stage
 Better shape:
 
 ```text
-create_schema_change_draft
-validate_schema_change
-apply_schema_change
+create_document_change_draft
+validate_document_change
+apply_document_change
 ```
 
 This gives the agent and human a checkpoint before production mutation.
@@ -324,7 +324,7 @@ The public examples all point toward the same principle:
 MCP does not remove the need for authorization.
 It makes authorization more important because the caller is now an agent.
 
-For our platform, I would separate four questions:
+For a production platform, I would separate four questions:
 
 <Card>
 
@@ -334,7 +334,7 @@ For our platform, I would separate four questions:
   headers={["Question", "Example check"]}
   rows={[
     { Question: "Who is the user?", "Example check": "Token subject, service account, or delegated identity" },
-    { Question: "Where are they acting?", "Example check": "Tenant, workspace, environment, project" },
+    { Question: "Where are they acting?", "Example check": "Account, project, environment, region" },
     { Question: "What can they see?", "Example check": "Read scopes, row-level filters, attribute redaction" },
     { Question: "What can they change?", "Example check": "Write scopes, toolset enablement, approval requirement" },
   ]}
@@ -356,7 +356,7 @@ I would build the platform MCP in stages.
 
 <Pipeline
   nodes={[
-    { title: 'Phase 1', subtitle: 'Read-only tools for docs, schemas, entities, and audit' },
+    { title: 'Phase 1', subtitle: 'Read-only tools for docs, projects, documents, and reports' },
     { title: 'Phase 2', subtitle: 'Toolsets, auth scopes, pagination, normalized errors' },
     { title: 'Phase 3', subtitle: 'Dry-run write workflows and approval gates' },
     { title: 'Phase 4', subtitle: 'Operational tools, observability, rate-limit controls' },
