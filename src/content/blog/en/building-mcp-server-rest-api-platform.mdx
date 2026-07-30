@@ -1,0 +1,399 @@
+---
+title: "Building an MCP Server for a REST API Platform: Lessons from Cloudflare, GitHub, and Microsoft"
+description: "What production MCP servers teach us about wrapping existing REST APIs for agents: toolsets, scoped auth, read-only modes, domain servers, workflow tools, and operational safety."
+pubDate: 2026-07-30
+tags: ["ai", "mcp", "architecture", "rest-api", "agents"]
+lang: "en"
+category: "architecture"
+series: "ai-agent-tools"
+seriesOrder: 4
+draft: true
+---
+
+import Card from '../../../components/mdx/Card.astro';
+import Label from '../../../components/mdx/Label.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import Pipeline from '../../../components/mdx/Pipeline.astro';
+import ArchLayer from '../../../components/mdx/ArchLayer.astro';
+
+I need to build an MCP service for an existing platform whose main interface is a REST API.
+The tempting design is obvious: expose a generic `call_api(method, path, body)` tool and let the agent figure it out.
+
+That is also the design I would avoid.
+
+After looking at public MCP servers from Cloudflare, GitHub, and Microsoft, the pattern is clear:
+the best MCP servers are not thin REST proxies.
+They are **agent-facing product surfaces**.
+They curate what the agent can see, make dangerous actions explicit, hide low-level API friction, and turn platform workflows into well-named tools.
+
+<Callout color="teal">
+An MCP server should not expose your API structure. It should expose the tasks an agent is allowed to perform safely.
+</Callout>
+
+---
+
+## <Label color="teal">1</Label> MCP Changes the Shape of an API
+
+REST APIs are usually built around resources:
+
+- `GET /entities/{id}`
+- `POST /schemas`
+- `GET /activity-history`
+- `POST /imports/{id}/retry`
+
+Agents do not naturally think in endpoint paths.
+They think in tasks:
+
+- find the entity related to this ticket
+- explain why this import failed
+- validate this payload against the schema
+- summarize recent changes for this workspace
+- create a safe draft change, but do not apply it yet
+
+That difference matters.
+
+If we expose raw REST endpoints directly, the model has to solve too many problems at once:
+
+<Card>
+
+<DataTable
+  caption="Why raw REST passthrough is a weak MCP design"
+  accent="rose"
+  headers={["Problem", "What the agent now has to infer"]}
+  rows={[
+    { Problem: "Endpoint discovery", "What the agent now has to infer": "Which path maps to the user's intent" },
+    { Problem: "Parameter semantics", "What the agent now has to infer": "Which IDs, filters, tenants, and pagination fields are required" },
+    { Problem: "Safety", "What the agent now has to infer": "Whether a call is read-only, destructive, or irreversible" },
+    { Problem: "Error handling", "What the agent now has to infer": "Whether a 400 is user input, expired auth, missing scope, or platform failure" },
+    { Problem: "Context bloat", "What the agent now has to infer": "How much JSON to fetch without flooding the conversation" },
+  ]}
+/>
+
+</Card>
+
+MCP gives us a better boundary.
+Instead of exporting endpoints, we export tools with schemas, descriptions, scopes, and defaults.
+
+---
+
+## <Label color="green">2</Label> Cloudflare: Split by Domain, Not by Endpoint
+
+Cloudflare's MCP repository is interesting because it does not present one giant "Cloudflare API MCP server."
+It publishes multiple focused servers, each mapped to a product or capability area:
+
+- Documentation
+- Workers Bindings
+- Workers Builds
+- Observability
+- Browser Rendering
+- Logpush
+- AI Gateway
+
+That is the first important lesson.
+
+<Callout color="green">
+Large platforms should not start with one global MCP tool catalog. They should start with domain-focused surfaces.
+</Callout>
+
+For an internal REST platform, that suggests a shape like this:
+
+<ArchLayer badge="ENTITY" badgeColor="teal" label="Entity MCP" items={["search_entities", "get_entity", "get_entity_relationships", "summarize_entity"]} />
+
+<ArchLayer badge="SCHEMA" badgeColor="green" label="Schema MCP" items={["search_schemas", "get_schema", "validate_payload", "explain_schema_field"]} />
+
+<ArchLayer badge="AUDIT" badgeColor="amber" label="Audit MCP" items={["search_activity", "summarize_recent_changes", "find_actor_changes"]} />
+
+<ArchLayer badge="IMPORT" badgeColor="rose" label="Migration / Import MCP" items={["get_import_status", "explain_import_error", "list_failed_rows", "suggest_retry_plan"]} />
+
+Each surface can have its own auth scopes, rate limits, logging policy, and deployment posture.
+The agent sees a smaller and more meaningful tool set.
+
+This also helps humans.
+When a platform team owns `Schema MCP`, it can evolve that surface without coordinating every other product area.
+
+---
+
+## <Label color="amber">3</Label> GitHub: Toolsets Are a Product Feature
+
+GitHub's MCP server makes tool configuration a first-class concern.
+It supports toolsets such as repositories, issues, pull requests, actions, and code security.
+It also supports selecting individual tools and running in read-only mode.
+
+This is a big design signal.
+
+Tool visibility is not just configuration.
+It changes model behavior.
+
+If the model sees 100 tools, it has to choose among 100 tools.
+If it sees 8 tools for the current task, the probability of a correct tool call goes up.
+
+<Card>
+
+<DataTable
+  caption="Toolset design for a REST-backed platform MCP"
+  accent="amber"
+  headers={["Mode", "Example", "Why it matters"]}
+  rows={[
+    { Mode: "Read-only", Example: "entity,schema,audit", "Why it matters": "Safe default for exploration, support, and documentation agents" },
+    { Mode: "Operator", Example: "entity-write,import-retry", "Why it matters": "Write tools are only exposed to trusted workflows" },
+    { Mode: "Debug", Example: "logs,audit,import-status", "Why it matters": "Focused tools for incident or RCA workflows" },
+    { Mode: "Docs", Example: "search_docs,get_api_example", "Why it matters": "Lets agents answer questions without touching production data" },
+  ]}
+/>
+
+</Card>
+
+For our platform, I would make read-only the default:
+
+```text
+platform-mcp --toolsets entity,schema,audit --read-only
+```
+
+Then expose write tools only when explicitly enabled:
+
+```text
+platform-mcp --toolsets entity,schema --tools create_schema_draft,submit_entity_update
+```
+
+The rule is simple:
+
+<Callout color="amber">
+If a tool can change production state, it should not appear by accident.
+</Callout>
+
+---
+
+## <Label color="rose">4</Label> Microsoft: MCP Is Not Only CRUD
+
+Microsoft's MCP ecosystem shows a different lesson.
+Some MCP servers are not wrappers around business APIs at all.
+
+Microsoft Learn MCP focuses on trusted documentation and code samples.
+Playwright MCP exposes browser automation.
+Azure MCP groups operational Azure capabilities.
+
+That widens the design space.
+
+For a platform team, MCP should include both API tools and knowledge tools.
+
+Useful non-CRUD tools might be:
+
+- `search_platform_docs`
+- `get_openapi_operation`
+- `find_request_example`
+- `explain_error_code`
+- `summarize_rate_limit_policy`
+- `generate_safe_api_plan`
+
+These tools reduce the number of blind API calls the agent makes.
+Before calling a write endpoint, the agent can inspect the docs, fetch an example, validate the input, and explain the plan.
+
+<Pipeline
+  nodes={[
+    { title: 'Understand', subtitle: 'Search docs + operation metadata' },
+    { title: 'Validate', subtitle: 'Check schema, scopes, tenant, and payload' },
+    { title: 'Preview', subtitle: 'Return a human-readable plan' },
+    { title: 'Execute', subtitle: 'Call REST API only after guardrails pass' },
+    { title: 'Summarize', subtitle: 'Normalize result + next steps' },
+  ]}
+  arrows={[
+    { label: 'context', direction: 'right' },
+    { label: 'safety', direction: 'right' },
+    { label: 'approval', direction: 'right' },
+    { label: 'api', direction: 'right' },
+  ]}
+  footer="A mature MCP server wraps the workflow around the REST call, not just the REST call itself."
+/>
+
+---
+
+## <Label color="teal">5</Label> Proposed Architecture for a REST Platform MCP
+
+The architecture I would start with has five layers.
+
+<ArchLayer badge="MCP" badgeColor="teal" label="Tool Surface" items={["Task-oriented tools", "JSON schemas", "Toolsets", "Read-only filtering"]} />
+
+<ArchLayer badge="AUTH" badgeColor="green" label="Identity and Scope Layer" items={["User token", "Service token", "Tenant/workspace context", "Permission checks"]} />
+
+<ArchLayer badge="API" badgeColor="amber" label="REST Client Layer" items={["Typed clients", "Pagination helpers", "Retries", "Rate-limit handling"]} />
+
+<ArchLayer badge="SAFE" badgeColor="rose" label="Safety Layer" items={["Input validation", "Dry-run support", "Write confirmation", "Audit logging"]} />
+
+<ArchLayer badge="OBS" badgeColor="cyan" label="Observability Layer" items={["Tool call logs", "Latency", "Failure classification", "Redacted payload traces"]} />
+
+This keeps the MCP server from becoming a messy pile of endpoint wrappers.
+
+The REST client layer knows HTTP.
+The MCP tool layer knows agent tasks.
+The safety layer decides whether a requested action is allowed.
+
+---
+
+## <Label color="green">6</Label> Tool Design Rules I Would Use
+
+### 1. Prefer task names over endpoint names
+
+Good:
+
+```text
+search_entities
+summarize_entity_history
+validate_payload_against_schema
+explain_import_failure
+```
+
+Weak:
+
+```text
+get_entity_by_id_endpoint
+post_schema_endpoint
+call_activity_history_api
+```
+
+The tool name should describe the job, not the route.
+
+### 2. Return summarized results by default
+
+REST APIs often return large JSON documents.
+Agents do not always need the full object.
+
+For example, `get_entity` can support:
+
+```json
+{
+  "entityId": "...",
+  "includeRaw": false
+}
+```
+
+Default response:
+
+```text
+Entity summary, type, lifecycle, key attributes, relationship count, last modified time.
+```
+
+Raw response only when explicitly requested.
+
+### 3. Make pagination invisible when possible
+
+Instead of forcing the model to manage `offset`, `limit`, `nextPageToken`, and partial results, expose tools like:
+
+```text
+search_activity(query, maxResults)
+```
+
+Internally the MCP server can page through the REST API safely up to a limit.
+
+### 4. Normalize errors
+
+Do not leak raw platform errors directly.
+Return a consistent envelope:
+
+```json
+{
+  "ok": false,
+  "kind": "missing_permission",
+  "message": "The token lacks schema:read for this workspace.",
+  "retryable": false,
+  "nextAction": "Ask for a token with schema:read or switch to a read-authorized workspace."
+}
+```
+
+Agents recover better from classified errors than from random HTTP payloads.
+
+### 5. Separate draft, preview, and apply
+
+For writes, I would avoid tools that immediately mutate state when a safer staged workflow exists.
+
+Better shape:
+
+```text
+create_schema_change_draft
+validate_schema_change
+apply_schema_change
+```
+
+This gives the agent and human a checkpoint before production mutation.
+
+---
+
+## <Label color="amber">7</Label> Auth and Safety Model
+
+The public examples all point toward the same principle:
+MCP does not remove the need for authorization.
+It makes authorization more important because the caller is now an agent.
+
+For our platform, I would separate four questions:
+
+<Card>
+
+<DataTable
+  caption="Authorization questions for an internal MCP server"
+  accent="teal"
+  headers={["Question", "Example check"]}
+  rows={[
+    { Question: "Who is the user?", "Example check": "Token subject, service account, or delegated identity" },
+    { Question: "Where are they acting?", "Example check": "Tenant, workspace, environment, project" },
+    { Question: "What can they see?", "Example check": "Read scopes, row-level filters, attribute redaction" },
+    { Question: "What can they change?", "Example check": "Write scopes, toolset enablement, approval requirement" },
+  ]}
+/>
+
+</Card>
+
+The MCP server should never rely on the model to obey policy from text alone.
+Descriptions help the model choose tools.
+Backend checks enforce the rules.
+
+---
+
+## <Label color="rose">8</Label> The Implementation Roadmap
+
+I would build the platform MCP in stages.
+
+<Card>
+
+<Pipeline
+  nodes={[
+    { title: 'Phase 1', subtitle: 'Read-only tools for docs, schemas, entities, and audit' },
+    { title: 'Phase 2', subtitle: 'Toolsets, auth scopes, pagination, normalized errors' },
+    { title: 'Phase 3', subtitle: 'Dry-run write workflows and approval gates' },
+    { title: 'Phase 4', subtitle: 'Operational tools, observability, rate-limit controls' },
+    { title: 'Phase 5', subtitle: 'Remote deployment and enterprise policy controls' },
+  ]}
+  arrows={[
+    { label: 'safe base', direction: 'right' },
+    { label: 'control', direction: 'right' },
+    { label: 'writes', direction: 'right' },
+    { label: 'operate', direction: 'right' },
+  ]}
+/>
+
+</Card>
+
+Phase 1 should be boring on purpose.
+Read-only tools prove the tool schemas, auth flow, transport, and model ergonomics without production mutation risk.
+
+Only after the read path feels reliable would I add write operations.
+
+---
+
+## <Label color="green">9</Label> Final Takeaway
+
+The wrong way to build an MCP server for a REST API platform is to expose every endpoint and hope the agent behaves.
+
+Cloudflare shows the value of domain-focused MCP surfaces.
+GitHub shows the value of configurable toolsets and read-only modes.
+Microsoft shows that MCP can expose documentation, workflows, and operational actions — not just CRUD.
+
+The design principle I would keep in front of the team is this:
+
+<Callout color="green">
+Build the MCP server as a safe agent interface to the platform, not as a mechanical mirror of the REST API.
+</Callout>
+
+That means fewer tools, better names, scoped permissions, read-only defaults, normalized errors, summarized responses, and explicit write workflows.
+
+For human developers, REST remains the system API.
+For agents, MCP becomes the task API.
