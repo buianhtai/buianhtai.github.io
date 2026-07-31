@@ -1,0 +1,240 @@
+---
+title: "Apache Kafka: Architecture, Failure Modes, and Production Patterns"
+description: "How Kafka's log-based design turns messaging into a distributed commit log — partitions, replication, ISR, consumer groups, the failure scenarios that actually happen in production, and the patterns that prevent them."
+pubDate: 2026-07-31
+tags: ["kafka", "architecture", "distributed-systems", "messaging", "streaming", "devops"]
+lang: "en"
+category: "architecture"
+---
+
+import Label from '../../../components/mdx/Label.astro';
+import HeroGrid from '../../../components/mdx/HeroGrid.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import ArchLayer from '../../../components/mdx/ArchLayer.astro';
+import ArchDiagram from '../../../components/mdx/ArchDiagram.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import CompareTable from '../../../components/mdx/CompareTable.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import SequenceDiagram from '../../../components/mdx/SequenceDiagram.astro';
+import StateMachine from '../../../components/mdx/StateMachine.astro';
+import Card from '../../../components/mdx/Card.astro';
+
+Most people describe Kafka as "a message queue." That description causes almost every production incident related to it. Kafka is not a queue — it's a distributed, replicated, append-only commit log. Messages aren't removed when consumed; they're removed on a time or size retention policy, independent of any consumer. That single design choice is why Kafka can replay history, serve hundreds of independent consumer groups from one topic, and survive broker failures without losing acknowledged writes — and it's also why teams that treat it like RabbitMQ hit surprising failure modes.
+
+<HeroGrid items={[
+  { label: "Log, Not Queue", sublabel: "Append-only\nOffset-addressed", color: "#0891b2" },
+  { label: "Partition = Unit", sublabel: "Parallelism\nOrdering boundary", color: "#059669" },
+  { label: "ISR Replication", sublabel: "Leader + followers\nQuorum-like ack", color: "#d97706" },
+  { label: "Consumer Groups", sublabel: "Independent offsets\nRebalance on churn", color: "#e11d48" },
+]} />
+
+---
+
+## <Label color="teal">1</Label> The Core Abstraction: Partitioned, Replicated Log
+
+A **topic** is a named stream. It's split into **partitions** — the actual unit of storage, parallelism, and ordering. Each partition is an ordered, immutable sequence of records, each assigned a monotonically increasing **offset**. Kafka guarantees order *within* a partition only. Across partitions, there is no ordering guarantee — this trade-off is what lets Kafka scale writes and reads horizontally.
+
+<ArchDiagram
+  title="topic → partitions → brokers"
+  zones={[
+    { id: "topic", label: "Topic: orders", color: "teal" },
+    { id: "cluster", label: "Kafka Cluster", color: "blue" },
+  ]}
+  nodes={[
+    { id: "p0", label: "Partition 0", sub: "offsets 0..N", zone: "topic", row: 1, col: 1 },
+    { id: "p1", label: "Partition 1", sub: "offsets 0..N", zone: "topic", row: 2, col: 1 },
+    { id: "p2", label: "Partition 2", sub: "offsets 0..N", zone: "topic", row: 3, col: 1 },
+    { id: "b1", label: "Broker 1", sub: "Leader: P0\nFollower: P1", zone: "cluster", row: 1, col: 1, color: "green" },
+    { id: "b2", label: "Broker 2", sub: "Leader: P1\nFollower: P2", zone: "cluster", row: 1, col: 2, color: "green" },
+    { id: "b3", label: "Broker 3", sub: "Leader: P2\nFollower: P0", zone: "cluster", row: 1, col: 3, color: "green" },
+  ]}
+  edges={[
+    { from: "p0", to: "b1", label: "leader", type: "solid" },
+    { from: "p1", to: "b2", label: "leader", type: "solid" },
+    { from: "p2", to: "b3", label: "leader", type: "solid" },
+  ]}
+  caption="Each partition has exactly one leader broker at a time. Followers replicate the leader's log. Leadership is spread across brokers so no single node owns all writes for a topic."
+/>
+
+Records are never mutated. A "delete" in Kafka is just another record (a tombstone, in compacted topics) or the natural expiry of retention. This immutability is what makes Kafka replayable: a new consumer can start from offset 0 and reconstruct the entire history, or seek to any offset and reprocess from there — something a traditional queue (where consumed messages are gone) cannot do.
+
+<Callout color="amber">
+Partition count is a decision you effectively can't reverse cheaply. It sets your maximum consumer parallelism (one partition can only be actively read by one consumer per group) and it's expensive to increase later because existing key-to-partition hashing breaks — messages with the same key can land on a different partition after a resize, breaking per-key ordering.
+</Callout>
+
+---
+
+## <Label color="green">2</Label> Broker, Controller, and Metadata Layer
+
+<ArchLayer badge="CLI" badgeColor="teal" label="Client Layer" items={["Producer — partitioner + batching + acks", "Consumer — poll loop + offset commit", "Kafka Streams / ksqlDB — stateful processing"]} />
+<ArchLayer badge="BRK" badgeColor="green" label="Broker Layer" items={["Partition leader/follower replication", "Log segments on local disk (append-only)", "Request handling — Produce/Fetch/Metadata APIs"]} />
+<ArchLayer badge="CTL" badgeColor="amber" label="Controller / Metadata Layer" items={["KRaft (Raft-based) — replaces ZooKeeper since Kafka 3.x/4.x", "Leader election, ISR tracking, partition reassignment", "Cluster metadata log — replicated like any topic"]} />
+<ArchLayer badge="STO" badgeColor="rose" label="Storage Layer" items={["Log segments + index files (offset, time)", "Page-cache-backed sequential I/O (zero-copy sendfile)", "Retention: time-based, size-based, or log-compacted"]} />
+
+Kafka's historical dependency on ZooKeeper for controller election and metadata is being phased out via **KRaft** (Kafka Raft), which replaces the ZooKeeper ensemble with a Raft-replicated metadata log inside Kafka itself. This removes an entire external coordination service from the deployment — one less failure domain, one less operational surface to patch and monitor. If you're standing up a new cluster today, KRaft is the default and ZooKeeper mode is deprecated.
+
+The **controller** (a broker elected leader for cluster metadata) is the single source of truth for: which broker leads which partition, which replicas are in-sync, and how to react when a broker dies. Controller failover is itself a Raft leader election — fast, but not instantaneous, and during that window partition leadership changes can stall.
+
+---
+
+## <Label color="amber">3</Label> Replication and the In-Sync Replica (ISR) Set
+
+Every partition has a **replication factor** (commonly 3). One replica is the leader; the rest are followers that pull from the leader and replicate its log. The **ISR (in-sync replica) set** is the list of replicas that are caught up within a configurable lag threshold (`replica.lag.time.max.ms`). Only ISR members are eligible to become the new leader if the current leader fails.
+
+<StateMachine
+  title="partition leader failure and recovery"
+  states={[
+    { id: "healthy", label: "Healthy", sub: "leader + full ISR", initial: true, color: "green" },
+    { id: "degraded", label: "Degraded ISR", sub: "follower falls behind", color: "amber" },
+    { id: "leaderless", label: "Leaderless", sub: "leader broker dies", color: "rose" },
+    { id: "elected", label: "New Leader", sub: "controller picks ISR member", color: "teal" },
+  ]}
+  transitions={[
+    { from: "healthy", to: "degraded", label: "follower lag exceeds threshold" },
+    { from: "degraded", to: "healthy", label: "follower catches up" },
+    { from: "healthy", to: "leaderless", label: "leader broker crashes" },
+    { from: "degraded", to: "leaderless", label: "leader broker crashes" },
+    { from: "leaderless", to: "elected", label: "controller elects from ISR" },
+    { from: "elected", to: "healthy", label: "followers resync" },
+  ]}
+  caption="If the leader dies while the ISR is degraded (fewer in-sync replicas than min.insync.replicas), the partition can go unavailable rather than lose data — this is the trade-off unclean.leader.election.enable controls."
+/>
+
+<DataTable
+  caption="Key durability knobs and what they actually trade off"
+  accent="rose"
+  headers={["Setting", "Safe Value", "What It Trades"]}
+  rows={[
+    { "Setting": "acks", "What It Trades": "<code>0</code> = fire-and-forget (fast, can silently lose data). <code>1</code> = leader-ack only (lost if leader dies before replication). <code>all</code>/<code>-1</code> = waits for full ISR ack — required for no-data-loss guarantees." },
+    { "Setting": "min.insync.replicas", "What It Trades": "With <code>acks=all</code> and <code>min.insync.replicas=2</code> on RF=3, you tolerate 1 broker failure with zero data loss; producers get errors instead of silent loss when ISR shrinks below the minimum." },
+    { "Setting": "unclean.leader.election.enable", "What It Trades": "<code>false</code> (default, recommended) refuses to elect an out-of-sync replica as leader — partition stays unavailable rather than silently losing committed data. <code>true</code> favors availability over correctness." },
+    { "Setting": "replication.factor", "What It Trades": "RF=3 tolerates 1 broker loss. RF=1 has zero fault tolerance — any broker restart is a partition outage." },
+  ]}
+/>
+
+<Callout color="rose">
+The single most common production Kafka incident: someone sets <code>acks=1</code> for producer throughput, the leader broker crashes before the write reaches followers, a new leader is elected from a replica that never saw the message — and the write is gone with no error anywhere in the pipeline. If your data must not be lost, use <code>acks=all</code> with <code>min.insync.replicas &gt;= 2</code> and <code>unclean.leader.election.enable=false</code>. This costs latency, not durability — choose deliberately.
+</Callout>
+
+---
+
+## <Label color="teal">4</Label> Producers, Consumer Groups, and Offset Management
+
+A producer's **partitioner** decides which partition a record lands in — by explicit key hash (same key → same partition → guaranteed per-key order) or round-robin/sticky if no key is given. Batching (`linger.ms`, `batch.size`) trades a small latency window for dramatically higher throughput by grouping records into fewer, larger network requests.
+
+A **consumer group** is Kafka's scaling primitive for reads: every partition is assigned to exactly one consumer within a group, so N partitions support up to N parallel consumers per group. Multiple independent groups can each read the full topic independently — this is how one Kafka topic serves an analytics pipeline, a fraud-detection service, and an audit log simultaneously without them interfering.
+
+<SequenceDiagram
+  title="consumer group rebalance on scale-out"
+  actors={[
+    { label: "Consumer A", color: "teal" },
+    { label: "Group Coordinator", color: "blue" },
+    { label: "Consumer B (new)", color: "green" },
+  ]}
+  messages={[
+    { from: "Consumer A", to: "Group Coordinator", label: "owns partitions 0,1,2", type: "async" },
+    { from: "Consumer B (new)", to: "Group Coordinator", label: "JoinGroup request", type: "request" },
+    { note: "Rebalance triggered — all consumers stop fetching" },
+    { from: "Group Coordinator", to: "Consumer A", label: "revoke partitions, rejoin", type: "response" },
+    { from: "Group Coordinator", to: "Consumer A", label: "new assignment: 0,1", type: "response" },
+    { from: "Group Coordinator", to: "Consumer B (new)", label: "new assignment: 2", type: "response" },
+    { note: "Cooperative rebalancing (KIP-429) avoids the full stop-the-world pause above." },
+  ]}
+  caption="Every consumer join/leave/crash triggers a rebalance. Eager rebalancing (older default) pauses ALL consumers in the group during reassignment — a real throughput cliff at scale. Cooperative sticky assignment only reassigns the affected partitions."
+/>
+
+**Offsets** track how far a consumer group has read. They're committed either automatically (`enable.auto.commit=true`, on a timer — risks reprocessing or skipping on crash) or manually after successful processing (safer, "commit after side-effect" pattern). This is Kafka's actual delivery-guarantee lever:
+
+<DataTable
+  caption="Delivery semantics — determined by commit timing, not a Kafka setting alone"
+  accent="teal"
+  headers={["Pattern", "Guarantee", "Failure Mode"]}
+  rows={[
+    { "Pattern": "Commit offset before processing", "Guarantee": "At-most-once", "Failure Mode": "Crash between commit and processing = silent message loss" },
+    { "Pattern": "Commit offset after processing", "Guarantee": "At-least-once", "Failure Mode": "Crash between processing and commit = message reprocessed (must be idempotent downstream)" },
+    { "Pattern": "Transactional producer + <code>read_committed</code> consumer", "Guarantee": "Exactly-once (within Kafka)", "Failure Mode": "Only covers Kafka-to-Kafka; external side effects (DB writes, HTTP calls) still need idempotency keys" },
+  ]}
+/>
+
+---
+
+## <Label color="rose">5</Label> Failure Modes That Actually Happen in Production
+
+<Card>
+
+| Symptom | Root Cause | Fix |
+|---|---|---|
+| **Consumer group stuck rebalancing repeatedly** | `max.poll.interval.ms` exceeded — processing takes longer than Kafka's "is this consumer alive" timeout, so it's kicked from the group mid-batch | Shrink batch size (`max.poll.records`), move slow work off the poll thread, or raise the interval deliberately |
+| **Silent data loss after a broker restart** | `acks=1` or `acks=0` combined with unclean leader election allowed | `acks=all`, `min.insync.replicas>=2`, `unclean.leader.election.enable=false` |
+| **Producer blocks or throws `TimeoutException` under load** | Partition has no leader (mid-election) or broker is unreachable — buffer fills faster than it drains | Alert on ISR shrinkage and under-replicated partitions *before* this happens; size `buffer.memory` and `max.block.ms` deliberately |
+| **Consumer lag grows unbounded** | Consumers can't keep up with producer rate, or a single slow partition (hot key) bottlenecks one consumer while others idle | Scale consumer count to partition count; fix key skew; consider more partitions (irreversible-ish, plan ahead) |
+| **Duplicate messages processed downstream** | At-least-once semantics (the Kafka default reality) plus non-idempotent consumer logic | Idempotency key on the consumer side (e.g., upsert by unique event ID), not reliance on "exactly-once" as a silver bullet |
+| **"Everything is fine" until disk fills up** | Retention misconfigured (too-long retention, or compaction not enabled on a key-value-style topic) that nobody sized against actual write throughput | Set retention by both time AND size; monitor disk usage per broker, not just cluster aggregate |
+| **Split-brain-like duplicate active consumers momentarily** | Consumer group session timeout too aggressive under GC pauses or network blips — a consumer is evicted while still alive, its partitions reassigned, then it comes back | Tune `session.timeout.ms` / heartbeat interval to tolerate realistic GC pause / network jitter for your JVM and environment |
+
+</Card>
+
+<Callout color="amber">
+Kafka rarely fails loudly. Most incidents are silent correctness gaps (data loss under `acks=1`, duplicate processing under naive at-least-once) discovered days later during a reconciliation audit — not outages. Treat ISR health, under-replicated-partition count, and consumer lag as first-class alerts, not afterthoughts.
+</Callout>
+
+---
+
+## <Label color="green">6</Label> Where Kafka Fits — Use Cases
+
+<CompareTable
+  products={[
+    { name: "Traditional MQ (RabbitMQ/SQS)" },
+    { name: "Database CDC pipe" },
+    { name: "Kafka", highlight: true },
+  ]}
+  features={[
+    { label: "Message removed after consumption", values: ["yes", "no", "no"] },
+    { label: "Multiple independent consumers replay full history", values: ["no", "partial", "yes"] },
+    { label: "Ordering guarantee (per-key)", values: ["partial", "yes", "yes"] },
+    { label: "Built-in stream processing (joins, windows)", values: ["no", "no", "yes"] },
+    { label: "Millions of msgs/sec sustained throughput", values: ["no", "partial", "yes"] },
+    { label: "Good fit for simple task queues / RPC-style work", values: ["yes", "no", "partial"] },
+  ]}
+  caption="Kafka wins when you need replay, multiple independent consumers of the same stream, or high sustained throughput. A simple job queue with one consumer and no replay need is often better served by SQS/RabbitMQ — less operational surface."
+/>
+
+**Representative production use cases:**
+
+<FlowStep steps={[
+  { title: "Event sourcing / audit log", body: "The immutable log IS the source of truth. Application state is derived by replaying events — Kafka's native model, not a bolt-on.", color: "teal" },
+  { title: "CDC (Change Data Capture)", body: "Debezium (or similar) tails a database's write-ahead log and publishes row-level changes to Kafka topics, decoupling downstream consumers from the source database entirely.", color: "green" },
+  { title: "Log/metric aggregation", body: "Thousands of services publish to per-service topics; a small number of consumers (Elasticsearch, data lake sinks) fan-in without every producer needing to know every consumer.", color: "amber" },
+  { title: "Stream processing", body: "Kafka Streams or Flink consume, transform, join, and window events in real time — fraud detection, real-time dashboards, session analytics.", color: "rose" },
+  { title: "Microservice decoupling / choreography", body: "Services publish domain events instead of calling each other synchronously — reduces cross-service coupling and cascading failure blast radius.", color: "teal" },
+  { title: "Commit log for distributed systems", body: "Some systems (including parts of Kafka's own KRaft metadata layer) use a Kafka-like replicated log as their internal consensus/durability substrate.", color: "green" },
+]} />
+
+---
+
+## <Label color="amber">7</Label> Best-Practice Patterns
+
+<FlowStep steps={[
+  { title: "Design partition count around consumer parallelism, not producer convenience", body: "Partition count sets your read-side scaling ceiling. Estimate target consumer parallelism first; over-provision partitions modestly since increasing later breaks key-to-partition stability.", color: "teal" },
+  { title: "Choose keys for even distribution, not just correctness", body: "A key that concentrates 80% of traffic on one value creates a hot partition no amount of consumer scaling fixes. Salt high-skew keys if needed.", color: "green" },
+  { title: "Make consumers idempotent, don't chase exactly-once as a silver bullet", body: "At-least-once + idempotent consumer (upsert-by-event-id) is simpler to reason about and more portable than depending on Kafka transactions end-to-end, especially once external systems are involved.", color: "amber" },
+  { title: "Commit offsets after processing succeeds, not before", body: "Commit-before-process trades correctness for a false sense of 'no reprocessing' — it actually risks silent loss on crash.", color: "rose" },
+  { title: "Monitor consumer lag and under-replicated partitions as leading indicators", body: "Both metrics predict incidents before they become outages — lag predicts backlog/SLA breach, under-replication predicts an imminent unavailability window if another broker fails.", color: "teal" },
+  { title: "Set explicit retention (time AND size), especially for compacted topics", body: "Unbounded or oversized retention silently fills broker disks; log compaction needs `min.cleanable.dirty.ratio` tuning if compaction can't keep up with write rate.", color: "green" },
+  { title: "Prefer KRaft over ZooKeeper for new clusters", body: "One less coordination service, one less operational surface, and it's the direction the project has moved for several major versions.", color: "amber" },
+]} />
+
+<Callout color="teal">
+The recurring theme across every failure mode above: Kafka's defaults favor throughput and availability. Every durability and ordering guarantee you actually need has to be turned on deliberately — `acks=all`, `min.insync.replicas`, idempotent producers, careful offset-commit timing. Kafka doesn't protect you from your own defaults; it gives you the knobs and expects you to turn them.
+</Callout>
+
+---
+
+## <Label color="rose">8</Label> Summary
+
+- **It's a log, not a queue.** Retention, not consumption, removes data — this is what enables replay and multiple independent consumer groups.
+- **Partitions are the unit of everything** — parallelism, ordering, and the ceiling on consumer scale-out. Choose the count deliberately; it's expensive to change.
+- **Replication safety is opt-in.** `acks=1` is fast and silently unsafe; `acks=all` + `min.insync.replicas>=2` + `unclean.leader.election.enable=false` is the durable combination.
+- **Delivery semantics are a consumer-side contract**, not just a Kafka setting — commit timing determines at-most-once vs at-least-once, and exactly-once needs both a transactional producer and an idempotent consumer for anything touching external systems.
+- **Failures are usually silent correctness gaps**, not outages — monitor ISR health and consumer lag as leading indicators, not just broker uptime.
+- **Kafka isn't always the right tool.** A simple task queue with one consumer and no replay requirement is often better served by something with less operational surface — SQS, RabbitMQ. Reach for Kafka when you need replay, multiple independent consumers, or sustained high throughput with ordering guarantees.
