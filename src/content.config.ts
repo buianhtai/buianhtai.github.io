@@ -31,6 +31,7 @@ export const blogSchema = z.object({
   seriesSection: z.string().optional(),
   featured: z.boolean().default(false),
   draft: z.boolean().default(false),
+  renderTitle: z.boolean().default(true),
 });
 
 const blog = defineCollection({
