@@ -1,0 +1,292 @@
+---
+import { Icon } from "astro-icon/components";
+import BaseLayout from '../../../../layouts/BaseLayout.astro';
+
+// Design decision: Use a fixed SVG viewport for poster ratio, then scale with CSS.
+// Content will be absolutely positioned within this SVG space.
+const POSTER_WIDTH = 1200;
+const POSTER_HEIGHT = 1800; // 2:3 ratio for posters
+
+const TITLE_COLOR = 'var(--color-accent)';
+const TEXT_COLOR = 'var(--color-text)';
+const SUBTITLE_COLOR = 'var(--color-text-dim)';
+const BG_COLOR = 'var(--color-bg)';
+const SURFACE_COLOR = 'var(--color-surface)';
+const BORDER_COLOR = 'var(--color-border)';
+const ACCENT_COLOR = 'var(--color-accent)';
+const GREEN_COLOR = 'var(--color-green)';
+const AMBER_COLOR = 'var(--color-amber)';
+const ROSE_COLOR = 'var(--color-rose)';
+
+---
+
+<BaseLayout title="Kafka Architecture Cheat Sheet" description="A visual summary of Apache Kafka's architecture and production patterns.">
+  <main class="kafka-poster-page">
+    <div class="poster-container">
+      <svg width="100%" height="auto" viewBox={`0 0 ${POSTER_WIDTH} ${POSTER_HEIGHT}`} xmlns="http://www.w3.org/2000/svg">
+        <style>
+          {`
+            .kafka-poster-page {
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              min-height: 100vh;
+              background-color: var(--color-bg);
+            }
+            .poster-container {
+              width: 80vw; /* Scale down the poster on screen */
+              max-width: ${POSTER_WIDTH / 1.5}px;
+              aspect-ratio: ${POSTER_WIDTH} / ${POSTER_HEIGHT};
+              box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+              border: 1px solid var(--color-border-bright);
+              border-radius: 8px;
+              overflow: hidden;
+            }
+            svg {
+              background-color: ${BG_COLOR};
+            }
+            .box-title {
+                font-family: var(--font-mono);
+                font-size: 18px;
+                fill: var(--color-text-dim);
+            }
+            .box-title .prompt {
+                fill: var(--color-accent);
+            }
+            .box-content {
+                font-family: var(--font-sans);
+                font-size: 16px;
+                color: var(--color-text);
+                line-height: 1.5;
+            }
+            .section-title {
+                font-family: var(--font-mono);
+                font-size: 28px;
+                fill: var(--color-accent);
+            }
+            .section-line {
+                stroke: var(--color-accent);
+                stroke-width: 2;
+            }
+            .main-title {
+                font-family: var(--font-mono);
+                font-size: 60px;
+                fill: ${BG_COLOR};
+                font-weight: bold;
+            }
+            .sub-title {
+                font-family: var(--font-sans);
+                font-size: 36px;
+                fill: var(--color-text);
+                font-weight: bold;
+            }
+            .summary-text {
+                font-family: var(--font-sans);
+                font-size: 24px;
+                fill: var(--color-text-dim);
+            }
+            .footer-text {
+                font-family: var(--font-mono);
+                font-size: 16px;
+                fill: var(--color-text-dim);
+            }
+            .text-rose { color: ${ROSE_COLOR}; }
+            .text-green { color: ${GREEN_COLOR}; }
+            .text-accent { color: ${ACCENT_COLOR}; }
+          `}
+        </style>
+
+        {/* Header */}
+        <rect x="0" y="0" width={POSTER_WIDTH} height="120" fill={ACCENT_COLOR} />
+        <foreignObject x={POSTER_WIDTH / 2 - 40} y="25" width="80" height="80" xmlns="http://www.w3.org/1999/xhtml">
+          <div style="width:100%; height:100%; display:flex; justify-content:center; align-items:center;">
+            <Icon name="logos:kafka" width="80" height="80" style={{ color: BG_COLOR }} />
+          </div>
+        </foreignObject>
+        <text x={POSTER_WIDTH / 2} y="100" text-anchor="middle" class="main-title">KAFKA</text>
+
+        <text x={POSTER_WIDTH / 2} y="160" text-anchor="middle" class="sub-title">ARCHITECTURE & PRODUCTION PATTERNS</text>
+        <text x={POSTER_WIDTH / 2} y="200" text-anchor="middle" class="summary-text">A Visual Summary</text>
+
+
+        {/* Key Concepts Section */}
+        <text x="100" y="280" class="section-title">KEY CONCEPTS</text>
+        <line x1="100" y1="285" x2="350" y2="285" class="section-line" />
+
+        {/* LOG, NOT QUEUE Box */}
+        <g>
+          <rect x={100} y={320} width={450} height={40} fill={SURFACE_COLOR} stroke={BORDER_COLOR} stroke-width="1" rx="8" ry="8" />
+          <rect x={100} y={320} width={450} height={200} fill="none" stroke={BORDER_COLOR} stroke-width="2" rx="8" />
+          <text x={120} y={345} class="box-title"><tspan class="prompt">$</tspan> LOG, NOT QUEUE</text>
+          <foreignObject x={500} y={328} width={24} height={24} xmlns="http://www.w3.org/1999/xhtml">
+            <div>
+              <Icon name="lucide:database" width="24" height="24" style={{ color: ACCENT_COLOR }} />
+            </div>
+          </foreignObject>
+          <foreignObject x={120} y={375} width={410} height={125} xmlns="http://www.w3.org/1999/xhtml">
+            <div class="box-content">
+              <p>Append-only, replicated commit log. Messages persist based on retention, not consumption.</p>
+              <p>Enables replayability & multiple independent consumer groups.</p>
+            </div>
+          </foreignObject>
+        </g>
+
+        {/* PARTITIONS Box */}
+        <g>
+          <rect x={650} y={320} width={450} height={40} fill={SURFACE_COLOR} stroke={BORDER_COLOR} stroke-width="1" rx="8" ry="8" />
+          <rect x={650} y={320} width={450} height={200} fill="none" stroke={BORDER_COLOR} stroke-width="2" rx="8" />
+          <text x={670} y={345} class="box-title"><tspan class="prompt">$</tspan> PARTITIONS</text>
+          <foreignObject x={1050} y={328} width={24} height={24} xmlns="http://www.w3.org/1999/xhtml">
+            <div>
+              <Icon name="lucide:bar-chart-3" width="24" height="24" style={{ color: ACCENT_COLOR }} />
+            </div>
+          </foreignObject>
+          <foreignObject x={670} y={375} width={410} height={125} xmlns="http://www.w3.org/1999/xhtml">
+            <div class="box-content">
+              <p>Unit of parallelism, ordering (per-partition), and storage. Max consumer parallelism = partition count.</p>
+              <p>Expensive to change; plan wisely (key hashing).</p>
+            </div>
+          </foreignObject>
+        </g>
+
+        {/* Replication & Durability */}
+        <text x="100" y="580" class="section-title">REPLICATION & DURABILITY</text>
+        <line x1="100" y1="585" x2="550" y2="585" class="section-line" />
+
+        {/* ISR SET Box */}
+        <g>
+          <rect x={100} y={620} width={450} height={40} fill={SURFACE_COLOR} stroke={GREEN_COLOR} stroke-width="1" rx="8" ry="8" />
+          <rect x={100} y={620} width={450} height={250} fill="none" stroke={GREEN_COLOR} stroke-width="2" rx="8" />
+          <text x={120} y={645} class="box-title" style={`fill:${GREEN_COLOR};`}><tspan class="prompt">$</tspan> ISR SET (IN-SYNC REPLICAS)</text>
+          <foreignObject x={500} y={628} width={24} height={24} xmlns="http://www.w3.org/1999/xhtml">
+            <div>
+              <Icon name="lucide:copy-check" width="24" height="24" style={{ color: GREEN_COLOR }} />
+            </div>
+          </foreignObject>
+          <foreignObject x={120} y={675} width={410} height={175} xmlns="http://www.w3.org/1999/xhtml">
+            <div class="box-content">
+              <p>Leader + followers caught up within lag threshold.</p>
+              <p>Only ISR members eligible for leader election if leader fails.</p>
+              <p><strong class="text-rose"><code>acks=all</code></strong> + <strong class="text-rose"><code>min.insync.replicas>=2</code></strong> + <strong class="text-rose"><code>unclean.leader.election.enable=false</code></strong> = no data loss.</p>
+            </div>
+          </foreignObject>
+        </g>
+
+        {/* KRaft Box */}
+        <g>
+          <rect x={650} y={620} width={450} height={40} fill={SURFACE_COLOR} stroke={AMBER_COLOR} stroke-width="1" rx="8" ry="8" />
+          <rect x={650} y={620} width={450} height={250} fill="none" stroke={AMBER_COLOR} stroke-width="2" rx="8" />
+          <text x={670} y={645} class="box-title" style={`fill:${AMBER_COLOR};`}><tspan class="prompt">$</tspan> KRaft (Raft-based metadata)</text>
+          <foreignObject x={1050} y={628} width={24} height={24} xmlns="http://www.w3.org/1999/xhtml">
+            <div>
+              <Icon name="lucide:server" width="24" height="24" style={{ color: AMBER_COLOR }} />
+            </div>
+          </foreignObject>
+          <foreignObject x={670} y={675} width={410} height={175} xmlns="http://www.w3.org/1999/xhtml">
+            <div class="box-content">
+              <p>Replaces ZooKeeper for metadata management. Simplifies operations.</p>
+              <p>Controller is single source of truth for partition leadership, ISR tracking.</p>
+              <p>New clusters should use KRaft.</p>
+            </div>
+          </foreignObject>
+        </g>
+
+        {/* Consumer Groups & Semantics */}
+        <text x="100" y="930" class="section-title">CONSUMER GROUPS & SEMANTICS</text>
+        <line x1="100" y1="935" x2="700" y1="935" class="section-line" />
+
+        {/* CONSUMER GROUPS Box */}
+        <g>
+          <rect x={100} y={970} width={450} height={40} fill={SURFACE_COLOR} stroke={BORDER_COLOR} stroke-width="1" rx="8" ry="8" />
+          <rect x={100} y={970} width={450} height={200} fill="none" stroke={BORDER_COLOR} stroke-width="2" rx="8" />
+          <text x={120} y={995} class="box-title"><tspan class="prompt">$</tspan> CONSUMER GROUPS</text>
+          <foreignObject x={500} y={978} width={24} height={24} xmlns="http://www.w3.org/1999/xhtml">
+            <div>
+              <Icon name="lucide:users" width="24" height="24" style={{ color: ACCENT_COLOR }} />
+            </div>
+          </foreignObject>
+          <foreignObject x={120} y={1025} width={410} height={125} xmlns="http://www.w3.org/1999/xhtml">
+            <div class="box-content">
+              <p>Scaling primitive for reads. Each partition assigned to one consumer per group.</p>
+              <p>Independent processing of topics by multiple groups.</p>
+            </div>
+          </foreignObject>
+        </g>
+
+        {/* DELIVERY GUARANTEES Box */}
+        <g>
+          <rect x={650} y={970} width={450} height={40} fill={SURFACE_COLOR} stroke={BORDER_COLOR} stroke-width="1" rx="8" ry="8" />
+          <rect x={650} y={970} width={450} height={200} fill="none" stroke={BORDER_COLOR} stroke-width="2" rx="8" />
+          <text x={670} y={995} class="box-title"><tspan class="prompt">$</tspan> DELIVERY GUARANTEES</text>
+          <foreignObject x={1050} y={978} width={24} height={24} xmlns="http://www.w3.org/1999/xhtml">
+            <div>
+              <Icon name="lucide:circle-question-mark" width="24" height="24" style={{ color: ACCENT_COLOR }} />
+            </div>
+          </foreignObject>
+          <foreignObject x={670} y={1025} width={410} height={125} xmlns="http://www.w3.org/1999/xhtml">
+            <div class="box-content">
+              <p><span class="text-rose">At-most-once:</span> commit before process (risk loss).</p>
+              <p><span class="text-green">At-least-once (default):</span> commit after process (risk duplicates, need idempotency).</p>
+              <p><span class="text-accent">Exactly-once:</span> transactional producer + idempotent consumer (Kafka-to-Kafka).</p>
+            </div>
+          </foreignObject>
+        </g>
+
+        {/* Best Practices / Failure Modes */}
+        <text x="100" y="1230" class="section-title">BEST PRACTICES & FAILURE MODES</text>
+        <line x1="100" y1="1235" x2="800" y2="1235" class="section-line" />
+
+        {/* COMMON ISSUES Box */}
+        <g>
+          <rect x={100} y={1270} width={450} height={40} fill={SURFACE_COLOR} stroke={ROSE_COLOR} stroke-width="1" rx="8" ry="8" />
+          <rect x={100} y={1270} width={450} height={280} fill="none" stroke={ROSE_COLOR} stroke-width="2" rx="8" />
+          <text x={120} y={1295} class="box-title" style={`fill:${ROSE_COLOR};`}><tspan class="prompt">$</tspan> COMMON ISSUES</text>
+          <foreignObject x={500} y={1278} width={24} height={24} xmlns="http://www.w3.org/1999/xhtml">
+            <div>
+              <Icon name="lucide:bug" width="24" height="24" style={{ color: ROSE_COLOR }} />
+            </div>
+          </foreignObject>
+          <foreignObject x={120} y={1325} width={410} height={210} xmlns="http://www.w3.org/1999/xhtml">
+            <div class="box-content">
+              <p>Consumer stuck rebalancing (max.poll.interval.ms).</p>
+              <p>Silent data loss (acks=1).</p>
+              <p>Unbounded lag (skew, insufficient consumers).</p>
+              <p>Duplicates (non-idempotent consumers).</p>
+              <p>Disk full (bad retention).</p>
+            </div>
+          </foreignObject>
+        </g>
+
+        {/* BEST PRACTICES Box */}
+        <g>
+          <rect x={650} y={1270} width={450} height={40} fill={SURFACE_COLOR} stroke={ACCENT_COLOR} stroke-width="1" rx="8" ry="8" />
+          <rect x={650} y={1270} width={450} height={280} fill="none" stroke={ACCENT_COLOR} stroke-width="2" rx="8" />
+          <text x={670} y={1295} class="box-title" style={`fill:${ACCENT_COLOR};`}><tspan class="prompt">$</tspan> BEST PRACTICES</text>
+          <foreignObject x={1050} y={1278} width={24} height={24} xmlns="http://www.w3.org/1999/xhtml">
+            <div>
+              <Icon name="lucide:badge-check" width="24" height="24" style={{ color: ACCENT_COLOR }} />
+            </div>
+          </foreignObject>
+          <foreignObject x={670} y={1325} width={410} height={210} xmlns="http://www.w3.org/1999/xhtml">
+            <div class="box-content">
+              <p>Idempotent consumers.</p>
+              <p>Commit offsets after processing.</p>
+              <p>Monitor lag & under-replicated partitions.</p>
+              <p>Set explicit retention (time & size).</p>
+              <p>Choose keys for even distribution.</p>
+              <p>KRaft for new clusters.</p>
+            </div>
+          </foreignObject>
+        </g>
+
+        {/* Footer */}
+        <rect x="0" y={POSTER_HEIGHT - 60} width={POSTER_WIDTH} height="60" fill={SURFACE_COLOR} />
+        <text x={POSTER_WIDTH / 2} y={POSTER_HEIGHT - 25} text-anchor="middle" class="footer-text">Generated from Kafka Architecture & Production Patterns article by Astro Blogs</text>
+      </svg>
+    </div>
+  </main>
+</BaseLayout>
+
+
+
+

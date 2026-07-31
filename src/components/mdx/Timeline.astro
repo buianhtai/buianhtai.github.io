@@ -26,13 +26,28 @@ interface TimelineEvent {
   color?: string;
 }
 
+interface TimelineItem {
+  title: string;
+  body: string;
+  accent?: string;
+}
+
 interface Props {
-  events: TimelineEvent[];
+  events?: TimelineEvent[];
+  items?: TimelineItem[];
   title?: string;
   caption?: string;
 }
 
-const { events, title, caption } = Astro.props;
+const { events: suppliedEvents, items, title, caption } = Astro.props;
+
+const events: TimelineEvent[] = suppliedEvents ?? (items ?? []).map((item, index) => ({
+  label: item.title,
+  date: `KAFKA ${index + 1}`,
+  sub: item.body,
+  color: item.accent,
+  major: index === (items?.length ?? 1) - 1,
+}));
 
 const COLORS: Record<string, string> = {
   teal:   '#0ea5e9',

@@ -4,6 +4,7 @@ import mdx from '@astrojs/mdx';
 import sitemap from '@astrojs/sitemap';
 import tailwindcss from '@tailwindcss/vite';
 import d2 from 'astro-d2';
+import icon from 'astro-icon';
 
 export default defineConfig({
   site: 'https://buianhtai.github.io',
@@ -21,6 +22,12 @@ export default defineConfig({
           en: 'en-US',
           vi: 'vi-VN',
         },
+       },
+    }),
+    icon({
+      include: {
+        'lucide': ['*'],
+        'logos': ['kafka'],
       },
     }),
   ],

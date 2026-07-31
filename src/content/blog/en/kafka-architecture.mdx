@@ -1,5 +1,6 @@
 ---
 title: "Apache Kafka: Architecture, Failure Modes, and Production Patterns"
+heroImage: "/og/kafka-og.png"
 description: "How Kafka's log-based design turns messaging into a distributed commit log — partitions, replication, ISR, consumer groups, the failure scenarios that actually happen in production, and the patterns that prevent them."
 pubDate: 2026-07-31
 tags: ["kafka", "architecture", "distributed-systems", "messaging", "streaming", "devops"]
@@ -18,6 +19,11 @@ import FlowStep from '../../../components/mdx/FlowStep.astro';
 import SequenceDiagram from '../../../components/mdx/SequenceDiagram.astro';
 import StateMachine from '../../../components/mdx/StateMachine.astro';
 import Card from '../../../components/mdx/Card.astro';
+import Timeline from '../../../components/mdx/Timeline.astro'; // NEW
+import NetworkMap from '../../../components/mdx/NetworkMap.astro'; // NEW
+import HeroBanner from '../../../components/HeroBanner.astro'; // NEW
+
+<HeroBanner title="Apache Kafka: Architecture & Production Patterns" category="Architecture" icon="logos:kafka" />
 
 Most people describe Kafka as "a message queue." That description causes almost every production incident related to it. Kafka is not a queue — it's a distributed, replicated, append-only commit log. Messages aren't removed when consumed; they're removed on a time or size retention policy, independent of any consumer. That single design choice is why Kafka can replay history, serve hundreds of independent consumer groups from one topic, and survive broker failures without losing acknowledged writes — and it's also why teams that treat it like RabbitMQ hit surprising failure modes.
 
@@ -75,6 +81,28 @@ Kafka's historical dependency on ZooKeeper for controller election and metadata 
 
 The **controller** (a broker elected leader for cluster metadata) is the single source of truth for: which broker leads which partition, which replicas are in-sync, and how to react when a broker dies. Controller failover is itself a Raft leader election — fast, but not instantaneous, and during that window partition leadership changes can stall.
 
+<Timeline
+  title="Kafka Metadata Evolution"
+  items={[
+    {
+      title: "Kafka < 2.8",
+      body: "ZooKeeper required for cluster metadata, controller election, and topic config. External dependency, separate operational concerns.",
+      accent: "rose"
+    },
+    {
+      title: "Kafka 2.8+",
+      body: "KRaft (Kafka Raft) mode introduced. Controller manages metadata via Raft consensus. ZooKeeper still an option.",
+      accent: "amber"
+    },
+    {
+      title: "Kafka 3.x / 4.x (current)",
+      body: "KRaft is the default and recommended metadata management. Removes ZooKeeper dependency entirely, simplifying deployments and operations.",
+      accent: "green"
+    }
+  ]}
+  caption="The transition from ZooKeeper to KRaft significantly simplifies Kafka's operational footprint by consolidating metadata management within Kafka itself."
+/>
+
 ---
 
 ## <Label color="amber">3</Label> Replication and the In-Sync Replica (ISR) Set
@@ -123,6 +151,29 @@ The single most common production Kafka incident: someone sets <code>acks=1</cod
 A producer's **partitioner** decides which partition a record lands in — by explicit key hash (same key → same partition → guaranteed per-key order) or round-robin/sticky if no key is given. Batching (`linger.ms`, `batch.size`) trades a small latency window for dramatically higher throughput by grouping records into fewer, larger network requests.
 
 A **consumer group** is Kafka's scaling primitive for reads: every partition is assigned to exactly one consumer within a group, so N partitions support up to N parallel consumers per group. Multiple independent groups can each read the full topic independently — this is how one Kafka topic serves an analytics pipeline, a fraud-detection service, and an audit log simultaneously without them interfering.
+
+<NetworkMap
+  title="Producer, Broker, Consumer Group Interaction"
+  nodes={[
+    { id: "producer", label: "Producer", color: "teal", icon: "logos:apache-kafka" },
+    { id: "broker1", label: "Broker 1", color: "green", icon: "logos:apache-kafka-icon" },
+    { id: "broker2", label: "Broker 2", color: "green", icon: "logos:apache-kafka-icon" },
+    { id: "broker3", label: "Broker 3", color: "green", icon: "logos:apache-kafka-icon" },
+    { id: "consumerGroup", label: "Consumer Group A", color: "amber", icon: "tabler:users-group" },
+    { id: "consumer1", label: "Consumer 1", parent: "consumerGroup" },
+    { id: "consumer2", label: "Consumer 2", parent: "consumerGroup" },
+    { id: "consumerGroupB", label: "Consumer Group B", color: "violet", icon: "tabler:users-group" },
+    { id: "consumer3", label: "Consumer 3", parent: "consumerGroupB" },
+  ]}
+  edges={[
+    { from: "producer", to: "broker1", label: "produces to Partition 0 (leader)" },
+    { from: "producer", to: "broker2", label: "produces to Partition 1 (leader)" },
+    { from: "broker1", to: "consumer1", label: "serves Partition 0" },
+    { from: "broker2", to: "consumer2", label: "serves Partition 1" },
+    { from: "broker3", to: "consumerGroupB", label: "serves Partition 2" },
+  ]}
+  caption="Producers write to partition leaders on brokers. Consumer groups read from partitions, with each consumer in a group responsible for a subset of partitions."
+/>
 
 <SequenceDiagram
   title="consumer group rebalance on scale-out"
