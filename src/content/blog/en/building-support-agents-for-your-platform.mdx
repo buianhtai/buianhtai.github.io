@@ -258,7 +258,7 @@ updated: 2026-08-24
 
 Second, **separate the two kinds of markdown**. Most files are *corpus* — content the agent retrieves and cites to customers. A few are *policy* — `escalation-rules.md` tells the agent how to behave (when to hand off, what never to promise). Policy files belong in the same repo for review and versioning, but they get injected into system prompts, never indexed for retrieval — quoting your escalation rules back at a customer is a leak, not an answer.
 
-This repo then plugs into anything: your own pipeline (CI merge → re-embed changed chunks), a platform's connector, or an MCP filesystem server for direct agent access. When sources beyond markdown arrive — PDFs, scanned docs, Confluence — add a parser (Docling, Unstructured) or adopt a platform's ingestion rather than changing the format. Markdown-plus-git scales further than teams expect; UC San Diego runs a markdown-backed deployment for 37,000+ users.
+This repo then plugs into anything: your own pipeline (CI merge → re-embed changed chunks), a platform's connector, or an MCP filesystem server for direct agent access. When sources beyond markdown arrive — PDFs, scanned docs, Confluence — add a parser (Docling, Unstructured) or adopt a platform's ingestion rather than changing the format. Markdown-plus-git scales further than teams expect, and if it ever truly doesn't, the format migrates into any platform's ingestion unchanged.
 
 <Callout color="teal">
 One knowledge base, two audiences: the same indexed corpus serves both the troubleshooting flow (the docs agent cites endpoint contracts during RCA) and a standalone "how do I" assistant for customers exploring your API and UI. Build the pipeline once; the `audience` metadata filter routes it.
@@ -286,7 +286,7 @@ Beyond those three engineering write-ups, the deployment record is broad enough 
   ]}
 />
 
-Two readings of that table matter. First, scale is proven — Klarna's month-one numbers ended the "is this production-ready?" debate for high-volume customer service. Second, *the regulated industries chose graph orchestration*, not because it's fashionable but because audit trails and deterministic gates are what their compliance teams demand — the same determinism stack described above.
+Two readings of that table matter. First, Klarna proved the **volume ceiling**: month-one numbers settled whether AI support could carry high-volume customer service (it could — though the 700 figure counts avoided hires, not replaced staff, and by 2025 Klarna publicly rehired humans for complex, emotionally charged tickets; the lesson isn't "AI failed," it's that volume and complexity ceilings are different ceilings — which is precisely why the determinism stack and escalation paths above exist). Second, *the regulated industries chose graph orchestration*, not because it's fashionable but because audit trails and deterministic gates are what their compliance teams demand — the same determinism stack described above. One clarification the tables can't show: Klarna's assistant was OpenAI-powered at the model layer and later migrated orchestration to LangGraph — provider and framework are different layers, not competing claims.
 
 The common thread across all of these: **agent observability is a first-class product surface**, not an afterthought. If you can't replay why your agent said something, you can't operate it.
 
@@ -300,7 +300,7 @@ The framework landscape has consolidated into four viable options (plus one to a
   headers={["Framework", "Model", "Strengths", "Watch out for"]}
   rows={[
     { "Framework": "LangGraph", "Model": "Directed graph over typed state", "Strengths": "Checkpointing/durable execution, human-in-the-loop gates, time-travel debugging, LangSmith tracing; runs at Klarna, Uber, LinkedIn", "Watch out for": "Steepest learning curve; most verbose" },
-    { "Framework": "CrewAI", "Model": "Role-based crews", "Strengths": "Fastest prototyping; native MCP + A2A; visual editor; huge community", "Watch out for": "~18% token overhead from role prompts; harder to debug complex flows" },
+    { "Framework": "CrewAI", "Model": "Role-based crews", "Strengths": "Fastest prototyping; native MCP + A2A; visual editor; huge community", "Watch out for": "~8–35% token overhead from role prompts (one 2026 benchmark's midpoint); harder to debug complex flows" },
     { "Framework": "OpenAI Agents SDK", "Model": "Minimal handoff chains", "Strengths": "Five clean primitives (agents, handoffs, guardrails, sessions, tracing); first-class MCP; fastest hello-world", "Watch out for": "OpenAI-first; no durable checkpointing; simple chains only" },
     { "Framework": "Claude Agent SDK", "Model": "Batteries-included Claude toolkit", "Strengths": "Native tool use, MCP, and subagents; smoothest path on Claude", "Watch out for": "Committed to one provider" },
     { "Framework": "AutoGen / AG2", "Model": "Agent conversations", "Strengths": "Great for research and debate-style reasoning", "Watch out for": "In maintenance mode; not recommended for new production work" },
@@ -498,7 +498,7 @@ This is Salesforce's *"deterministic exit despite probabilistic internals"* made
 
 ## Scaling: what actually grows
 
-Multi-agent support has an uncomfortable arithmetic: one ticket fans out into a triage call plus three specialist investigations, each making multiple tool calls, each tool call potentially triggering another reasoning round. A single hard ticket can mean 15–30 LLM invocations. Four levers keep that bounded:
+Multi-agent support has an uncomfortable arithmetic: one ticket fans out into a triage call plus three specialist investigations, each making multiple tool calls, each tool call potentially triggering another reasoning round. A single hard ticket can mean on the order of 15–30 LLM invocations (illustrative, not measured). Four levers keep that bounded:
 
 1. **Short-circuit before the model.** A known-issue hash match (error signature → existing resolution) skips every LLM call. In mature platforms this resolves a meaningful share of tickets for free.
 2. **Tier the models.** Triage and routing run on small fast models; only synthesis earns the frontier model. Salesforce built dedicated fine-tuned routing models for exactly this reason — one budget does not fit all tasks.
@@ -509,7 +509,7 @@ Latency composes the same way: delegation runs specialists in parallel, so wall-
 
 ## The cost model
 
-Per-ticket cost is arithmetic you can actually control. A typical investigation spends 30–80K tokens end-to-end: triage is cheap (small model, ~1–2K tokens), but each specialist re-sends accumulated context on every reasoning round, and tool results — log lines, trace spans, doc chunks — all land in the input window. **Input tokens dominate the bill**, which is why the scaling levers above matter more than output length.
+Per-ticket cost is arithmetic you can actually control. An illustrative investigation spends roughly 30–80K tokens end-to-end: triage is cheap (small model, ~1–2K tokens), but each specialist re-sends accumulated context on every reasoning round, and tool results — log lines, trace spans, doc chunks — all land in the input window. **Input tokens dominate the bill**, which is why the scaling levers above matter more than output length.
 
 <MetricBar
   title="Token spend per resolution, by scenario"
@@ -590,6 +590,7 @@ The maturity ladder in practice: start with retrieval-only over docs and known i
 ## Further reading
 
 - [Salesforce Engineering — Building enterprise AI agents that are autonomous and reliable](https://engineering.salesforce.com/building-enterprise-ai-agents-that-are-both-autonomous-and-reliable/)
+- [Salesforce Engineering — Agentforce's Agent Graph: Toward Guided Determinism (Jan 2026)](https://engineering.salesforce.com/)
 - [Sierra — Agent Traces: getting to the fix, fast](https://sierra.ai/blog/agent-traces)
 - [Klarna — AI assistant handles two-thirds of customer service chats in first month](https://www.klarna.com/international/press/klarna-ai-assistant-handles-two-thirds-of-customer-service-chats-in-its-first-month/)
 - [Intercom — Troubleshooting Fin procedures and data connectors](https://www.intercom.com/help/en/articles/13704396-troubleshooting-fin-procedures-and-data-connectors)
