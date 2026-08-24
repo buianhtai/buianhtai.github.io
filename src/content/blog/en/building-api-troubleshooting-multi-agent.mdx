@@ -10,6 +10,7 @@ category: "ai"
 import Callout from '../../../components/mdx/Callout.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
 import Flowchart from '../../../components/mdx/Flowchart.astro';
+import MetricBar from '../../../components/mdx/MetricBar.astro';
 import Pipeline from '../../../components/mdx/Pipeline.astro';
 import SequenceDiagram from '../../../components/mdx/SequenceDiagram.astro';
 import StateMachine from '../../../components/mdx/StateMachine.astro';
@@ -241,11 +242,149 @@ An agent is not a chat prompt living in someone's IDE. Treat every agent as a **
 
 Deployment shape follows from workload shape. Triage sits on the synchronous request path — it must answer routing decisions in milliseconds. The investigation leg is different: fetching traces, querying logs, correlating findings takes tens of seconds, which is far past what an HTTP request should hold open. So investigations run **queue-backed**: triage accepts the ticket, enqueues the investigation, and the customer gets an async answer via webhook or polling — the same 202-pattern discipline as any long-running job.
 
+Every investigation is itself a stateful run you can observe end to end:
+
+<StateMachine
+  title="investigation run lifecycle"
+  states={[
+    { id: "received", label: "Received",     sub: "artifacts extracted, tenant resolved", row: 1, col: 1 },
+    { id: "invest",   label: "Investigating",sub: "specialists running in parallel",      row: 1, col: 2 },
+    { id: "synth",    label: "Synthesizing", sub: "correlating findings into an answer",  row: 1, col: 3 },
+    { id: "answered", label: "Answered",     sub: "cited response delivered",             row: 2, col: 3 },
+    { id: "escalated",label: "Escalated",    sub: "human ticket with full context",       row: 2, col: 2 },
+    { id: "retrying", label: "Retrying",     sub: "transient failure, budget remaining",  row: 2, col: 1 },
+  ]}
+  transitions={[
+    { from: "received",  to: "invest",    label: "delegation fan-out" },
+    { from: "invest",    to: "synth",     label: "findings collected" },
+    { from: "synth",     to: "answered",  label: "confidence ≥ threshold" },
+    { from: "synth",     to: "escalated", label: "low confidence / sensitive" },
+    { from: "invest",    to: "retrying",  label: "provider error" },
+    { from: "retrying",  to: "invest",    label: "backoff elapsed" },
+  ]}
+/>
+
 <Callout color="teal">
 Rollout is a pipeline, not a flip: config change lands in git → golden-set evals gate the merge → new version runs in shadow mode beside production (same inputs, logged outputs, no customer sees it) → canary percentage → full traffic. Rollback is `git revert`. If you cannot answer "which agent version answered this ticket, with which prompt?", you are operating on vibes.
 </Callout>
 
 Two operational disciplines separate toys from production systems here. First, **secrets scoping**: the observability agent's MCP credentials are read-only and environment-scoped — staging investigations never touch production log indexes. Second, **trace everything**: every subagent invocation records its inputs, tool calls, token spend, and latency as a structured trace (Salesforce's per-conversation execution traces and Sierra's Agent Traces both exist because "the agent seemed confused" is undiagnosable without them).
+
+## Implementation structure: an agent is a module, not magic
+
+Concretely, each agent in the repo is a small, boring package:
+
+```text
+agents/
+  triage/
+    agent.ts          # definition: model, instructions, handoff targets
+    tools.ts          # typed tool functions (validate_endpoint, resolve_tenant)
+    schema.ts         # structured output contract (JSON Schema)
+    prompts/*.md      # versioned prompt templates
+    evals/golden.json # questions + expected answers for this agent
+  observability/
+    agent.ts
+    tools.ts          # get_trace, query_logs — thin clients over MCP
+    ...
+orchestrator/         # graph wiring, routing, budgets — no business logic
+shared/               # MCP clients, provider gateway, redaction utils
+```
+
+Three rules keep this sane. **Tools are just typed functions** — the same discipline as any internal API client, with schemas that double as the LLM's function-calling contract. **Prompts live in files**, reviewed in pull requests, never inline strings. **The orchestrator holds no business logic** — routing, budgets, and delegation only — so specialists stay independently testable.
+
+## Yes — deploy it like a normal backend service
+
+The honest answer to "is this special?" is no. The agent runtime is a **stateless containerized worker service** behind your existing ingress and queues, scaled on queue depth and CPU exactly like any other backend component. Nothing about an LLM call requires new infrastructure — it's an outbound HTTP call to a provider, best routed through a small gateway sidecar that centralizes rate limiting, retries, cost attribution, and logging for every model call in one place.
+
+The only architectural rule that matters: **the runtime stays stateless; all state lives in databases** (next section). A worker pod dying mid-investigation loses nothing because run state was checkpointed externally — which is precisely why the framework choice (checkpointing support) mattered earlier.
+
+<Flowchart
+  title="where agents sit in a classic backend landscape"
+  nodes={[
+    { id: "ch",     label: "Channels",            shape: "oval",   color: "teal",   icon: "lucide:message-circle", sub: "portal · email · chat widget" },
+    { id: "api",    label: "Agent API service",   shape: "rect",   color: "blue",   icon: "lucide:server",         sub: "sync triage — just another REST/gRPC service" },
+    { id: "queue",  label: "Investigation queue", shape: "rect",   color: "amber",  icon: "lucide:list-ordered",   sub: "async jobs, per-tenant caps" },
+    { id: "rt",     label: "Agent runtime workers", shape: "rect", color: "violet", icon: "lucide:cpu",            sub: "stateless pods · framework as a library" },
+    { id: "eng",    label: "Workflow engines",    shape: "rect",   color: "green",  icon: "lucide:workflow",       sub: "Kestra · Temporal · Camunda (below)" },
+    { id: "mcp",    label: "Tools via MCP",       shape: "rect",   color: "default",icon: "lucide:plug",           sub: "logs · traces · docs · tickets" },
+    { id: "db",     label: "State stores",        shape: "rect",   color: "default", icon: "lucide:database",     sub: "Postgres · Redis · vector index" },
+  ]}
+  edges={[
+    { from: "ch",    to: "api" },
+    { from: "api",   to: "queue",  label: "long work" },
+    { from: "queue", to: "rt" },
+    { from: "rt",    to: "mcp" },
+    { from: "rt",    to: "db" },
+    { from: "eng",   to: "rt",     label: "trigger / supervise" },
+  ]}
+/>
+
+## CI/CD: prompts get the same pipeline as code
+
+A workable agent pipeline has two tracks merging into one gate:
+
+1. **Code track** — unit tests for tools (mocked MCP responses), schema validation tests, integration test of the orchestrator graph with recorded fixtures.
+2. **Prompt/config track** — every prompt or model change runs the agent's golden-set evals in CI; scores below threshold block the merge exactly like a failing unit test.
+
+Both land in the same artifact: a versioned config bundle. Promotion then follows one gate and three stages:
+
+<Flowchart
+  title="agent CI/CD — two tracks, one gate"
+  nodes={[
+    { id: "code",   label: "Code changes",          shape: "rect",   color: "blue",   icon: "lucide:code",    sub: "tool unit tests · schema tests · graph fixtures" },
+    { id: "prompt", label: "Prompt / config change",shape: "rect",   color: "violet", icon: "lucide:file-text", sub: "versioned templates · model pin · guardrail thresholds" },
+    { id: "gate",   label: "Golden-set evals pass?", shape: "diamond",                sub: "regression suite runs on every merge" },
+    { id: "block",  label: "Block merge",           shape: "rect",   color: "rose",   icon: "lucide:octagon-x", sub: "diff shows which questions regressed" },
+    { id: "shadow", label: "Shadow run",            shape: "rect",   color: "amber",  icon: "lucide:eye",     sub: "production inputs, logged outputs only" },
+    { id: "canary", label: "Canary %",              shape: "rect",   color: "teal",   icon: "lucide:percent", sub: "regression alerts wired to auto-rollback" },
+    { id: "prod",   label: "Production",            shape: "oval",   color: "green",  icon: "lucide:rocket",  sub: "rollback = git revert" },
+  ]}
+  edges={[
+    { from: "code",   to: "gate" },
+    { from: "prompt", to: "gate" },
+    { from: "gate",   to: "block",  label: "fail" },
+    { from: "gate",   to: "shadow", label: "pass" },
+    { from: "shadow", to: "canary", label: "parity confirmed" },
+    { from: "canary", to: "prod",   label: "stable" },
+  ]}
+/>
+
+## Composing with workflow engines: Kestra, Temporal, Camunda
+
+The sharpest question backend teams ask: *do agent frameworks replace our workflow engines?* No — they solve different halves, and the composition is where systems get good:
+
+<DataTable
+  caption="Who owns what across engines and agents"
+  accent="amber"
+  headers={["Engine", "Sweet spot with agents", "Concrete example"]}
+  rows={[
+    { "Engine": "Kestra", "Sweet spot with agents": "Event-driven data pipelines around the agent — not the reasoning itself", "Concrete example": "Docs merge triggers KB re-index flow: chunk → embed → swap index → run eval suite → report regressions" },
+    { "Engine": "Temporal", "Sweet spot with agents": "Durable execution of long, resumable investigations with retries and signals", "Concrete example": "One workflow per investigation: activities wrap tool calls; crash resumes from last checkpoint; human approval arrives days later as a signal" },
+    { "Engine": "Camunda", "Sweet spot with agents": "BPMN human-in-the-loop processes with SLAs and audit requirements", "Concrete example": "Escalation process: agent output → review task → approve/reject → notify customer, fully auditable" },
+  ]}
+/>
+
+The division of labor that works in practice: **the agent framework decides what the model does next within a node; the workflow engine guarantees what happens between nodes and after failures.** Don't let the LLM own control flow that must be auditable, and don't hand-roll retry/checkpoint machinery that Temporal provides natively. A pragmatic split many teams land on: Temporal (or similar) supervises the investigation workflow; the agent framework runs *inside* one activity; Kestra handles the scheduled/event-driven plumbing (KB indexing, eval sweeps, nightly quality reports); Camunda owns escalation processes where humans sign off.
+
+## What state lives in which database
+
+Agent systems add three new state categories to a classic backend — none of them belong in your system-of-record RDBMS's core tables, but most of them still fit in Postgres:
+
+<DataTable
+  caption="State taxonomy for agent platforms"
+  accent="violet"
+  headers={["State", "Store", "Why"]}
+  rows={[
+    { "State": "Conversation/session context", "Store": "Redis (with TTL)", "Why": "Ephemeral by nature; expiration IS the retention policy" },
+    { "State": "Run checkpoints / workflow state", "Store": "Postgres (framework checkpointer) or Temporal's persistence", "Why": "Durable, resumable, queryable for debugging — but operational, not business data" },
+    { "State": "KB vector index", "Store": "pgvector, Qdrant, or Elasticsearch", "Why": "pgvector if Postgres-native simplicity wins; dedicated vector DB when scale/filtering demands it" },
+    { "State": "Tickets, answers, feedback, eval results", "Store": "Postgres", "Why": "This IS business data — quality metrics and audit history worth keeping forever" },
+    { "State": "Tool-call audit log", "Store": "Append-only table or log platform", "Why": "Every query the agent ran, scoped to whom — compliance reads this daily" },
+    { "State": "Retrieval / known-issue caches", "Store": "Redis", "Why": "Cost lever from the scaling section; TTL-bounded staleness" },
+  ]}
+/>
+
+The boundary rule from the caching world applies verbatim: **durable truth lives in the RDBMS; agent state is operational data with TTLs and rebuildability.** If losing a store would corrupt customer trust rather than merely slow responses, it was never agent state to begin with.
 
 ## Engineering determinism
 
@@ -280,6 +419,15 @@ Latency composes the same way: delegation runs specialists in parallel, so wall-
 ## The cost model
 
 Per-ticket cost is arithmetic you can actually control. A typical investigation spends 30–80K tokens end-to-end: triage is cheap (small model, ~1–2K tokens), but each specialist re-sends accumulated context on every reasoning round, and tool results — log lines, trace spans, doc chunks — all land in the input window. **Input tokens dominate the bill**, which is why the scaling levers above matter more than output length.
+
+<MetricBar
+  title="Token spend per resolution, by scenario"
+  metrics={[
+    { label: "Known-issue match", value: 0.5, displayValue: "~0 (cache hit)", color: "teal" },
+    { label: "Simple ticket", value: 30, displayValue: "~30K tokens", color: "green" },
+    { label: "Hard multi-service ticket", value: 80, displayValue: "~80K tokens", color: "amber" },
+  ]}
+/>
 
 <DataTable
   caption="Cost levers, ranked by leverage"
