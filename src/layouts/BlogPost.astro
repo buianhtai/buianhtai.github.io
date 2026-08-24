@@ -6,6 +6,8 @@ import TableOfContents from '../components/TableOfContents.astro';
 import SeriesNav from '../components/SeriesNav.astro';
 import Giscus from '../components/Giscus.astro';
 import { getPostSlug } from '../lib/posts';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 
 interface Props {
   post: CollectionEntry<'blog'>;
@@ -70,9 +72,27 @@ const dateFmt = (d: Date) =>
       />
     )}
 
-    {heroImage && (
-      <img src={heroImage} alt={title} class="w-full mb-10" loading="eager" style="border: 1px solid var(--color-border);" />
-    )}
+    {heroImage && (() => {
+      const darkSrc = heroImage.replace(/\.png$/, "-dark.png");
+      const hasDarkVariant = darkSrc !== heroImage && existsSync(join(process.cwd(), "public", darkSrc));
+      return (
+        <div class="hero-media w-full mb-10">
+          <img src={heroImage} alt={title} class:list={["hero-img", "hero-img-light", { "hero-img-pair": hasDarkVariant }]} loading="eager" />
+          {hasDarkVariant && (
+            <img src={darkSrc} alt={title} class="hero-img hero-img-dark" loading="eager" />
+          )}
+        </div>
+      );
+    })()}
+
+    <style is:global>
+      /* Theme-aware hero: default terminal theme and every non-light theme use the dark card;
+         light / material-light themes use the light card. Single-card posts always show light. */
+      .hero-media .hero-img { width: 100%; border: 1px solid var(--color-border); }
+      .hero-media .hero-img-dark { display: none; }
+      :root:not(.theme-light):not(.theme-material-light) .hero-media .hero-img-pair.hero-img-light { display: none; }
+      :root:not(.theme-light):not(.theme-material-light) .hero-media .hero-img-pair.hero-img-dark { display: block; }
+    </style>
 
     <TableOfContents headings={headings} />
 
