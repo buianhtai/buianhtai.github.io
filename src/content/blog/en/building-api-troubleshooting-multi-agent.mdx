@@ -1,0 +1,246 @@
+---
+title: "Building a Troubleshooting Agent for Your API Platform"
+description: "A customer sends you an error message, a traceId, and an endpoint. Today a human support engineer pivots between docs, logs, and traces for 30 minutes. Here is how enterprises build multi-agent systems that do this automatically — the architecture, the guardrails, and the open source to assemble it from."
+pubDate: 2026-08-24
+tags: ["ai-agents", "mcp", "observability", "customer-support", "architecture"]
+lang: "en"
+category: "ai"
+---
+
+import Callout from '../../../components/mdx/Callout.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import Flowchart from '../../../components/mdx/Flowchart.astro';
+import Pipeline from '../../../components/mdx/Pipeline.astro';
+import SequenceDiagram from '../../../components/mdx/SequenceDiagram.astro';
+import StateMachine from '../../../components/mdx/StateMachine.astro';
+
+If you run an API platform, you know this support ticket: *"Your API returned 500. Here's the traceId: `a4f8...`. I was calling `POST /v2/orders`."* No reproduction steps, no payload, no environment details — just three artifacts and an expectation that you'll figure it out.
+
+Today, a support engineer handles this by pivoting between tabs: look up the endpoint in the API docs, search logs by traceId, open the distributed trace, check whether it's a known issue, draft an answer. Thirty minutes later, maybe there's a root cause.
+
+Every piece of that investigation is mechanical except the judgment at the end — which makes it exactly the kind of workflow enterprises are now handing to **multi-agent systems**. This post walks through the architecture that keeps such an agent trustworthy, what Salesforce, Intercom, and Sierra learned building theirs, and the open source you can assemble today.
+
+## The core insight: orchestration is the system
+
+The most instructive enterprise write-up comes from Salesforce's Agentforce team, and their conclusion generalizes: **the model is not the system — the orchestration is**. They call their approach *guided determinism*, and it rests on a distinction every troubleshooting agent needs.
+
+An LLM reasoning freely about a customer's error is probabilistic. But the workflow around it — *verify the customer, fetch the trace, check auth errors before suggesting bug reports* — must be deterministic. Salesforce models each business process as a graph of nodes where some transitions are guarded by hard validation gates. Their slogan is worth stealing: each node is *"a deterministic exit despite probabilistic internals"* — the node thinks locally, but the graph guarantees the path globally.
+
+They also codified the two ways agents cooperate, which map directly onto a support architecture:
+
+- **Handoff** — one agent passes full context to another and exits (triage hands a confirmed billing issue to the billing specialist).
+- **Delegation** — an orchestrator farms subtasks out to specialists in parallel and synthesizes results (one question needing both docs and logs fans out to both).
+
+## The reference architecture
+
+For an API platform, the troubleshooting flow decomposes into five specialized roles behind one entry point:
+
+<Flowchart
+  title="multi-agent support topology"
+  nodes={[
+    { id: "cust",    label: "Customer ticket",      shape: "oval",   color: "teal",   icon: "lucide:message-circle", sub: "error + traceId + endpoint" },
+    { id: "triage",  label: "Triage agent",         shape: "rect",   color: "blue",   icon: "lucide:filter",         sub: "classify intent, extract artifacts, validate tenant" },
+    { id: "docs",    label: "Docs agent",           shape: "rect",   color: "violet", icon: "lucide:book-open",      sub: "OpenAPI spec + API docs (RAG)" },
+    { id: "obs",     label: "Observability agent",  shape: "rect",   color: "amber",  icon: "lucide:search-code",    sub: "trace by ID → logs via MCP" },
+    { id: "known",   label: "Knowledge agent",      shape: "rect",   color: "green",  icon: "lucide:lightbulb",      sub: "known issues, past tickets" },
+    { id: "synth",   label: "Resolution synthesis", shape: "rect",   color: "blue",   icon: "lucide:git-merge",      sub: "correlate findings into one answer" },
+    { id: "reply",   label: "Answer + next steps",  shape: "oval",   color: "teal",   icon: "lucide:check-circle",   sub: "or escalate with full context" },
+    { id: "human",   label: "Human engineer",       shape: "rect",   color: "rose",   icon: "lucide:user",           sub: "escalation path, always available" },
+  ]}
+  edges={[
+    { from: "cust",   to: "triage" },
+    { from: "triage", to: "docs",  label: "delegation" },
+    { from: "triage", to: "obs",   label: "if traceId present" },
+    { from: "triage", to: "known",  label: "delegation" },
+    { from: "docs",   to: "synth" },
+    { from: "obs",    to: "synth" },
+    { from: "known",  to: "synth" },
+    { from: "synth",  to: "reply",  label: "confidence high" },
+    { from: "synth",  to: "human",  label: "low confidence / sensitive" },
+  ]}
+/>
+
+Each specialist has a narrow contract:
+
+- **Triage** extracts the structured artifacts (endpoint, status code, traceId, timestamp, tenant identity), validates them against the OpenAPI spec — does this endpoint even exist? what does a 500 mean there? — and routes. It never investigates.
+- **Docs agent** answers "what is this endpoint supposed to do, and which error codes are documented?" via retrieval over your OpenAPI spec and documentation.
+- **Observability agent** owns the traceId. It fetches the distributed trace, identifies the failing span and service, pulls correlated logs, and reports findings — read-only.
+- **Knowledge agent** searches known issues and historical resolutions; a surprising share of tickets match something already fixed.
+- **Synthesis** correlates the three reports into one answer with next steps — and is explicitly allowed to say "we need a human."
+
+The end-to-end flow for our opening ticket looks like this:
+
+<SequenceDiagram
+  title="from '500 with a traceId' to a root-cause answer"
+  actors={[
+    { label: "Customer", color: "teal", icon: "lucide:user" },
+    { label: "Triage", color: "blue", icon: "lucide:filter" },
+    { label: "Obs Agent", color: "amber", icon: "lucide:search-code" },
+    { label: "MCP / Logs", color: "violet", icon: "simple-icons:grafana" },
+  ]}
+  messages={[
+    { from: "Customer", to: "Triage", label: "500 on POST /v2/orders, traceId a4f8...", type: "request" },
+    { from: "Triage", to: "Triage", label: "validate endpoint vs OpenAPI spec; resolve tenant scope", type: "async" },
+    { from: "Triage", to: "Obs Agent", label: "delegate: investigate traceId a4f8..., tenant=acme", type: "request" },
+    { from: "Obs Agent", to: "MCP / Logs", label: "get-trace(a4f8...) → failing span: inventory-service, timeout", type: "request" },
+    { from: "Obs Agent", to: "MCP / Logs", label: "query logs: service=inventory-service, window ±2s around span", type: "request" },
+    { from: "MCP / Logs", to: "Obs Agent", label: "connection-pool exhausted, retry storm detected", type: "response", highlight: true },
+    { from: "Obs Agent", to: "Triage", label: "findings: downstream pool exhaustion, not your payload", type: "response" },
+    { from: "Triage", to: "Customer", label: "root cause + workaround + incident link + retry guidance", type: "response" },
+    { note: "The agent only ever reads. Every tool it holds is scoped to the caller's own tenant." },
+  ]}
+/>
+
+## The traceId is the whole ballgame
+
+The reason this works at all is that the customer hands you a correlation key. A traceId collapses "search millions of log lines" into "fetch one trace and its neighbors." Three pieces of infrastructure make it agent-ready:
+
+**Trace-to-log correlation.** Your tracing backend must link spans to log lines sharing the trace ID, with a small time-window shift (±2s is the common starting point) because span timestamps are millisecond-precise while log lines land slightly outside them. If your services don't inject trace IDs into logs yet, fix that first — no agent can compensate for missing correlation.
+
+**MCP servers over your observability stack.** This is the newest and most important piece. Grafana ships a production MCP server exposing Loki queries, Tempo TraceQL, `get-trace` by ID, Sift investigations (automated error-pattern and slow-request detection), and datasource metadata as agent tools. Tempo's own MCP server exposes `traceql-search`, `get-trace`, and attribute discovery — and notably serves an LLM-optimized response format (`Accept: application/vnd.grafana.llm`) that strips detail to fit traces inside a context window. Standalone `loki-mcp` servers exist if you run just Loki. Your agent doesn't screen-scrape a dashboard; it calls the same tools your engineers do.
+
+**Query guardrails.** The Grafana MCP server's defaults encode hard-won lessons: log-line limits per query, and a *guardrail mode* that blocks unselective LogQL queries — because a broad selector over a wide time range can scan terabytes, and an LLM will absolutely try that. Enforce selective stream selectors, cap time ranges, and reject-with-guidance so the model learns to narrow its own queries.
+
+<Callout color="amber">
+Tenant isolation is non-negotiable. The observability agent must scope every query to the calling customer's tenant (in Loki terms, the org/tenant header) using identity resolved server-side at triage — never a tenant name the customer typed. A support agent that can read another tenant's logs is not a support agent; it's an incident.
+</Callout>
+
+## The knowledge-base pipeline: teaching customers your API and UI
+
+Troubleshooting is only half the support volume. The other half is *"how do I...?"* — how to authenticate, how to paginate, which UI screen exports data, whether the API supports idempotency keys. This is a second agent with a different engine behind it: not logs and traces, but a **knowledge-base pipeline** that turns your documentation into a grounded answer machine.
+
+The pipeline has two halves. Ingestion runs whenever your docs change; retrieval runs on every question.
+
+```text
+Ingestion:   Sources → Normalize → Chunk → Embed → Index (+ metadata)
+Retrieval:   Question → Hybrid search → Rerank → Filter by metadata → Grounded answer + citations
+```
+
+<Pipeline
+  nodes={[
+    { title: "Sources", subtitle: "spec, guides, help center, changelog" },
+    { title: "Normalize", subtitle: "strip nav/boilerplate, keep structure" },
+    { title: "Chunk", subtitle: "spec-aware + heading-aware" },
+    { title: "Embed", subtitle: "vectors per chunk" },
+    { title: "Index", subtitle: "+ version, area, audience, date" },
+    { title: "Serve", subtitle: "hybrid search → cite or refuse" },
+  ]}
+  arrows={[
+    { label: "CI hook on merge", direction: "right" },
+    { label: "structure preserved", direction: "right" },
+    { label: "one endpoint = one chunk", direction: "right" },
+    { label: "batched", direction: "right" },
+    { label: "filters at query time", direction: "right" },
+    { label: "freshness checked", direction: "right" },
+  ]}
+/>
+
+### Sources: each one earns its place
+
+<DataTable
+  caption="Knowledge sources for an API platform"
+  accent="teal"
+  headers={["Source", "What it answers", "Gotcha"]}
+  rows={[
+    { "Source": "OpenAPI spec", "Source answers": "Endpoint contracts, params, error codes — machine-generated truth", "Gotcha": "Never hand-summarize it; chunk per operation so contracts stay intact" },
+    { "Source": "API guides & tutorials", "Source answers": "How to accomplish tasks, auth flows, pagination patterns", "Gotcha": "Duplicates spec content — dedupe or the agent cites both inconsistently" },
+    { "Source": "UI help center", "Source answers": "Where features live in the product, step-by-step flows", "Gotcha": "Screenshots age fast; tag chunks with UI version or release" },
+    { "Source": "Changelog / release notes", "Source answers": "What changed, deprecations, migration paths", "Gotcha": "Must be version-filtered or old breaking-change notes mislead" },
+    { "Source": "SDK samples", "Source answers": "Copy-paste-ready code per language", "Gotcha": "Keep snippets whole — splitting code across chunks destroys it" },
+    { "Source": "Resolved support tickets", "Source answers": "Real-world edge cases no doc anticipated", "Gotcha": "PII scrubbing before anything enters the index" },
+  ]}
+/>
+
+### The three decisions that make or break it
+
+**Chunk along the spec's seams, not fixed character counts.** A naive 500-token splitter cuts an endpoint definition mid-schema. Instead: one OpenAPI operation = one chunk (path, method, parameters, responses together); markdown chunks follow headings and carry their breadcrumb ("Guides → Authentication → Rotating keys") as metadata; code blocks never split. Retrieval quality is decided here more than in any model choice.
+
+**Metadata is the real retrieval power tool.** Every chunk carries `api_version`, `product_area`, `audience` (`api-developer` vs `ui-user`), and `updated_at`. At query time these become filters: a customer on v2 of the API should never see a v1 answer; a UI question shouldn't retrieve endpoint schemas. This single design choice eliminates the most common failure mode — confidently correct answers for the wrong version.
+
+**Freshness is a deployment event, not a cron job.** Hook re-indexing into the same CI pipeline that publishes your docs and spec: merge to main → docs build → re-embed changed chunks → swap index. Stale documentation silently poisons every downstream answer, and a nightly job means up-to-24-hours of wrong guidance.
+
+### Query time: hybrid search and honest refusals
+
+Pure vector search fails on exactly the things users ask about — exact error codes, field names, HTTP verbs are keyword matches, not semantic ones. Run **hybrid retrieval**: BM25 keyword search plus embedding similarity, merged and reranked. Then two rules for generation:
+
+- **Citations are mandatory.** Every claim links to the doc section it came from. This lets customers verify, and lets you audit *why* the agent said what it said.
+- **Refusal is a feature.** When retrieval confidence is low or sources conflict, the agent says so and offers the human path — the same escalation contract as the troubleshooting side. Intercom's Fin behaves this way by defaulting to Help Center grounding and escalating when nothing solid matches; the pattern transfers directly.
+
+Finally, close the loop with evaluation: maintain a golden set of real customer questions with known-correct answers, and run it on every docs change and prompt tweak. A KB agent without regression evals degrades silently as content evolves.
+
+<Callout color="teal">
+One knowledge base, two audiences: the same indexed corpus serves both the troubleshooting flow (the docs agent cites endpoint contracts during RCA) and a standalone "how do I" assistant for customers exploring your API and UI. Build the pipeline once; the `audience` metadata filter routes it.
+</Callout>
+
+## What the enterprises learned
+
+**Salesforce (Agentforce)** contributes the runtime philosophy: graph-shaped orchestration with validation gates, specialized subagents instead of one generalist, fine-tuned routing models, and deep per-conversation traces so engineers can see which subagent took which action. Their testing story matters as much as the architecture — synthetic utterances at scale, scored by LLM judges, before a real customer ever reaches the agent.
+
+**Intercom (Fin)** shows what the failure modes actually look like in production. Their debugging model is refreshingly concrete: every procedure step emits *"Fin's thoughts"* events explaining its reasoning; connector failures are classified (auth vs network vs response-mapping); and their top recommendation for flaky integrations is structural — make the external API return a fallback value instead of an error, so the agent always has something actionable rather than improvising. The lesson: design your platform's APIs for agent consumption, not just human consumption.
+
+**Sierra** built Agent Traces on the observation that traditional logs show inputs and outputs, while agents need the *decision path* in between — which tool was chosen, what alternatives existed, whether conflicting instructions pushed it off course, and how many milliseconds each step cost. For a support product, latency is UX; per-step timing is how you keep voice-grade responsiveness.
+
+The common thread across all three: **agent observability is a first-class product surface**, not an afterthought. If you can't replay why your agent said something, you can't operate it.
+
+## Choosing the orchestration framework
+
+The framework landscape has consolidated into four viable options (plus one to avoid):
+
+<DataTable
+  caption="Multi-agent frameworks for a production support agent"
+  accent="teal"
+  headers={["Framework", "Model", "Strengths", "Watch out for"]}
+  rows={[
+    { "Framework": "LangGraph", "Model": "Directed graph over typed state", "Strengths": "Checkpointing/durable execution, human-in-the-loop gates, time-travel debugging, LangSmith tracing; runs at Klarna, Uber, LinkedIn", "Watch out for": "Steepest learning curve; most verbose" },
+    { "Framework": "CrewAI", "Model": "Role-based crews", "Strengths": "Fastest prototyping; native MCP + A2A; visual editor; huge community", "Watch out for": "~18% token overhead from role prompts; harder to debug complex flows" },
+    { "Framework": "OpenAI Agents SDK", "Model": "Minimal handoff chains", "Strengths": "Five clean primitives (agents, handoffs, guardrails, sessions, tracing); first-class MCP; fastest hello-world", "Watch out for": "OpenAI-first; no durable checkpointing; simple chains only" },
+    { "Framework": "Claude Agent SDK", "Model": "Batteries-included Claude toolkit", "Strengths": "Native tool use, MCP, and subagents; smoothest path on Claude", "Watch out for": "Committed to one provider" },
+    { "Framework": "AutoGen / AG2", "Model": "Agent conversations", "Strengths": "Great for research and debate-style reasoning", "Watch out for": "In maintenance mode; not recommended for new production work" },
+  ]}
+/>
+
+The industry's dominant pattern is two-phase: prototype the crew in whatever gets you answers fastest, then move the production-critical path to a framework with durable state once requirements harden. For a support agent specifically, the deciding questions are: does it hold state across a long investigation (→ checkpointing), do you need approval gates before certain answers ship (→ human-in-the-loop), and can you trace a bad answer back to the exact step (→ observability)?
+
+## The open-source assembly kit
+
+Nothing here requires a proprietary platform. The stack assembles from:
+
+<DataTable
+  caption="Open source building blocks"
+  accent="violet"
+  headers={["Block", "Project", "What it gives the agent"]}
+  rows={[
+    { "Block": "Logs", "Project": "Grafana MCP server / loki-mcp", "What it gives the agent": "LogQL queries, label discovery, pattern analysis, stats — with cost guardrails" },
+    { "Block": "Traces", "Project": "Tempo MCP server", "What it gives the agent": "TraceQL search, get-trace by ID, attribute discovery, LLM-optimized trace format" },
+    { "Block": "Auto-investigation", "Project": "Grafana Sift (via MCP)", "What it gives the agent": "Elevated error-pattern detection, slow-request analysis without hand-written queries" },
+    { "Block": "Orchestration", "Project": "LangGraph / CrewAI / OpenAI Agents SDK", "What it gives the agent": "Routing, delegation, state, guardrails, tracing" },
+    { "Block": "API knowledge", "Project": "RAG over your OpenAPI spec", "What it gives the agent": "Endpoint contracts, documented error codes, request/response schemas" },
+    { "Block": "Instrumentation", "Project": "OpenTelemetry", "What it gives the agent": "The trace IDs and correlated logs the whole system depends on" },
+  ]}
+/>
+
+## Guardrails: what the agent must never do
+
+The constraint list is shorter and more important than the feature list:
+
+1. **Read-only tools.** The support agent observes; it never mutates. No retries on the customer's behalf against production, no config changes, no data writes. If a fix requires action, the output is instructions or an escalated ticket — not an executed change.
+2. **Server-side tenant scoping.** Identity resolved from authentication at triage, injected into every downstream query. Tenant identifiers from the customer's message are hints, never credentials.
+3. **PII discipline end-to-end.** Traces and logs routinely contain tokens and personal data. Redact before data reaches any LLM provider, and prefer self-hosted models for the observability leg if policy demands it — the Tempo docs themselves warn teams to review what tracing data leaves the perimeter.
+4. **Bounded curiosity.** Query limits, time-range caps, and selective-selector enforcement on every log tool — both for cost and to stop the model from wandering into scan-the-world queries.
+5. **Honest escalation.** Confidence thresholds below which the agent stops synthesizing and hands a fully-contextualized ticket to a human. A wrong confident answer costs more than a slow human handoff — Intercom's connector fallback pattern (always give the agent something structured to act on) applies to your own escalation design too.
+
+<Callout color="teal">
+The maturity ladder in practice: start with retrieval-only over docs and known issues (no log access). Add trace-by-ID lookup once correlation infrastructure is solid. Add open-ended log querying last, with guardrails on. Each rung earns the next by demonstrating it can cite evidence instead of hallucinating causes.
+</Callout>
+
+## Further reading
+
+- [Salesforce Engineering — Building enterprise AI agents that are autonomous and reliable](https://engineering.salesforce.com/building-enterprise-ai-agents-that-are-both-autonomous-and-reliable/)
+- [Sierra — Agent Traces: getting to the fix, fast](https://sierra.ai/blog/agent-traces)
+- [Intercom — Troubleshooting Fin procedures and data connectors](https://www.intercom.com/help/en/articles/13704396-troubleshooting-fin-procedures-and-data-connectors)
+- [Grafana MCP server](https://github.com/grafana/mcp-grafana)
+- [Tempo MCP server documentation](https://grafana.com/docs/tempo/latest/api_docs/mcp-server/)
+- [Tempo and AI — LLM-optimized endpoints](https://grafana.com/docs/tempo/latest/introduction/tempo-and-ai/)
+- [grafana/loki-mcp](https://github.com/grafana/loki-mcp)
+- [Grafana — Configure trace-to-logs correlation](https://grafana.com/docs/grafana/latest/datasources/tempo/configure-tempo-data-source/configure-trace-to-logs/)
+- [AgentsCamp — Which agent framework in 2026?](https://agentscamp.com/guides/concepts/agent-frameworks-2026)
