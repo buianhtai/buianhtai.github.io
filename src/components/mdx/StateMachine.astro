@@ -126,6 +126,23 @@ const CHAR_W = 5.6;
 const LABEL_PAD_H = 10; // horizontal padding total
 const LABEL_H = 12;     // label rect height
 
+// State labels use the mono face. Estimate their width so icon + label can
+// remain a centered group; long labels fall back to a vertical stack.
+const ICON_SIZE = 14;
+const ICON_GAP = 6;
+function estimatedTextWidth(label: string, fontSize: number) {
+  return label.length * fontSize * 0.6;
+}
+function iconLabelLayout(cx: number, label: string, fontSize: number, maxWidth: number) {
+  const labelWidth = estimatedTextWidth(label, fontSize);
+  const groupWidth = ICON_SIZE + ICON_GAP + labelWidth;
+  if (groupWidth <= maxWidth) {
+    const left = cx - groupWidth / 2;
+    return { mode: 'inline' as const, iconX: left, labelX: left + ICON_SIZE + ICON_GAP };
+  }
+  return { mode: 'stack' as const, iconX: cx - ICON_SIZE / 2, labelX: cx };
+}
+
 // Build arrow path data for each transition
 interface ArrowData {
   d: string;
@@ -406,6 +423,9 @@ transitions.forEach((t) => {
           const cy = boxCy(s);
           const x = cx - BOX_W / 2;
           const y = cy - BOX_H / 2;
+          const labelY = s.sub ? cy - 6 : cy + 4;
+          const iconLayout = s.icon ? iconLabelLayout(cx, s.label, 11.5, BOX_W - 16) : null;
+          const stackedIcon = s.icon ? iconLayout!.mode === 'stack' : false;
           return (
             <>
               {/* Initial state indicator: small filled circle → arrow */}
@@ -450,14 +470,14 @@ transitions.forEach((t) => {
               )}
 
               {/* State label */}
-              {s.icon && <Icon name={s.icon} x={cx - 54} y={(s.sub ? cy - 6 : cy + 4) - 7} width="14" height="14" style={`color: ${c.text}`} />}
+              {s.icon && <Icon name={s.icon} x={iconLayout!.iconX} y={stackedIcon ? labelY - 18 : labelY - 7} width="14" height="14" style={`color: ${c.text}`} />}
               <text
-                x={s.icon ? cx + 10 : cx} y={s.sub ? cy - 6 : cy + 4}
+                x={s.icon ? iconLayout!.labelX : cx} y={stackedIcon ? labelY + 1 : labelY}
                 font-size="11.5"
                 font-weight="700"
                 font-family="var(--font-mono, monospace)"
                 fill={c.text}
-                text-anchor="middle"
+                text-anchor={s.icon && !stackedIcon ? 'start' : 'middle'}
                 dominant-baseline="middle"
               >{s.label}</text>
 

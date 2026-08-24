@@ -85,6 +85,24 @@ const ROW_GAP = 64;
 const PAD_X   = 48;
 const PAD_Y   = 32;
 
+// Icon labels use the mono face, so a character-count estimate is enough to
+// keep the pair inside a shape without changing the long-standing no-icon
+// rendering.  Icons that do not fit sit above the label as a compact stack.
+const ICON_SIZE = 14;
+const ICON_GAP = 6;
+function estimatedTextWidth(label: string, fontSize: number) {
+  return label.length * fontSize * 0.6;
+}
+function iconLabelLayout(cx: number, label: string, fontSize: number, maxWidth: number) {
+  const labelWidth = estimatedTextWidth(label, fontSize);
+  const groupWidth = ICON_SIZE + ICON_GAP + labelWidth;
+  if (groupWidth <= maxWidth) {
+    const left = cx - groupWidth / 2;
+    return { mode: 'inline' as const, iconX: left, labelX: left + ICON_SIZE + ICON_GAP };
+  }
+  return { mode: 'stack' as const, iconX: cx - ICON_SIZE / 2, labelX: cx };
+}
+
 // Auto-layout: BFS from roots (nodes with no incoming edges)
 const hasIncoming = new Set(edges.map(e => e.to));
 const roots = nodes.filter(n => !hasIncoming.has(n.id));
@@ -229,6 +247,7 @@ const nodeMap = Object.fromEntries(nodes.map(n => [n.id, n]));
         }
 
         if (shape === 'oval') {
+          const iconLayout = n.icon ? iconLabelLayout(x, n.label, 11, NODE_W - 16) : null;
           return (
             <>
               <ellipse
@@ -236,9 +255,9 @@ const nodeMap = Object.fromEntries(nodes.map(n => [n.id, n]));
                 rx={NODE_W / 2} ry={NODE_H / 2 - 4}
                 fill={col.fill} stroke={col.stroke} stroke-width="1.5"
               />
-              {n.icon && <Icon name={n.icon} x={x - 54} y={y - 7} width="14" height="14" style={`color: ${col.text}`} />}
-              <text x={n.icon ? x + 10 : x} y={y + 1}
-                text-anchor="middle" dominant-baseline="middle"
+              {n.icon && <Icon name={n.icon} x={iconLayout!.iconX} y={iconLayout!.mode === 'inline' ? y - 7 : y - 17} width="14" height="14" style={`color: ${col.text}`} />}
+              <text x={n.icon ? iconLayout!.labelX : x} y={n.icon && iconLayout!.mode === 'stack' ? y + 8 : y + 1}
+                text-anchor={n.icon && iconLayout!.mode === 'inline' ? 'start' : 'middle'} dominant-baseline="middle"
                 font-family="var(--font-mono,'IBM Plex Mono',monospace)"
                 font-size="11" font-weight="700"
                 fill={col.text}
@@ -250,15 +269,18 @@ const nodeMap = Object.fromEntries(nodes.map(n => [n.id, n]));
         if (shape === 'diamond') {
           const hw = NODE_W / 2, hh = DIA_H / 2;
           const pts = `${x},${y - hh} ${x + hw},${y} ${x},${y + hh} ${x - hw},${y}`;
+          const iconLayout = n.icon ? iconLabelLayout(x, n.label, 10, 92) : null;
+          const diamondStackIcon = n.icon ? iconLayout!.mode === 'stack' && 44 >= estimatedTextWidth(n.label, 10) : false;
           return (
             <>
               <polygon
                 points={pts}
                 fill={col.fill} stroke={col.stroke} stroke-width="1.5"
               />
-              {n.icon && <Icon name={n.icon} x={x - 54} y={y - 7} width="14" height="14" style={`color: ${col.text}`} />}
-              <text x={n.icon ? x + 10 : x} y={y + 1}
-                text-anchor="middle" dominant-baseline="middle"
+              {n.icon && iconLayout!.mode === 'inline' && <Icon name={n.icon} x={iconLayout!.iconX} y={y - 7} width="14" height="14" style={`color: ${col.text}`} />}
+              {diamondStackIcon && <Icon name={n.icon!} x={iconLayout!.iconX} y={y - 20} width="14" height="14" style={`color: ${col.text}`} />}
+              <text x={n.icon && iconLayout!.mode === 'inline' ? iconLayout!.labelX : x} y={diamondStackIcon ? y + 8 : y + 1}
+                text-anchor={n.icon && iconLayout!.mode === 'inline' ? 'start' : 'middle'} dominant-baseline="middle"
                 font-family="var(--font-mono,'IBM Plex Mono',monospace)"
                 font-size="10" font-weight="700"
                 fill={col.text}
@@ -271,6 +293,8 @@ const nodeMap = Object.fromEntries(nodes.map(n => [n.id, n]));
         const subLines = n.sub ? n.sub.split('\n') : [];
         const nh = NODE_H + subLines.length * 12;
         const labelY = subLines.length > 0 ? y - nh / 2 + 18 : y + 1;
+        const iconLayout = n.icon ? iconLabelLayout(x, n.label, 11, NODE_W - 16) : null;
+        const stackedIcon = n.icon && iconLayout!.mode === 'stack';
         return (
           <>
             <rect
@@ -279,9 +303,9 @@ const nodeMap = Object.fromEntries(nodes.map(n => [n.id, n]));
               rx="6"
               fill={col.fill} stroke={col.stroke} stroke-width="1.5"
             />
-            {n.icon && <Icon name={n.icon} x={x - 54} y={labelY - 7} width="14" height="14" style={`color: ${col.text}`} />}
-            <text x={n.icon ? x + 10 : x} y={labelY}
-              text-anchor="middle" dominant-baseline="middle"
+            {n.icon && <Icon name={n.icon} x={iconLayout!.iconX} y={stackedIcon ? labelY - 16 : labelY - 7} width="14" height="14" style={`color: ${col.text}`} />}
+            <text x={n.icon ? iconLayout!.labelX : x} y={stackedIcon ? labelY + 1 : labelY}
+              text-anchor={n.icon && !stackedIcon ? 'start' : 'middle'} dominant-baseline="middle"
               font-family="var(--font-mono,'IBM Plex Mono',monospace)"
               font-size="11" font-weight="700"
               fill={col.text}
