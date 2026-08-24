@@ -10,6 +10,7 @@ category: "architecture"
 import Callout from '../../../components/mdx/Callout.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
 import Flowchart from '../../../components/mdx/Flowchart.astro';
+import MetricBar from '../../../components/mdx/MetricBar.astro';
 import SequenceDiagram from '../../../components/mdx/SequenceDiagram.astro';
 import StateMachine from '../../../components/mdx/StateMachine.astro';
 
@@ -45,13 +46,13 @@ The trap that catches everyone: the naive implementation is `INCR` then `EXPIRE`
 <Flowchart
   title="choosing a rate-limiting algorithm"
   nodes={[
-    { id: "start", label: "Pick your limiter",        shape: "oval",    color: "teal",  sub: "shared across all instances" },
+    { id: "start", label: "Pick your limiter",        shape: "oval",    color: "teal",  icon: "simple-icons:redis", sub: "shared across all instances" },
     { id: "exact", label: "Exact counts required?",   shape: "diamond",                 sub: "billing, audit, SLA enforcement" },
-    { id: "vol",   label: "High request volume?",     shape: "diamond",                 sub: "memory scales with traffic" },
+    { id: "vol",   label: "High request volume?",     shape: "diamond",                 icon: "lucide:gauge", sub: "memory scales with traffic" },
     { id: "log",   label: "Sliding window log",       shape: "rect",    color: "violet",sub: "sorted set of timestamps, O(n)" },
     { id: "ctr",   label: "Sliding window counter",   shape: "rect",    color: "teal",  sub: "weighted blend of 2 windows, O(1)" },
     { id: "burst", label: "Bursts acceptable?",       shape: "diamond",                 sub: "spikes above average rate" },
-    { id: "tok",   label: "Token bucket",             shape: "rect",    color: "green", sub: "capacity + refill rate" },
+    { id: "tok",   label: "Token bucket",             shape: "rect",    color: "green", icon: "lucide:zap", sub: "capacity + refill rate" },
     { id: "fix",   label: "Fixed window",             shape: "rect",    color: "amber", sub: "cheapest; 2× at boundaries" },
   ]}
   edges={[
@@ -105,9 +106,9 @@ The lifecycle of a message tells you most of the design:
 <StateMachine
   title="stream message lifecycle under a consumer group"
   states={[
-    { id: "logged",  label: "In the log",   sub: "XADD — immutable entry",            row: 1, col: 1 },
-    { id: "pending", label: "Pending (PEL)",sub: "delivered, awaiting XACK",          row: 1, col: 2 },
-    { id: "acked",   label: "Acked",        sub: "processed; group cursor advances",  row: 1, col: 3 },
+    { id: "logged",  label: "In the log",   icon: "lucide:database", sub: "XADD — immutable entry",            row: 1, col: 1 },
+    { id: "pending", label: "Pending (PEL)",icon: "lucide:clock-3", sub: "delivered, awaiting XACK",          row: 1, col: 2 },
+    { id: "acked",   label: "Acked",        icon: "lucide:check-circle", sub: "processed; group cursor advances",  row: 1, col: 3 },
     { id: "claimed", label: "Claimed",      sub: "XAUTOCLAIM — new owner",            row: 2, col: 2 },
     { id: "dlq",     label: "Dead-lettered",sub: "times-delivered over threshold",    row: 2, col: 3 },
   ]}
@@ -124,10 +125,10 @@ Crash recovery is where Streams earn their keep — orphaned messages get stolen
 <SequenceDiagram
   title="consumer crash and work stealing"
   actors={[
-    { label: "Producer", color: "teal" },
-    { label: "Redis Stream", color: "blue" },
-    { label: "Worker A", color: "violet" },
-    { label: "Worker B", color: "green" },
+    { label: "Producer", color: "teal", icon: "lucide:upload" },
+    { label: "Redis Stream", color: "blue", icon: "simple-icons:redis" },
+    { label: "Worker A", color: "violet", icon: "lucide:cpu" },
+    { label: "Worker B", color: "green", icon: "lucide:cpu" },
   ]}
   messages={[
     { from: "Producer", to: "Redis Stream", label: "XADD order-event", type: "request" },
@@ -158,6 +159,15 @@ Three structures turn analytics workloads that would melt a database into roundi
 - **Bitmaps** — one bit per user per day answers "was user X active?" and `BITCOUNT` gives DAU; AND-ing days produces retention cohorts in milliseconds.
 
 Freshworks combines all three — HyperLogLog, bitmaps, and sets — as the frontend database for user analytics, with MySQL safely behind it.
+
+<MetricBar
+  title="HyperLogLog keeps cardinality memory bounded"
+  metrics={[
+    { label: "1K uniques", value: 12, displayValue: "~12KB", color: "teal" },
+    { label: "1B uniques", value: 12, displayValue: "~12KB", color: "green" },
+    { label: "Set at 1B", value: 1000000, displayValue: "≈1M× larger", color: "amber" },
+  ]}
+/>
 
 ## Sessions and geospatial: the quiet workhorses
 

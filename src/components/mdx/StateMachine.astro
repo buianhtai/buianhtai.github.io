@@ -25,10 +25,13 @@
  * transition.type: 'forward'|'back'|'self'|'error' (default: forward)
  */
 
+import { Icon } from 'astro-icon/components';
+
 interface State {
   id: string;
   label: string;
   sub?: string;
+  icon?: string;
   initial?: boolean;
   final?: boolean;
   color?: string;
@@ -447,8 +450,9 @@ transitions.forEach((t) => {
               )}
 
               {/* State label */}
+              {s.icon && <Icon name={s.icon} x={cx - 54} y={(s.sub ? cy - 6 : cy + 4) - 7} width="14" height="14" style={`color: ${c.text}`} />}
               <text
-                x={cx} y={s.sub ? cy - 6 : cy + 4}
+                x={s.icon ? cx + 10 : cx} y={s.sub ? cy - 6 : cy + 4}
                 font-size="11.5"
                 font-weight="700"
                 font-family="var(--font-mono, monospace)"

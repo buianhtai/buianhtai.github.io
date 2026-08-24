@@ -10,6 +10,7 @@ category: "architecture"
 import Callout from '../../../components/mdx/Callout.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
 import Flowchart from '../../../components/mdx/Flowchart.astro';
+import MetricBar from '../../../components/mdx/MetricBar.astro';
 import Pipeline from '../../../components/mdx/Pipeline.astro';
 import SequenceDiagram from '../../../components/mdx/SequenceDiagram.astro';
 import StateMachine from '../../../components/mdx/StateMachine.astro';
@@ -69,6 +70,14 @@ The numbers tell you about the design constraints:
 - Ceiling: 15,000 batches/day × 10k records = **150M records per day**.
 - For huge queries, "PK chunking" splits work by record-ID boundaries (100k–250k rows per chunk), with a `startRow` parameter so a job that died mid-way can restart from where it stopped.
 
+<MetricBar
+  title="Salesforce Bulk API 2.0 published ceilings"
+  metrics={[
+    { label: "Daily records", value: 150, maxValue: 150, displayValue: "150M / day", color: "teal" },
+    { label: "Records / batch", value: 10, maxValue: 150, displayValue: "10K", color: "green" },
+  ]}
+/>
+
 Two details deserve special attention:
 
 **Parallel vs serial mode.** Parallel processing is fast but risks *lock contention* — two batches trying to update the same parent record at once. Salesforce's guidance is telling: before falling back to slow serial mode, *reorganize your batches by parent ID* so all rows touching the same parent land in one batch. Lock contention is a data-partitioning problem disguised as a concurrency problem.
@@ -98,9 +107,9 @@ The industry answer is to stop treating the import as a request and start treati
 <SequenceDiagram
   title="the async import round trip"
   actors={[
-    { label: "Client", color: "teal" },
-    { label: "API", color: "blue" },
-    { label: "Workers", color: "violet" },
+    { label: "Client", color: "teal", icon: "lucide:upload" },
+    { label: "API", color: "blue", icon: "lucide:file-spreadsheet" },
+    { label: "Workers", color: "violet", icon: "lucide:database" },
   ]}
   messages={[
     { from: "Client", to: "API", label: "POST /imports — 200k rows, callbackUrl registered", type: "request" },
@@ -131,10 +140,10 @@ Per RFC 9110, `202 Accepted` means exactly this: received, not yet fulfilled. Th
 <StateMachine
   title="operation lifecycle (Google LRO style)"
   states={[
-    { id: "pending",    label: "Pending",    sub: "accepted, queued",              row: 1, col: 1 },
-    { id: "running",    label: "Running",    sub: "progress lives in metadata",    row: 1, col: 2 },
-    { id: "completed",  label: "Completed",  sub: "result / presigned download",   row: 1, col: 3 },
-    { id: "failed",     label: "Failed",     sub: "error + partial report",        row: 2, col: 3 },
+    { id: "pending",    label: "Pending",    icon: "lucide:clock-3", sub: "accepted, queued",              row: 1, col: 1 },
+    { id: "running",    label: "Running",    icon: "lucide:upload", sub: "progress lives in metadata",    row: 1, col: 2 },
+    { id: "completed",  label: "Completed",  icon: "lucide:check-circle", sub: "result / presigned download",   row: 1, col: 3 },
+    { id: "failed",     label: "Failed",     icon: "lucide:alert-triangle", sub: "error + partial report",        row: 2, col: 3 },
     { id: "cancelled",  label: "Cancelled",  sub: "by client request",             row: 2, col: 1 },
   ]}
   transitions={[
@@ -199,10 +208,10 @@ The standard mental model is depth — load layer by layer, parallel *within* a 
 <Flowchart
   title="load order by dependency depth"
   nodes={[
-    { id: "refs",     label: "Depth 0 — References",   shape: "rect", color: "teal",   sub: "lookup tables, no deps" },
-    { id: "parents",  label: "Depth 1 — Parents",      shape: "rect",                  sub: "parallel within layer" },
-    { id: "children", label: "Depth 2 — Children",     shape: "rect",                  sub: "FK → resolved parents" },
-    { id: "details",  label: "Depth 3 — Details",      shape: "rect", color: "violet", sub: "grandchild / line rows" },
+    { id: "refs",     label: "Depth 0 — References",   shape: "rect", color: "teal",   icon: "lucide:database", sub: "lookup tables, no deps" },
+    { id: "parents",  label: "Depth 1 — Parents",      shape: "rect",                  icon: "lucide:folder-tree", sub: "parallel within layer" },
+    { id: "children", label: "Depth 2 — Children",     shape: "rect",                  icon: "lucide:git-branch", sub: "FK → resolved parents" },
+    { id: "details",  label: "Depth 3 — Details",      shape: "rect", color: "violet", icon: "lucide:file-spreadsheet", sub: "grandchild / line rows" },
     { id: "junction", label: "Junction tables",        shape: "oval", color: "amber",  sub: "needs BOTH sides resolved" },
   ]}
   edges={[
@@ -342,12 +351,12 @@ The whole contract collapses into one decision the server makes on every mutatin
 <Flowchart
   title="idempotency key claim — the server's decision"
   nodes={[
-    { id: "arrive",   label: "Request + Idempotency-Key", shape: "oval",   color: "teal",   sub: "one key per logical operation" },
-    { id: "claim",    label: "Atomic claim won?",         shape: "diamond",                 sub: "INSERT ... ON CONFLICT — never check-then-insert" },
-    { id: "exec",     label: "Execute handler",           shape: "rect",                    sub: "store response + hash on the key row" },
-    { id: "replay",   label: "Replay stored response",    shape: "rect",   color: "teal",   sub: "verbatim — even if it was an error" },
+    { id: "arrive",   label: "Request + Idempotency-Key", shape: "oval",   color: "teal",   icon: "lucide:upload", sub: "one key per logical operation" },
+    { id: "claim",    label: "Atomic claim won?",         shape: "diamond",                 icon: "lucide:lock", sub: "INSERT ... ON CONFLICT — never check-then-insert" },
+    { id: "exec",     label: "Execute handler",           shape: "rect",                    icon: "lucide:database", sub: "store response + hash on the key row" },
+    { id: "replay",   label: "Replay stored response",    shape: "rect",   color: "teal",   icon: "lucide:check-circle", sub: "verbatim — even if it was an error" },
     { id: "progress", label: "409 in progress",           shape: "rect",   color: "amber",  sub: "client retries later; don't block" },
-    { id: "reject",   label: "422 reject",                shape: "rect",   color: "rose",   sub: "same key, different payload = client bug" },
+    { id: "reject",   label: "422 reject",                shape: "rect",   color: "rose",   icon: "lucide:alert-triangle", sub: "same key, different payload = client bug" },
   ]}
   edges={[
     { from: "arrive",   to: "claim" },

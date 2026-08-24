@@ -27,10 +27,13 @@
  * A message with `activate: actor` highlights that actor's lifeline.
  */
 
+import { Icon } from 'astro-icon/components';
+
 interface Actor {
   id?: string;
   label: string;
   color?: string; // optional per-actor accent: 'blue'|'teal'|'amber'|'rose'|'violet'|'green'
+  icon?: string;
 }
 
 interface Message {
@@ -89,7 +92,10 @@ const N = actors.length;
       <div class="sd-header-row">
         {actors.map((a, i) => (
           <div class="sd-actor-cell" style={`grid-column: ${i + 1}; --actor-color: ${actorColor(a)}`}>
-            <div class="sd-actor-box">{a.label}</div>
+            <div class={`sd-actor-box${a.icon ? ' sd-actor-box-icon' : ''}`}>
+              {a.icon && <Icon name={a.icon} width="13" height="13" />}
+              <span>{a.label}</span>
+            </div>
             <div class="sd-lifeline-top"></div>
           </div>
         ))}
@@ -144,7 +150,10 @@ const N = actors.length;
         {actors.map((a, i) => (
           <div class="sd-actor-foot" style={`grid-column: ${i + 1}; --actor-color: ${actorColor(a)}`}>
             <div class="sd-lifeline-bot"></div>
-            <div class="sd-actor-box">{a.label}</div>
+            <div class={`sd-actor-box${a.icon ? ' sd-actor-box-icon' : ''}`}>
+              {a.icon && <Icon name={a.icon} width="13" height="13" />}
+              <span>{a.label}</span>
+            </div>
           </div>
         ))}
       </div>
@@ -198,7 +207,11 @@ const N = actors.length;
     align-items: center;
   }
 
-  .sd-actor-box {
+  .sd-actor-box-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.3rem;
     padding: 0.3rem 0.6rem;
     border: 1px solid var(--actor-color, var(--color-accent));
     background: var(--color-surface-2);

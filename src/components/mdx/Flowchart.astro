@@ -30,8 +30,11 @@
  *
  * node.shape:  'rect' | 'oval' | 'diamond' | 'dot'  (default: rect)
  * node.color:  'teal' | 'amber' | 'green' | 'rose' | 'violet'  (default: accent)
+ * node.icon:   optional astro-icon name rendered beside the label
  * edge.label:  branch label (Yes / No / condition)
  */
+
+import { Icon } from 'astro-icon/components';
 
 interface FCNode {
   id: string;
@@ -39,6 +42,7 @@ interface FCNode {
   shape?: 'rect' | 'oval' | 'diamond' | 'dot';
   color?: string;
   sub?: string;
+  icon?: string;
   col?: number; // explicit column for multi-branch layouts (1-based)
   row?: number; // explicit row (1-based)
 }
@@ -232,7 +236,8 @@ const nodeMap = Object.fromEntries(nodes.map(n => [n.id, n]));
                 rx={NODE_W / 2} ry={NODE_H / 2 - 4}
                 fill={col.fill} stroke={col.stroke} stroke-width="1.5"
               />
-              <text x={x} y={y + 1}
+              {n.icon && <Icon name={n.icon} x={x - 54} y={y - 7} width="14" height="14" style={`color: ${col.text}`} />}
+              <text x={n.icon ? x + 10 : x} y={y + 1}
                 text-anchor="middle" dominant-baseline="middle"
                 font-family="var(--font-mono,'IBM Plex Mono',monospace)"
                 font-size="11" font-weight="700"
@@ -251,7 +256,8 @@ const nodeMap = Object.fromEntries(nodes.map(n => [n.id, n]));
                 points={pts}
                 fill={col.fill} stroke={col.stroke} stroke-width="1.5"
               />
-              <text x={x} y={y + 1}
+              {n.icon && <Icon name={n.icon} x={x - 54} y={y - 7} width="14" height="14" style={`color: ${col.text}`} />}
+              <text x={n.icon ? x + 10 : x} y={y + 1}
                 text-anchor="middle" dominant-baseline="middle"
                 font-family="var(--font-mono,'IBM Plex Mono',monospace)"
                 font-size="10" font-weight="700"
@@ -273,7 +279,8 @@ const nodeMap = Object.fromEntries(nodes.map(n => [n.id, n]));
               rx="6"
               fill={col.fill} stroke={col.stroke} stroke-width="1.5"
             />
-            <text x={x} y={labelY}
+            {n.icon && <Icon name={n.icon} x={x - 54} y={labelY - 7} width="14" height="14" style={`color: ${col.text}`} />}
+            <text x={n.icon ? x + 10 : x} y={labelY}
               text-anchor="middle" dominant-baseline="middle"
               font-family="var(--font-mono,'IBM Plex Mono',monospace)"
               font-size="11" font-weight="700"
