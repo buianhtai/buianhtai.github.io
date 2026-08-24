@@ -1,6 +1,6 @@
 ---
 title: "Building a Troubleshooting Agent for Your API Platform"
-description: "A customer sends you an error message, a traceId, and an endpoint. Today a human support engineer pivots between docs, logs, and traces for 30 minutes. Here is how enterprises build multi-agent systems that do this automatically — the architecture, the guardrails, and the open source to assemble it from."
+description: "A customer sends you an error message, a traceId, and an endpoint. Here is how enterprises build multi-agent systems that troubleshoot automatically — the architecture, deployment, scaling, determinism engineering, failure modes, and the open source to assemble it from."
 pubDate: 2026-08-24
 tags: ["ai-agents", "mcp", "observability", "customer-support", "architecture"]
 lang: "en"
@@ -180,7 +180,23 @@ One knowledge base, two audiences: the same indexed corpus serves both the troub
 
 **Sierra** built Agent Traces on the observation that traditional logs show inputs and outputs, while agents need the *decision path* in between — which tool was chosen, what alternatives existed, whether conflicting instructions pushed it off course, and how many milliseconds each step cost. For a support product, latency is UX; per-step timing is how you keep voice-grade responsiveness.
 
-The common thread across all three: **agent observability is a first-class product surface**, not an afterthought. If you can't replay why your agent said something, you can't operate it.
+Beyond those three engineering write-ups, the deployment record is broad enough to read as an industry pattern rather than a novelty:
+
+<DataTable
+  caption="Documented enterprise deployments"
+  accent="green"
+  headers={["Enterprise", "What they shipped", "Documented outcome"]}
+  rows={[
+    { "Enterprise": "Klarna", "What they shipped": "OpenAI-powered assistant handling service chats end-to-end across 23 markets, 35 languages", "Documented outcome": "2.3M conversations in month one (~2/3 of chats); work of ~700 full-time agents; repeat inquiries down 25%; resolution time 11 min → under 2 min; est. $40M profit improvement" },
+    { "Enterprise": "LinkedIn / Uber", "What they shipped": "Production agent workloads on LangGraph's graph orchestration", "Documented outcome": "Cited as reference production deployments for stateful, durable agent workflows" },
+    { "Enterprise": "Coinbase / Box", "What they shipped": "Agents prototyped and deployed on the OpenAI Agents SDK", "Documented outcome": "Days-not-weeks deployment timelines using handoffs, guardrails, and built-in tracing" },
+    { "Enterprise": "BlackRock / JPMorgan / Cisco", "What they shipped": "Regulated-industry agent workloads on graph-based runtimes", "Documented outcome": "Audit trails and checkpoint semantics as the deciding factor over role-based frameworks" },
+  ]}
+/>
+
+Two readings of that table matter. First, scale is proven — Klarna's month-one numbers ended the "is this production-ready?" debate for high-volume customer service. Second, *the regulated industries chose graph orchestration*, not because it's fashionable but because audit trails and deterministic gates are what their compliance teams demand — the same determinism stack described above.
+
+The common thread across all of these: **agent observability is a first-class product surface**, not an afterthought. If you can't replay why your agent said something, you can't operate it.
 
 ## Choosing the orchestration framework
 
@@ -219,6 +235,105 @@ Nothing here requires a proprietary platform. The stack assembles from:
   ]}
 />
 
+## Deploying and operating the agents
+
+An agent is not a chat prompt living in someone's IDE. Treat every agent as a **versioned configuration artifact**: system prompt, tool allowlist, pinned model, guardrail thresholds, escalation rules — one declarative file per agent, reviewed in git like any other production config. The deployment unit is the config, not the code; the orchestration runtime stays stable while agent definitions iterate.
+
+Deployment shape follows from workload shape. Triage sits on the synchronous request path — it must answer routing decisions in milliseconds. The investigation leg is different: fetching traces, querying logs, correlating findings takes tens of seconds, which is far past what an HTTP request should hold open. So investigations run **queue-backed**: triage accepts the ticket, enqueues the investigation, and the customer gets an async answer via webhook or polling — the same 202-pattern discipline as any long-running job.
+
+<Callout color="teal">
+Rollout is a pipeline, not a flip: config change lands in git → golden-set evals gate the merge → new version runs in shadow mode beside production (same inputs, logged outputs, no customer sees it) → canary percentage → full traffic. Rollback is `git revert`. If you cannot answer "which agent version answered this ticket, with which prompt?", you are operating on vibes.
+</Callout>
+
+Two operational disciplines separate toys from production systems here. First, **secrets scoping**: the observability agent's MCP credentials are read-only and environment-scoped — staging investigations never touch production log indexes. Second, **trace everything**: every subagent invocation records its inputs, tool calls, token spend, and latency as a structured trace (Salesforce's per-conversation execution traces and Sierra's Agent Traces both exist because "the agent seemed confused" is undiagnosable without them).
+
+## Engineering determinism
+
+"Make the agent deterministic" is really five layered techniques, each buying certainty in a different place:
+
+<DataTable
+  caption="The determinism stack"
+  accent="violet"
+  headers={["Layer", "Technique", "What it guarantees", "Cost"]}
+  rows={[
+    { "Layer": "Structural", "Technique": "Graph topology with validation gates between nodes", "What it guarantees": "Workflow path is fixed regardless of what the model says — verification nodes cannot be persuaded", "Cost": "Less conversational freedom; more upfront design" },
+    { "Layer": "Interface", "Technique": "Structured outputs (JSON schema) and typed tool contracts", "What it guarantees": "Downstream code parses agent output reliably; malformed findings rejected at the boundary", "Cost": "Occasional retries when output fails schema validation" },
+    { "Layer": "Inference", "Technique": "Temperature 0, pinned model versions, fixed prompts", "What it guarantees": "Reproducible behavior within a model version — no silent drift from provider updates", "Cost": "Pinning means missing new model improvements until you choose to upgrade" },
+    { "Layer": "Behavioral", "Technique": "Golden-set evals as CI regression tests; replay real tickets from traces", "What it guarantees": "Known questions keep producing known-good answers after every change", "Cost": "Maintaining the question set is ongoing work" },
+    { "Layer": "Operational", "Technique": "Read-only, idempotent tools with bounded parameters", "What it guarantees": "Even a wrong decision causes no side effects and no runaway cost", "Cost": "Agent cannot fix anything itself — by design" },
+  ]}
+/>
+
+This is Salesforce's *"deterministic exit despite probabilistic internals"* made concrete: you cannot make the model deterministic, but you can make its **boundaries** deterministic — where it may go, what shape it must return, which answers ship. The honest trade-off: every layer you add trades flexibility for reliability. A fully-pinned, fully-gated agent handles novel situations worse than a free one — which is exactly why the escalation path exists. Determinism engineering is about choosing *where* flexibility lives, not eliminating it.
+
+## Scaling: what actually grows
+
+Multi-agent support has an uncomfortable arithmetic: one ticket fans out into a triage call plus three specialist investigations, each making multiple tool calls, each tool call potentially triggering another reasoning round. A single hard ticket can mean 15–30 LLM invocations. Four levers keep that bounded:
+
+1. **Short-circuit before the model.** A known-issue hash match (error signature → existing resolution) skips every LLM call. In mature platforms this resolves a meaningful share of tickets for free.
+2. **Tier the models.** Triage and routing run on small fast models; only synthesis earns the frontier model. Salesforce built dedicated fine-tuned routing models for exactly this reason — one budget does not fit all tasks.
+3. **Cap concurrency per tenant.** One customer submitting fifty tickets must not monopolize provider quota and starve everyone else — the same per-tenant fairness rule Redis-based import systems use.
+4. **Degrade gracefully under pressure.** When provider rate limits bite, the queue absorbs the load and answers arrive slower — never partially. Per-agent timeouts mean a hung log query degrades the answer to "docs + known issues found nothing unusual; escalating with context" instead of hanging the whole investigation.
+
+Latency composes the same way: delegation runs specialists in parallel, so wall-clock time is the slowest specialist, not the sum. Streaming the synthesis keeps perceived responsiveness acceptable even when the full investigation takes half a minute.
+
+## The cost model
+
+Per-ticket cost is arithmetic you can actually control. A typical investigation spends 30–80K tokens end-to-end: triage is cheap (small model, ~1–2K tokens), but each specialist re-sends accumulated context on every reasoning round, and tool results — log lines, trace spans, doc chunks — all land in the input window. **Input tokens dominate the bill**, which is why the scaling levers above matter more than output length.
+
+<DataTable
+  caption="Cost levers, ranked by leverage"
+  accent="green"
+  headers={["Lever", "Mechanism", "Typical impact"]}
+  rows={[
+    { "Lever": "Known-issue short-circuit", "Mechanism": "Error-signature hash match resolves without any LLM call", "Typical impact": "Removes an entire class of tickets from the bill entirely" },
+    { "Lever": "Model tiering", "Mechanism": "Small models for routing/extraction; frontier only for synthesis", "Typical impact": "Largest single reduction — most steps don't need frontier reasoning" },
+    { "Lever": "Context discipline", "Mechanism": "LLM-optimized trace formats, log-line limits, chunk-level retrieval instead of whole pages", "Typical impact": "Directly shrinks the dominant input-token cost per round" },
+    { "Lever": "Retrieval caching", "Mechanism": "Cache doc-chunk and known-issue lookups by query signature", "Typical impact": "Cuts repeated embedding/search spend across similar tickets" },
+    { "Lever": "Budget guardrails", "Mechanism": "Per-run token budgets, per-tenant daily caps, cost attributed per agent step", "Typical impact": "Doesn't save money — prevents surprises; attribution shows which agent burns it" },
+  ]}
+/>
+
+Attribute cost per agent step, not per ticket — otherwise you're optimizing blind. The frameworks' tracing layers (LangSmith, OpenAI tracing) all provide this; treat cost-per-resolution as the headline metric and cost variance as the early-warning signal.
+
+## LLM providers: one vendor is a single point of failure
+
+A support agent is production infrastructure, and infrastructure with exactly one model provider inherits that provider's outages, price changes, and silent capability shifts. Three practices de-risk it:
+
+**Route through an abstraction.** Framework-native adapters (LangGraph and CrewAI are model-agnostic; CrewAI routes via LiteLLM) or a standalone gateway let you swap providers per agent role without touching orchestration code. The OpenAI Agents SDK's tightest integration is also its lock-in — fine for prototypes, a liability for production support.
+
+**Match provider to task, not to brand.** Model tiering generalizes across vendors: a fast small model from any provider handles triage; the synthesis agent earns the strongest reasoner you can afford; the observability leg may demand a *self-hosted open-weight model* purely for data-policy reasons — sending raw customer logs to a third-party API is exactly the perimeter question the guardrails section raises.
+
+**Build fallback chains — then test them.** Primary provider fails or rate-limits → route to secondary. But models differ in behavior, not just price: an answer chain validated only on your primary is untested the day it fails over. Golden-set evals must run against every provider path you intend to serve, or your fallback is theoretical.
+
+## Multi-cloud and data residency
+
+Support agents occupy a niche where multi-cloud stops being fashion and becomes compliance: the logs and traces they read are customer telemetry, and residency rules may require EU customer investigations to touch only EU-hosted infrastructure. Two patterns dominate:
+
+- **Region-pinned deployment:** agent workers run in-region, call provider endpoints in-region, and the observability stack stays where the data lives. You move the *model call* to the data's jurisdiction — never ship the data to the model.
+- **Cloud-managed agent runtimes:** if you're already committed to a cloud, managed options (Amazon Bedrock Agents, Google ADK, Azure OpenAI) keep models, storage, and governance inside one vendor's compliance boundary — trading flexibility for auditability.
+
+The honest counsel: true active-active multi-cloud for agents multiplies your operational surface for a rare failure mode. Most teams get 90% of the value from **one cloud + one alternate provider route** (the fallback chain above) plus region pinning where law requires it. Reserve full multi-cloud for jurisdictions that mandate it.
+
+## Failure modes: what goes wrong and how you know
+
+<DataTable
+  caption="Production failure modes for support agents"
+  accent="rose"
+  headers={["Failure", "Detection signal", "Mitigation"]}
+  rows={[
+    { "Failure": "Hallucinated root cause", "Detection signal": "Answer cites no retrievable evidence; customer replies 'that endpoint doesn't exist'", "Mitigation": "Mandatory citations; refusal below retrieval-confidence threshold" },
+    { "Failure": "Runaway investigation (cost bomb)", "Detection signal": "Token spend per ticket spikes; step count hits limits", "Mitigation": "Hard step/token budgets per run; circuit breaker halts and escalates" },
+    { "Failure": "Prompt drift after an edit", "Detection signal": "Golden-set scores drop on merge", "Mitigation": "Eval gate blocks promotion; shadow-mode diff before canary" },
+    { "Failure": "Stale knowledge answers", "Detection signal": "Cited doc sections older than last release; customers report outdated guidance", "Mitigation": "CI-hooked re-indexing; freshness metadata surfaced in answers" },
+    { "Failure": "Cascading subagent timeouts", "Detection signal": "p99 investigation duration climbing; partial-finding answers increase", "Mitigation": "Per-agent timeouts; synthesize from whatever completed; escalate the rest" },
+    { "Failure": "Cross-tenant data exposure", "Detection signal": "Audit log shows query outside caller's scope — target: zero, ever", "Mitigation": "Server-side identity injection; read-only scoped credentials; audit every query" },
+    { "Failure": "Over-confident wrong answers", "Detection signal": "Escalation rate drops while CSAT drops — the agent stopped admitting uncertainty", "Mitigation": "Calibration checks on confidence scores; reward honest escalation in evals" },
+  ]}
+/>
+
+That last row deserves emphasis: the most dangerous failure mode is quiet. An agent that escalates often is annoying but safe; an agent that learned to always sound confident is a liability wearing a success metric. Track escalation rate alongside satisfaction — divergence between them is your early-warning system.
+
 ## Guardrails: what the agent must never do
 
 The constraint list is shorter and more important than the feature list:
@@ -237,6 +352,7 @@ The maturity ladder in practice: start with retrieval-only over docs and known i
 
 - [Salesforce Engineering — Building enterprise AI agents that are autonomous and reliable](https://engineering.salesforce.com/building-enterprise-ai-agents-that-are-both-autonomous-and-reliable/)
 - [Sierra — Agent Traces: getting to the fix, fast](https://sierra.ai/blog/agent-traces)
+- [Klarna — AI assistant handles two-thirds of customer service chats in first month](https://www.klarna.com/international/press/klarna-ai-assistant-handles-two-thirds-of-customer-service-chats-in-its-first-month/)
 - [Intercom — Troubleshooting Fin procedures and data connectors](https://www.intercom.com/help/en/articles/13704396-troubleshooting-fin-procedures-and-data-connectors)
 - [Grafana MCP server](https://github.com/grafana/mcp-grafana)
 - [Tempo MCP server documentation](https://grafana.com/docs/tempo/latest/api_docs/mcp-server/)
