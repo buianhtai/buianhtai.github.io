@@ -12,10 +12,11 @@ interface Props {
   headings: { depth: number; slug: string; text: string }[];
   rawContent: string;
   seriesPosts?: CollectionEntry<'blog'>[];
+  renderTitle?: boolean; // New prop to control title rendering
 }
 
-const { post, headings, rawContent, seriesPosts = [] } = Astro.props;
-const { title, description, pubDate, updatedDate, tags, lang, heroImage, series, renderTitle } = post.data;
+const { post, headings, rawContent, seriesPosts = [], renderTitle = true } = Astro.props; // Extract from Astro.props
+const { title, description, pubDate, updatedDate, tags, lang, heroImage, series } = post.data; // Keep post.data for other fields
 
 const dateFmt = (d: Date) =>
   d.toISOString().slice(0, 10);
@@ -140,6 +141,10 @@ const dateFmt = (d: Date) =>
     margin-bottom: 2rem;
   }
 
+  @media (max-width: 480px) {
+    .post-header { padding: 1.5rem 0.75rem 1.25rem; } /* Reduce padding on mobile */
+  }
+
   /* Metadata line */
   .post-meta {
     display: flex;
@@ -167,6 +172,7 @@ const dateFmt = (d: Date) =>
     margin: 0 0 0.75rem;
     font-family: var(--font-mono);
     letter-spacing: -0.01em;
+    word-break: break-word; /* Ensure long titles break */
   }
 
   /* Description */
@@ -175,6 +181,7 @@ const dateFmt = (d: Date) =>
     font-size: 0.95rem;
     line-height: 1.65;
     margin: 0;
+    word-break: break-word; /* Ensure long descriptions break */
   }
 
   /* Tags */

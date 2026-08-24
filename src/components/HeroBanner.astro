@@ -1,5 +1,5 @@
 ---
-import { Icon } from 'astro-icon/components';
+import { Icon } from 'astro-icon/components'; // Reverted to astro-icon/components
 import type { HTMLAttributes } from 'astro/types';
 
 interface Props extends HTMLAttributes<'div'> {
@@ -85,3 +85,4 @@ const { title, category, icon, ...attrs } = Astro.props;
     z-index: 0;
   }
 </style>
+
