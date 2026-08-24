@@ -1,0 +1,452 @@
+---
+title: "Doanh Nghiệp Xử Lý Import Dữ Liệu Quy Mô Lớn Như Thế Nào"
+description: "\"Nhận file CSV, validate, insert vào DB\" nghe như dự án cuối tuần. Ở quy mô enterprise, nó trở thành hệ thống job bất đồng bộ với tầng staging, thứ tự phụ thuộc, webhook ký số và idempotency key. Đây là cách các hệ thống trưởng thành thực sự vận hành."
+pubDate: 2026-08-24
+tags: ["system-design", "data-engineering", "architecture", "scalability", "etl"]
+lang: "vi"
+category: "architecture"
+---
+
+import Callout from '../../../components/mdx/Callout.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import Flowchart from '../../../components/mdx/Flowchart.astro';
+import Pipeline from '../../../components/mdx/Pipeline.astro';
+import SequenceDiagram from '../../../components/mdx/SequenceDiagram.astro';
+import StateMachine from '../../../components/mdx/StateMachine.astro';
+
+Mọi team backend sớm muộn cũng nhận được cùng một yêu cầu: *cho khách hàng upload dữ liệu của họ*. Một file CSV ở đây, một bản export Excel ở kia — parse, validate, ghi vào database. Trên giấy, đó là dự án cuối tuần.
+
+Rồi thực tế ập đến:
+
+- Một khách upload 200.000 dòng và dòng 143.201 có ngày tháng sai.
+- Khác upload các record con mà record cha nằm phía sau trong file.
+- Một khách nữa upload file to đến mức nạp cả file vào memory giết chết worker.
+- Và ai đó hỏi tại sao đợt import tuần trước âm thầm làm hỏng một nửa dữ liệu.
+
+Import quy mô lớn hóa ra là dạng bài trông giống CRUD nhưng thực chất là **thiết kế hệ thống phân tán**. Tin tốt: mọi hệ thống trưởng thành đều hội tụ về một kiến trúc gần như giống nhau. Bài này đi qua những gì các nhà cung cấp nền tảng (Salesforce, Shopify, Stripe, Google) và các team production đã học, từng pattern một, với trade-off nói rõ.
+
+## Bộ khung phổ biến
+
+Bỏ hết thương hiệu, hầu như mọi hệ thống import nghiêm túc đều là pipeline này:
+
+<Pipeline
+  nodes={[
+    { title: "Upload", subtitle: "presigned URL → object storage" },
+    { title: "Stage", subtitle: "bản raw + bản đã chuẩn hóa" },
+    { title: "Parse", subtitle: "streaming, memory có giới hạn" },
+    { title: "Validate", subtitle: "cấu trúc → từng dòng → quan hệ" },
+    { title: "Resolve", subtitle: "business key, FK map, cycle" },
+    { title: "Load", subtitle: "upsert theo batch, đúng thứ tự phụ thuộc" },
+    { title: "Report", subtitle: "file lỗi + trạng thái job" },
+  ]}
+  arrows={[
+    { label: "bản sao bền vững", direction: "right" },
+    { label: "dòng đã định kiểu", direction: "right" },
+    { label: "sai là từ chối ngay", direction: "right" },
+    { label: "map ID", direction: "right" },
+    { label: "từng tầng depth", direction: "right" },
+    { label: "presigned URL", direction: "right" },
+  ]}
+/>
+
+Ba bài toán khó chi phối tất cả phần còn lại:
+
+1. **Thứ tự** — dòng con xuất hiện trước khi dòng cha tồn tại.
+2. **Ngữ nghĩa thất bại** — chuyện gì xảy ra khi dòng 40.000 trên 200.000 lỗi?
+3. **Scale** — không bao giờ giữ cả file trong memory; ghi theo batch; quản lý lock contention.
+
+Mọi thứ bên dưới đều là câu trả lời khác nhau cho một trong ba bài toán đó.
+
+## Các nhà cung cấp làm gì
+
+### Salesforce Bulk API 2.0 — mô hình job bất đồng bộ
+
+Câu trả lời của Salesforce cho dữ liệu lớn là một state machine dạng job. Bạn tạo job, upload một file CSV, và *server* tự chia nó thành các batch ~10.000 record xử lý bất đồng bộ. Bạn poll trạng thái, rồi tải về các file kết quả riêng biệt: success / failure / unprocessed.
+
+Những con số cho thấy ràng buộc thiết kế:
+
+- Dưới ~2.000 record, Salesforce bảo bạn bỏ Bulk API đi và dùng call đồng bộ.
+- Trần: 15.000 batch/ngày × 10k record = **150 triệu record mỗi ngày**.
+- Với query khổng lồ, "PK chunking" chia nhỏ theo biên record-ID (100k–250k dòng mỗi chunk), kèm tham số `startRow` để job chết giữa chừng có thể khởi động lại từ nơi dừng.
+
+Hai chi tiết đáng chú ý đặc biệt:
+
+**Chế độ parallel vs serial.** Xử lý parallel nhanh nhưng dễ dính *lock contention* — hai batch cùng cố cập nhật một record cha. Hướng dẫn của Salesforce rất đáng suy ngẫm: trước khi quay về chế độ serial chậm chạp, *hãy tổ chức lại batch theo parent ID* để mọi dòng cùng chạm vào một cha nằm chung một batch. Lock contention là bài toán phân vùng dữ liệu đội lốt bài toán đồng thời.
+
+**Thành công một phần là chuẩn mực.** Batch "hoàn thành" không có nghĩa mọi dòng đều thành công. Kết quả từng record nằm trong các file tải về riêng, và các dòng lỗi thật sự phải do client tự submit lại. Không ai ở quy mô này hứa hẹn all-or-nothing trên hàng triệu dòng.
+
+### Shopify Bulk Operations — mô hình dữ liệu lồng nhau
+
+Shopify đối mặt với hình phức tạp hơn: dữ liệu e-commerce lồng sâu (product → variant → image). Giải pháp của họ rất thanh lịch.
+
+Bạn upload file JSONL trong đó **một dòng = một đơn vị input, bất kể phức tạp đến đâu**, và Shopify chạy mutation của bạn once-per-line, bất đồng bộ. Kết quả trả về cũng là file JSONL với lỗi từng dòng báo ngay cạnh dòng thành công.
+
+Khi đọc dữ liệu phân cấp ra, họ làm phẳng cây: mỗi dòng product đứng trước các dòng variant của nó, mỗi variant đứng trước các dòng image, và con tham chiếu cha qua field `__parentId` được chèn sẵn. Client dựng lại cây trong khi stream file từng dòng một.
+
+Hãy để ý các guardrail họ áp đặt: tối đa 2 mức connection lồng nhau, tối đa 5 connection mỗi query, operation phải xong trong 24 giờ, input giới hạn 100MB. Giới hạn depth không phải vì kỹ thuật không làm được — đệ quy vô hạn phá vỡ memory bound, timeout và khả năng báo lỗi cùng một lúc.
+
+<Callout color="teal">
+Sách chơi chung của các vendor: không bao giờ xử lý đồng bộ vượt ngưỡng nhỏ; client upload một file phẳng, server sở hữu việc phân mảnh; kết quả trả về dưới dạng file tải về, không phải API response; cô lập lỗi từng dòng nên một dòng hỏng không giết job; trần tài nguyên được công bố trước thay vì phát hiện trong production.
+</Callout>
+
+## Lấy kết quả khi HTTP không thể chờ
+
+Đây là chỗ gai góc mà chẳng ai thiết kế tới cho đến khi va phải: **HTTP là request-response, nhưng import mất vài phút đến vài giờ.** Connection đứt. Proxy giết request idle sau 30–60 giây. Mobile client đổi mạng giữa chừng. Giữ nguyên request mở đến khi import xong không phải là phương án — vậy client lấy kết quả bằng cách nào?
+
+Câu trả lời của ngành là ngừng coi import là một request và bắt đầu coi nó là một **resource**:
+
+<SequenceDiagram
+  title="vòng đời bất đồng bộ của một lần import"
+  actors={[
+    { label: "Client", color: "teal" },
+    { label: "API", color: "blue" },
+    { label: "Workers", color: "violet" },
+  ]}
+  messages={[
+    { from: "Client", to: "API", label: "POST /imports — 200k dòng, đăng ký callbackUrl", type: "request" },
+    { from: "API", to: "Client", label: "202 Accepted + Location: /operations/import_8f3k2", type: "response", highlight: true },
+    { from: "API", to: "Workers", label: "đưa job vào queue (file đã nằm trong object storage)", type: "async" },
+    { from: "Client", to: "API", label: "GET /operations/import_8f3k2", type: "request" },
+    { from: "API", to: "Client", label: "{ status: running, progress: 45% } + Retry-After: 10", type: "response" },
+    { from: "Workers", to: "API", label: "job xong — file kết quả đã ghi", type: "async" },
+    { from: "API", to: "Client", label: "webhook POST (ký HMAC): completed + downloadUrl", type: "async" },
+    { note: "Operation resource sống lâu hơn mọi HTTP connection. Polling và webhook chỉ là phương tiện vận chuyển cho câu 'hãy nhìn vào operation'." },
+  ]}
+/>
+### Mẫu 202
+
+Submission không bao giờ trả dữ liệu. Nó trả bằng chứng đã tiếp nhận:
+
+```text
+POST /imports
+→ 202 Accepted
+  Location: /operations/import_8f3k2
+
+{ "id": "import_8f3k2", "status": "pending" }
+```
+
+Theo RFC 9110, `202 Accepted` nghĩa chính xác là điều đó: đã nhận, chưa hoàn thành. Header `Location` trỏ tới status resource để client poll. Google chính thức hóa điều này thành pattern **Long-Running Operations (LRO)**, trong đó operation là first-class object với vòng đời riêng:
+
+<StateMachine
+  title="vòng đời operation (phong cách Google LRO)"
+  states={[
+    { id: "pending",    label: "Pending",    sub: "đã nhận, đang chờ queue",            row: 1, col: 1 },
+    { id: "running",    label: "Running",    sub: "progress nằm trong metadata",        row: 1, col: 2 },
+    { id: "completed",  label: "Completed",  sub: "kết quả / presigned download",       row: 1, col: 3 },
+    { id: "failed",     label: "Failed",     sub: "lỗi + báo cáo một phần",             row: 2, col: 3 },
+    { id: "cancelled",  label: "Cancelled",  sub: "theo yêu cầu client",                row: 2, col: 1 },
+  ]}
+  transitions={[
+    { from: "pending",   to: "running",   label: "worker nhận job" },
+    { from: "running",   to: "completed", label: "toàn bộ batch xong" },
+    { from: "running",   to: "failed",    label: "lỗi chí mạng / timeout" },
+    { from: "pending",   to: "cancelled", label: ":cancel" },
+    { from: "running",   to: "cancelled", label: ":cancel" },
+  ]}
+/>
+
+Xung quanh nó là một API surface chuẩn: `GET` operation để poll, `POST :cancel` để hủy, `DELETE` để dọn dẹp, và TTL để operation đã xong tự hết hạn (Salesforce giữ kết quả bulk 7 ngày; Google APIs cho phép operation hết hạn sau khi hoàn thành).
+
+### Bốn cách biết job đã xong
+
+<DataTable
+  caption="Các pattern nhận kết quả cho job bất đồng bộ"
+  accent="teal"
+  headers={["Pattern", "Cách hoạt động", "Phù hợp", "Lưu ý"]}
+  rows={[
+    { "Pattern": "Polling", "Cách hoạt động": "Client GET operation theo chu kỳ.", "Phù hợp": "Client đơn giản; job ít.", "Lưu ý": "Lãng phí request; poll quá nhanh là tự DDoS mình." },
+    { "Pattern": "Smart polling", "Cách hoạt động": "Server gửi Retry-After hoặc gợi ý tiến độ; client backoff theo cấp số nhân giữa các lần poll.", "Phù hợp": "Lựa chọn mặc định cho đa số API.", "Lưu ý": "Vẫn có độ trễ giữa lúc xong và lúc biết." },
+    { "Pattern": "Webhook callback", "Cách hoạt động": "Client đăng ký callback URL; server POST thông báo có chữ ký khi xong.", "Phù hợp": "Tích hợp server-to-server.", "Lưu ý": "Delivery là at-least-once; cần chữ ký và dedup (bên dưới)." },
+    { "Pattern": "SSE / WebSocket", "Cách hoạt động": "Connection liên tục stream event tiến độ.", "Phù hợp": "Thanh tiến độ trực tiếp trên UI trình duyệt.", "Lưu ý": "Connection hay đứt; logic reconnect vẫn phải re-sync từ operation resource." },
+  ]}
+/>
+
+Webhook đáng có luật riêng, vì một webhook chỉ là một network call không đáng tin khác — nhưng nhắm vào *bạn*:
+
+- **Ký mọi payload** (HMAC-SHA256 trên timestamp + body) và từ chối payload cũ hơn vài phút — chống replay.
+- **Trả 2xx ngay lập tức**, rồi xử lý bất đồng bộ. Handler chậm kích hoạt vòng retry của bên gửi, biến backlog của bạn thành outage của họ.
+- **Coi như sẽ có trùng lặp.** Mọi hệ thống webhook đều deliver at-least-once; dedup theo event ID.
+- **Chấp nhận bên gửi retry có backoff** — Gemini API của Google retry delivery thất bại tới 24 giờ; hãy thiết kế endpoint idempotent trước điều đó.
+
+Còn khi *kết quả* quá lớn — 40.000 dòng lỗi chẳng hạn — operation không nhét nó vào body. Nó mang theo con trỏ: presigned download URL trỏ tới file kết quả. Response body nhỏ mãi mãi, dù import tệ đến đâu.
+
+<Callout color="teal">
+Chuyển đổi tư duy: client không bao giờ chờ import. Nó chờ *operation*, và operation sống lâu hơn bất kỳ HTTP connection nào. Còn lại — polling, webhook, streaming — chỉ là phương tiện vận chuyển cho câu "hãy nhìn vào operation".
+</Callout>
+
+## Bên trong pipeline của doanh nghiệp
+
+### Tầng staging
+
+Hầu như mọi bài viết production đều mô tả một phiên bản nào đó của pattern staging bốn tầng:
+
+1. **Raw landing** — bản sao byte-exact của file upload, phục vụ audit và replay.
+2. **Normalized staging** — cột đã định kiểu, source key chuẩn hóa, cờ validation, reject bị cách ly.
+3. **Key resolution** — ánh xạ business key nguồn → target ID; lộ diện các tham chiếu ngoại chưa giải quyết được.
+4. **Final load** — insert đúng thứ tự phụ thuộc, rồi đối soát số lượng.
+
+Tại sao phải làm vậy? Vì nó tách *"đọc được file không?"* khỏi *"dữ liệu có hợp lệ về quan hệ không?"* Hai cái fail vì lý do khác nhau và cần error message khác nhau. Staging còn cho bạn dry-run, kiểm tra đối soát trước khi bất cứ thứ gì chạm production, và khả năng replay đầy đủ sau một deploy sai.
+
+Chi phí cũng có thật: thêm storage, thêm stage pipeline, độ trễ giữa upload và khả dụng. Team có một loại entity sạch và nguồn đầu vào kiểm soát được có thể bỏ qua. Team ăn file bẩn của khách hàng thì không.
+
+### Nhiều loại entity: load theo độ sâu phụ thuộc
+
+Khi một lần import mang nhiều loại entity liên quan, tính đúng đắn không còn nằm ở giá trị mà nằm ở **thứ tự**. Dòng con không thể trỏ tới một người cha chưa tồn tại; bảng junction cần cả hai phía được load trước.
+
+Mô hình tư duy chuẩn là depth — load từng tầng, song song *trong* một tầng, không bao giờ xuyên tầng:
+
+<Flowchart
+  title="thứ tự load theo độ sâu phụ thuộc"
+  nodes={[
+    { id: "refs",     label: "Tầng 0 — Tham chiếu",    shape: "rect", color: "teal",   sub: "bảng lookup, không phụ thuộc" },
+    { id: "parents",  label: "Tầng 1 — Cha",           shape: "rect",                  sub: "song song trong tầng" },
+    { id: "children", label: "Tầng 2 — Con",           shape: "rect",                  sub: "FK → cha đã resolve" },
+    { id: "details",  label: "Tầng 3 — Chi tiết",      shape: "rect", color: "violet", sub: "dòng cháu / line item" },
+    { id: "junction", label: "Bảng junction",          shape: "oval", color: "amber",  sub: "cần CẢ HAI phía đã resolve" },
+  ]}
+  edges={[
+    { from: "refs",     to: "parents",  label: "resolve ID" },
+    { from: "parents",  to: "children", label: "cha tồn tại trước" },
+    { from: "children", to: "details",  label: "resolve ID" },
+    { from: "parents",  to: "junction", label: "phía A sẵn sàng" },
+    { from: "children", to: "junction", label: "phía B sẵn sàng" },
+  ]}
+/>
+
+Có hai cách triển khai thứ tự đó:
+
+<DataTable
+  caption="Hai chiến lược sắp thứ tự loại entity"
+  accent="teal"
+  headers={["Chiến lược", "Cách hoạt động", "Ưu điểm", "Nhược điểm"]}
+  rows={[
+    { "Chiến lược": "Static layering", "Cách hoạt động": "Hardcode thứ tự loại (loại → subtype → instance).", "Ưu điểm": "Đơn giản, đoán trước được, dễ debug.", "Nhược điểm": "Giòn khi schema đổi; lãng phí khả năng song song trong tầng." },
+    { "Chiến lược": "Topological sort", "Cách hoạt động": "Dựng đồ thị phụ thuộc từ schema và sort lúc chạy.", "Ưu điểm": "Tự thích ứng loại mới; tối đa song song trong tầng.", "Nhược điểm": "Thêm hạ tầng; cycle phải được phát hiện và từ chối sớm." },
+  ]}
+/>
+
+Dù chọn cách nào, toàn vẹn tham chiếu giữa các loại phải được kiểm tra **trước khi persist** — dòng mồ côi cần lỗi có hành động rõ ràng ("line item tham chiếu Order X không tồn tại"), chứ không phải FK exception lúc insert.
+
+### Cấu trúc lồng nhau: bốn hướng tiếp cận
+
+Phân cấp — sơ đồ tổ chức, cây danh mục, cụm sản phẩm — là phần khó nhất. Bốn pattern xuất hiện lặp lại:
+
+<DataTable
+  caption="Xử lý import phân cấp"
+  accent="violet"
+  headers={["Hướng tiếp cận", "Cơ chế", "Ưu điểm", "Nhược điểm"]}
+  rows={[
+    { "Hướng tiếp cận": "Làm phẳng + parent ref", "Cơ chế": "Encode cây thành dòng phẳng với __parentId; dựng lại khi stream (kiểu Shopify).", "Ưu điểm": "Memory có bounds; chạy được trên mọi queue/file transport.", "Nhược điểm": "Client phải dựng lại cây; thường bị ép giới hạn depth." },
+    { "Hướng tiếp cận": "Import hai lượt", "Cơ chế": "Lượt 1 validate tất cả và dựng map ID; lượt 2 ghi theo thứ tự phụ thuộc.", "Ưu điểm": "Bắt lỗi cấu trúc trước khi ghi bất cứ gì; resolve FK đúng.", "Nhược điểm": "Xử lý đôi; cần vùng staging giữa hai lượt." },
+    { "Hướng tiếp cận": "Resolve từng tầng", "Cơ chế": "Xử lý tầng 0, resolve ID, xử lý tầng 1 tham chiếu tới, lặp lại.", "Ưu điểm": "Hợp tự nhiên cho cây tự tham chiếu; tiến độ thấy được.", "Nhược điểm": "Cây sâu bị tuần tự hóa thành nhiều vòng; tail latency = max depth." },
+    { "Hướng tiếp cận": "Deferred constraints", "Cơ chế": "Insert không thứ tự với FK tắt, sửa tham chiếu sau, bật lại.", "Ưu điểm": "Nhanh; không cần logic thứ tự.", "Nhược điểm": "Nguy hiểm; nguy cơ hỏng im lặng; cần đối soát mạnh. Phương án cuối." },
+  ]}
+/>
+
+Hai quy tắc áp dụng bất kể hướng tiếp cận:
+
+**Phát hiện cycle tường minh.** Cấu trúc tự tham chiếu có thể chứa chính nó (part A chứa part B chứa part A). Phát hiện trong lượt validation bằng visited-set traversal và từ chối kèm đường dẫn chính xác — `A → B → C → A` — thay vì để worker quay mãi.
+
+**Áp đặt giới hạn depth.** Các hệ thống production chủ động cap độ sâu cây. Nó chặn đệ quy, memory, hành vi timeout, và giữ error report dễ hiểu.
+
+### Giải quyết xung đột
+
+Import hiếm khi chạy trên database rỗng. Sớm muộn file nói một đằng sau database nói một nẻo — hoặc cùng một entity xuất hiện hai lần. Các hệ thống trưởng thành coi giải quyết xung đột là chính sách được tuyên bố, không phải tai nạn của thứ tự insert.
+
+**Bước một luôn giống nhau: khai báo business key.** Trước khi xung đột có thể được giải quyết, hệ thống cần biết điều gì khiến hai dòng là "cùng một entity". Đó là natural key hoặc external key — email, SKU, mã định danh quốc gia, primary key của hệ cũ — khai báo theo từng loại entity. Sau khi khai báo, insert trở thành **upsert**: key tồn tại → update; chưa có → insert. Salesforce xây cả một cơ chế quanh ý tưởng này (external-ID upsert), và nó lặng lẽ chuyển dạng xung đột tệ nhất — duplicate im lặng — thành một quyết định merge tất định.
+
+Còn khi dòng mới *không đồng tình* với dòng đã lưu, đó là chính sách:
+
+<DataTable
+  caption="Các chính sách giải quyết xung đột"
+  accent="amber"
+  headers={["Chính sách", "Quy tắc", "Dùng khi", "Rủi ro"]}
+  rows={[
+    { "Chính sách": "Last-write-wins", "Quy tắc": "Timestamp/giá trị mới hơn ghi đè giá trị đã lưu.", "Dùng khi": "Nguồn đáng tin và tươi; field ít stakes.", "Rủi ro": "Clock lệch hoặc batch đảo thứ tự âm thầm đè dữ liệu mới hơn." },
+    { "Chính sách": "Optimistic concurrency", "Quy tắc": "Số phiên bản đã lưu (hoặc ETag / If-Match) phải khớp; không khớp thì từ chối dòng vì stale.", "Dùng khi": "Import đua với chỉnh sửa trực tiếp của user trên cùng record.", "Rủi ro": "Nhiều dòng bị từ chối hơn; cần đường re-submission." },
+    { "Chính sách": "Field-level merge", "Quy tắc": "Ưu tiên từng field: non-null thắng, xếp hạng ưu tiên nguồn, field được bảo vệ loại khỏi update.", "Dùng khi": "Import kiểu làm giàu dữ liệu, lấp chỗ trống của record sẵn có.", "Rủi ro": "Phức tạp nhất để implement và giải thích; cần config từng field." },
+    { "Chính sách": "Cách ly chờ review", "Quy tắc": "Dòng xung đột bỏ qua auto-resolution, vào hàng chờ review.", "Dùng khi": "Duplicate fuzzy-match; record giá trị cao (khách hàng, tài chính).", "Rủi ro": "Backlog phình nếu không ai trực review." },
+  ]}
+/>
+
+Ba thực hành hỗ trợ giúp xung đột hiếm và sống sót được:
+
+- **Phát hiện duplicate trước khi insert**, không phải sau: khớp chính xác business key trong lúc validation, fuzzy match (tương tự tên/địa chỉ) thì gắn cờ review thay vì tự merge.
+- **Chặn import chồng lấn.** Hai import đồng thời chạm cùng tập entity nhân mọi xung đột lên nhiều lần. Hệ thống hoặc tuần tự hóa chúng theo phạm vi (đưa cái thứ hai vào queue) hoặc từ chối với lỗi rõ ràng "có import xung đột đang chạy" — hướng dẫn API của Google nói trả lỗi tường minh thay vì để chúng đan xen.
+- **Giữ lock ngắn và batch gộp theo cha.** Khi dòng import update record mà traffic trực tiếp cũng chạm tới, gộp dòng theo parent key (bài học Salesforce) để các batch không giành nhau cùng một dòng, và chỉ giữ mỗi transaction cho một batch — không bao giờ cho cả import.
+
+### Ngữ nghĩa thất bại, retry và idempotence
+
+Khi một lần import gặp lỗi, bạn cần một chính sách được chọn chủ đích, không phải mặc định ngẫu nhiên:
+
+<DataTable
+  caption="Các chiến lược xử lý lỗi"
+  accent="amber"
+  headers={["Chiến lược", "Hành vi", "Dùng khi"]}
+  rows={[
+    { "Chiến lược": "Fail-fast", "Hành vi": "Dừng ngay tại lỗi đầu tiên.", "Dùng khi": "Batch tài chính/pháp lý nghiêm ngặt nơi dữ liệu một phần tệ hơn không có gì." },
+    { "Chiến lược": "Skip-and-continue", "Hành vi": "Ghi nhận lỗi, chạy tiếp, báo cáo cuối cùng.", "Dùng khi": "Import best-effort của khách hàng nơi đa số dòng tốt. Mặc định phổ biến nhất." },
+    { "Chiến lược": "Collect-all", "Hành vi": "Xử lý mọi dòng, trả về mọi lỗi.", "Dùng khi": "Chế độ diagnostic, audit, dry-run." },
+    { "Chiến lược": "Partial commit + correction file", "Hành vi": "Commit dòng hợp lệ; xuất dòng lỗi kèm cột _error thành CSV để sửa và upload lại.", "Dùng khi": "Import hướng người dùng cuối. Khép kín vòng lặp không cần support ticket." },
+  ]}
+/>
+
+#### Phân loại trước khi retry
+
+Không phải failure nào cũng xứng đáng được retry. Dội cùng một request vào lỗi validation vĩnh viễn chỉ tạo nhiễu; *không* retry một timeout có thể âm thầm đánh mất dữ liệu. Ngành xếp failure thành ba lớp:
+
+<DataTable
+  caption="Ba lớp thất bại"
+  accent="violet"
+  headers={["Lớp", "Ví dụ", "Phản ứng đúng"]}
+  rows={[
+    { "Lớp": "Transient", "Ví dụ": "Timeout, 429 rate limit, 503, connection reset.", "Phản ứng đúng": "Retry với exponential backoff + jitter. Đây là điều tất yếu ở quy mô lớn." },
+    { "Lớp": "Permanent", "Ví dụ": "Lỗi validation 4xx, vi phạm schema, lỗi auth.", "Phản ứng đúng": "Không bao giờ retry. Chuyển sang luồng báo lỗi / correction." },
+    { "Lớp": "Ambiguous", "Ví dụ": "Timeout sau khi request đã gửi; response lạc trên đường truyền.", "Phản ứng đúng": "Lớp nguy hiểm. Bạn không biết nó đã xảy ra chưa. Chỉ an toàn khi retry nếu operation idempotent." },
+  ]}
+/>
+
+Lớp ambiguous là lý do kỷ luật retry và idempotence không thể tách rời. Trên mạng chịu traffic thật, ambiguous failure không phải trường hợp hiếm — mobile đứt kết nối giữa chừng liên tục, load balancer retry khi idle timeout, queue consumer redeliver. Bất kỳ mutating endpoint nào rồi cũng bị gọi hai lần với cùng ý định. Câu hỏi duy nhất là hệ thống có nhận ra hay không.
+
+Cơ chế retry xuất hiện khắp nơi khi hệ thống trở nên nghiêm túc:
+
+- **Exponential backoff kèm jitter.** Chờ `2^n` giữa các lần thử, randomize. Không có jitter, mọi client bị một sự cố đá văng cùng lúc sẽ retry cùng lịch và trở thành outage kế tiếp (thundering herd).
+- **Caps và leo thang.** Salesforce tự retry batch lỗi tạm thời tới 10–20 lần rồi fail batch vĩnh viễn. Sau max attempts, công việc rơi vào **dead-letter queue** — inspectable, không bốc hơi.
+- **Resume, đừng restart.** Lưu checkpoint cuối đã commit (row index, batch ID); lần retry nhảy tới thay vì xử lý lại 39.000 dòng tốt.
+
+#### Biến retry thành vô hại: idempotence
+
+Trick cốt lõi của hệ thống phân tán áp dụng ở đây ở dạng thuần nhất nhất:
+
+```text
+effectively-once = at-least-once delivery + idempotent processing
+```
+
+Bạn không thể ngăn retry xảy ra. Bạn *có thể* khiến việc lặp một operation cho ra cùng kết quả như làm nó một lần. Ba cơ chế, theo độ tinh vi tăng dần:
+
+**1. Operation tự nhiên idempotent.** Upsert là lực lượng chủ lực: ghi row X hai lần để lại cùng trạng thái như ghi một lần. Đây là lý do business-key upsert ở mục xung đột kiêm luôn hai vai trò — giải xung đột file-vs-database *và* miễn phí retry cấp dòng.
+
+**2. Deterministic derived IDs.** Gán cho mỗi dòng import một ID tính từ input ổn định — `hash(import_id, row_index)` — với unique index, và ghi theo kiểu "insert or ignore on conflict". Worker crash có thể chạy lại cả batch; duplicate đơn giản không xảy ra.
+
+**3. Idempotency keys.** Đóng góp nổi tiếng nhất của Stripe cho thiết kế API, và là công cụ đúng khi operation không lặp lại tự nhiên (charge thẻ, tạo order). Hợp đồng:
+
+- Client sinh một key duy nhất **cho mỗi logical operation** — không phải mỗi attempt — và gửi nó trong mọi lần retry.
+- Server **claim key một cách atomic**: một câu insert-with-on-conflict trên row có khóa. (Check tồn tại trước rồi insert là race time-of-check-to-time-of-use kinh điển — hai retry đồng thời cùng pass check và cùng execute.)
+- Cùng key + cùng request hash → **replay response đã lưu nguyên văn**, kể cả khi nó là lỗi. Hash khác → từ chối ồn ào (client bug).
+- Key đã claim nhưng đang chạy → trả "in progress", đừng block.
+- Key được scope theo account và endpoint, và hết hạn (Stripe dọn sau 24 giờ) — chúng là sổ sách vận hành, không phải lịch sử.
+
+Toàn bộ hợp đồng gói gọn trong một quyết định server đưa ra trên mọi mutating request:
+
+<Flowchart
+  title="claim idempotency key — quyết định của server"
+  nodes={[
+    { id: "arrive",   label: "Request + Idempotency-Key", shape: "oval",   color: "teal",   sub: "một key cho mỗi logical operation" },
+    { id: "claim",    label: "Claim atomic thành công?",  shape: "diamond",                 sub: "INSERT ... ON CONFLICT — không check-then-insert" },
+    { id: "exec",     label: "Chạy handler",              shape: "rect",                    sub: "lưu response + hash vào row của key" },
+    { id: "replay",   label: "Replay response đã lưu",    shape: "rect",   color: "teal",   sub: "nguyên văn — kể cả khi là lỗi" },
+    { id: "progress", label: "409 đang chạy",             shape: "rect",   color: "amber",  sub: "client retry sau; đừng block" },
+    { id: "reject",   label: "422 từ chối",               shape: "rect",   color: "rose",   sub: "cùng key, payload khác = client bug" },
+  ]}
+  edges={[
+    { from: "arrive",   to: "claim" },
+    { from: "claim",    to: "exec",     label: "rồi — mới" },
+    { from: "claim",    to: "replay",   label: "không — done, cùng hash" },
+    { from: "claim",    to: "progress", label: "không — vẫn đang chạy" },
+    { from: "claim",    to: "reject",   label: "không — done, hash khác" },
+  ]}
+/>
+
+Với operation trải qua nhiều bước, cùng ý tưởng mở rộng thành **recovery points**: commit trạng thái local *trước* mỗi external call, ghi tiến độ sau, và để retry nhảy tới phase đầu tiên chưa xong thay vì bắt đầu lại. Đó là cách crash giữa import resume thay vì hỏng dữ liệu.
+
+<Callout color="amber">
+Kiểm tra thực tế: all-or-nothing thật sự trên hàng trăm nghìn dòng hầu như không bao giờ được attempted. Chuẩn ngành là atomicity từng batch cộng báo cáo thành-công-một-phần cấp job. Hãy thiết kế "completed with N errors" như một kết quả first-class, không phải đường exception.
+</Callout>
+
+### Validation
+
+Phân biệt ba lớp lỗi, vì chúng fail khác nhau và cần xử lý khác nhau:
+
+1. **Cấu trúc** — thiếu cột, delimiter sai, encoding hỏng. Từ chối cả file ngay lập tức, trước khi tốn bất kỳ compute nào.
+2. **Từng dòng** — kiểu sai, thiếu field bắt buộc. Thu theo dòng và đưa vào vòng correction-file.
+3. **Quan hệ/nghiệp vụ** — FK target không tồn tại, trùng business key, cycle trong phân cấp. Cần ngữ cảnh liên dòng.
+
+Lớp thứ ba giấu cái bẫy đắt nhất: kiểm tra FK của từng dòng bằng một query riêng tuần tự hóa import của bạn xuống vài dòng/giây. Thay vào đó, preload các ID hợp lệ vào memory (set 100K UUID ~10–20MB) và check set-membership. Vượt ~10 triệu ID, đổ sang temporary table và validate theo batch.
+
+Và hãy xây **chế độ dry-run**: cùng code path với execute, transaction rollback cuối đường. Chi phí gần bằng không và mua được lòng tin khổng lồ.
+
+### Kỹ thuật scale
+
+Checklist xuất hiện trong mọi hệ thống high-volume:
+
+- **Stream tất cả.** Streaming parser emit từng dòng; chỉ batch hiện tại (~500 dòng) cộng lỗi tích lũy nằm trong memory. File 1 triệu dòng tốn cùng memory file 1 nghìn dòng.
+- **Ghi batch khoảng 500 dòng.** Vượt ~1.000 mỗi batch bạn chạm diminishing returns và lock contention tăng.
+- **Dùng bulk loader** (`COPY`, loader gốc engine) để đổ data thô vào staging — nhanh hơn vòng INSERT hàng cấp độ lớn.
+- **Song song trong tầng phụ thuộc, không bao giờ xuyên tầng.**
+- **Gộp batch theo parent key** tránh lock contention (bài học Salesforce).
+- **Thêm backpressure** cho volume rất cao: worker publish batch vào stream và một writer chuyên trách tiêu thụ theo tốc độ database chịu được.
+- **Báo lỗi bằng file.** Ghi CSV thất bại vào object storage và trả link tải — API response nhỏ mãi mãi dù bao nhiêu dòng fail.
+- **Cap concurrency theo tenant** để một importer khổng lồ không đói mọi người khác.
+
+## Có cần orchestration engine không?
+
+Import nhiều stage tích tụ cùng một nhóm nhu cầu: retry, resume-sau-crash, hiển thị tiến độ, thứ tự phụ thuộc. Các team hoặc tự xây hoặc dùng orchestrator:
+
+<DataTable
+  caption="Các lựa chọn orchestration cho workload import"
+  accent="teal"
+  headers={["Engine", "Mô hình", "Điểm ngọt", "Cẩn thận"]}
+  rows={[
+    { "Engine": "Airflow", "Mô hình": "Python DAG scheduler", "Điểm ngọt": "Batch ETL định kỳ với task ngắn; hệ sinh thái khổng lồ.", "Cẩn thận": "Không có durable mid-task state; retry chạy task lại từ đầu." },
+    { "Engine": "Kestra", "Mô hình": "Workflow YAML declarative", "Điểm ngọt": "Pipeline theo file; tự động truyền file giữa các stage; team trộn eng/analyst.", "Cẩn thận": "Logic branching động phức tạp khó hơn code." },
+    { "Engine": "Temporal", "Mô hình": "Durable code execution với replay event history", "Điểm ngọt": "Luồng nghiệp vụ nhiều bước quan trọng, saga, job chạy ngày–tuần.", "Cẩn thận": "Learning curve dốc; tự lo file/I-O; overhead throughput." },
+    { "Engine": "Camunda", "Mô hình": "Process diagram BPMN", "Điểm ngọt": "Phê duyệt human-in-the-loop trong luồng.", "Cẩn thận": "Nặng ký cho thuần di chuyển dữ liệu." },
+  ]}
+/>
+
+Một case study fintech rất đáng học: họ chạy replay sổ cái 2,4 tỷ dòng trong 18 ngày trên Temporal chính vì deterministic replay và audit trail đáng giá hơn chi phí — và vẫn giữ Airflow song song cho ETL định kỳ thường ngày. Các engine này kết hợp được; chúng giải bài toán chồng lấn nhưng khác nhau.
+
+Rule of thumb: nếu import chủ yếu là *file → transform → load*, orchestrator declarative thắng. Nếu nó gồm transaction đa service cần compensation và cổng phê duyệt con người, durable execution thắng.
+
+## Khung quyết định
+
+Nếu bạn đang xây hệ thống import cho nhiều loại entity với cấu trúc lồng nhau, đây là các quyết định chưng cất:
+
+1. **Chuyển async trên ngưỡng nhỏ** (~2.000 record). Trả `202 Accepted` kèm operation resource; cung cấp polling cộng tùy chọn webhook có chữ ký; đặt TTL cho operation đã xong.
+2. **Dùng biểu diễn phẳng với parent reference** giữa các stage pipeline. Nó stream qua queue và file với memory có bounds; chỉ dựng lại phân cấp khi cần.
+3. **Validate hai lượt với dữ liệu lồng nhau**: resolve mọi key và phát hiện cycle trước khi ghi bất cứ gì. Import single-pass fail mọi dòng con có cha nằm sau trong file.
+4. **Khai báo business key theo từng loại entity và giải xung đột bằng chính sách** — upsert làm nền, optimistic version check nơi import đua với edit trực tiếp, quarantine cho duplicate fuzzy.
+5. **Load từng tầng xuống cây**, song song trong một tầng, với từ chối max-depth tường minh.
+6. **Mặc định skip-and-continue với vòng correction-file**; cung cấp fail-fast cho batch nghiêm ngặt; expose dry-run dùng đúng code path execute.
+7. **Biến idempotency thành cấu trúc**: deterministic row key cộng upsert nội bộ, idempotency key trên mọi mutating endpoint bên ngoài. Crash-retry trở nên miễn phí thay vì kinh hoàng.
+8. **Công bố trần tài nguyên** — max file size, max dòng, max depth, concurrent job mỗi tenant. Giới hạn không ghi thành văn sẽ thành sự kiện 2 giờ sáng.
+
+## Anti-pattern
+
+Mỗi mục dưới đây là một failure mode có hồ sơ production:
+
+- Query FK tồn tại từng dòng trong lúc load (tuần tự hóa throughput).
+- Tắt constraint làm chiến lược thứ tự, không có kế hoạch đối soát.
+- Load bảng junction trước khi cả hai phía tồn tại.
+- Phụ thuộc thứ tự dòng trong file cho tính đúng đắn.
+- Trả mảng lỗi trong API response thay vì file.
+- Đệ quy không giới hạn trên dữ liệu phân cấp.
+- Coi "batch completed" là "mọi dòng thành công".
+- Giữ HTTP connection mở chờ import xong.
+- Check-then-insert cho claim idempotency (race TOCTOU — hai retry cùng pass).
+- Sinh idempotency key mới cho mỗi attempt (phá hủy toàn bộ cơ chế).
+- Chấp nhận webhook không chữ ký, hoặc xử lý chúng đồng bộ trong handler.
+
+## Đọc thêm
+
+- [Salesforce Bulk API 2.0 limits and allocations](https://developer.salesforce.com/docs/atlas.en-us.salesforce_app_limits_cheatsheet.meta/salesforce_app_limits_cheatsheet/salesforce_app_limits_platform_bulkapi.htm)
+- [Salesforce: general guidelines for data loads](https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/asynch_api_planning_guidelines.htm)
+- [Shopify: bulk import data with the GraphQL Admin API](https://shopify.dev/docs/api/usage/bulk-operations/imports)
+- [Designing robust and predictable APIs with idempotency — Stripe](https://stripe.com/blog/idempotency)
+- [Stripe: idempotent requests (API reference)](https://docs.stripe.com/api/idempotent_requests)
+- [Google AIP-151: Long-running operations](https://google.aip.dev/151)
+- [Long-running API operations: async patterns, polling, webhooks](https://codelit.io/blog/api-long-running-operations)
+- [REST API design for long-running tasks](https://restfulapi.net/rest-api-design-for-long-running-tasks/)
+- [Designing a tenant data import system at scale](https://letsbuildsolutions.com/blog/system-design/designing-a-tenant-data-import-system-file-parsing-schema-mapping-and-error-recovery-for-saas-onboarding-at-scale/)
+- [Foreign keys and CSV loads: load-order templates](https://www.elysiate.com/blog/foreign-keys-and-csv-loads-load-order-templates)
+- [Temporal vs Airflow for ETL replay — a case study](https://automationatlas.io/guides/case-study-temporal-vs-airflow-fintech-etl-replay-2026/)
