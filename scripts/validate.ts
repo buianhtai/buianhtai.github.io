@@ -136,6 +136,79 @@ function validateFile(filePath: string, schema: z.ZodSchema): ValidationError | 
   return { filePath, errors };
 }
 
+// --- Content checks: icons, Flowchart shapes, component imports ---
+
+const VALID_ICON_SETS = ['lucide', 'simple-icons', 'logos'];
+const iconCache = new Map<string, { icons: Record<string, unknown>; aliases?: Record<string, unknown> } | null>();
+
+function loadIconSet(set: string): { icons: Record<string, unknown>; aliases?: Record<string, unknown> } | null {
+  if (iconCache.has(set)) return iconCache.get(set)!;
+  const p = join(process.cwd(), 'node_modules', '@iconify-json', set, 'icons.json');
+  if (!existsSync(p)) {
+    iconCache.set(set, null);
+    return null;
+  }
+  const col = JSON.parse(readFileSync(p, 'utf-8'));
+  iconCache.set(set, col);
+  return col;
+}
+
+const VALID_SHAPES = new Set(['rect', 'oval', 'diamond', 'dot', 'circle', 'cylinder', 'hexagon', 'cloud']);
+
+function availableMdxComponents(): Set<string> {
+  const dir = join(process.cwd(), 'src/components/mdx');
+  if (!existsSync(dir)) return new Set();
+  return new Set(readdirSync(dir).map((f) => f.replace(/\.(astro|tsx?)$/, '')));
+}
+
+const HTML_ELEMENTS = new Set([
+  'p', 'div', 'span', 'img', 'a', 'ul', 'ol', 'li', 'code', 'pre', 'br', 'hr',
+  'strong', 'em', 'blockquote', 'section', 'figure', 'figcaption', 'table',
+  'thead', 'tbody', 'tr', 'td', 'th', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+  'svg', 'path', 'circle', 'rect', 'line', 'text', 'marker', 'polygon', 'g', 'defs',
+]);
+
+function validateContent(filePath: string): string[] {
+  const issues: string[] = [];
+  const content = readFileSync(filePath, 'utf-8');
+
+  // 1. Icon names must exist in installed @iconify-json sets
+  for (const m of content.matchAll(/icon:\s*"([a-z0-9-]+):([^"]+)"/g)) {
+    const set = m[1];
+    const name = m[2];
+    if (!VALID_ICON_SETS.includes(set)) {
+      issues.push(`icon "${m[1]}:${name}" — set "${set}" is not one of ${VALID_ICON_SETS.join(', ')}`);
+      continue;
+    }
+    const col = loadIconSet(set);
+    if (!col || !(col.icons[name] || (col.aliases && col.aliases[name]))) {
+      issues.push(`icon "${set}:${name}" does not exist in @iconify-json/${set}`);
+    }
+  }
+
+  // 2. Flowchart shape values must be in the supported whitelist
+  for (const m of content.matchAll(/shape:\s*"([^"]+)"/g)) {
+    if (!VALID_SHAPES.has(m[1])) {
+      issues.push(`shape "${m[1]}" is not supported (valid: rect, oval, diamond, dot)`);
+    }
+  }
+
+  // 3. House components used but not imported
+  const components = availableMdxComponents();
+  const imported = new Set(
+    [...content.matchAll(/import\s+(?:\w+\s+from\s+)?['"][^'"]*\/mdx\/(\w+)\.astro['"]/g)].map((m) => m[1]),
+  );
+  for (const m of content.matchAll(/<(\/?)([A-Z]\w+)/g)) {
+    const name = m[2];
+    if (HTML_ELEMENTS.has(name) || !components.has(name)) continue;
+    if (!imported.has(name)) {
+      issues.push(`component <${name}> used but not imported`);
+    }
+  }
+
+  return issues;
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const blogSchema = await loadBlogSchema();
@@ -158,11 +231,16 @@ async function main() {
   }
 
   const validationErrors: ValidationError[] = [];
+  const contentIssues: { filePath: string; issues: string[] }[] = [];
 
   for (const filePath of filesToValidate) {
     const error = validateFile(filePath, blogSchema);
     if (error) {
       validationErrors.push(error);
+    }
+    const issues = validateContent(filePath);
+    if (issues.length > 0) {
+      contentIssues.push({ filePath, issues });
     }
   }
 
@@ -175,9 +253,17 @@ async function main() {
     }
   }
 
+  for (const ci of contentIssues) {
+    const relativePath = ci.filePath.replace(process.cwd() + '/', '');
+    console.error(`\nCONTENT ISSUES: ${relativePath}`);
+    for (const issue of ci.issues) {
+      console.error(`  - ${issue}`);
+    }
+  }
+
   // Print summary
   const totalFiles = filesToValidate.length;
-  const invalidCount = validationErrors.length;
+  const invalidCount = validationErrors.length + contentIssues.length;
 
   if (invalidCount === 0) {
     console.log(`\n✅ Validated ${totalFiles} posts — all valid.`);

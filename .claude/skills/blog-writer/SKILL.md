@@ -104,3 +104,29 @@ Exception: Reading files you intend to EDIT (component creation, post writing).
 - Component library: `/Users/BuiAnhTai/GitHub/Blogs/.claude/skills/blog-writer/references/component-library.md`
 - Style guide: `/Users/BuiAnhTai/GitHub/Blogs/.claude/skills/blog-writer/references/style-guide.md`
 - Frontmatter schema: `/Users/BuiAnhTai/GitHub/Blogs/.claude/skills/blog-writer/references/frontmatter-schema.md`
+
+## Variant: Research-Lane Post (multi-source topic)
+
+Trigger: "write about <topic>" / "explore how X handles Y" without a specific GitHub URL.
+Same 6-phase pipeline, with these lane-specific steps:
+
+### Research
+- Run 2–3 parallel web-search lanes on distinct subtopics (vendor APIs / internal architectures / tooling landscape)
+- Write the synthesis to `docs/<topic>-research.md` first (reference doc), then derive the post from it
+
+### Content
+- Use house MDX components only: Flowchart, Pipeline, SequenceDiagram, StateMachine, DataTable, Callout, ArchDiagram, MetricBar
+- Icons from installed sets only: lucide, simple-icons, logos (`icon: "lucide:name"`)
+- Flowchart shapes limited to: rect, oval, diamond, dot
+
+### Validation gate (before build)
+- `npm run blog:validate` — catches invalid icons, bad shapes, missing component imports
+
+### OG image
+- fireworks-tech-graph skill, **theme-neutral dark background** (site has manual light/dark toggle; white cards glare in dark mode)
+- 1200×630 → `public/og/<slug>-og.png`, wire `heroImage` in frontmatter
+
+### Fact-check pass (mandatory before publish)
+- Verify every vendor number against primary sources; label estimates as illustrative ("~", "on the order of")
+- Include failure/reversal narratives for vendor case studies, not just launch PRs
+- Never fabricate statistics or deep URLs; link roots when unsure

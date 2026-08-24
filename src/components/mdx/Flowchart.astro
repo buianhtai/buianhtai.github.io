@@ -289,6 +289,110 @@ const nodeMap = Object.fromEntries(nodes.map(n => [n.id, n]));
           );
         }
 
+        if (shape === 'circle') {
+          const r = NODE_H / 2 - 2;
+          const iconLayout = n.icon ? iconLabelLayout(x, n.label, 11, 2 * r - 14) : null;
+          return (
+            <>
+              <circle cx={x} cy={y} r={r}
+                fill={col.fill} stroke={col.stroke} stroke-width="1.5"
+              />
+              {n.icon && <Icon name={n.icon} x={iconLayout!.iconX} y={iconLayout!.mode === 'inline' ? y - 7 : y - 16} width="14" height="14" style={`color: ${col.text}`} />}
+              <text x={n.icon && iconLayout!.mode === 'inline' ? iconLayout!.labelX : x} y={n.icon && iconLayout!.mode === 'stack' ? y + 9 : y + 1}
+                text-anchor={n.icon && iconLayout!.mode === 'inline' ? 'start' : 'middle'} dominant-baseline="middle"
+                font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+                font-size="11" font-weight="700"
+                fill={col.text}
+              >{n.label}</text>
+            </>
+          );
+        }
+
+        if (shape === 'cylinder') {
+          const subLines = n.sub ? n.sub.split('\n') : [];
+          const nh = NODE_H + subLines.length * 12;
+          const w = NODE_W - 8;
+          const ellRy = 9;
+          const topCy = y - nh / 2 + ellRy;
+          const botCy = y + nh / 2;
+          const hw = w / 2;
+          const iconLayout = n.icon ? iconLabelLayout(x, n.label, 11, w - 22) : null;
+          const labelY = subLines.length > 0 ? y - 4 : y + 4;
+          return (
+            <>
+              <path
+                d={`M ${x - hw},${topCy} L ${x - hw},${botCy} A ${hw} ${ellRy} 0 0 0 ${x + hw},${botCy} L ${x + hw},${topCy} Z`}
+                fill={col.fill} stroke={col.stroke} stroke-width="1.5"
+              />
+              <ellipse cx={x} cy={topCy} rx={hw} ry={ellRy}
+                fill={col.fill} stroke={col.stroke} stroke-width="1.5"
+              />
+              {n.icon && <Icon name={n.icon} x={iconLayout!.iconX} y={(iconLayout!.mode === 'inline' ? labelY : labelY - 18) - 7} width="14" height="14" style={`color: ${col.text}`} />}
+              <text x={n.icon && iconLayout!.mode === 'inline' ? iconLayout!.labelX : x} y={labelY}
+                text-anchor={n.icon && iconLayout!.mode === 'inline' ? 'start' : 'middle'} dominant-baseline="middle"
+                font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+                font-size="11" font-weight="700"
+                fill={col.text}
+              >{n.label}</text>
+              {subLines.map((sl, i) => (
+                <text key={`cyl-sub-${i}`} x={x} y={labelY + 16 + i * 12}
+                  text-anchor="middle" font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+                  font-size="10" fill="var(--color-text-muted)"
+                >{sl}</text>
+              ))}
+            </>
+          );
+        }
+
+        if (shape === 'hexagon') {
+          const hw = NODE_W / 2, hh = NODE_H / 2 - 2;
+          const inset = 16;
+          const pts = `${x - hw + inset},${y - hh} ${x + hw - inset},${y - hh} ${x + hw},${y} ${x + hw - inset},${y + hh} ${x - hw + inset},${y + hh} ${x - hw},${y}`;
+          const iconLayout = n.icon ? iconLabelLayout(x, n.label, 11, NODE_W - inset * 2 - 12) : null;
+          return (
+            <>
+              <polygon
+                points={pts}
+                fill={col.fill} stroke={col.stroke} stroke-width="1.5"
+              />
+              {n.icon && <Icon name={n.icon} x={iconLayout!.iconX} y={iconLayout!.mode === 'inline' ? y - 7 : y - 17} width="14" height="14" style={`color: ${col.text}`} />}
+              <text x={n.icon && iconLayout!.mode === 'inline' ? iconLayout!.labelX : x} y={n.icon && iconLayout!.mode === 'stack' ? y + 8 : y + 1}
+                text-anchor={n.icon && iconLayout!.mode === 'inline' ? 'start' : 'middle'} dominant-baseline="middle"
+                font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+                font-size="11" font-weight="700"
+                fill={col.text}
+              >{n.label}</text>
+            </>
+          );
+        }
+
+        if (shape === 'cloud') {
+          const hw = NODE_W / 2, hh = NODE_H / 2 - 2;
+          const d = [
+            `M ${x - hw * 0.62},${y + hh}`,
+            `C ${x - hw * 1.08},${y + hh} ${x - hw * 1.08},${y - hh * 0.25} ${x - hw * 0.45},${y - hh * 0.28}`,
+            `C ${x - hw * 0.32},${y - hh * 1.25} ${x + hw * 0.34},${y - hh * 1.25} ${x + hw * 0.44},${y - hh * 0.32}`,
+            `C ${x + hw * 1.06},${y - hh * 0.38} ${x + hw * 1.06},${y + hh} ${x + hw * 0.56},${y + hh}`,
+            'Z',
+          ].join(' ');
+          const iconLayout = n.icon ? iconLabelLayout(x, n.label, 11, NODE_W - 28) : null;
+          return (
+            <>
+              <path
+                d={d}
+                fill={col.fill} stroke={col.stroke} stroke-width="1.5"
+              />
+              {n.icon && <Icon name={n.icon} x={iconLayout!.iconX} y={iconLayout!.mode === 'inline' ? y - 7 : y - 17} width="14" height="14" style={`color: ${col.text}`} />}
+              <text x={n.icon && iconLayout!.mode === 'inline' ? iconLayout!.labelX : x} y={n.icon && iconLayout!.mode === 'stack' ? y + 8 : y + 1}
+                text-anchor={n.icon && iconLayout!.mode === 'inline' ? 'start' : 'middle'} dominant-baseline="middle"
+                font-family="var(--font-mono,'IBM Plex Mono',monospace)"
+                font-size="11" font-weight="700"
+                fill={col.text}
+              >{n.label}</text>
+            </>
+          );
+        }
+
         // rect (default)
         const subLines = n.sub ? n.sub.split('\n') : [];
         const nh = NODE_H + subLines.length * 12;

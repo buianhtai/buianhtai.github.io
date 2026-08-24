@@ -9,6 +9,7 @@
     "astro": "astro",
     "blog:series": "npx tsx scripts/series.ts",
     "blog:new": "npx tsx scripts/blog.ts",
+    "blog:validate": "npx tsx scripts/validate.ts",
     "blog:update": "npx tsx scripts/update.ts",
     "blog:validate": "npx tsx scripts/validate.ts"
   },
