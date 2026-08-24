@@ -63,7 +63,7 @@ The Bully algorithm (Garcia-Molina, 1982) elects the process with the highest ID
 
 <SequenceDiagram
   title="Bully Algorithm — highest-ID process wins"
-  actors={["Node 1 (low)", "Node 3 (dead)", "Node 5 (mid)", "Node 7 (new leader)"]}
+  actors={[{ label: "Node 1 (low)", icon: "lucide:server" }, { label: "Node 3 (dead)", icon: "lucide:heart-pulse" }, { label: "Node 5 (mid)", icon: "lucide:server" }, { label: "Node 7 (new leader)", icon: "lucide:crown" }]}
   messages={[
     { from: "Node 1 (low)", to: "Node 3 (dead)", label: "ELECTION (higher ID)" },
     { from: "Node 1 (low)", to: "Node 5 (mid)", label: "ELECTION (higher ID)" },
@@ -112,7 +112,7 @@ Nodes are logically arranged in a ring. When a leader failure is detected:
 
 <SequenceDiagram
   title="Ring Algorithm — election message travels the ring"
-  actors={["Node A (initiator)", "Node B", "Node C", "Node D (highest ID)"]}
+  actors={[{ label: "Node A (initiator)", icon: "lucide:send" }, { label: "Node B", icon: "lucide:server" }, { label: "Node C", icon: "lucide:server" }, { label: "Node D (highest ID)", icon: "lucide:crown" }]}
   messages={[
     { from: "Node A (initiator)", to: "Node B", label: "ELECTION(id=A)" },
     { from: "Node B", to: "Node C", label: "ELECTION(id=B) — B > A, replace" },

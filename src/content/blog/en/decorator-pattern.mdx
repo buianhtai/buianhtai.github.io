@@ -90,7 +90,13 @@ How `cost()` chains back — from outermost to innermost then back:
 
 <SequenceDiagram
   title="cost() call chain — unwinding through the wrapper stack"
-  actors={["caller", "Whip", "Mocha (2nd)", "Mocha (1st)", "DarkRoast"]}
+  actors={[
+    { label: "caller", icon: "lucide:user" },
+    { label: "Whip", icon: "lucide:layers" },
+    { label: "Mocha (2nd)", icon: "lucide:layers" },
+    "Mocha (1st)",
+    { label: "DarkRoast", icon: "lucide:coffee" },
+  ]}
   messages={[
     { from: "caller",      to: "Whip",        label: "cost()" },
     { from: "Whip",        to: "Mocha (2nd)", label: "beverage.cost()" },

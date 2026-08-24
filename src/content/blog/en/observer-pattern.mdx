@@ -94,7 +94,12 @@ public interface Observer {
 
 <SequenceDiagram
   title="Observer notification flow"
-  actors={["WeatherData", "List<Observer>", "CurrentConditionsDisplay", "StatisticsDisplay"]}
+  actors={[
+    { label: "WeatherData", icon: "lucide:radio" },
+    { label: "List<Observer>", icon: "lucide:eye" },
+    { label: "CurrentConditionsDisplay", icon: "lucide:eye" },
+    "StatisticsDisplay",
+  ]}
   messages={[
     { from: "WeatherData",            to: "List<Observer>",             label: "measurementsChanged() → notifyObservers()" },
     { from: "List<Observer>",         to: "CurrentConditionsDisplay",   label: "update(temp, humidity, pressure)" },

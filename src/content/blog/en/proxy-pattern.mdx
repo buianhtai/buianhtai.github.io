@@ -37,7 +37,13 @@ The remote proxy solution: give `GumballMonitor` a **stub** that implements the 
 
 <SequenceDiagram
   title="Remote Proxy — Java RMI call flow"
-  actors={["GumballMonitor", "Stub (Proxy)", "Network", "Skeleton", "GumballMachine"]}
+  actors={[
+    { label: "GumballMonitor", icon: "lucide:monitor" },
+    { label: "Stub (Proxy)", icon: "lucide:shield" },
+    { label: "Network", icon: "lucide:globe" },
+    "Skeleton",
+    { label: "GumballMachine", icon: "lucide:box" },
+  ]}
   messages={[
     { from: "GumballMonitor", to: "Stub (Proxy)",    label: "getCount()" },
     { from: "Stub (Proxy)",   to: "Network",          label: "serialise + send" },
@@ -89,8 +95,8 @@ The proxy shows a loading message until the download completes. The client never
   title="Virtual Proxy — ImageProxy state transitions"
   cols={3}
   states={[
-    { id: "uninit",   label: "Uninitialized", sub: "realImage == null",         color: "amber", row: 1, col: 1, initial: true },
-    { id: "loading",  label: "Loading",       sub: "background thread running", color: "teal",  row: 1, col: 2 },
+    { id: "uninit",   label: "Uninitialized", sub: "realImage == null",         color: "amber", row: 1, col: 1, initial: true, icon: "lucide:shield" },
+    { id: "loading",  label: "Loading",       sub: "background thread running", color: "teal",  row: 1, col: 2, icon: "lucide:loader" },
     { id: "loaded",   label: "Loaded",        sub: "realImage ready",           color: "green", row: 1, col: 3, final: true },
   ]}
   transitions={[

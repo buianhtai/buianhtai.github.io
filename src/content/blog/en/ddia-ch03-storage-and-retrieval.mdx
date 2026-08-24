@@ -91,10 +91,10 @@ The hash index's fatal flaw is the RAM requirement. Log-Structured Merge-trees (
 <SequenceDiagram
   title="lsm-tree write path — from client to disk"
   actors={[
-    { label: "Client",      color: "teal" },
-    { label: "WAL (disk)",  color: "amber" },
-    { label: "Memtable",    color: "blue" },
-    { label: "Compaction",  color: "green" },
+    { label: "Client",      color: "teal",  icon: "lucide:user" },
+    { label: "WAL (disk)",  color: "amber", icon: "lucide:hard-drive" },
+    { label: "Memtable",    color: "blue",  icon: "lucide:database" },
+    { label: "Compaction",  color: "green", icon: "lucide:layers" },
   ]}
   messages={[
     { from: "Client",     to: "WAL (disk)", label: "append key=X val=V",        type: "request" },

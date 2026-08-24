@@ -105,7 +105,12 @@ Person person = new Person.Builder("Alice")
 
 <SequenceDiagram
   title="Builder — Director drives construction; client gets finished product"
-  actors={["Client", "Director", "MealBuilder", "Meal"]}
+  actors={[
+    { label: "Client", icon: "lucide:user" },
+    { label: "Director", icon: "lucide:settings" },
+    { label: "MealBuilder", icon: "lucide:hammer" },
+    "Meal",
+  ]}
   messages={[
     { from: "Client",   to: "Director",    label: "construct(builder)" },
     { from: "Director", to: "MealBuilder", label: "buildBurger()" },
@@ -143,9 +148,9 @@ Client → AuthHandler → RateLimitHandler → LoggingHandler → BusinessHandl
   title="Chain of Responsibility — request travels until handled or dropped"
   cols={4}
   states={[
-    { id: "client",   label: "Client",        sub: "sends Request",       color: "teal",   row: 1, col: 1, initial: true },
-    { id: "auth",     label: "AuthHandler",   sub: "auth check",          color: "amber",  row: 1, col: 2 },
-    { id: "rate",     label: "RateLimit",     sub: "quota check",         color: "amber",  row: 1, col: 3 },
+    { id: "client",   label: "Client",        sub: "sends Request",       color: "teal",   row: 1, col: 1, initial: true, icon: "lucide:user" },
+    { id: "auth",     label: "AuthHandler",   sub: "auth check",          color: "amber",  row: 1, col: 2, icon: "lucide:shield" },
+    { id: "rate",     label: "RateLimit",     sub: "quota check",         color: "amber",  row: 1, col: 3, icon: "lucide:gauge" },
     { id: "business", label: "BusinessLogic", sub: "handles request",     color: "green",  row: 1, col: 4, final: true },
   ]}
   transitions={[
@@ -310,7 +315,12 @@ The caretaker (e.g., an undo manager) stores a stack of mementos and pops the to
 
 <SequenceDiagram
   title="Memento — save and restore state via opaque snapshot"
-  actors={["User", "UndoManager (Caretaker)", "TextEditor (Originator)", "Memento"]}
+  actors={[
+    { label: "User", icon: "lucide:user" },
+    { label: "UndoManager (Caretaker)", icon: "lucide:history" },
+    { label: "TextEditor (Originator)", icon: "lucide:file-text" },
+    "Memento",
+  ]}
   messages={[
     { from: "User",        to: "TextEditor (Originator)", label: "type 'Hello'" },
     { from: "User",        to: "UndoManager (Caretaker)", label: "Ctrl+S (checkpoint)" },

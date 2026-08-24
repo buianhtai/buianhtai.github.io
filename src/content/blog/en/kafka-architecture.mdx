@@ -113,10 +113,10 @@ Every partition has a **replication factor** (commonly 3). One replica is the le
 <StateMachine
   title="partition leader failure and recovery"
   states={[
-    { id: "healthy", label: "Healthy", sub: "leader + full ISR", initial: true, color: "green" },
-    { id: "degraded", label: "Degraded ISR", sub: "follower falls behind", color: "amber" },
-    { id: "leaderless", label: "Leaderless", sub: "leader broker dies", color: "rose" },
-    { id: "elected", label: "New Leader", sub: "controller picks ISR member", color: "teal" },
+    { id: "healthy", label: "Healthy", sub: "leader + full ISR", initial: true, color: "green", icon: "simple-icons:apachekafka" },
+    { id: "degraded", label: "Degraded ISR", sub: "follower falls behind", color: "amber", icon: "lucide:alert-triangle" },
+    { id: "leaderless", label: "Leaderless", sub: "leader broker dies", color: "rose", icon: "lucide:heart-pulse" },
+    { id: "elected", label: "New Leader", sub: "controller picks ISR member", color: "teal", icon: "lucide:crown" },
   ]}
   transitions={[
     { from: "healthy", to: "degraded", label: "follower lag exceeds threshold" },
@@ -156,14 +156,14 @@ A **consumer group** is Kafka's scaling primitive for reads: every partition is 
 <NetworkMap
   title="Producer, Broker, Consumer Group Interaction"
   nodes={[
-    { id: "producer", label: "Producer", color: "teal", icon: "logos:apache-kafka" },
-    { id: "broker1", label: "Broker 1", color: "green", icon: "logos:apache-kafka-icon" },
-    { id: "broker2", label: "Broker 2", color: "green", icon: "logos:apache-kafka-icon" },
-    { id: "broker3", label: "Broker 3", color: "green", icon: "logos:apache-kafka-icon" },
-    { id: "consumerGroup", label: "Consumer Group A", color: "amber", icon: "tabler:users-group" },
+    { id: "producer", label: "Producer", color: "teal", icon: "logos:kafka" },
+    { id: "broker1", label: "Broker 1", color: "green", icon: "logos:kafka" },
+    { id: "broker2", label: "Broker 2", color: "green", icon: "logos:kafka" },
+    { id: "broker3", label: "Broker 3", color: "green", icon: "logos:kafka" },
+    { id: "consumerGroup", label: "Consumer Group A", color: "amber", icon: "lucide:users" },
     { id: "consumer1", label: "Consumer 1", parent: "consumerGroup" },
     { id: "consumer2", label: "Consumer 2", parent: "consumerGroup" },
-    { id: "consumerGroupB", label: "Consumer Group B", color: "violet", icon: "tabler:users-group" },
+    { id: "consumerGroupB", label: "Consumer Group B", color: "violet", icon: "lucide:users" },
     { id: "consumer3", label: "Consumer 3", parent: "consumerGroupB" },
   ]}
   edges={[
@@ -179,9 +179,9 @@ A **consumer group** is Kafka's scaling primitive for reads: every partition is 
 <SequenceDiagram
   title="consumer group rebalance on scale-out"
   actors={[
-    { label: "Consumer A", color: "teal" },
-    { label: "Group Coordinator", color: "blue" },
-    { label: "Consumer B (new)", color: "green" },
+    { label: "Consumer A", color: "teal", icon: "lucide:users" },
+    { label: "Group Coordinator", color: "blue", icon: "lucide:git-merge" },
+    { label: "Consumer B (new)", color: "green", icon: "lucide:users" },
   ]}
   messages={[
     { from: "Consumer A", to: "Group Coordinator", label: "owns partitions 0,1,2", type: "async" },

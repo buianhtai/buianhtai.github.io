@@ -129,10 +129,10 @@ Correct event-time windowing requires deciding: how long do you wait for late ev
 <SequenceDiagram
   title="event time vs processing time — late event handling"
   actors={[
-    { label: "Mobile Client",   color: "teal" },
-    { label: "Kafka Topic",     color: "blue" },
-    { label: "Stream Processor", color: "green" },
-    { label: "Window [0-60s]",  color: "amber" },
+    { label: "Mobile Client",   color: "teal",  icon: "lucide:smartphone" },
+    { label: "Kafka Topic",     color: "blue",  icon: "simple-icons:apachekafka" },
+    { label: "Stream Processor", color: "green", icon: "lucide:cpu" },
+    { label: "Window [0-60s]",  color: "amber", icon: "lucide:clock" },
   ]}
   messages={[
     { from: "Mobile Client",   to: "Kafka Topic",      label: "event t=30s (event time) — sent immediately", type: "request" },

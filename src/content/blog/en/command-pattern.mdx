@@ -108,7 +108,12 @@ public class RemoteControl {
 
 <SequenceDiagram
   title="Command execution flow"
-  actors={["Client", "RemoteControl (Invoker)", "LightOnCommand", "Light (Receiver)"]}
+  actors={[
+    { label: "Client", icon: "lucide:user" },
+    { label: "RemoteControl (Invoker)", icon: "lucide:radio" },
+    { label: "LightOnCommand", icon: "lucide:terminal" },
+    "Light (Receiver)",
+  ]}
   messages={[
     { from: "Client",               to: "RemoteControl (Invoker)", label: "setCommand(slot, lightOnCmd)" },
     { from: "Client",               to: "RemoteControl (Invoker)", label: "onButtonWasPushed(0)" },
@@ -130,9 +135,9 @@ The four roles:
 <SequenceDiagram
   title="Multi-level undo — execute() pushes, undo() pops and reverses"
   actors={[
-    { id: "user",    label: "User",            color: "amber" },
-    { id: "remote",  label: "RemoteControl",   color: "teal" },
-    { id: "command", label: "Command (stack)", color: "violet" },
+    { id: "user",    label: "User",            color: "amber",  icon: "lucide:user" },
+    { id: "remote",  label: "RemoteControl",   color: "teal",   icon: "lucide:radio" },
+    { id: "command", label: "Command (stack)", color: "violet", icon: "lucide:terminal" },
   ]}
   messages={[
     { divider: "execute phase — building history" },

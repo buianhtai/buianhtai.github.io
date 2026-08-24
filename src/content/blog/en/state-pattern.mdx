@@ -141,9 +141,9 @@ Adding `WinnerState` requires one new class — no edits to any existing state.
 <StateMachine
   title="Gumball Machine — state transitions"
   states={[
-    { id: "no_q",     label: "No Quarter",   sub: "waiting for coin",    row: 1, col: 2 },
-    { id: "has_q",    label: "Has Quarter",  sub: "ready to dispense",   row: 2, col: 3 },
-    { id: "sold",     label: "Gumball Sold", sub: "dispensing",          row: 2, col: 1 },
+    { id: "no_q",     label: "No Quarter",   sub: "waiting for coin",    row: 1, col: 2, icon: "lucide:settings-2" },
+    { id: "has_q",    label: "Has Quarter",  sub: "ready to dispense",   row: 2, col: 3, icon: "lucide:settings-2" },
+    { id: "sold",     label: "Gumball Sold", sub: "dispensing",          row: 2, col: 1, icon: "lucide:settings-2" },
     { id: "sold_out", label: "Sold Out",     sub: "empty machine",       row: 3, col: 2 },
     { id: "winner",   label: "Winner!",      sub: "dispense 2 gumballs", row: 1, col: 4 },
   ]}

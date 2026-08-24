@@ -130,10 +130,10 @@ A database can be serializable but not linearizable (e.g., snapshot isolation wi
 <SequenceDiagram
   title="linearizability violation — world cup example"
   actors={[
-    { label: "Alice",         color: "teal" },
-    { label: "Replica A (up-to-date)", color: "blue" },
-    { label: "Replica B (lagging)",    color: "amber" },
-    { label: "Bob",           color: "green" },
+    { label: "Alice",         color: "teal", icon: "lucide:user" },
+    { label: "Replica A (up-to-date)", color: "blue", icon: "lucide:database" },
+    { label: "Replica B (lagging)",    color: "amber", icon: "lucide:clock" },
+    { label: "Bob",           color: "green", icon: "lucide:user" },
   ]}
   messages={[
     { from: "Alice",  to: "Replica A (up-to-date)", label: "write: result = 'Germany wins'", type: "request" },
@@ -268,9 +268,9 @@ Real consensus algorithms don't directly implement the single-value consensus fo
   title="raft consensus — node state machine"
   cols={3}
   states={[
-    { id: "follower",  label: "Follower",   sub: "receives heartbeats; applies log", color: "teal",  row: 1, col: 2, initial: true },
-    { id: "candidate", label: "Candidate",  sub: "requests votes; increments term",  color: "amber", row: 2, col: 1 },
-    { id: "leader",    label: "Leader",     sub: "sends heartbeats; replicates log", color: "green", row: 2, col: 3, final: true },
+    { id: "follower",  label: "Follower",   sub: "receives heartbeats; applies log", color: "teal",  icon: "lucide:radio", row: 1, col: 2, initial: true },
+    { id: "candidate", label: "Candidate",  sub: "requests votes; increments term",  color: "amber", icon: "lucide:vote", row: 2, col: 1 },
+    { id: "leader",    label: "Leader",     sub: "sends heartbeats; replicates log", color: "green", icon: "lucide:crown", row: 2, col: 3, final: true },
   ]}
   transitions={[
     { from: "follower",  to: "candidate", label: "election timeout — no heartbeat" },

@@ -98,9 +98,9 @@ Câu trả lời của ngành là ngừng coi import là một request và bắt
 <SequenceDiagram
   title="vòng đời bất đồng bộ của một lần import"
   actors={[
-    { label: "Client", color: "teal" },
-    { label: "API", color: "blue" },
-    { label: "Workers", color: "violet" },
+    { label: "Client", color: "teal", icon: "lucide:upload" },
+    { label: "API", color: "blue", icon: "lucide:file-spreadsheet" },
+    { label: "Workers", color: "violet", icon: "lucide:database" },
   ]}
   messages={[
     { from: "Client", to: "API", label: "POST /imports — 200k dòng, đăng ký callbackUrl", type: "request" },
@@ -130,10 +130,10 @@ Theo RFC 9110, `202 Accepted` nghĩa chính xác là điều đó: đã nhận, 
 <StateMachine
   title="vòng đời operation (phong cách Google LRO)"
   states={[
-    { id: "pending",    label: "Pending",    sub: "đã nhận, đang chờ queue",            row: 1, col: 1 },
-    { id: "running",    label: "Running",    sub: "progress nằm trong metadata",        row: 1, col: 2 },
-    { id: "completed",  label: "Completed",  sub: "kết quả / presigned download",       row: 1, col: 3 },
-    { id: "failed",     label: "Failed",     sub: "lỗi + báo cáo một phần",             row: 2, col: 3 },
+    { id: "pending",    label: "Pending",    icon: "lucide:clock-3", sub: "đã nhận, đang chờ queue",            row: 1, col: 1 },
+    { id: "running",    label: "Running",    icon: "lucide:upload", sub: "progress nằm trong metadata",        row: 1, col: 2 },
+    { id: "completed",  label: "Completed",  icon: "lucide:check-circle", sub: "kết quả / presigned download",       row: 1, col: 3 },
+    { id: "failed",     label: "Failed",     icon: "lucide:alert-triangle", sub: "lỗi + báo cáo một phần",             row: 2, col: 3 },
     { id: "cancelled",  label: "Cancelled",  sub: "theo yêu cầu client",                row: 2, col: 1 },
   ]}
   transitions={[
@@ -198,10 +198,10 @@ Mô hình tư duy chuẩn là depth — load từng tầng, song song *trong* m�
 <Flowchart
   title="thứ tự load theo độ sâu phụ thuộc"
   nodes={[
-    { id: "refs",     label: "Tầng 0 — Tham chiếu",    shape: "rect", color: "teal",   sub: "bảng lookup, không phụ thuộc" },
-    { id: "parents",  label: "Tầng 1 — Cha",           shape: "rect",                  sub: "song song trong tầng" },
-    { id: "children", label: "Tầng 2 — Con",           shape: "rect",                  sub: "FK → cha đã resolve" },
-    { id: "details",  label: "Tầng 3 — Chi tiết",      shape: "rect", color: "violet", sub: "dòng cháu / line item" },
+    { id: "refs",     label: "Tầng 0 — Tham chiếu",    shape: "rect", color: "teal",   icon: "lucide:database", sub: "bảng lookup, không phụ thuộc" },
+    { id: "parents",  label: "Tầng 1 — Cha",           shape: "rect",                  icon: "lucide:folder-tree", sub: "song song trong tầng" },
+    { id: "children", label: "Tầng 2 — Con",           shape: "rect",                  icon: "lucide:git-branch", sub: "FK → cha đã resolve" },
+    { id: "details",  label: "Tầng 3 — Chi tiết",      shape: "rect", color: "violet", icon: "lucide:file-spreadsheet", sub: "dòng cháu / line item" },
     { id: "junction", label: "Bảng junction",          shape: "oval", color: "amber",  sub: "cần CẢ HAI phía đã resolve" },
   ]}
   edges={[
@@ -341,12 +341,12 @@ Toàn bộ hợp đồng gói gọn trong một quyết định server đưa ra 
 <Flowchart
   title="claim idempotency key — quyết định của server"
   nodes={[
-    { id: "arrive",   label: "Request + Idempotency-Key", shape: "oval",   color: "teal",   sub: "một key cho mỗi logical operation" },
-    { id: "claim",    label: "Claim atomic thành công?",  shape: "diamond",                 sub: "INSERT ... ON CONFLICT — không check-then-insert" },
-    { id: "exec",     label: "Chạy handler",              shape: "rect",                    sub: "lưu response + hash vào row của key" },
-    { id: "replay",   label: "Replay response đã lưu",    shape: "rect",   color: "teal",   sub: "nguyên văn — kể cả khi là lỗi" },
+    { id: "arrive",   label: "Request + Idempotency-Key", shape: "oval",   color: "teal",   icon: "lucide:upload", sub: "một key cho mỗi logical operation" },
+    { id: "claim",    label: "Claim atomic thành công?",  shape: "diamond",                 icon: "lucide:lock", sub: "INSERT ... ON CONFLICT — không check-then-insert" },
+    { id: "exec",     label: "Chạy handler",              shape: "rect",                    icon: "lucide:database", sub: "lưu response + hash vào row của key" },
+    { id: "replay",   label: "Replay response đã lưu",    shape: "rect",   color: "teal",   icon: "lucide:check-circle", sub: "nguyên văn — kể cả khi là lỗi" },
     { id: "progress", label: "409 đang chạy",             shape: "rect",   color: "amber",  sub: "client retry sau; đừng block" },
-    { id: "reject",   label: "422 từ chối",               shape: "rect",   color: "rose",   sub: "cùng key, payload khác = client bug" },
+    { id: "reject",   label: "422 từ chối",               shape: "rect",   color: "rose",   icon: "lucide:alert-triangle", sub: "cùng key, payload khác = client bug" },
   ]}
   edges={[
     { from: "arrive",   to: "claim" },

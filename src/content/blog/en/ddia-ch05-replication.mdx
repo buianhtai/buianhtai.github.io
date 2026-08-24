@@ -101,9 +101,9 @@ Old leader comes back, doesn't know it was replaced. Two nodes accept writes sim
   title="single-leader failover state machine"
   cols={3}
   states={[
-    { id: "normal",    label: "Normal",        sub: "leader + followers healthy",    color: "green",  row: 1, col: 2, initial: true },
-    { id: "detect",    label: "Detect failure", sub: "heartbeat timeout exceeded",   color: "amber",  row: 2, col: 1 },
-    { id: "elect",     label: "Elect leader",   sub: "most up-to-date follower",     color: "teal",   row: 2, col: 2 },
+    { id: "normal",    label: "Normal",        sub: "leader + followers healthy",    color: "green",  icon: "lucide:check-circle", row: 1, col: 2, initial: true },
+    { id: "detect",    label: "Detect failure", sub: "heartbeat timeout exceeded",   color: "amber",  icon: "lucide:clock", row: 2, col: 1 },
+    { id: "elect",     label: "Elect leader",   sub: "most up-to-date follower",     color: "teal",   icon: "lucide:git-branch", row: 2, col: 2 },
     { id: "splitbrain",label: "Split-brain",    sub: "2 nodes think they're leader", color: "rose",   row: 2, col: 3 },
     { id: "recovered", label: "Recovered",      sub: "new leader active, old fenced", color: "green", row: 3, col: 2, final: true },
   ]}
@@ -140,9 +140,9 @@ Asynchronous followers are always behind the leader by some amount — the **rep
 <SequenceDiagram
   title="replication lag — read-your-writes anomaly"
   actors={[
-    { label: "User",         color: "teal" },
-    { label: "Leader",       color: "blue" },
-    { label: "Follower (lagging)", color: "amber" },
+    { label: "User",         color: "teal",  icon: "lucide:user" },
+    { label: "Leader",       color: "blue",  icon: "lucide:database" },
+    { label: "Follower (lagging)", color: "amber", icon: "lucide:clock" },
   ]}
   messages={[
     { from: "User",    to: "Leader",             label: "POST /profile — update bio",    type: "request" },

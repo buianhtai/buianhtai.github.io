@@ -153,9 +153,9 @@ Several strategies prevent the lost-update problem (two reads of the same row fo
 <SequenceDiagram
   title="lost update — read-modify-write race condition"
   actors={[
-    { label: "Client A (Txn A)", color: "teal" },
-    { label: "Database",         color: "blue" },
-    { label: "Client B (Txn B)", color: "amber" },
+    { label: "Client A (Txn A)", color: "teal",  icon: "lucide:user" },
+    { label: "Database",         color: "blue",  icon: "lucide:database" },
+    { label: "Client B (Txn B)", color: "amber", icon: "lucide:user" },
   ]}
   messages={[
     { from: "Client A (Txn A)", to: "Database",         label: "READ counter (value=42)",            type: "request" },
@@ -189,9 +189,9 @@ Neither write was a lost update — they wrote to different rows. Neither was a 
 <SequenceDiagram
   title="write skew — on-call doctor scenario under snapshot isolation"
   actors={[
-    { label: "Dr. Alice (Txn A)", color: "teal" },
-    { label: "DB (MVCC snapshot)", color: "blue" },
-    { label: "Dr. Bob (Txn B)",   color: "amber" },
+    { label: "Dr. Alice (Txn A)", color: "teal",  icon: "lucide:user" },
+    { label: "DB (MVCC snapshot)", color: "blue",  icon: "lucide:database" },
+    { label: "Dr. Bob (Txn B)",   color: "amber", icon: "lucide:user" },
   ]}
   messages={[
     { from: "Dr. Alice (Txn A)", to: "DB (MVCC snapshot)", label: "BEGIN — snapshot at T1", type: "request" },

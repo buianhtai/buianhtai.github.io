@@ -57,9 +57,9 @@ This works perfectly — in a single-threaded world. Two threads entering `getIn
   title="Naive getInstance() — race condition with two threads"
   cols={3}
   states={[
-    { id: "t1_check",   label: "Thread 1",     sub: "sees instance==null",   color: "teal",  row: 1, col: 1 },
-    { id: "t2_check",   label: "Thread 2",     sub: "sees instance==null",   color: "amber", row: 1, col: 2 },
-    { id: "t1_create",  label: "Thread 1",     sub: "calls new Singleton()", color: "teal",  row: 2, col: 1 },
+    { id: "t1_check",   label: "Thread 1",     sub: "sees instance==null",   color: "teal",  row: 1, col: 1, icon: "lucide:box" },
+    { id: "t2_check",   label: "Thread 2",     sub: "sees instance==null",   color: "amber", row: 1, col: 2, icon: "lucide:box" },
+    { id: "t1_create",  label: "Thread 1",     sub: "calls new Singleton()", color: "teal",  row: 2, col: 1, icon: "lucide:box" },
     { id: "t2_create",  label: "Thread 2",     sub: "calls new Singleton()", color: "amber", row: 2, col: 2 },
     { id: "two_insts",  label: "Two instances!", sub: "violates the pattern", color: "rose",  row: 3, col: 1 },
     { id: "dcl_ok",     label: "DCL + volatile", sub: "second check inside lock", color: "green", row: 3, col: 2 },

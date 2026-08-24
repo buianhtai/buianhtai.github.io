@@ -91,7 +91,7 @@ Paxos correctness: any two quorums overlap by at least one member. If a value V 
 
 <SequenceDiagram
   title="Paxos — Prepare (Phase 1) then Accept (Phase 2)"
-  actors={["Proposer", "Acceptor A", "Acceptor B", "Acceptor C"]}
+  actors={[{ label: "Proposer", icon: "lucide:vote" }, { label: "Acceptor A", icon: "lucide:shield" }, { label: "Acceptor B", icon: "lucide:shield" }, { label: "Acceptor C", icon: "lucide:shield" }]}
   messages={[
     { from: "Proposer", to: "Acceptor A", label: "PREPARE(N=7)" },
     { from: "Proposer", to: "Acceptor B", label: "PREPARE(N=7)" },
@@ -129,12 +129,12 @@ Raft (Ongaro and Ousterhout, 2014) was designed specifically for **understandabi
 <Flowchart
   title="Raft leader election state machine"
   nodes={[
-    { id: "follower",   label: "Follower",         shape: "oval",    color: "teal", sub: "awaiting heartbeat" },
+    { id: "follower",   label: "Follower",         shape: "oval",    color: "teal", icon: "lucide:users", sub: "awaiting heartbeat" },
     { id: "timeout",    label: "Election timeout?", shape: "diamond" },
-    { id: "candidate",  label: "Become Candidate",  shape: "rect",   sub: "increment term, vote self" },
+    { id: "candidate",  label: "Become Candidate",  shape: "rect",   icon: "lucide:vote", sub: "increment term, vote self" },
     { id: "sendvotes",  label: "RequestVote RPCs",  shape: "rect",   sub: "broadcast to all peers" },
     { id: "majority",   label: "Majority votes?",   shape: "diamond" },
-    { id: "leader",     label: "Leader",            shape: "oval",   color: "teal", sub: "send heartbeats" },
+    { id: "leader",     label: "Leader",            shape: "oval",   color: "teal", icon: "lucide:crown", sub: "send heartbeats" },
     { id: "higher",     label: "Higher-term msg?",  shape: "diamond" },
     { id: "revert",     label: "Revert to Follower", shape: "rect" },
   ]}
@@ -174,7 +174,7 @@ Raft (Ongaro and Ousterhout, 2014) was designed specifically for **understandabi
 
 <SequenceDiagram
   title="Raft log replication — leader to followers"
-  actors={["Client", "Leader (term 3)", "Follower 1", "Follower 2"]}
+  actors={[{ label: "Client", icon: "lucide:send" }, { label: "Leader (term 3)", icon: "lucide:crown" }, { label: "Follower 1", icon: "lucide:users" }, { label: "Follower 2", icon: "lucide:users" }]}
   messages={[
     { from: "Client", to: "Leader (term 3)", label: "SET x=42" },
     { from: "Leader (term 3)", to: "Leader (term 3)", label: "append entry [index=8, term=3, x=42] — uncommitted" },

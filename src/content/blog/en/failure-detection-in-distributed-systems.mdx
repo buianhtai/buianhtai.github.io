@@ -157,7 +157,7 @@ SWIM detects failures in O(log N) time with high probability while keeping the m
 
 <SequenceDiagram
   title="SWIM indirect ping — detecting failure without false positives"
-  actors={["P1 (detector)", "P2 (suspect)", "P3 (intermediary)", "P4 (intermediary)"]}
+  actors={[{ label: "P1 (detector)", icon: "lucide:radar" }, { label: "P2 (suspect)", icon: "lucide:heart-pulse" }, { label: "P3 (intermediary)", icon: "lucide:network" }, { label: "P4 (intermediary)", icon: "lucide:network" }]}
   messages={[
     { from: "P1 (detector)", to: "P2 (suspect)", label: "direct PING" },
     { from: "P2 (suspect)", to: "P1 (detector)", label: "[no response — timeout]" },

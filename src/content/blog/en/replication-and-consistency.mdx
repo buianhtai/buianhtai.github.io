@@ -76,7 +76,7 @@ Causal consistency uses this to guarantee: if write W1 happened-before write W2,
 
 <SequenceDiagram
   title="Vector clocks — tracking causality and detecting conflicts"
-  actors={["Alice [2,0,0]", "Bob [0,1,0]", "Carol [0,0,1]"]}
+  actors={[{ label: "Alice [2,0,0]", icon: "lucide:user" }, { label: "Bob [0,1,0]", icon: "lucide:user" }, { label: "Carol [0,0,1]", icon: "lucide:user" }]}
   messages={[
     { from: "Alice [2,0,0]", to: "Alice [2,0,0]", label: "local event → A:[2,0,0]" },
     { from: "Alice [2,0,0]", to: "Bob [0,1,0]", label: "send msg, vc=[2,0,0]" },

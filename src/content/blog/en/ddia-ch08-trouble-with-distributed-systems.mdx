@@ -93,9 +93,9 @@ A timeout tells you that you haven't received a response. It tells you nothing a
 <SequenceDiagram
   title="what a timeout tells you — three scenarios"
   actors={[
-    { label: "Client",   color: "teal" },
-    { label: "Network",  color: "amber" },
-    { label: "Server",   color: "blue" },
+    { label: "Client",   color: "teal",  icon: "lucide:user" },
+    { label: "Network",  color: "amber", icon: "lucide:network" },
+    { label: "Server",   color: "blue",  icon: "lucide:server" },
   ]}
   messages={[
     { divider: "scenario A — request lost" },
@@ -196,10 +196,10 @@ The paused-lock-holder pattern is one of the most insidious bugs in distributed 
 <SequenceDiagram
   title="paused lock holder — GC pause causes stale lease corruption"
   actors={[
-    { label: "Client A",        color: "teal" },
-    { label: "Lock service",    color: "blue" },
-    { label: "Shared resource", color: "amber" },
-    { label: "Client B",        color: "green" },
+    { label: "Client A",        color: "teal",  icon: "lucide:user" },
+    { label: "Lock service",    color: "blue",  icon: "lucide:lock" },
+    { label: "Shared resource", color: "amber", icon: "lucide:database" },
+    { label: "Client B",        color: "green", icon: "lucide:user" },
   ]}
   messages={[
     { from: "Client A",     to: "Lock service",    label: "acquire lock → token=33, lease=60s",       type: "request" },
@@ -220,10 +220,10 @@ The paused-lock-holder pattern is one of the most insidious bugs in distributed 
 <StateMachine
   title="distributed node state — from the cluster's perspective"
   states={[
-    { id: "healthy",   label: "Healthy",         sub: "heartbeats arriving",       initial: true },
-    { id: "suspected", label: "Suspected dead",  sub: "heartbeat timeout",         color: "amber" },
-    { id: "dead",      label: "Declared dead",   sub: "quorum voted to remove",    color: "red" },
-    { id: "rejoining", label: "Rejoining",       sub: "node reconnects, syncing",  color: "blue" },
+    { id: "healthy",   label: "Healthy",         sub: "heartbeats arriving",       icon: "lucide:heart-pulse", initial: true },
+    { id: "suspected", label: "Suspected dead",  sub: "heartbeat timeout",         color: "amber", icon: "lucide:clock" },
+    { id: "dead",      label: "Declared dead",   sub: "quorum voted to remove",    color: "rose", icon: "lucide:circle-x" },
+    { id: "rejoining", label: "Rejoining",       sub: "node reconnects, syncing",  color: "blue", icon: "lucide:refresh-cw" },
   ]}
   transitions={[
     { from: "healthy",   to: "suspected", label: "heartbeat timeout (e.g. 30s)" },

@@ -114,7 +114,13 @@ The Model never mentions `bpmOutputLabel`. The View never contains business logi
 
 <SequenceDiagram
   title="User increments BPM"
-  actors={["User", "View", "Controller", "Model", "View (observer)"]}
+  actors={[
+    { label: "User", icon: "lucide:user" },
+    { label: "View", icon: "lucide:layout" },
+    { label: "Controller", icon: "lucide:repeat" },
+    "Model",
+    { label: "View (observer)", icon: "lucide:eye" },
+  ]}
   messages={[
     { from: "User",           to: "View",            label: "clicks '+' button" },
     { from: "View",           to: "Controller",      label: "actionPerformed(event)" },

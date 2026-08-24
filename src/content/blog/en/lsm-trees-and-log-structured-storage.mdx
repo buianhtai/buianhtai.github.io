@@ -68,7 +68,7 @@ A delete in an LSM Tree is a write, not a removal. This has an important consequ
 
 <SequenceDiagram
   title="LSM Tree read path — memtable → L0 → L1"
-  actors={["Client", "Memtable", "L0 SSTables", "L1 SSTables"]}
+  actors={[{ label: "Client", icon: "lucide:send" }, { label: "Memtable", icon: "lucide:layers" }, { label: "L0 SSTables", icon: "lucide:layers" }, { label: "L1 SSTables", icon: "lucide:layers" }]}
   messages={[
     { from: "Client", to: "Memtable", label: "GET key=K" },
     { from: "Memtable", to: "Memtable", label: "binary search — O(log N)" },

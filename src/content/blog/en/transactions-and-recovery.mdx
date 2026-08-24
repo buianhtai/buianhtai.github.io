@@ -71,7 +71,7 @@ Why WAL provides durability:
 
 <SequenceDiagram
   title="WAL write path and LSN assignment"
-  actors={["Transaction", "Log Manager", "Buffer Pool", "Disk: WAL File", "Disk: Data Pages"]}
+  actors={[{ label: "Transaction", icon: "lucide:lock" }, { label: "Log Manager", icon: "lucide:file-text" }, { label: "Buffer Pool", icon: "lucide:database" }, { label: "Disk: WAL File", icon: "lucide:hard-drive" }, { label: "Disk: Data Pages", icon: "lucide:hard-drive" }]}
   messages={[
     { from: "Transaction", to: "Log Manager", label: "write(page P, old=X, new=Y)" },
     { from: "Log Manager", to: "Log Manager", label: "assign LSN=42 to log record" },
@@ -132,7 +132,7 @@ The redo phase's "repeat history" approach is the key insight: it simplifies rec
 
 <SequenceDiagram
   title="ARIES recovery — three phases after a crash"
-  actors={["WAL Log", "Analysis Phase", "Redo Phase", "Undo Phase"]}
+  actors={[{ label: "WAL Log", icon: "lucide:file-text" }, { label: "Analysis Phase", icon: "lucide:search" }, { label: "Redo Phase", icon: "lucide:rotate-cw" }, { label: "Undo Phase", icon: "lucide:undo-2" }]}
   messages={[
     { from: "WAL Log", to: "Analysis Phase", label: "scan forward from last checkpoint" },
     { from: "Analysis Phase", to: "Analysis Phase", label: "build dirty-page table (DPT)" },

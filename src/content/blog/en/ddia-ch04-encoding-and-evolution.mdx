@@ -219,10 +219,10 @@ All new records have new fields. Old records are still on disk with old format a
 <SequenceDiagram
   title="rolling upgrade — mixed-version coexistence"
   actors={[
-    { label: "Node A (v2)",   color: "green" },
-    { label: "Database",      color: "blue" },
-    { label: "Node B (v1)",   color: "amber" },
-    { label: "Node C (v2)",   color: "green" },
+    { label: "Node A (v2)",   color: "green", icon: "lucide:server" },
+    { label: "Database",      color: "blue",  icon: "lucide:database" },
+    { label: "Node B (v1)",   color: "amber", icon: "lucide:server" },
+    { label: "Node C (v2)",   color: "green", icon: "lucide:server" },
   ]}
   messages={[
     { divider: "phase 1 — v2 deployed to nodes A and C only" },

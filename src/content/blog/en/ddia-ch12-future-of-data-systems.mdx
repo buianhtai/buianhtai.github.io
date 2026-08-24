@@ -172,10 +172,10 @@ Fencing tokens (Ch08), idempotent consumer check tables, or Kafka transactional 
 <SequenceDiagram
   title="end-to-end idempotency — duplicate request safely suppressed"
   actors={[
-    { label: "Client",           color: "teal" },
-    { label: "API gateway",      color: "blue" },
-    { label: "Payment service",  color: "green" },
-    { label: "Idempotency store", color: "amber" },
+    { label: "Client",           color: "teal",  icon: "lucide:user" },
+    { label: "API gateway",      color: "blue",  icon: "lucide:router" },
+    { label: "Payment service",  color: "green", icon: "lucide:credit-card" },
+    { label: "Idempotency store", color: "amber", icon: "lucide:database" },
   ]}
   messages={[
     { from: "Client",          to: "API gateway",       label: "POST /charge (request_id=uuid-abc123, amount=$100)", type: "request" },

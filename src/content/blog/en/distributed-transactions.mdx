@@ -62,7 +62,7 @@ This is harder than single-node transactions because cohorts fail independently 
 
 <SequenceDiagram
   title="Two-Phase Commit (2PC) — prepare then commit"
-  actors={["Coordinator", "Cohort A", "Cohort B", "Cohort C"]}
+  actors={[{ label: "Coordinator", icon: "lucide:git-merge" }, { label: "Cohort A", icon: "lucide:database" }, { label: "Cohort B", icon: "lucide:database" }, { label: "Cohort C", icon: "lucide:database" }]}
   messages={[
     { from: "Coordinator", to: "Cohort A", label: "PREPARE txn-42" },
     { from: "Coordinator", to: "Cohort B", label: "PREPARE txn-42" },
@@ -103,7 +103,7 @@ The key difference: after Phase 2, cohorts know that all other cohorts are also 
 
 <SequenceDiagram
   title="Three-Phase Commit (3PC) — pre-commit eliminates blocking"
-  actors={["Coordinator", "Cohort A", "Cohort B"]}
+  actors={[{ label: "Coordinator", icon: "lucide:git-merge" }, { label: "Cohort A", icon: "lucide:database" }, { label: "Cohort B", icon: "lucide:database" }]}
   messages={[
     { from: "Coordinator", to: "Cohort A", label: "CANCOMMIT? (Phase 1)" },
     { from: "Coordinator", to: "Cohort B", label: "CANCOMMIT? (Phase 1)" },
