@@ -1,6 +1,6 @@
 ---
-title: "Building a Troubleshooting Agent for Your API Platform"
-description: "A customer sends you an error message, a traceId, and an endpoint. Here is how enterprises build multi-agent systems that troubleshoot automatically — the architecture, deployment, scaling, determinism engineering, failure modes, and the open source to assemble it from."
+title: "Building Support Agents for Your Platform"
+description: "Support volume for an API platform spans how-to questions, account issues, and deep technical errors with traceIds. Here is how enterprises build multi-agent support systems that cover it all — architecture, knowledge pipelines, deployment, determinism, scaling, cost, and the open source to assemble it from."
 pubDate: 2026-08-24
 tags: ["ai-agents", "mcp", "observability", "customer-support", "architecture"]
 lang: "en"
@@ -8,6 +8,7 @@ category: "ai"
 ---
 
 import Callout from '../../../components/mdx/Callout.astro';
+import ArchDiagram from '../../../components/mdx/ArchDiagram.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
 import Flowchart from '../../../components/mdx/Flowchart.astro';
 import MetricBar from '../../../components/mdx/MetricBar.astro';
@@ -15,11 +16,9 @@ import Pipeline from '../../../components/mdx/Pipeline.astro';
 import SequenceDiagram from '../../../components/mdx/SequenceDiagram.astro';
 import StateMachine from '../../../components/mdx/StateMachine.astro';
 
-If you run an API platform, you know this support ticket: *"Your API returned 500. Here's the traceId: `a4f8...`. I was calling `POST /v2/orders`."* No reproduction steps, no payload, no environment details — just three artifacts and an expectation that you'll figure it out.
+Support volume for an API platform arrives in three very different shapes. Most tickets are **how-to questions** — how to authenticate, paginate, find a feature in the UI. A steady stream is **account work** — billing confusion, plan changes, access problems. And the hardest slice is **technical failures**: *"Your API returned 500. Here's the traceId: `a4f8...`. I was calling `POST /v2/orders`."* No reproduction steps, no payload — just artifacts and an expectation that you'll figure it out.
 
-Today, a support engineer handles this by pivoting between tabs: look up the endpoint in the API docs, search logs by traceId, open the distributed trace, check whether it's a known issue, draft an answer. Thirty minutes later, maybe there's a root cause.
-
-Every piece of that investigation is mechanical except the judgment at the end — which makes it exactly the kind of workflow enterprises are now handing to **multi-agent systems**. This post walks through the architecture that keeps such an agent trustworthy, what Salesforce, Intercom, and Sierra learned building theirs, and the open source you can assemble today.
+Today these land in one human queue, where an engineer pivots between docs, logs, and traces for thirty minutes per ticket. Every piece of that work is mechanical except the judgment at the end — which makes support exactly the kind of workflow enterprises are now handing to **multi-agent systems**: one front door, specialized agents behind it, humans for what genuinely needs humans. This post walks through the architecture that keeps such a system trustworthy, what Salesforce, Intercom, Sierra, and Klarna learned building theirs, and the open source you can assemble today.
 
 ## The core insight: orchestration is the system
 
@@ -34,13 +33,15 @@ They also codified the two ways agents cooperate, which map directly onto a supp
 
 ## The reference architecture
 
-For an API platform, the troubleshooting flow decomposes into five specialized roles behind one entry point:
+General support decomposes into specialist lanes behind one entry point — how-to questions, account work, and deep technical failures each get an agent with its own tools:
 
 <Flowchart
   title="multi-agent support topology"
   nodes={[
-    { id: "cust",    label: "Customer ticket",      shape: "oval",   color: "teal",   icon: "lucide:message-circle", sub: "error + traceId + endpoint" },
+    { id: "cust",    label: "Customer ticket",      shape: "oval",   color: "teal",   icon: "lucide:message-circle", sub: "question · account issue · error + traceId" },
     { id: "triage",  label: "Triage agent",         shape: "rect",   color: "blue",   icon: "lucide:filter",         sub: "classify intent, extract artifacts, validate tenant" },
+    { id: "faq",     label: "How-to agent",         shape: "rect",   color: "violet", icon: "lucide:compass",        sub: "API & UI usage — answers from KB" },
+    { id: "account", label: "Account agent",        shape: "rect",   color: "green",  icon: "lucide:credit-card",    sub: "billing, plans, access — scoped reads only" },
     { id: "docs",    label: "Docs agent",           shape: "rect",   color: "violet", icon: "lucide:book-open",      sub: "OpenAPI spec + API docs (RAG)" },
     { id: "obs",     label: "Observability agent",  shape: "rect",   color: "amber",  icon: "lucide:search-code",    sub: "trace by ID → logs via MCP" },
     { id: "known",   label: "Knowledge agent",      shape: "rect",   color: "green",  icon: "lucide:lightbulb",      sub: "known issues, past tickets" },
@@ -50,24 +51,30 @@ For an API platform, the troubleshooting flow decomposes into five specialized r
   ]}
   edges={[
     { from: "cust",   to: "triage" },
-    { from: "triage", to: "docs",  label: "delegation" },
-    { from: "triage", to: "obs",   label: "if traceId present" },
-    { from: "triage", to: "known",  label: "delegation" },
+    { from: "triage", to: "faq",     label: "usage questions — most volume" },
+    { from: "triage", to: "account", label: "account / billing intent" },
+    { from: "triage", to: "docs",    label: "technical lane" },
+    { from: "triage", to: "obs",     label: "if traceId present" },
+    { from: "triage", to: "known",   label: "delegation" },
+    { from: "faq",    to: "reply",   label: "grounded answer" },
+    { from: "account",to: "reply",   label: "self-service safe" },
     { from: "docs",   to: "synth" },
     { from: "obs",    to: "synth" },
     { from: "known",  to: "synth" },
-    { from: "synth",  to: "reply",  label: "confidence high" },
-    { from: "synth",  to: "human",  label: "low confidence / sensitive" },
+    { from: "synth",  to: "reply",   label: "confidence high" },
+    { from: "synth",  to: "human",   label: "low confidence / sensitive" },
   ]}
 />
 
 Each specialist has a narrow contract:
 
-- **Triage** extracts the structured artifacts (endpoint, status code, traceId, timestamp, tenant identity), validates them against the OpenAPI spec — does this endpoint even exist? what does a 500 mean there? — and routes. It never investigates.
+- **Triage** classifies intent and extracts structured artifacts (endpoint, status code, traceId, timestamp, tenant identity), validating them against the OpenAPI spec where relevant. It routes; it never investigates.
+- **How-to agent** handles the majority of volume — usage questions about the API and UI — answering purely from the knowledge-base pipeline with mandatory citations.
+- **Account agent** resolves billing, plan, and access questions using narrowly-scoped read tools; anything touching money moves to a human.
 - **Docs agent** answers "what is this endpoint supposed to do, and which error codes are documented?" via retrieval over your OpenAPI spec and documentation.
 - **Observability agent** owns the traceId. It fetches the distributed trace, identifies the failing span and service, pulls correlated logs, and reports findings — read-only.
 - **Knowledge agent** searches known issues and historical resolutions; a surprising share of tickets match something already fixed.
-- **Synthesis** correlates the three reports into one answer with next steps — and is explicitly allowed to say "we need a human."
+- **Synthesis** correlates specialist reports into one answer with next steps — and is explicitly allowed to say "we need a human."
 
 The end-to-end flow for our opening ticket looks like this:
 
@@ -92,7 +99,50 @@ The end-to-end flow for our opening ticket looks like this:
   ]}
 />
 
+### The platform at a glance
+
+Zoom out one level and the whole system is four swappable bands — channels, the agent platform itself, a capability plane of tools and engines, and state stores. Read it as a plug-and-play map: providers change behind the gateway, MCP servers come and go per capability, engines attach from the side, and nothing outside the platform band knows an LLM is involved.
+
+<ArchDiagram
+  title="support agent platform — containers view"
+  zones={[
+    { id: "edge",      label: "Channels",        color: "teal" },
+    { id: "platform",  label: "Agent platform",  color: "violet" },
+    { id: "cap",       label: "Capability plane", color: "amber" },
+    { id: "state",     label: "State",           color: "green" },
+  ]}
+  nodes={[
+    { id: "ch",     label: "Customer channels",   sub: "portal · email · chat widget",     zone: "edge",     row: 1, col: 1 },
+    { id: "api",    label: "Agent API service",   sub: "sync triage endpoint",             zone: "platform", row: 1, col: 1 },
+    { id: "queue",  label: "Investigation queue", sub: "async jobs, tenant caps",          zone: "platform", row: 1, col: 2 },
+    { id: "rt",     label: "Runtime workers",     sub: "stateless pods, framework inside", zone: "platform", row: 2, col: 1 },
+    { id: "gw",     label: "Provider gateway",    sub: "rate limits · cost · fallback",    zone: "platform", row: 2, col: 2 },
+    { id: "mcp",    label: "MCP servers",         sub: "logs · traces · docs · tickets",   zone: "cap",      row: 1, col: 1 },
+    { id: "kestra", label: "Kestra",              sub: "KB re-index · eval sweeps",        zone: "cap",      row: 1, col: 2 },
+    { id: "temp",   label: "Temporal",            sub: "durable investigation runs",       zone: "cap",      row: 2, col: 1 },
+    { id: "cam",    label: "Camunda",             sub: "escalation processes",             zone: "cap",      row: 2, col: 2 },
+    { id: "pg",     label: "Postgres",            sub: "checkpoints · tickets · evals",    zone: "state",    row: 1, col: 1 },
+    { id: "redis",  label: "Redis",               sub: "sessions · retrieval caches",      zone: "state",    row: 1, col: 2 },
+    { id: "vec",    label: "Vector index",        sub: "pgvector / Qdrant",                zone: "state",    row: 2, col: 1 },
+  ]}
+  edges={[
+    { from: "ch",      to: "api",    type: "solid" },
+    { from: "api",     to: "queue",  label: "long work", type: "solid" },
+    { from: "queue",   to: "rt",     type: "solid" },
+    { from: "rt",      to: "mcp",    label: "tool calls", type: "solid" },
+    { from: "rt",      to: "gw",     label: "model calls", type: "dashed" },
+    { from: "rt",      to: "pg",     type: "solid" },
+    { from: "rt",      to: "redis",  type: "solid" },
+    { from: "temp",    to: "rt",     label: "supervise", type: "dashed" },
+    { from: "cam",     to: "rt",     label: "human gates", type: "dashed" },
+    { from: "kestra",  to: "vec",    label: "re-index", type: "dashed" },
+  ]}
+  caption="Plug-and-play boundaries: model providers live behind the gateway, capabilities are MCP servers you add or remove per lane, workflow engines attach from the side without entering the reasoning path, and every store is rebuildable except Postgres."
+/>
+
 ## The traceId is the whole ballgame
+
+This is the deepest lane in the topology — most volume never reaches it, but when a ticket arrives carrying correlation artifacts, automation has everything it needs.
 
 The reason this works at all is that the customer hands you a correlation key. A traceId collapses "search millions of log lines" into "fetch one trace and its neighbors." Three pieces of infrastructure make it agent-ready:
 
