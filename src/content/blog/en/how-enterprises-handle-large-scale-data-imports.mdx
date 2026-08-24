@@ -1,6 +1,6 @@
 ---
 title: "How Enterprises Handle Large-Scale Data Imports"
-description: "\"Accept a CSV, validate it, insert it\" sounds like a weekend project. At enterprise scale it becomes an async job system with staging layers, dependency ordering, and error files. Here is how mature systems actually do it."
+description: "\"Accept a CSV, validate it, insert it\" sounds like a weekend project. At enterprise scale it becomes an async job system with staging layers, dependency ordering, signed webhooks, and idempotency keys. Here is how mature systems actually do it."
 pubDate: 2026-08-24
 tags: ["system-design", "data-engineering", "architecture", "scalability", "etl"]
 lang: "en"
@@ -10,6 +10,9 @@ category: "architecture"
 import Callout from '../../../components/mdx/Callout.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
 import Flowchart from '../../../components/mdx/Flowchart.astro';
+import Pipeline from '../../../components/mdx/Pipeline.astro';
+import SequenceDiagram from '../../../components/mdx/SequenceDiagram.astro';
+import StateMachine from '../../../components/mdx/StateMachine.astro';
 
 Every backend team eventually gets the same request: *let customers upload their data*. A CSV here, an Excel export there — parse it, validate it, put it in the database. On paper that's a weekend project.
 
@@ -20,15 +23,31 @@ Then reality arrives:
 - A third uploads a file so large that loading it into memory kills your worker.
 - And someone asks why the import silently corrupted half of last week's data.
 
-Large-scale import turns out to be one of those problems that looks like CRUD but is really **distributed systems design**. The good news: every mature system converges on roughly the same architecture. This post walks through what platform vendors (Salesforce, Shopify) and production engineering teams have learned, pattern by pattern, with the trade-offs explicit.
+Large-scale import turns out to be one of those problems that looks like CRUD but is really **distributed systems design**. The good news: every mature system converges on roughly the same architecture. This post walks through what platform vendors (Salesforce, Shopify, Stripe, Google) and production engineering teams have learned, pattern by pattern, with the trade-offs explicit.
 
 ## The universal skeleton
 
 Strip away the branding and nearly every serious import system is this pipeline:
 
-```text
-Upload → Stage → Parse/Stream → Validate → Resolve keys & order → Load in batches → Report errors
-```
+<Pipeline
+  nodes={[
+    { title: "Upload", subtitle: "presigned URL → object storage" },
+    { title: "Stage", subtitle: "raw landing + normalized copy" },
+    { title: "Parse", subtitle: "streaming, bounded memory" },
+    { title: "Validate", subtitle: "structural → row-level → relational" },
+    { title: "Resolve", subtitle: "business keys, FK maps, cycles" },
+    { title: "Load", subtitle: "batched upserts, dependency order" },
+    { title: "Report", subtitle: "error files + job status" },
+  ]}
+  arrows={[
+    { label: "durable copy", direction: "right" },
+    { label: "typed rows", direction: "right" },
+    { label: "reject fast", direction: "right" },
+    { label: "ID maps", direction: "right" },
+    { label: "level by level", direction: "right" },
+    { label: "presigned URLs", direction: "right" },
+  ]}
+/>
 
 Three hard problems dominate everything else:
 
@@ -70,6 +89,92 @@ Note the guardrails they impose: max two levels of nested connections, max five 
 The shared vendor playbook: never process synchronously above a small threshold; client uploads one flat file and the server owns partitioning; results come back as downloadable files, not API responses; per-row error isolation means one bad row never kills the job; resource ceilings are published upfront instead of discovered in production.
 </Callout>
 
+## Getting results when HTTP can't wait
+
+Here's the awkward part nobody designs for until they hit it: **HTTP is request-response, but imports take minutes to hours.** Connections drop. Proxies kill idle requests at 30–60 seconds. Mobile clients switch networks mid-flight. Holding the original request open until the import finishes is not an option — so how does the client ever see the results?
+
+The industry answer is to stop treating the import as a request and start treating it as a **resource**:
+
+<SequenceDiagram
+  title="the async import round trip"
+  actors={[
+    { label: "Client", color: "teal" },
+    { label: "API", color: "blue" },
+    { label: "Workers", color: "violet" },
+  ]}
+  messages={[
+    { from: "Client", to: "API", label: "POST /imports — 200k rows, callbackUrl registered", type: "request" },
+    { from: "API", to: "Client", label: "202 Accepted + Location: /operations/import_8f3k2", type: "response", highlight: true },
+    { from: "API", to: "Workers", label: "enqueue job (file already in object storage)", type: "async" },
+    { from: "Client", to: "API", label: "GET /operations/import_8f3k2", type: "request" },
+    { from: "API", to: "Client", label: "{ status: running, progress: 45% } + Retry-After: 10", type: "response" },
+    { from: "Workers", to: "API", label: "job finished — result file written", type: "async" },
+    { from: "API", to: "Client", label: "webhook POST (HMAC-signed): completed + downloadUrl", type: "async" },
+    { note: "The operation resource outlives every HTTP connection. Polling and webhooks are just transports for 'go look at the operation'." },
+  ]}
+/>
+
+### The 202 pattern
+
+Submission never returns the data. It returns proof of receipt:
+
+```text
+POST /imports
+→ 202 Accepted
+  Location: /operations/import_8f3k2
+
+{ "id": "import_8f3k2", "status": "pending" }
+```
+
+Per RFC 9110, `202 Accepted` means exactly this: received, not yet fulfilled. The `Location` header points at a status resource the client can poll. Google formalized this as the **Long-Running Operations (LRO)** pattern, where the operation is a first-class object with its own lifecycle:
+
+<StateMachine
+  title="operation lifecycle (Google LRO style)"
+  states={[
+    { id: "pending",    label: "Pending",    sub: "accepted, queued",              row: 1, col: 1 },
+    { id: "running",    label: "Running",    sub: "progress lives in metadata",    row: 1, col: 2 },
+    { id: "completed",  label: "Completed",  sub: "result / presigned download",   row: 1, col: 3 },
+    { id: "failed",     label: "Failed",     sub: "error + partial report",        row: 2, col: 3 },
+    { id: "cancelled",  label: "Cancelled",  sub: "by client request",             row: 2, col: 1 },
+  ]}
+  transitions={[
+    { from: "pending",   to: "running",   label: "worker claims job" },
+    { from: "running",   to: "completed", label: "all batches done" },
+    { from: "running",   to: "failed",    label: "fatal error / timeout" },
+    { from: "pending",   to: "cancelled", label: ":cancel" },
+    { from: "running",   to: "cancelled", label: ":cancel" },
+  ]}
+/>
+
+With a standard surface around it: `GET` the operation to poll, `POST :cancel` to abort, `DELETE` to clean up, and a TTL so completed operations expire (Salesforce keeps bulk results for 7 days; Google APIs let operations expire after completion).
+
+### Four ways to learn the job finished
+
+<DataTable
+  caption="Result-delivery patterns for async jobs"
+  accent="teal"
+  headers={["Pattern", "How it works", "Best for", "Watch out for"]}
+  rows={[
+    { "Pattern": "Polling", "Mechanism": "Client GETs the operation on an interval.", "Best for": "Simple clients; infrequent jobs.", "Watch out for": "Wasted requests; poll too fast and you DDoS yourself." },
+    { "Pattern": "Smart polling", "Mechanism": "Server sends Retry-After or progress hints; client backs off exponentially between polls.", "Best for": "Default choice for most APIs.", "Watch out for": "Still latency between completion and discovery." },
+    { "Pattern": "Webhook callback", "Mechanism": "Client registers a callback URL; server POSTs a signed notification on completion.", "Best for": "Server-to-server integrations.", "Watch out for": "Delivery is at-least-once; needs signatures and dedup (below)." },
+    { "Pattern": "SSE / WebSocket", "Mechanism": "Persistent connection streams progress events.", "Best for": "Live progress bars in browser UIs.", "Watch out for": "Connection churn; reconnect logic must re-sync from the operation resource anyway." },
+  ]}
+/>
+
+Webhooks deserve their own hygiene rules, because a webhook is just another unreliable network call pointed at *you*:
+
+- **Sign every payload** (HMAC-SHA256 over timestamp + body) and reject anything older than a few minutes — replay protection.
+- **Respond 2xx immediately**, then process asynchronously. Slow handlers trigger the sender's retry cycle, turning your backlog into their outage.
+- **Assume duplicates.** Every webhook system delivers at-least-once; deduplicate on the event ID.
+- **Expect provider-side retries with backoff** — Google's Gemini API retries failed deliveries for up to 24 hours; design your endpoint to be idempotent against that.
+
+And when the *result itself* is huge — 40,000 error rows, say — the operation doesn't embed it. It carries a pointer: a presigned download URL to a result file. Response bodies stay small forever, no matter how badly the import went.
+
+<Callout color="teal">
+The mental shift: the client never waits on the import. It waits on the *operation*, and the operation outlives any single HTTP connection. Everything else — polling, webhooks, streaming — is just a transport for "go look at the operation."
+</Callout>
+
 ## Inside enterprise pipelines
 
 ### The staging layer
@@ -89,15 +194,25 @@ The cost is real though: more storage, more pipeline stages, latency between upl
 
 When one import carries several related entity types, correctness stops being about values and becomes about **order**. A child row cannot point at a parent that doesn't exist yet; a junction table needs both sides loaded first.
 
-The standard mental model is depth:
+The standard mental model is depth — load layer by layer, parallel *within* a layer, never across:
 
-```text
-Depth 0: independent reference tables
-Depth 1: parent entities
-Depth 2: child entities
-Depth 3: detail/grandchild rows
-Last:    junction tables (both sides resolved)
-```
+<Flowchart
+  title="load order by dependency depth"
+  nodes={[
+    { id: "refs",     label: "Depth 0 — References",   shape: "rect", color: "teal",   sub: "lookup tables, no deps" },
+    { id: "parents",  label: "Depth 1 — Parents",      shape: "rect",                  sub: "parallel within layer" },
+    { id: "children", label: "Depth 2 — Children",     shape: "rect",                  sub: "FK → resolved parents" },
+    { id: "details",  label: "Depth 3 — Details",      shape: "rect", color: "violet", sub: "grandchild / line rows" },
+    { id: "junction", label: "Junction tables",        shape: "oval", color: "amber",  sub: "needs BOTH sides resolved" },
+  ]}
+  edges={[
+    { from: "refs",     to: "parents",  label: "resolve IDs" },
+    { from: "parents",  to: "children", label: "parents exist first" },
+    { from: "children", to: "details",  label: "resolve IDs" },
+    { from: "parents",  to: "junction", label: "side A ready" },
+    { from: "children", to: "junction", label: "side B ready" },
+  ]}
+/>
 
 There are two ways to implement the ordering:
 
@@ -135,7 +250,33 @@ Two rules apply regardless of approach:
 
 **Impose a depth limit.** Production systems cap tree depth on purpose. It bounds recursion, memory, timeout behavior, and keeps error reports comprehensible.
 
-### Failure semantics
+### Resolving conflicts
+
+An import rarely runs against an empty database. Sooner or later the file says one thing and the database says another — or the same entity appears twice. Mature systems treat conflict resolution as a declared policy, not an accident of insert order.
+
+**Step one is always the same: define the business key.** Before any conflict can be resolved, the system needs to know what makes two rows "the same entity." That's a natural or external key — email, SKU, national ID, legacy-system primary key — declared per entity type. Once declared, the insert becomes an **upsert**: key exists → update; missing → insert. Salesforce built an entire mechanism around this (external-ID upsert), and it quietly converts the worst kind of conflict — silent duplicates — into a deterministic merge decision.
+
+What happens when the incoming row *disagrees* with the stored row is policy:
+
+<DataTable
+  caption="Conflict-resolution policies"
+  accent="amber"
+  headers={["Policy", "Rule", "Use when", "Risk"]}
+  rows={[
+    { "Policy": "Last-write-wins", "Rule": "Newer timestamp/value overwrites stored value.", "Use when": "Source is trusted and fresh; low-stakes fields.", "Risk": "Stale clocks or reordered batches clobber newer data silently." },
+    { "Policy": "Optimistic concurrency", "Rule": "Stored version number (or ETag / If-Match) must match; otherwise reject the row as stale.", "Use when": "Import races live user edits on the same records.", "Risk": "More rejected rows; needs a re-submission path." },
+    { "Policy": "Field-level merge", "Rule": "Per-field precedence: non-null wins, source priority ranking, protected fields excluded from update.", "Use when": "Enrichment-style imports filling gaps in existing records.", "Risk": "Most complex to implement and explain; needs per-field config." },
+    { "Policy": "Quarantine for review", "Rule": "Conflicting rows bypass auto-resolution and land in a review queue.", "Use when": "Fuzzy-matched duplicates; high-value records (customers, financials).", "Risk": "Backlog grows if nobody staffs the queue." },
+  ]}
+/>
+
+Three supporting practices keep conflicts rare and survivable:
+
+- **Detect duplicates before inserting**, not after: exact business-key matches during validation, fuzzy matching (name/address similarity) flagged for review rather than auto-merged.
+- **Guard against overlapping imports.** Two concurrent imports touching the same entity set multiply every conflict. Systems either serialize them per scope (queue the second) or reject with a clear "conflicting import in progress" error — Google's API guidance says return an explicit error rather than letting them interleave.
+- **Keep locks short and batches grouped.** When imported rows update records that live traffic also touches, group rows by parent key (the Salesforce lesson) so batches don't fight over the same rows, and hold each transaction only for one batch — never for the whole import.
+
+### Failure semantics, retries, and idempotence
 
 When a large import hits errors, you need a policy chosen deliberately, not by accident:
 
@@ -151,12 +292,73 @@ When a large import hits errors, you need a policy chosen deliberately, not by a
   ]}
 />
 
-Underneath the policy sit four pieces of machinery that make retries safe:
+#### Classify before you retry
 
-- **Idempotent upserts.** Derive deterministic row IDs (`import_id + row_index`), unique-index them, and upsert. Now a crashed job can retry its current batch without duplicating anything.
-- **Checkpoint/resume.** Persist the last committed row index after each flush; on retry, skip ahead. Workflow engines formalize this with heartbeats and replayable execution history.
-- **Dead-letter queues.** Permanently failed batches land somewhere inspectable instead of vanishing.
-- **Sagas.** For multi-step flows spanning services (create entities → link relations → notify), compensating actions undo step N when step N+1 fails.
+Not every failure deserves a retry. Blasting the same request at a permanent validation error just generates noise; *not* retrying a timeout can silently drop data. The industry sorts failures into three classes:
+
+<DataTable
+  caption="The three failure classes"
+  accent="violet"
+  headers={["Class", "Examples", "Correct response"]}
+  rows={[
+    { "Class": "Transient", "Examples": "Timeouts, 429 rate limits, 503s, connection resets.", "Correct response": "Retry with exponential backoff + jitter. These are expected at scale." },
+    { "Class": "Permanent", "Examples": "4xx validation errors, schema violations, auth failures.", "Correct response": "Never retry. Route to the error report / correction flow." },
+    { "Class": "Ambiguous", "Examples": "Timeout after the request was sent; response lost in flight.", "Correct response": "The dangerous one. You don't know if it happened. Only safe to retry if the operation is idempotent." },
+  ]}
+/>
+
+The ambiguous class is why retry discipline and idempotence are inseparable. On networks carrying real traffic, ambiguous failures aren't edge cases — mobile connections drop mid-request constantly, load balancers retry on idle timeouts, queue consumers redeliver. Any mutating endpoint gets called twice with the same intent eventually. The only question is whether the system notices.
+
+Retry mechanics that show up everywhere once systems get serious:
+
+- **Exponential backoff with jitter.** Wait `2^n` between attempts, randomized. Without jitter, every client knocked offline by one incident retries on the same schedule and becomes the next outage (the thundering herd).
+- **Caps and escalation.** Salesforce auto-retries transient batch failures up to 10–20 times, then permanently fails the batch. After max attempts, work lands in a **dead-letter queue** — inspectable, not vanished.
+- **Resume, don't restart.** Persist the last committed checkpoint (row index, batch ID); a retry skips ahead instead of reprocessing 39,000 good rows.
+
+#### Making retries harmless: idempotence
+
+The core trick of distributed systems applies here in its purest form:
+
+```text
+effectively-once = at-least-once delivery + idempotent processing
+```
+
+You cannot stop retries from happening. You *can* make repeating an operation produce the same result as doing it once. Three mechanisms, in increasing sophistication:
+
+**1. Naturally idempotent operations.** Upserts are the workhorse: writing row X twice leaves the same state as writing it once. This is why the business-key upsert from the conflict section does double duty — it resolves file-vs-database conflicts *and* makes row-level retries free.
+
+**2. Deterministic derived IDs.** Give every imported row an ID computed from stable inputs — `hash(import_id, row_index)` — with a unique index, and write with "insert or ignore on conflict." A crashed worker can re-run its whole batch; duplicates simply don't happen.
+
+**3. Idempotency keys.** Stripe's signature contribution to API design, and the right tool when the operation isn't naturally repeatable (charging a card, creating an order). The contract:
+
+- Client generates one unique key **per logical operation** — not per attempt — and sends it on every retry.
+- Server **atomically claims** the key: a single insert-with-on-conflict on a keyed row. (Checking existence first, then inserting, is a classic time-of-check-to-time-of-use race — two simultaneous retries both pass the check and both execute.)
+- Same key + same request hash → **replay the stored response verbatim**, even if it was an error. Different hash → reject loudly (client bug).
+- Key claimed but still executing → return "in progress," don't block.
+- Keys are scoped per account and endpoint, and expire (Stripe prunes after 24 hours) — they're operational bookkeeping, not history.
+
+The whole contract collapses into one decision the server makes on every mutating request:
+
+<Flowchart
+  title="idempotency key claim — the server's decision"
+  nodes={[
+    { id: "arrive",   label: "Request + Idempotency-Key", shape: "oval",   color: "teal",   sub: "one key per logical operation" },
+    { id: "claim",    label: "Atomic claim won?",         shape: "diamond",                 sub: "INSERT ... ON CONFLICT — never check-then-insert" },
+    { id: "exec",     label: "Execute handler",           shape: "rect",                    sub: "store response + hash on the key row" },
+    { id: "replay",   label: "Replay stored response",    shape: "rect",   color: "teal",   sub: "verbatim — even if it was an error" },
+    { id: "progress", label: "409 in progress",           shape: "rect",   color: "amber",  sub: "client retries later; don't block" },
+    { id: "reject",   label: "422 reject",                shape: "rect",   color: "rose",   sub: "same key, different payload = client bug" },
+  ]}
+  edges={[
+    { from: "arrive",   to: "claim" },
+    { from: "claim",    to: "exec",     label: "yes — fresh" },
+    { from: "claim",    to: "replay",   label: "no — done, same hash" },
+    { from: "claim",    to: "progress", label: "no — still running" },
+    { from: "claim",    to: "reject",   label: "no — done, different hash" },
+  ]}
+/>
+
+For operations spanning multiple steps, the same idea extends to **recovery points**: commit local state *before* each external call, record progress after, and let a retry jump to the first unfinished phase instead of starting over. That's how a crash mid-import resumes instead of corrupting.
 
 <Callout color="amber">
 Reality check: true all-or-nothing across hundreds of thousands of rows is almost never attempted. The industry norm is per-batch atomicity plus job-level partial-success reporting. Design for "completed with N errors" as a first-class outcome, not an exception path.
@@ -211,13 +413,14 @@ Rule of thumb: if the import is mostly *file → transform → load*, a declarat
 
 If you're building an import system for multiple entity types with nested structures, the distilled decisions:
 
-1. **Go async above a small threshold** (~2,000 records). Create a job, return an ID, let clients poll or subscribe.
+1. **Go async above a small threshold** (~2,000 records). Return `202 Accepted` with an operation resource; expose polling plus a signed-webhook option; put TTLs on completed operations.
 2. **Adopt a flat internal representation with parent references** between pipeline stages. It streams through queues and files with bounded memory; reconstruct hierarchy only where needed.
 3. **Validate in two passes for nested data**: resolve all keys and detect cycles before writing anything. Single-pass imports fail every child whose parent appears later in the file.
-4. **Load level-by-level down the tree**, parallel within a level, with explicit max-depth rejection.
-5. **Default to skip-and-continue with a correction-file round-trip**; offer fail-fast for strict batches; expose dry-run using the exact execute code path.
-6. **Make idempotency structural**: deterministic row keys plus upsert semantics mean crash-retry is free.
-7. **Publish your ceilings** — max file size, max rows, max depth, concurrent jobs per tenant. Undocumented limits become 2 a.m. incidents.
+4. **Declare business keys per entity type and resolve conflicts by policy** — upsert as the baseline, optimistic version checks where imports race live edits, quarantine for fuzzy duplicates.
+5. **Load level-by-level down the tree**, parallel within a level, with explicit max-depth rejection.
+6. **Default to skip-and-continue with a correction-file round-trip**; offer fail-fast for strict batches; expose dry-run using the exact execute code path.
+7. **Make idempotency structural**: deterministic row keys plus upsert semantics internally, idempotency keys on every mutating endpoint externally. Crash-retry becomes free instead of terrifying.
+8. **Publish your ceilings** — max file size, max rows, max depth, concurrent jobs per tenant. Undocumented limits become 2 a.m. incidents.
 
 ## Anti-patterns
 
@@ -230,12 +433,21 @@ Each of these is a documented production failure mode:
 - Returning error arrays in API responses instead of files.
 - Unbounded recursion over hierarchical data.
 - Treating "batch completed" as "all rows succeeded."
+- Holding the HTTP connection open waiting for the import to finish.
+- Check-then-insert for idempotency claims (the TOCTOU race — two retries both pass).
+- Minting a new idempotency key per attempt (defeats the entire mechanism).
+- Accepting unsigned webhooks, or processing them synchronously in the handler.
 
 ## Further reading
 
 - [Salesforce Bulk API 2.0 limits and allocations](https://developer.salesforce.com/docs/atlas.en-us.salesforce_app_limits_cheatsheet.meta/salesforce_app_limits_cheatsheet/salesforce_app_limits_platform_bulkapi.htm)
 - [Salesforce: general guidelines for data loads](https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/asynch_api_planning_guidelines.htm)
 - [Shopify: bulk import data with the GraphQL Admin API](https://shopify.dev/docs/api/usage/bulk-operations/imports)
+- [Designing robust and predictable APIs with idempotency — Stripe](https://stripe.com/blog/idempotency)
+- [Stripe: idempotent requests (API reference)](https://docs.stripe.com/api/idempotent_requests)
+- [Google AIP-151: Long-running operations](https://google.aip.dev/151)
+- [Long-running API operations: async patterns, polling, webhooks](https://codelit.io/blog/api-long-running-operations)
+- [REST API design for long-running tasks](https://restfulapi.net/rest-api-design-for-long-running-tasks/)
 - [Designing a tenant data import system at scale](https://letsbuildsolutions.com/blog/system-design/designing-a-tenant-data-import-system-file-parsing-schema-mapping-and-error-recovery-for-saas-onboarding-at-scale/)
 - [Foreign keys and CSV loads: load-order templates](https://www.elysiate.com/blog/foreign-keys-and-csv-loads-load-order-templates)
 - [Temporal vs Airflow for ETL replay — a case study](https://automationatlas.io/guides/case-study-temporal-vs-airflow-fintech-etl-replay-2026/)
