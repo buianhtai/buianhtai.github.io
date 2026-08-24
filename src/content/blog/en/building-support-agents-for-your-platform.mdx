@@ -219,6 +219,46 @@ Pure vector search fails on exactly the things users ask about — exact error c
 
 Finally, close the loop with evaluation: maintain a golden set of real customer questions with known-correct answers, and run it on every docs change and prompt tweak. A KB agent without regression evals degrades silently as content evolves.
 
+### The zero-infrastructure starting point: a git repo of markdown
+
+Before choosing any platform, note that the open knowledge format already exists and you're looking at it every day: **a git repository of markdown files**. Folders are metadata, filenames are titles, git is versioning and review, and a merge is the re-index trigger. Every serious tool ingests it natively — RAG platforms index it, LlamaIndex reads it, and an MCP filesystem server exposes it to agents directly with zero conversion:
+
+```text
+knowledge-base/
+  how-to/                  # majority-volume lane
+    authentication.md
+    pagination.md
+    ui-export-data.md
+  product/
+    feature-list.md
+    integrations.md
+    release-notes/
+  pricing/
+    trial-policy.md
+    enterprise-onboarding.md
+  support/
+    common-issues.md       # retrieval corpus
+    escalation-rules.md    # agent POLICY — see below
+  api/                     # OpenAPI spec lives here too (machine truth)
+```
+
+Two upgrades turn this from a folder into a knowledge base. First, **YAML frontmatter per file** makes routing explicit instead of inferred-from-path:
+
+```yaml
+---
+title: Trial policy
+audience: customer      # customer | support | internal
+lane: account           # how-to | account | technical
+product_area: billing
+api_version: v2         # only when version-specific
+updated: 2026-08-24
+---
+```
+
+Second, **separate the two kinds of markdown**. Most files are *corpus* — content the agent retrieves and cites to customers. A few are *policy* — `escalation-rules.md` tells the agent how to behave (when to hand off, what never to promise). Policy files belong in the same repo for review and versioning, but they get injected into system prompts, never indexed for retrieval — quoting your escalation rules back at a customer is a leak, not an answer.
+
+This repo then plugs into anything: your own pipeline (CI merge → re-embed changed chunks), a platform's connector, or an MCP filesystem server for direct agent access. When sources beyond markdown arrive — PDFs, scanned docs, Confluence — add a parser (Docling, Unstructured) or adopt a platform's ingestion rather than changing the format. Markdown-plus-git scales further than teams expect; UC San Diego runs a markdown-backed deployment for 37,000+ users.
+
 <Callout color="teal">
 One knowledge base, two audiences: the same indexed corpus serves both the troubleshooting flow (the docs agent cites endpoint contracts during RCA) and a standalone "how do I" assistant for customers exploring your API and UI. Build the pipeline once; the `audience` metadata filter routes it.
 </Callout>
