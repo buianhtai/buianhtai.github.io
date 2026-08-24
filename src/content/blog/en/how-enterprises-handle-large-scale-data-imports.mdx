@@ -1,0 +1,241 @@
+---
+title: "How Enterprises Handle Large-Scale Data Imports"
+description: "\"Accept a CSV, validate it, insert it\" sounds like a weekend project. At enterprise scale it becomes an async job system with staging layers, dependency ordering, and error files. Here is how mature systems actually do it."
+pubDate: 2026-08-24
+tags: ["system-design", "data-engineering", "architecture", "scalability", "etl"]
+lang: "en"
+category: "architecture"
+---
+
+import Callout from '../../../components/mdx/Callout.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import Flowchart from '../../../components/mdx/Flowchart.astro';
+
+Every backend team eventually gets the same request: *let customers upload their data*. A CSV here, an Excel export there — parse it, validate it, put it in the database. On paper that's a weekend project.
+
+Then reality arrives:
+
+- A customer uploads 200,000 rows and row 143,201 has a bad date.
+- Another uploads child records whose parents appear later in the file.
+- A third uploads a file so large that loading it into memory kills your worker.
+- And someone asks why the import silently corrupted half of last week's data.
+
+Large-scale import turns out to be one of those problems that looks like CRUD but is really **distributed systems design**. The good news: every mature system converges on roughly the same architecture. This post walks through what platform vendors (Salesforce, Shopify) and production engineering teams have learned, pattern by pattern, with the trade-offs explicit.
+
+## The universal skeleton
+
+Strip away the branding and nearly every serious import system is this pipeline:
+
+```text
+Upload → Stage → Parse/Stream → Validate → Resolve keys & order → Load in batches → Report errors
+```
+
+Three hard problems dominate everything else:
+
+1. **Ordering** — child rows arrive before their parents exist.
+2. **Failure semantics** — what happens when row 40,000 of 200,000 fails?
+3. **Scale** — never hold the whole file in memory; batch writes; manage lock contention.
+
+Everything below is a different answer to one of those three.
+
+## What the vendors do
+
+### Salesforce Bulk API 2.0 — the async job model
+
+Salesforce's answer to bulk data is a job state machine. You create a job, upload one CSV, and the *server* splits it into batches of ~10,000 records that it processes asynchronously. You poll status, then download separate success/failure/unprocessed result files.
+
+The numbers tell you about the design constraints:
+
+- Under ~2,000 records, Salesforce tells you to skip Bulk API entirely and use synchronous calls.
+- Ceiling: 15,000 batches/day × 10k records = **150M records per day**.
+- For huge queries, "PK chunking" splits work by record-ID boundaries (100k–250k rows per chunk), with a `startRow` parameter so a job that died mid-way can restart from where it stopped.
+
+Two details deserve special attention:
+
+**Parallel vs serial mode.** Parallel processing is fast but risks *lock contention* — two batches trying to update the same parent record at once. Salesforce's guidance is telling: before falling back to slow serial mode, *reorganize your batches by parent ID* so all rows touching the same parent land in one batch. Lock contention is a data-partitioning problem disguised as a concurrency problem.
+
+**Partial success is the norm.** A batch "completing" does not mean every row succeeded. Per-record results live in downloadable files, and genuinely failed rows must be resubmitted by the client. Nobody at this scale promises all-or-nothing across millions of rows.
+
+### Shopify Bulk Operations — the nested-data model
+
+Shopify faces a harder shape: e-commerce data is deeply hierarchical (products → variants → images). Their solution is elegant.
+
+You upload a JSONL file where **one line = one input unit, no matter how complex**, and Shopify runs your mutation once per line, asynchronously. Results come back as another JSONL file with per-line errors reported inline next to successes.
+
+For reading hierarchical data back out, they flatten the tree: each product line is followed by its variant lines, each variant by its image lines, and children reference parents through an injected `__parentId` field. Your client reconstructs the tree while streaming the file line by line.
+
+Note the guardrails they impose: max two levels of nested connections, max five connections per query, operations must finish within 24 hours, input capped at 100MB. Depth limits aren't a technical inability — unbounded recursion breaks memory bounds, timeouts, and error reporting all at once.
+
+<Callout color="teal">
+The shared vendor playbook: never process synchronously above a small threshold; client uploads one flat file and the server owns partitioning; results come back as downloadable files, not API responses; per-row error isolation means one bad row never kills the job; resource ceilings are published upfront instead of discovered in production.
+</Callout>
+
+## Inside enterprise pipelines
+
+### The staging layer
+
+Almost every production write-up describes some version of a four-stage staging pattern:
+
+1. **Raw landing** — a byte-exact copy of the uploaded file, for audit and replay.
+2. **Normalized staging** — typed columns, standardized source keys, validation flags, rejects quarantined.
+3. **Key resolution** — map source business keys to target IDs; surface unresolved foreign references.
+4. **Final load** — insert in dependency order, then reconcile counts.
+
+Why bother? Because it separates *"can we read this file?"* from *"is this data relationally valid?"* Those fail for different reasons and need different error messages. Staging also gives you dry-runs, reconciliation checks before anything touches production, and full replayability after a bad deploy.
+
+The cost is real though: more storage, more pipeline stages, latency between upload and availability. Teams with a single clean entity type and controlled upstream sources can skip it. Teams ingesting messy customer files cannot.
+
+### Multiple entity types: load by dependency depth
+
+When one import carries several related entity types, correctness stops being about values and becomes about **order**. A child row cannot point at a parent that doesn't exist yet; a junction table needs both sides loaded first.
+
+The standard mental model is depth:
+
+```text
+Depth 0: independent reference tables
+Depth 1: parent entities
+Depth 2: child entities
+Depth 3: detail/grandchild rows
+Last:    junction tables (both sides resolved)
+```
+
+There are two ways to implement the ordering:
+
+<DataTable
+  caption="Two strategies for entity-type ordering"
+  accent="teal"
+  headers={["Strategy", "How it works", "Pros", "Cons"]}
+  rows={[
+    { "Strategy": "Static layering", "How it works": "Hardcode the type order (types → subtypes → instances).", "Pros": "Simple, predictable, easy to reason about and debug.", "Cons": "Brittle when the schema changes; underutilizes parallelism within layers." },
+    { "Strategy": "Topological sort", "How it works": "Build a dependency graph from the schema and sort at runtime.", "Pros": "Adapts to new types automatically; maximizes intra-layer parallelism.", "Cons": "More infrastructure; cycles must be detected and rejected early." },
+  ]}
+/>
+
+Either way, referential integrity across types must be checked **before persistence** — orphaned children should get actionable errors ("line item references unknown Order X"), not foreign-key exceptions at insert time.
+
+### Nested structures: four approaches
+
+Hierarchies — org charts, category trees, product assemblies — are the hardest part. Four patterns show up repeatedly:
+
+<DataTable
+  caption="Handling hierarchical imports"
+  accent="violet"
+  headers={["Approach", "Mechanism", "Pros", "Cons"]}
+  rows={[
+    { "Approach": "Flatten + parent refs", "Mechanism": "Encode the tree as flat lines with __parentId; reconstruct while streaming (Shopify style).", "Pros": "Bounded memory; works over any queue or file transport.", "Cons": "Client rebuilds the tree; depth caps usually imposed." },
+    { "Approach": "Two-pass import", "Mechanism": "Pass 1 validates everything and builds ID maps; pass 2 writes in dependency order.", "Pros": "Catches structural errors before any write; correct FK resolution.", "Cons": "Double processing cost; needs a staging area between passes." },
+    { "Approach": "Level-by-level resolution", "Mechanism": "Process level 0, resolve IDs, process level 1 referencing them, repeat.", "Pros": "Natural fit for self-referencing trees; visible incremental progress.", "Cons": "Deep trees serialize into many rounds; tail latency = max depth." },
+    { "Approach": "Deferred constraints", "Mechanism": "Insert unordered with FKs disabled, fix references after, re-enable.", "Pros": "Fast; no ordering logic needed.", "Cons": "Dangerous; silent corruption risk; requires strong reconciliation. Last resort." },
+  ]}
+/>
+
+Two rules apply regardless of approach:
+
+**Detect cycles explicitly.** Self-referencing structures can contain themselves (part A contains part B contains part A). Detect during validation with a visited-set traversal and reject with a precise path — `A → B → C → A` — rather than letting a worker spin forever.
+
+**Impose a depth limit.** Production systems cap tree depth on purpose. It bounds recursion, memory, timeout behavior, and keeps error reports comprehensible.
+
+### Failure semantics
+
+When a large import hits errors, you need a policy chosen deliberately, not by accident:
+
+<DataTable
+  caption="Error strategies"
+  accent="amber"
+  headers={["Strategy", "Behavior", "Use when"]}
+  rows={[
+    { "Strategy": "Fail-fast", "Behavior": "Stop at the first error.", "Use when": "Strict financial or legal batches where partial data is worse than none." },
+    { "Strategy": "Skip-and-continue", "Behavior": "Record the error, keep going, report at the end.", "Use when": "Best-effort customer imports where most rows are good. The common default." },
+    { "Strategy": "Collect-all", "Behavior": "Process every row, return every error.", "Use when": "Diagnostic, audit, or dry-run modes." },
+    { "Strategy": "Partial commit + correction file", "Behavior": "Commit valid rows; emit failed rows plus an _error column as CSV for fix-and-reupload.", "Use when": "Consumer-facing imports. Closes the loop without support tickets." },
+  ]}
+/>
+
+Underneath the policy sit four pieces of machinery that make retries safe:
+
+- **Idempotent upserts.** Derive deterministic row IDs (`import_id + row_index`), unique-index them, and upsert. Now a crashed job can retry its current batch without duplicating anything.
+- **Checkpoint/resume.** Persist the last committed row index after each flush; on retry, skip ahead. Workflow engines formalize this with heartbeats and replayable execution history.
+- **Dead-letter queues.** Permanently failed batches land somewhere inspectable instead of vanishing.
+- **Sagas.** For multi-step flows spanning services (create entities → link relations → notify), compensating actions undo step N when step N+1 fails.
+
+<Callout color="amber">
+Reality check: true all-or-nothing across hundreds of thousands of rows is almost never attempted. The industry norm is per-batch atomicity plus job-level partial-success reporting. Design for "completed with N errors" as a first-class outcome, not an exception path.
+</Callout>
+
+### Validation
+
+Distinguish three error classes, because they fail differently and need different handling:
+
+1. **Structural** — missing columns, wrong delimiter, bad encoding. Reject the whole file immediately, before spending any compute.
+2. **Row-level** — bad types, missing required fields. Collect per-row and feed the correction-file loop.
+3. **Relational/business** — FK target missing, duplicate business key, cycle in hierarchy. Needs cross-row context.
+
+The third class hides the most expensive mistake: checking whether each row's foreign key exists with an individual query serializes your import to single-digit rows per second. Instead, preload valid IDs into memory (a set of 100K UUIDs is ~10–20MB) and do set-membership checks. Beyond ~10M IDs, spill to a temporary table and validate per batch.
+
+And build a **dry-run mode**: same code path as execute, transaction rolled back at the end. It costs almost nothing and buys enormous user trust.
+
+### Scale techniques
+
+The checklist that shows up in every high-volume system:
+
+- **Stream everything.** Streaming parsers emit rows; only the current batch (~500 rows) plus accumulated errors live in memory. A 1M-row file uses the same memory as a 1K-row file.
+- **Batch writes around 500 rows.** Past ~1,000 per batch you hit diminishing returns and rising lock contention.
+- **Use bulk loaders** (`COPY`, engine-native loaders) for landing raw data into staging — orders of magnitude faster than INSERT loops.
+- **Parallelize within dependency layers, never across them.**
+- **Group batches by parent key** to avoid lock contention (the Salesforce lesson).
+- **Add backpressure** for very high volume: workers publish batches to a stream and a dedicated writer consumes at database-safe rates.
+- **Report errors as files.** Write failure CSVs to object storage and return a download link — API responses stay bounded no matter how many rows failed.
+- **Cap concurrency per tenant** so one giant importer can't starve everyone else.
+
+## Do you need an orchestration engine?
+
+Multi-stage imports accumulate the same needs: retries, resume-after-crash, progress visibility, dependency ordering. Teams either build these by hand or adopt an orchestrator:
+
+<DataTable
+  caption="Orchestration options for import workloads"
+  accent="teal"
+  headers={["Engine", "Model", "Sweet spot", "Watch out for"]}
+  rows={[
+    { "Engine": "Airflow", "Model": "Python DAG scheduler", "Sweet spot": "Scheduled batch ETL with short tasks; huge ecosystem.", "Watch out for": "No durable mid-task state; retries start tasks from scratch." },
+    { "Engine": "Kestra", "Model": "Declarative YAML workflows", "Sweet spot": "File-driven pipelines; automatic file passing between stages; mixed eng/analyst teams.", "Watch out for": "Complex dynamic branching logic is harder than code." },
+    { "Engine": "Temporal", "Model": "Durable code execution with event-history replay", "Sweet spot": "Mission-critical multi-step flows, sagas, jobs running days–weeks.", "Watch out for": "Steep learning curve; manual file/I-O plumbing; throughput overhead." },
+    { "Engine": "Camunda", "Model": "BPMN process diagrams", "Sweet spot": "Human-in-the-loop approvals inside the flow.", "Watch out for": "Heavyweight for pure data movement." },
+  ]}
+/>
+
+A fintech case study is instructive: they ran a 2.4-billion-row ledger replay over 18 days on Temporal specifically because deterministic replay and an auditable trail justified the cost — and kept Airflow alongside for ordinary scheduled ETL. The engines compose; they solve overlapping but different problems.
+
+Rule of thumb: if the import is mostly *file → transform → load*, a declarative orchestrator wins. If it involves multi-service transactions needing compensation and human gates, durable execution wins.
+
+## A decision framework
+
+If you're building an import system for multiple entity types with nested structures, the distilled decisions:
+
+1. **Go async above a small threshold** (~2,000 records). Create a job, return an ID, let clients poll or subscribe.
+2. **Adopt a flat internal representation with parent references** between pipeline stages. It streams through queues and files with bounded memory; reconstruct hierarchy only where needed.
+3. **Validate in two passes for nested data**: resolve all keys and detect cycles before writing anything. Single-pass imports fail every child whose parent appears later in the file.
+4. **Load level-by-level down the tree**, parallel within a level, with explicit max-depth rejection.
+5. **Default to skip-and-continue with a correction-file round-trip**; offer fail-fast for strict batches; expose dry-run using the exact execute code path.
+6. **Make idempotency structural**: deterministic row keys plus upsert semantics mean crash-retry is free.
+7. **Publish your ceilings** — max file size, max rows, max depth, concurrent jobs per tenant. Undocumented limits become 2 a.m. incidents.
+
+## Anti-patterns
+
+Each of these is a documented production failure mode:
+
+- Per-row FK existence queries during load (serializes throughput).
+- Disabling constraints as the ordering strategy, with no reconciliation plan.
+- Loading junction tables before both sides exist.
+- Relying on file row order for correctness.
+- Returning error arrays in API responses instead of files.
+- Unbounded recursion over hierarchical data.
+- Treating "batch completed" as "all rows succeeded."
+
+## Further reading
+
+- [Salesforce Bulk API 2.0 limits and allocations](https://developer.salesforce.com/docs/atlas.en-us.salesforce_app_limits_cheatsheet.meta/salesforce_app_limits_cheatsheet/salesforce_app_limits_platform_bulkapi.htm)
+- [Salesforce: general guidelines for data loads](https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/asynch_api_planning_guidelines.htm)
+- [Shopify: bulk import data with the GraphQL Admin API](https://shopify.dev/docs/api/usage/bulk-operations/imports)
+- [Designing a tenant data import system at scale](https://letsbuildsolutions.com/blog/system-design/designing-a-tenant-data-import-system-file-parsing-schema-mapping-and-error-recovery-for-saas-onboarding-at-scale/)
+- [Foreign keys and CSV loads: load-order templates](https://www.elysiate.com/blog/foreign-keys-and-csv-loads-load-order-templates)
+- [Temporal vs Airflow for ETL replay — a case study](https://automationatlas.io/guides/case-study-temporal-vs-airflow-fintech-etl-replay-2026/)
