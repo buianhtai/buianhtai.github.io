@@ -40,8 +40,21 @@ async function callImages(body) {
     body: JSON.stringify(body),
   });
 }
+async function pollinations(prompt) {
+  const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1536&height=1024&nologo=true&model=flux&seed=42`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`pollinations ${r.status}`);
+  const buf = Buffer.from(await r.arrayBuffer());
+  return { b64: buf.toString('base64'), model: 'pollinations/flux' };
+}
+
 const MODELS = ['gpt-image-2', 'gpt-image-1.5', 'gpt-image-1-mini', 'gpt-image-1'];
 async function generate() {
+  try {
+    const p = await pollinations(prompt);
+    console.log('✓ generated with', p.model);
+    return p;
+  } catch (e) { console.log('pollinations failed:', e.message.slice(0, 80), '— trying OpenAI cascade…'); }
   let lastErr = '';
   for (const model of MODELS) {
     for (let attempt = 1; attempt <= 2; attempt++) {
