@@ -15,6 +15,8 @@ const args = process.argv.slice(2);
 const file = args.find(a => !a.startsWith('--'));
 const PUBLISH = args.includes('--publish');
 const EMAIL = args.includes('--email');
+const updateIdx = args.indexOf('--update');
+const UPDATE_ID = updateIdx !== -1 ? args[updateIdx + 1] : null;
 if (!file) { console.error('usage: ship-substack.mjs <edition.md> [--publish] [--email]'); process.exit(1); }
 
 const cfg = JSON.parse(readFileSync(process.env.HOME + '/.config/opencode/opencode.json', 'utf8'));
@@ -131,8 +133,9 @@ const bodyMd = md.replace(/^# .+\n/m, '').replace(/^\*[^*]+\*\n/m, '');
     type: 'newsletter',
   };
 
-  const res = await fetch(`${PUB}/api/v1/drafts`, { method: 'POST', headers: { ...H }, body: JSON.stringify(payload) });
-  console.log('CREATE:', res.status);
+  const url = UPDATE_ID ? `${PUB}/api/v1/drafts/${UPDATE_ID}` : `${PUB}/api/v1/drafts`;
+  const res = await fetch(url, { method: UPDATE_ID ? 'PUT' : 'POST', headers: { ...H }, body: JSON.stringify(payload) });
+  console.log(UPDATE_ID ? 'UPDATE:' : 'CREATE:', res.status);
   if (!res.ok) { console.error((await res.text()).slice(0, 300)); process.exit(1); }
   const d = await res.json();
   console.log('✅ DRAFT CREATED');
