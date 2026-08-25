@@ -4,6 +4,8 @@
 
 ---
 
+I've spent the last few months living inside import pipelines — the kind that move tens of millions of records between systems where a single silent failure poisons production data. Everything below comes from that grind plus a deep read of how Salesforce, Shopify, Stripe, and Grafana engineered their way around the same three problems. If you're building (or fixing) an import system, this is the map I wish I'd had.
+
 Every backend team eventually gets the same request: *let customers upload their data*. A CSV here, an Excel export there — parse it, validate it, put it in the database. On paper that's a weekend project.
 
 Then reality arrives:
