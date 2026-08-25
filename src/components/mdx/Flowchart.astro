@@ -39,7 +39,7 @@ import { Icon } from 'astro-icon/components';
 interface FCNode {
   id: string;
   label: string;
-  shape?: 'rect' | 'oval' | 'diamond' | 'dot';
+  shape?: 'rect' | 'oval' | 'diamond' | 'dot' | 'circle' | 'cylinder' | 'hexagon' | 'cloud';
   color?: string;
   sub?: string;
   icon?: string;
@@ -335,7 +335,7 @@ const nodeMap = Object.fromEntries(nodes.map(n => [n.id, n]));
                 fill={col.text}
               >{n.label}</text>
               {subLines.map((sl, i) => (
-                <text key={`cyl-sub-${i}`} x={x} y={labelY + 16 + i * 12}
+                <text x={x} y={labelY + 16 + i * 12}
                   text-anchor="middle" font-family="var(--font-mono,'IBM Plex Mono',monospace)"
                   font-size="10" fill="var(--color-text-muted)"
                 >{sl}</text>
