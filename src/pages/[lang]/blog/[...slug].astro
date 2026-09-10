@@ -25,11 +25,11 @@ if (post.data.series) {
   seriesPosts = getSeriesPosts(allPosts, post.data.series);
 }
 
-const isFoundations = post.data.category === 'foundations';
+const isFoundations = post.data.category === 'foundations' || post.data.postLayout === 'foundations';
 ---
 
 {isFoundations ? (
-  <BlogFoundationsLayout post={post} headings={headings} rawContent={rawContent} seriesPosts={seriesPosts}>
+  <BlogFoundationsLayout post={post} headings={headings} rawContent={rawContent} seriesPosts={seriesPosts} category={post.data.category}>
     <Content />
   </BlogFoundationsLayout>
 ) : (

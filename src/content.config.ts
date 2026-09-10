@@ -32,6 +32,7 @@ export const blogSchema = z.object({
   featured: z.boolean().default(false),
   draft: z.boolean().default(false),
   renderTitle: z.boolean().default(true),
+  postLayout: z.enum(['foundations']).optional(),
 });
 
 const blog = defineCollection({

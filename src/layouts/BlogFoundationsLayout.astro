@@ -13,9 +13,10 @@ interface Props {
   headings: { depth: number; slug: string; text: string }[];
   rawContent: string;
   seriesPosts?: CollectionEntry<'blog'>[];
+  category?: string;
 }
 
-const { post, headings, rawContent, seriesPosts = [] } = Astro.props;
+const { post, headings, rawContent, seriesPosts = [], category = 'foundations' } = Astro.props;
 const {
   title, description, pubDate, updatedDate,
   tags, lang, heroImage, series, seriesOrder,
@@ -28,6 +29,8 @@ const dateFmt = (d: Date) => d.toLocaleDateString(lang === 'vi' ? 'vi-VN' : 'en-
 const chapterIndex = seriesPosts.findIndex(p => getPostSlug(p) === getPostSlug(post));
 const chapterNum = chapterIndex >= 0 ? chapterIndex + 1 : seriesOrder ?? 1;
 const seriesTitle = series ? (seriesMeta[series]?.title ?? series) : null;
+const hubPath = category === 'foundations' ? `/${lang}/foundations` : `/${lang}/blog`;
+const hubLabel = category === 'foundations' ? 'foundations' : 'blog';
 ---
 
 <BaseLayout title={title} description={description} lang={lang} ogImage={heroImage}>
@@ -40,8 +43,12 @@ const seriesTitle = series ? (seriesMeta[series]?.title ?? series) : null;
         <!-- Breadcrumb -->
         <nav class="f-topbar-crumb" aria-label="breadcrumb">
           <a href={`/${lang}/blog`} class="f-crumb-link">blog</a>
-          <span class="f-crumb-sep">/</span>
-          <a href={`/${lang}/foundations`} class="f-crumb-link">foundations</a>
+          {category === 'foundations' && (
+            <>
+              <span class="f-crumb-sep">/</span>
+              <a href={hubPath} class="f-crumb-link">{hubLabel}</a>
+            </>
+          )}
           {seriesTitle && (
             <>
               <span class="f-crumb-sep">/</span>
@@ -79,7 +86,7 @@ const seriesTitle = series ? (seriesMeta[series]?.title ?? series) : null;
 
         <!-- Post header -->
         <header class="f-post-header">
-          {chapterNum && (
+          {series && chapterNum && (
             <div class="f-post-chapter-badge">Chapter {chapterNum}</div>
           )}
           <h1 class="f-post-title">{title}</h1>
@@ -137,7 +144,7 @@ const seriesTitle = series ? (seriesMeta[series]?.title ?? series) : null;
           )}
 
           <div class="f-footer-back">
-            <a href={`/${lang}/foundations`} class="f-back-link">↑ Back to {seriesTitle ?? 'Foundations'}</a>
+            <a href={hubPath} class="f-back-link">↑ Back to {seriesTitle ?? 'Blog'}</a>
           </div>
         </footer>
 

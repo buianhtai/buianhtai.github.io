@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "DeepAgents: Middleware Stack Composition",
+    "quality_profile": "showcase",
+    "animation": "trace"
+  },
+  "components": [
+    { "id": "create_agent", "type": "frontend",   "label": "create_deep_agent()", "sublabel": "harness entry point",        "pos": [60,  290], "size": [156, 58] },
+    { "id": "harness",      "type": "backend",    "label": "Harness Profile",      "sublabel": "model + tools + config",    "pos": [280, 290], "size": [140, 58] },
+    { "id": "fs_mw",        "type": "backend",    "label": "FilesystemMiddleware", "sublabel": "required — ls/read/write",  "pos": [500, 160], "size": [170, 58] },
+    { "id": "subagent_mw",  "type": "backend",    "label": "SubAgentMiddleware",   "sublabel": "provides task tool",        "pos": [500, 290], "size": [170, 58] },
+    { "id": "todo_mw",      "type": "backend",    "label": "TodoListMiddleware",   "sublabel": "opt-in — write_todos",      "pos": [500, 420], "size": [170, 58] },
+    { "id": "stategraph",   "type": "backend",    "label": "CompiledStateGraph",   "sublabel": "LangGraph runtime",         "pos": [760, 290], "size": [158, 58] },
+    { "id": "checkpointer", "type": "database",   "label": "Checkpointer + Store", "sublabel": "persist + resume",         "pos": [1010, 180], "size": [154, 58] },
+    { "id": "streaming",    "type": "messagebus", "label": "Streaming Events",     "sublabel": "typed event streams",       "pos": [1010, 290], "size": [154, 58] },
+    { "id": "langsmith",    "type": "external",   "label": "LangSmith",            "sublabel": "tracing / eval / deploy",   "pos": [1010, 400], "size": [154, 58] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "Entry Point",                        "wraps": ["create_agent", "harness"],               "pad": 18 },
+    { "kind": "region", "label": "Middleware Layer (Harness Profile)", "wraps": ["fs_mw", "subagent_mw", "todo_mw"],       "pad": 18 },
+    { "kind": "region", "label": "LangGraph Runtime",                  "wraps": ["stategraph"],                             "pad": 18 },
+    { "kind": "region", "label": "Durability & Observability",         "wraps": ["checkpointer", "streaming", "langsmith"], "pad": 18 }
+  ],
+  "connections": [
+    { "from": "create_agent", "to": "harness",     "label": "config" },
+    { "from": "harness",      "to": "fs_mw",       "fromSide": "right",  "toSide": "left", "variant": "emphasis" },
+    { "from": "harness",      "to": "subagent_mw",                       "variant": "emphasis" },
+    { "from": "harness",      "to": "todo_mw",     "fromSide": "bottom", "toSide": "left", "variant": "dashed" },
+    { "from": "fs_mw",        "to": "stategraph",  "toSide": "top",      "variant": "emphasis" },
+    { "from": "subagent_mw",  "to": "stategraph",  "label": "compose" },
+    { "from": "todo_mw",      "to": "stategraph",  "toSide": "bottom",   "variant": "dashed" },
+    { "from": "stategraph",   "to": "checkpointer","fromSide": "right",  "toSide": "left", "label": "persist", "variant": "emphasis" },
+    { "from": "stategraph",   "to": "streaming",                          "variant": "emphasis" },
+    { "from": "stategraph",   "to": "langsmith",   "fromSide": "bottom", "toSide": "left",   "label": "trace",   "variant": "dashed" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Harness Composition",
+      "items": [
+        "FilesystemMiddleware is always required — hide tools via excluded_tools, never remove the middleware",
+        "SubAgentMiddleware provides the task tool for fresh-context delegation",
+        "TodoListMiddleware is opt-in since v0.7 — enable via middleware= explicitly"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Runtime",
+      "items": [
+        "Any CompiledStateGraph can be passed as a sub-agent for custom orchestration",
+        "LangSmith traces every step for evaluation and debugging"
+      ]
+    }
+  ]
+}

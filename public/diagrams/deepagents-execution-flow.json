@@ -1,0 +1,58 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "DeepAgents: Long-Horizon Execution Flow",
+    "quality_profile": "showcase",
+    "animation": "trace"
+  },
+  "lanes": [
+    { "id": "agent", "label": "Main Agent" },
+    { "id": "sub",   "label": "Sub-Agent (fresh context)" },
+    { "id": "infra", "label": "Storage & Control" }
+  ],
+  "phases": [
+    { "id": "setup",  "label": "Setup",          "fromCol": 0, "toCol": 0 },
+    { "id": "work",   "label": "Plan + Delegate", "fromCol": 1, "toCol": 3, "variant": "emphasis" },
+    { "id": "commit", "label": "Gate + Commit",   "fromCol": 4, "toCol": 5, "variant": "dashed" }
+  ],
+  "groups": [
+    { "id": "isolation", "label": "Fresh context isolation", "lane": "sub", "fromCol": 2, "toCol": 3, "variant": "dashed" }
+  ],
+  "mainPath": ["invoke", "plan", "delegate", "act", "offload", "gate", "checkpoint"],
+  "nodes": [
+    { "id": "invoke",     "lane": "agent", "col": 0, "type": "frontend",  "label": "Invoke",      "sublabel": "memory + skills loaded",  "width": 138 },
+    { "id": "plan",       "lane": "agent", "col": 1, "type": "backend",   "label": "Plan",        "sublabel": "write_todos in state",    "width": 138 },
+    { "id": "delegate",   "lane": "agent", "col": 2, "type": "backend",   "label": "Delegate",    "sublabel": "task → sub-agent",        "width": 138 },
+    { "id": "act",        "lane": "sub",   "col": 2, "type": "backend",   "label": "Act",         "sublabel": "FS + execute",            "width": 138 },
+    { "id": "offload",    "lane": "agent", "col": 3, "type": "backend",   "label": "Offload",     "sublabel": "summarize + compress",    "width": 138 },
+    { "id": "gate",       "lane": "infra", "col": 4, "type": "security",  "label": "HITL Gate",   "sublabel": "approve / reject",        "tag": "interrupt", "width": 138 },
+    { "id": "checkpoint", "lane": "infra", "col": 5, "type": "database",  "label": "Checkpoint",  "sublabel": "persist + resume",        "width": 138 }
+  ],
+  "edges": [
+    { "id": "e1", "from": "invoke",   "to": "plan",       "variant": "default"  },
+    { "id": "e2", "from": "plan",     "to": "delegate",   "label": "split work",     "variant": "emphasis" },
+    { "id": "e3", "from": "delegate", "to": "act",        "label": "fresh context",  "variant": "dashed"   },
+    { "id": "e4", "from": "act",      "to": "offload",    "label": "compact report", "variant": "dashed"   },
+    { "id": "e5", "from": "offload",  "to": "gate",       "label": "review",         "variant": "security" },
+    { "id": "e6", "from": "gate",     "to": "checkpoint", "label": "persist",        "variant": "emphasis" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Context Isolation",
+      "items": [
+        "Sub-agent runs in a fresh context window, quarantining heavy work from the main thread",
+        "Returns one compact report that the main agent compresses before continuing"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Durable Loop",
+      "items": [
+        "HITL gate can approve, add guidance, or reject before any risky action executes",
+        "Checkpoint persists state so the run resumes after failure without replaying everything"
+      ]
+    }
+  ]
+}
