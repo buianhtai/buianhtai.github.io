@@ -91,11 +91,11 @@ The agent acts **in** this environment, not beside it.
 <DataTable
   headers={["Surface", "What it does"]}
   rows={[
-    ["Tools + MCP", "Custom functions, LangChain tools, or any MCP server via tools= param"],
-    ["Virtual Filesystem", "ls / read_file / write_file / edit_file / delete / glob / grep — pluggable backends: in-memory, local disk, LangGraph Store, composite, or custom"],
-    ["Permissions", "Declarative allow/deny rules with glob paths, first-match-wins — e.g. deny .env, allow /workspace only"],
-    ["Code Execution", "Sandbox backends expose execute (shell) + QuickJS interpreter exposes eval (JS) for deterministic loops/batching"],
-    ["Streaming", "Typed event streams for messages, tool calls, values; stream.subagents gives each delegated task its own handle"],
+    { "Surface": "Tools + MCP", "What it does": "Custom functions, LangChain tools, or any MCP server via tools= param" },
+    { "Surface": "Virtual Filesystem", "What it does": "ls / read_file / write_file / edit_file / delete / glob / grep — pluggable backends: in-memory, local disk, LangGraph Store, composite, or custom" },
+    { "Surface": "Permissions", "What it does": "Declarative allow/deny rules with glob paths, first-match-wins — e.g. deny .env, allow /workspace only" },
+    { "Surface": "Code Execution", "What it does": "Sandbox backends expose execute (shell) + QuickJS interpreter exposes eval (JS) for deterministic loops/batching" },
+    { "Surface": "Streaming", "What it does": "Typed event streams for messages, tool calls, values; stream.subagents gives each delegated task its own handle" },
   ]}
 />
 
@@ -195,14 +195,14 @@ Add `TodoListMiddleware` for planning, define `permissions=[...]` for filesystem
 ## What Makes It Different
 
 <DataTable
-  headers={["", "DeepAgents", "LangChain create_agent", "LangGraph"]}
+  headers={["Dimension", "DeepAgents", "LangChain create_agent", "LangGraph"]}
   rows={[
-    ["Scope", "Full harness: FS, sub-agents, skills, memory, offloading, HITL", "Light harness on LangGraph", "Graph runtime — you build the loop"],
-    ["Best for", "Long-horizon, multi-step work out of the box", "Lighter harness without bundled middleware", "Custom graph shape not fitting agent loop"],
-    ["Planning", "Opt-in write_todos (TodoListMiddleware)", "Bring your own", "Model as you want"],
-    ["Delegation", "Built-in task tool → ephemeral subagents (fresh context, parallel)", "Manual", "Send / Command fan-out"],
-    ["Durability", "LangGraph checkpointing + streaming + interrupts inherited", "Same", "You compose it"],
-    ["Extensibility", "Override any middleware/tool without forking", "Lighter surface", "Full control"],
+    { "Dimension": "Scope",         "DeepAgents": "Full harness: FS, sub-agents, skills, memory, offloading, HITL", "LangChain create_agent": "Light harness on LangGraph",            "LangGraph": "Graph runtime — you build the loop" },
+    { "Dimension": "Best for",      "DeepAgents": "Long-horizon, multi-step work out of the box",                   "LangChain create_agent": "Lighter harness without bundled middleware", "LangGraph": "Custom graph shape not fitting agent loop" },
+    { "Dimension": "Planning",      "DeepAgents": "Opt-in write_todos (TodoListMiddleware)",                         "LangChain create_agent": "Bring your own",                           "LangGraph": "Model as you want" },
+    { "Dimension": "Delegation",    "DeepAgents": "Built-in task tool → ephemeral subagents (fresh context, parallel)", "LangChain create_agent": "Manual",                              "LangGraph": "Send / Command fan-out" },
+    { "Dimension": "Durability",    "DeepAgents": "LangGraph checkpointing + streaming + interrupts inherited",      "LangChain create_agent": "Same",                                     "LangGraph": "You compose it" },
+    { "Dimension": "Extensibility", "DeepAgents": "Override any middleware/tool without forking",                    "LangChain create_agent": "Lighter surface",                          "LangGraph": "Full control" },
   ]}
 />
 
