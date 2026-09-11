@@ -74,28 +74,33 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_aws import BedrockEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain_litellm import ChatLiteLLM
+from langchain_core.documents import Document
+import os
 
 embeddings = BedrockEmbeddings(
     model_id="amazon.titan-embed-text-v2:0",
-    region_name="us-east-1",
+    region_name=os.environ.get("AWS_REGION", "us-east-1"),
 )
-vision = ChatLiteLLM(model="bedrock/anthropic.claude-sonnet-4-5-20250929-v1:0")
+# Reasoning and multimodal calls — model ID set via LLM_MODEL env var
+vision = ChatLiteLLM(
+    model=os.environ["LLM_MODEL"],
+    api_base=os.environ.get("LITELLM_API_BASE"),  # proxy base URL when using LiteLLM proxy
+)
 
-# ── 1. Image-to-text: extract content from diagrams and screenshots ──────────
-# Run before chunking so embedded prose describes visual content accurately.
-def extract_image_text(img_path: Path) -> str:
-    data = base64.b64encode(img_path.read_bytes()).decode()
+# ── 1. Image-to-text: convert diagrams and screenshots to indexed prose ───────
+image_docs: list[Document] = []
+for img_path in sorted(Path("./kb-source").rglob("*.png")):
     msg = vision.invoke([{
         "role": "user",
         "content": [
-            {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{data}"}},
+            {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{base64.b64encode(img_path.read_bytes()).decode()}"}},
             {"type": "text", "text": "Describe this diagram or screenshot concisely for a support agent knowledge base."},
         ],
     }])
-    return msg.content
+    image_docs.append(Document(page_content=msg.content, metadata={"source": str(img_path)}))
 
 # ── 2. Markdown KB: chunk and embed as searchable prose ──────────────────────
-docs = DirectoryLoader("./kb-source/", glob="**/*.md").load()
+docs = DirectoryLoader("./kb-source/", glob="**/*.md").load() + image_docs
 chunks = RecursiveCharacterTextSplitter(
     chunk_size=800,
     chunk_overlap=100,
@@ -225,12 +230,13 @@ from deepagents.middleware.filesystem import FilesystemPermission
 from langgraph.checkpoint.memory import MemorySaver
 
 def make_model(**kw):
-    """LiteLLM routes to any backend. Set LLM_MODEL env var to switch."""
+    """LiteLLM routes to any backend. LLM_MODEL must be set — no default.
+    Set LITELLM_API_BASE when routing through a LiteLLM proxy.
+    Credential: LITELLM_API_KEY (upstream: model_config.py PROVIDER_API_KEY_ENV)."""
+    import os
     return ChatLiteLLM(
-        model=__import__("os").getenv(
-            "LLM_MODEL",
-            "bedrock/anthropic.claude-sonnet-4-5-20250929-v1:0",
-        ),
+        model=os.environ["LLM_MODEL"],
+        api_base=os.environ.get("LITELLM_API_BASE"),
         temperature=0,
         **kw,
     )
@@ -557,10 +563,11 @@ Use direct HTTP for a few endpoints owned by the same team. Use MCP when capabil
 [LiteLLM](https://github.com/BerriAI/litellm) gives DeepAgents a single `ChatLiteLLM` interface over every major provider. The only variable is the model string; no provider-specific client classes. For this stack Bedrock is the default — reasoning and multimodal calls both route through it:
 
 ```python
-# Set in environment or secret manager — never in code
-# LLM_MODEL=bedrock/anthropic.claude-sonnet-4-5-20250929-v1:0   ← default
-# LLM_MODEL=anthropic/claude-sonnet-4-5-20250929                ← direct Anthropic
-# LLM_MODEL=openai/gpt-4.1                                      ← OpenAI
+# Set in environment or secret manager — never in code.
+# LiteLLM model string format: "provider/model-id"
+# LLM_MODEL=bedrock/anthropic.claude-sonnet-...  ← Bedrock (Sonnet 5)
+# LLM_MODEL=anthropic/claude-sonnet-...          ← Anthropic direct
+# LLM_MODEL=openai/gpt-4.1                       ← OpenAI
 ```
 
 `make_model()` in `agent.py` reads `LLM_MODEL` at startup and returns a `ChatLiteLLM` instance — no code change needed to switch backends. The same model handles both text reasoning and multimodal image-to-text in the ingestion pipeline.
@@ -568,8 +575,8 @@ Use direct HTTP for a few endpoints owned by the same team. Use MCP when capabil
 <DataTable
   headers={["Backend", "LiteLLM model string", "Credentials"]}
   rows={[
-    { "Backend": "Amazon Bedrock (default)", "LiteLLM model string": "`bedrock/anthropic.claude-sonnet-4-5-20250929-v1:0`", "Credentials": "IAM role or `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`" },
-    { "Backend": "Anthropic direct", "LiteLLM model string": "`anthropic/claude-sonnet-4-5-20250929`", "Credentials": "`ANTHROPIC_API_KEY`" },
+    { "Backend": "Amazon Bedrock", "LiteLLM model string": "`bedrock/anthropic.claude-sonnet-...`", "Credentials": "IAM role or `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`" },
+    { "Backend": "Anthropic direct", "LiteLLM model string": "`anthropic/claude-sonnet-...`", "Credentials": "`ANTHROPIC_API_KEY`" },
     { "Backend": "OpenAI", "LiteLLM model string": "`openai/gpt-4.1`", "Credentials": "`OPENAI_API_KEY`" },
   ]}
 />
@@ -653,13 +660,13 @@ Before production, replace `MemorySaver()` with a durable checkpointer, replace 
 <DataTable
   headers={["Step", "What you need", "Time estimate"]}
   rows={[
-    { "Step": "KB ingestion",       "What you need": "Your docs in a readable format + `uv add langchain-community chromadb openai`", "Time estimate": "1–2h" },
+    { "Step": "KB ingestion",       "What you need": "`langchain-aws` (Titan embeddings) + `rank-bm25` + `chromadb`; set `AWS_REGION` and `LLM_MODEL`", "Time estimate": "1–2h" },
     { "Step": "MCP server",         "What you need": "Platform APIs wrapped with FastMCP (`uv add mcp`)", "Time estimate": "2–4h" },
     { "Step": "Skills directory",   "What you need": "`./skills/401-errors/SKILL.md` with investigation checklist", "Time estimate": "30 min" },
     { "Step": "AGENTS.md",         "What you need": "Escalation rules + known issues (see above)", "Time estimate": "30 min" },
     { "Step": "Tenant data",        "What you need": "Customer DB + server-derived tenant context; never use model-supplied tenant IDs for authorization", "Time estimate": "Depends on your platform" },
     { "Step": "Wire DeepAgents",    "What you need": "`uv add deepagents langchain-mcp-adapters`", "Time estimate": "1h" },
-    { "Step": "LLM provider",      "What you need": "Anthropic, OpenAI, or Bedrock credentials + a pinned model ID", "Time estimate": "30 min" },
+    { "Step": "LLM provider",      "What you need": "`LITELLM_API_KEY` + `LLM_MODEL` env var (e.g. `bedrock/anthropic.claude-sonnet-...`); optional `LITELLM_API_BASE` for proxy", "Time estimate": "30 min" },
     { "Step": "Deploy service",    "What you need": "FastAPI container, gateway auth, durable checkpointer, secret manager", "Time estimate": "1–2h" },
     { "Step": "Test + tune prompts","What you need": "Run 5–10 real past tickets through the agent", "Time estimate": "2–3h" },
   ]}
