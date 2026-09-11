@@ -12,114 +12,165 @@ postLayout: "foundations"
 ---
 import Card from '../../../components/mdx/Card.astro';
 import Label from '../../../components/mdx/Label.astro';
-import HeroGrid from '../../../components/mdx/HeroGrid.astro';
 import Callout from '../../../components/mdx/Callout.astro';
-import Pipeline from '../../../components/mdx/Pipeline.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
+import AgentMemoryMap from '../../../components/mdx/AgentMemoryMap.astro';
+import LayerStack from '../../../components/mdx/LayerStack.astro';
+import ControlLoop from '../../../components/mdx/ControlLoop.astro';
+import EnforceRule from '../../../components/mdx/EnforceRule.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import Concept from '../../../components/mdx/Concept.astro';
 
-Most agent demos collapse after three tool calls — context bloats, planning disappears, and parallel work becomes impossible. [DeepAgents](https://github.com/langchain-ai/deepagents) is LangChain AI's answer: a **batteries-included harness** on top of `create_agent` and LangGraph that ships the pieces long-horizon agents actually need out of the box.
+Every agent demo dies on turn three.
 
-<HeroGrid items={[
-  { label: "Sub-Agents", sublabel: "isolated contexts", color: "#0891b2" },
-  { label: "Filesystem", sublabel: "virtual + sandboxed", color: "#059669" },
-  { label: "Context Mgmt", sublabel: "summarize + offload", color: "#d97706" },
-  { label: "Production", sublabel: "LangGraph runtime", color: "#e11d48" },
-]} />
+Turn one: model calls a tool, gets a result. Turn two: it calls another. Turn three: context is bloated, the plan it made on turn one is gone, and if you gave it file access it just overwrote the wrong file with no way back. The agent didn't fail because of a bad model — it failed because nothing around the model was built for multi-step work.
 
-<Callout color="green">
-  LangGraph is the runtime. `create_agent` is the minimal harness. DeepAgents is the opinionated harness — same building blocks, but with filesystem, delegation, memory, and skills bundled and tuned for multi-step work.
-</Callout>
+[DeepAgents](https://github.com/langchain-ai/deepagents) is LangChain's answer: an opinionated harness that ships the six things a long-horizon agent actually needs, built on LangGraph so every piece is production-grade from day one.
+
+<AgentMemoryMap
+  title="DeepAgents runtime topology"
+  nodes={[
+    { id: "user",      label: "Caller",          shape: "oval",     x: 50, y: 4,  color: "default", sub: "invoke()" },
+    { id: "harness",   label: "DeepAgents\nHarness", shape: "hexagon", x: 50, y: 26, color: "teal",    sub: "create_deep_agent()" },
+    { id: "hitl",      label: "HITL Gate",        shape: "diamond",  x: 82, y: 50, color: "rose",    sub: "interrupt_on" },
+    { id: "llm",       label: "LLM",              shape: "circle",   x: 18, y: 50, color: "violet",  sub: "any model" },
+    { id: "subagent",  label: "Sub-Agent",        shape: "hexagon",  x: 50, y: 50, color: "teal",    sub: "fresh context" },
+    { id: "tools",     label: "Tools + FS",       shape: "rect",     x: 50, y: 74, color: "green",   sub: "read / write / execute" },
+    { id: "memory",    label: "Memory + Skills",  shape: "cylinder", x: 18, y: 74, color: "amber",   sub: "AGENTS.md" },
+    { id: "langgraph", label: "LangGraph",        shape: "rect",     x: 82, y: 74, color: "default", sub: "checkpoint + stream" },
+    { id: "langsmith", label: "LangSmith",        shape: "cloud",    x: 50, y: 94, color: "default", sub: "trace / eval / deploy" },
+  ]}
+  edges={[
+    { from: "user",     to: "harness",   label: "invoke",     type: "call" },
+    { from: "harness",  to: "llm",       label: "reason",     type: "call" },
+    { from: "harness",  to: "subagent",  label: "delegate",   type: "call" },
+    { from: "harness",  to: "hitl",      label: "gate",       type: "feedback" },
+    { from: "harness",  to: "memory",    label: "recall",     type: "memory" },
+    { from: "subagent", to: "tools",     label: "act",        type: "call" },
+    { from: "llm",      to: "tools",     label: "tool call",  type: "call" },
+    { from: "tools",    to: "harness",   label: "result",     type: "feedback" },
+    { from: "harness",  to: "langgraph", label: "persist",    type: "data" },
+    { from: "langgraph",to: "langsmith", label: "trace",      type: "data" },
+  ]}
+  legend={true}
+  caption="Harness sits between the caller and everything else — routing, isolating, persisting, and gating before any action reaches the filesystem or network."
+/>
 
 ---
 
-## <Label color="teal">1</Label> WHY — The gap between demo and durable agent
+## <Label color="teal">1</Label> The six gaps that kill demo agents
 
-A vanilla tool-calling loop is enough when the task is `one prompt + one tool`:
+A vanilla tool loop handles `one prompt + one tool`. It breaks on anything longer because it was never designed for it.
 
 <Card accent="teal" flush={true}>
 
 ```py
 while not done:
-    result = call_model(context)
+    result = call_model(context)         # context grows unbounded
     if result.tool_call:
-        context.append(run_tool(result.tool_call))
+        context.append(run_tool(result)) # no isolation, no rollback
     else:
-        done = True
+        done = True                      # plan from turn 1 is gone
 ```
 
 </Card>
 
-That breaks when the task is *research a codebase, draft a plan, edit 12 files, run tests, and summarize* — because you now need:
+<FlowStep
+  steps={[
+    { title: "Planning",         body: "No persistent todo list — the model's plan only exists in the context window it just filled up.",         color: "teal" },
+    { title: "Isolation",        body: "Heavy subtasks pollute the main context; one failed side-task poisons the whole run.",                    color: "green" },
+    { title: "Filesystem",       body: "Ephemeral tool outputs disappear between turns; there's no shared workspace the model can reliably read.", color: "amber" },
+    { title: "Memory",           body: "Preferences, AGENTS.md conventions, and previous session learnings vanish on every new thread.",          color: "teal" },
+    { title: "Human-in-the-loop","body": "Nothing pauses before destructive actions — edit_file and execute run unreviewed or not at all.",        color: "rose" },
+    { title: "Durability",       body: "No checkpointing means a failed turn restarts everything from zero instead of the last safe state.",       color: "amber" },
+  ]}
+/>
 
-- **Planning** — a persistent todo list that survives across turns, not just next-token optimism
-- **Isolation** — heavy subtasks without polluting the main context window
-- **Filesystem** — real read/write/search over a workspace, not just ephemeral tool outputs
-- **Memory** — preferences and `AGENTS.md` that carry across sessions
-- **Human-in-the-loop** — pause before `edit_file` or `execute` so a person can approve
-- **Durability** — streaming, checkpointing, and resume from LangGraph instead of replaying everything
-
-DeepAgents packages all six as defaults. The inspiration is explicit: *Claude Code, generalized* — what makes a terminal coding agent feel general-purpose, rebuilt as a model-agnostic, extensible harness. From the [deepagents README](https://github.com/langchain-ai/deepagents) and [overview docs](https://docs.langchain.com/oss/python/deepagents/overview).
-
-<Callout color="amber">
-  Principles from the project: **Opinionated** (tuned for long-horizon work), **Extensible** (override any piece without forking), **Model-agnostic** (any LLM with tool calling), **Production-ready** (LangGraph + LangSmith).
-</Callout>
+DeepAgents ships a default fix for all six. The inspiration is direct — *Claude Code, generalized*: what makes a terminal agent feel capable, rebuilt as a model-agnostic harness any LLM can run.
 
 ---
 
-## <Label color="green">2</Label> HOW — Four layers, one harness
+## <Label color="green">2</Label> Four layers, one harness
 
-DeepAgents is not a new runtime. It is a **harness profile** that composes middleware over LangGraph's `CompiledStateGraph`. The docs group capabilities into four layers:
+DeepAgents isn't a new runtime. It's middleware layered over `create_agent` and LangGraph's `CompiledStateGraph`. Each layer fixes one category of gap:
 
-<Pipeline
-  nodes={[
-    { title: "Execution Env", subtitle: "Tools, FS, sandbox, streaming" },
-    { title: "Context Mgmt", subtitle: "Skills, Memory, offload, cache" },
-    { title: "Delegation", subtitle: "write_todos + task subagents" },
-    { title: "Steering", subtitle: "HITL interrupts + permissions" },
+<LayerStack
+  layers={[
+    {
+      tag: "L4",
+      color: "rose",
+      title: "Steering",
+      items: ["interrupt_on", "permissions", "allow / deny rules", "sandbox boundaries"],
+      note: "Control without relying on the model to self-police."
+    },
+    {
+      tag: "L3",
+      color: "amber",
+      title: "Delegation",
+      items: ["write_todos", "task tool", "sub-agents", "fresh context window", "parallel work"],
+      note: "Scale work across isolated agents without polluting the main thread."
+    },
+    {
+      tag: "L2",
+      color: "green",
+      title: "Context Management",
+      items: ["Skills (SKILL.md)", "Memory (AGENTS.md)", "summarization", "offloading", "prompt caching"],
+      note: "Keep the context window from collapsing on long runs."
+    },
+    {
+      tag: "L1",
+      color: "teal",
+      title: "Execution Environment",
+      items: ["Tools + MCP servers", "FilesystemMiddleware", "sandbox (shell + QuickJS)", "typed streaming"],
+      note: "The agent acts in this environment, not beside it."
+    },
   ]}
-  arrows={[
-    { label: "act", direction: "right" },
-    { label: "recall", direction: "right" },
-    { label: "scale", direction: "right" },
-  ]}
+  arrows={["approve / gate", "delegate tasks", "load context", "act on environment"]}
+  caption="Higher layers control how lower layers are used — steering gates delegation, delegation offloads context, context shapes execution."
 />
 
 ### Layer 1 — Execution Environment
 
-The agent acts **in** this environment, not beside it.
-
 <DataTable
   headers={["Surface", "What it does"]}
   rows={[
-    { "Surface": "Tools + MCP", "What it does": "Custom functions, LangChain tools, or any MCP server via tools= param" },
+    { "Surface": "Tools + MCP",        "What it does": "Custom functions, LangChain tools, or any MCP server via tools= param" },
     { "Surface": "Virtual Filesystem", "What it does": "ls / read_file / write_file / edit_file / delete / glob / grep — pluggable backends: in-memory, local disk, LangGraph Store, composite, or custom" },
-    { "Surface": "Permissions", "What it does": "Declarative allow/deny rules with glob paths, first-match-wins — e.g. deny .env, allow /workspace only" },
-    { "Surface": "Code Execution", "What it does": "Sandbox backends expose execute (shell) + QuickJS interpreter exposes eval (JS) for deterministic loops/batching" },
-    { "Surface": "Streaming", "What it does": "Typed event streams for messages, tool calls, values; stream.subagents gives each delegated task its own handle" },
+    { "Surface": "Permissions",        "What it does": "Declarative allow/deny rules with glob paths, first-match-wins — e.g. deny .env, allow /workspace only" },
+    { "Surface": "Code Execution",     "What it does": "Sandbox backends expose execute (shell) + QuickJS interpreter exposes eval (JS) for deterministic loops/batching" },
+    { "Surface": "Streaming",          "What it does": "Typed event streams for messages, tool calls, values; stream.subagents gives each delegated task its own handle" },
   ]}
 />
 
-Key detail: `FilesystemMiddleware` is required scaffolding — you hide tools via `excluded_tools` on the harness profile, not by removing the middleware. `read_file` must always remain. Custom `tools=` are never filtered by the filesystem allowlist. Backends that don't support `execute`/`delete` drop those tools automatically.
+<Callout color="amber">
+  `FilesystemMiddleware` is always required scaffolding. Hide specific tools via `excluded_tools` on the harness profile — never remove the middleware itself. `read_file` must always remain.
+</Callout>
 
 ### Layer 2 — Context Management
 
-This is how the agent avoids context collapse on long runs.
+This is how the agent survives past turn three.
 
-- **Skills** — directories with `SKILL.md` following the [Agent Skills standard](https://agentskills.io/). Loaded with *progressive disclosure*: frontmatter at startup, full content only when a task needs it. Scripts, templates, and reference docs ship alongside.
-- **Memory** — `AGENTS.md` files passed via `memory=` param, always loaded, persisted in `StateBackend | StoreBackend | FilesystemBackend`. The agent can update memory from feedback so conventions carry forward.
-- **Summarization + Offloading** — builtin compression of conversation history and large tool results. Subagents add *isolation* (heavy work stays out of the main window) and the virtual filesystem adds *long-term memory* across threads.
-- **Prompt caching** — automatic for Anthropic/Bedrock (Claude, Nova) on static prompt sections; other providers via middleware integrations.
+- **Skills** — directories with `SKILL.md` following the [Agent Skills standard](https://agentskills.io/). Loaded with *progressive disclosure*: frontmatter at startup, full content only when a task needs it.
+- **Memory** — `AGENTS.md` files passed via `memory=` param, persisted in `StateBackend | StoreBackend | FilesystemBackend`. The agent can update memory from feedback so conventions carry forward.
+- **Summarization + Offloading** — builtin compression of conversation history and large tool outputs. Subagents add isolation (heavy work stays out of the main window) and the virtual filesystem adds long-term memory across threads.
+- **Prompt caching** — automatic for Anthropic/Bedrock (Claude, Nova) on static sections; pluggable for other providers.
 
 ### Layer 3 — Delegation
 
+<Concept term="Sub-agent" category="pattern">
+  A sub-agent is an ephemeral child agent spawned by the `task` tool. It gets a **fresh context window**, runs autonomously on one delegated goal, and returns a single compact report. Heavy work is quarantined — failures, noise, and bloat stay inside the sub-agent and never reach the main context.
+</Concept>
+
 Two complementary pieces:
 
-- **Task planning** — opt-in via `TodoListMiddleware` → exposes `write_todos` tool. Tasks are `pending → in_progress → completed` and persisted in state. Useful for long runs, weaker models that need accountability, or UIs that stream progress. Was default pre-v0.7, now explicit.
-- **Sub-agents** — the `task` tool spawns ephemeral child agents. Each gets a **fresh context window**, runs autonomously, and returns one final report. Supports a default `general-purpose` subagent or fully custom definitions. Heavy work is quarantined and compressed. Disable via harness profile (`excluded_tools: [task]`) — don't try to remove `SubAgentMiddleware`.
+- **Task planning** — opt-in via `TodoListMiddleware` → exposes `write_todos` tool. Tasks are `pending → in_progress → completed` and persisted in state. Useful for long runs, weaker models that need accountability, or UIs that stream progress.
+- **Sub-agents** — the `task` tool spawns isolated child agents in parallel. Disable via `excluded_tools: [task]` on the harness profile — don't try to remove `SubAgentMiddleware`.
 
 ### Layer 4 — Steering
 
-Control without relying on the model to self-police:
+<Concept term="Human-in-the-loop" category="pattern">
+  HITL in DeepAgents is a LangGraph interrupt: the run pauses *before* a named tool executes, surfaces the pending call to a human, and resumes only after approval, edits, or rejection. It's structural, not conversational — the model can't talk its way past it.
+</Concept>
 
 ```py
 agent = create_deep_agent(
@@ -129,13 +180,27 @@ agent = create_deep_agent(
 # pauses before every edit/execute — approve, add guidance, or modify inputs
 ```
 
-Filesystem permission rules mirror this — `permissions=[{operations: ["write"], paths: [".env"], mode: "deny"}, ...]` evaluated top-down. Sandboxes enforce boundaries at the tool level; the harness follows a "trust the LLM" security model.
+Filesystem permission rules enforce the same principle at the tool level:
+
+<EnforceRule
+  rules={[
+    { method: "READ",  action: "/workspace/**",  allowed: true  },
+    { method: "WRITE", action: "/workspace/**",  allowed: true  },
+    { method: "READ",  action: ".env",           allowed: false },
+    { method: "WRITE", action: ".env",           allowed: false },
+    { method: "DELETE",action: ".env",           allowed: false },
+    { method: "PATCH", action: "/workspace/src/**", allowed: true  },
+    { method: "DELETE",action: "/workspace/**",  allowed: true  },
+  ]}
+/>
+
+Rules are first-match-wins, evaluated top-down. Sandboxes enforce boundaries at the execution layer; the harness follows a "trust but verify" security model.
 
 ---
 
-## <Label color="amber">3</Label> HOW — The stack that makes it composable
+## <Label color="amber">3</Label> The middleware stack
 
-Under the hood, DeepAgents is middleware ordering over LangGraph:
+Under the hood, DeepAgents is a declarative ordering of middleware over LangGraph. Every piece is replaceable — pass a custom `FilesystemMiddleware(tools=[...])`, swap the sub-agent definition, or wire in a hand-built `CompiledStateGraph` as a worker:
 
 <div style="border-radius: 8px; overflow: hidden;">
   <iframe
@@ -149,18 +214,32 @@ Under the hood, DeepAgents is middleware ordering over LangGraph:
   <a href="/diagrams/deepagents-middleware-stack.html" target="_blank" rel="noopener">Open full diagram ↗</a>
 </p>
 
-What matters:
-
-- **Override or replace any piece without forking** — pass a custom `FilesystemMiddleware(tools=[...])` or custom subagent definitions via `middleware=` / `subagents=`; the stack is declarative.
-- **Any `CompiledStateGraph` is a subagent** — drop a hand-built LangGraph workflow in as a delegated worker; custom orchestration composes with the harness defaults.
+- **Override any piece without forking** — pass custom middleware via `middleware=` / `subagents=`; the stack is declarative.
+- **Any `CompiledStateGraph` is a sub-agent** — drop a hand-built LangGraph workflow in as a delegated worker.
 - **Model-agnostic** — frontier (OpenAI, Anthropic, Google), open-weight (Baseten, Fireworks), or local (Ollama, vLLM, llama.cpp) — anything with tool calling and a LangChain chat model wrapper.
-- **DeepAgents Code** — a pre-built terminal coding agent (Claude Code / Cursor analog) powered by any LLM: `curl -LsSf https://langch.in/dcode | bash` — same harness, different surface.
+- **DeepAgents Code** — a pre-built terminal coding agent (Claude Code / Cursor analog) powered by any LLM: `curl -LsSf https://langch.in/dcode | bash`.
 
 ---
 
-## <Label color="rose">4</Label> FLOW — A typical long-horizon run
+## <Label color="rose">4</Label> The durable loop
 
-<div style="border-radius: 8px; overflow: hidden;">
+The core insight of DeepAgents: the agent loop is not `model → tool → model`. It's a durable cycle where state, isolation, and control gates compound across turns:
+
+<ControlLoop
+  nodes={[
+    { id: "plan",    title: "Plan",        subtitle: "write_todos + delegate",  color: "amber" },
+    { id: "execute", title: "Sub-Agent",   subtitle: "act on FS + execute",     color: "teal"  },
+    { id: "persist", title: "Checkpoint",  subtitle: "LangGraph state + stream", color: "green" },
+  ]}
+  edges={[
+    { from: "plan",    to: "execute", label: "spawn fresh context" },
+    { from: "execute", to: "persist", label: "compact report + offload" },
+    { from: "persist", to: "plan",    label: "resume + next step" },
+  ]}
+  caption="Each turn is a full cycle: plan spawns isolated work, execution returns a compact result, and the checkpoint makes the whole thing resumable."
+/>
+
+<div style="border-radius: 8px; overflow: hidden; margin-top: 1rem;">
   <iframe
     src="/diagrams/deepagents-execution-flow.html"
     style="width: 100%; height: 520px; border: none; display: block;"
@@ -172,31 +251,28 @@ What matters:
   <a href="/diagrams/deepagents-execution-flow.html" target="_blank" rel="noopener">Open full diagram ↗</a>
 </p>
 
-<Callout color="green">
-  The loop that matters is not model → tool → model. It is **plan → delegate (fresh contexts) → act on filesystem → offload → gate → checkpoint**. The model stays in the center, but the harness keeps the system durable.
-</Callout>
-
 ### Minimal code
 
 ```py
-# pip: uv add deepagents
+# uv add deepagents
 from deepagents import create_deep_agent
 
-def my_custom_tool(query: str) -> str:
+def my_tool(query: str) -> str:
     return f"result for {query}"
 
 agent = create_deep_agent(
     model="openai:gpt-5.5",
-    tools=[my_custom_tool],
+    tools=[my_tool],
     system_prompt="You are a research assistant.",
-    # optional: sandbox, memory, skills, permissions, interrupts
+    # interrupt_on={"edit_file": True},      # HITL
+    # permissions=[{"paths": [".env"], "mode": "deny"}],
+    # memory=["./AGENTS.md"],
+    # middleware=[TodoListMiddleware()],
 )
 
 result = agent.invoke({"messages": "Research LangGraph and write a summary"})
 print(result["messages"][-1].content)
 ```
-
-Add `TodoListMiddleware` for planning, define `permissions=[...]` for filesystem ACLs, pass `interrupt_on={"edit_file": True}` for HITL, or wire an MCP server — all via the same `create_deep_agent` entry point. Full docs at [deepagents overview](https://docs.langchain.com/oss/python/deepagents/overview) and [customization guide](https://docs.langchain.com/oss/python/deepagents/customization). JS/TS mirror lives at [deepagentsjs](https://github.com/langchain-ai/deepagentsjs).
 
 ---
 
@@ -205,17 +281,21 @@ Add `TodoListMiddleware` for planning, define `permissions=[...]` for filesystem
 <DataTable
   headers={["Dimension", "DeepAgents", "LangChain create_agent", "LangGraph"]}
   rows={[
-    { "Dimension": "Scope",         "DeepAgents": "Full harness: FS, sub-agents, skills, memory, offloading, HITL", "LangChain create_agent": "Light harness on LangGraph",            "LangGraph": "Graph runtime — you build the loop" },
+    { "Dimension": "Scope",         "DeepAgents": "Full harness: FS, sub-agents, skills, memory, offloading, HITL", "LangChain create_agent": "Light harness on LangGraph",             "LangGraph": "Graph runtime — you build the loop" },
     { "Dimension": "Best for",      "DeepAgents": "Long-horizon, multi-step work out of the box",                   "LangChain create_agent": "Lighter harness without bundled middleware", "LangGraph": "Custom graph shape not fitting agent loop" },
-    { "Dimension": "Planning",      "DeepAgents": "Opt-in write_todos (TodoListMiddleware)",                         "LangChain create_agent": "Bring your own",                           "LangGraph": "Model as you want" },
-    { "Dimension": "Delegation",    "DeepAgents": "Built-in task tool → ephemeral subagents (fresh context, parallel)", "LangChain create_agent": "Manual",                              "LangGraph": "Send / Command fan-out" },
-    { "Dimension": "Durability",    "DeepAgents": "LangGraph checkpointing + streaming + interrupts inherited",      "LangChain create_agent": "Same",                                     "LangGraph": "You compose it" },
-    { "Dimension": "Extensibility", "DeepAgents": "Override any middleware/tool without forking",                    "LangChain create_agent": "Lighter surface",                          "LangGraph": "Full control" },
+    { "Dimension": "Planning",      "DeepAgents": "Opt-in write_todos (TodoListMiddleware)",                         "LangChain create_agent": "Bring your own",                            "LangGraph": "Model as you want" },
+    { "Dimension": "Delegation",    "DeepAgents": "Built-in task tool → ephemeral sub-agents (fresh context, parallel)", "LangChain create_agent": "Manual",                             "LangGraph": "Send / Command fan-out" },
+    { "Dimension": "Durability",    "DeepAgents": "LangGraph checkpointing + streaming + interrupts inherited",      "LangChain create_agent": "Same",                                      "LangGraph": "You compose it" },
+    { "Dimension": "Extensibility", "DeepAgents": "Override any middleware/tool without forking",                    "LangChain create_agent": "Lighter surface",                           "LangGraph": "Full control" },
   ]}
 />
 
+<Concept term="Context Collapse" category="failure mode">
+  Context collapse is what kills long-horizon agents. As turns accumulate, the context window fills with tool outputs, intermediate thoughts, and stale plan fragments. The model's effective attention span shrinks to the last few thousand tokens. DeepAgents avoids it through summarization, offloading to the virtual filesystem, and sub-agent isolation — the main agent never sees the full output of heavy subtasks.
+</Concept>
+
 <Callout color="amber">
-  Rule of thumb from the docs: use **DeepAgents** when you want harness defaults for planning, delegation, and context management. Use **create_agent** when you want less bundle. Drop to **LangGraph** when the agent loop itself is the wrong shape.
+  Rule of thumb: use **DeepAgents** when you want harness defaults for planning, delegation, and context management. Use **create_agent** when you want less bundle. Drop to **LangGraph** when the agent loop itself is the wrong shape.
 </Callout>
 
-Sources: <a href="https://github.com/langchain-ai/deepagents">github.com/langchain-ai/deepagents</a> · <a href="https://docs.langchain.com/oss/python/deepagents/overview">DeepAgents overview</a> · <a href="https://docs.langchain.com/oss/python/deepagents/quickstart">Quickstart</a> · <a href="https://docs.langchain.com/oss/python/deepagents/subagents">Subagents</a> · <a href="https://docs.langchain.com/oss/python/deepagents/backends">Backends</a> · <a href="https://docs.langchain.com/oss/python/deepagents/permissions">Permissions</a> · <a href="https://docs.langchain.com/oss/python/concepts/products">Products overview</a> · <a href="https://github.com/langchain-ai/deepagentsjs">deepagentsjs</a>
+Sources: <a href="https://github.com/langchain-ai/deepagents">github.com/langchain-ai/deepagents</a> · <a href="https://docs.langchain.com/oss/python/deepagents/overview">DeepAgents overview</a> · <a href="https://docs.langchain.com/oss/python/deepagents/quickstart">Quickstart</a> · <a href="https://docs.langchain.com/oss/python/deepagents/subagents">Subagents</a> · <a href="https://docs.langchain.com/oss/python/deepagents/backends">Backends</a> · <a href="https://docs.langchain.com/oss/python/deepagents/permissions">Permissions</a> · <a href="https://docs.langchain.com/oss/python/concepts/products">Products overview</a>
