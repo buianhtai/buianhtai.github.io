@@ -231,8 +231,8 @@ from langgraph.checkpoint.memory import MemorySaver
 
 def make_model(**kw):
     """LiteLLM routes to any backend. LLM_MODEL must be set — no default.
-    Set LITELLM_API_BASE when routing through a LiteLLM proxy.
-    Credential: LITELLM_API_KEY (upstream: model_config.py PROVIDER_API_KEY_ENV)."""
+    Credentials are per-backend: AWS IAM chain for Bedrock, ANTHROPIC_API_KEY,
+    OPENAI_API_KEY, etc. Set LITELLM_API_BASE only when routing via a proxy."""
     import os
     return ChatLiteLLM(
         model=os.environ["LLM_MODEL"],
