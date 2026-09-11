@@ -1,0 +1,308 @@
+---
+title: "DeepAgents in Practice: KB Ingestion + MCP + Customer Troubleshooting"
+description: "A step-by-step walkthrough of wiring DeepAgents to your knowledge base and platform MCP server to build a customer troubleshooting agent — from ingestion pipeline to a live 401-error diagnosis with human approval."
+pubDate: 2026-09-11
+tags: ["ai", "agents", "deepagents", "mcp", "customer-support", "python", "langchain"]
+lang: "en"
+category: "ai"
+series: "ai-agent-tools"
+seriesOrder: 12
+draft: false
+postLayout: "foundations"
+---
+import Label from '../../../components/mdx/Label.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import Concept from '../../../components/mdx/Concept.astro';
+
+A customer emails at 11pm: *"Getting 401s since 3pm, blocking our release."* Your on-call engineer opens four browser tabs — docs, logs dashboard, admin panel, runbook — and starts the same manual investigation they've done a hundred times.
+
+This post wires [DeepAgents](https://github.com/langchain-ai/deepagents) to do that investigation automatically: ingest your KB into a searchable store, connect your platform via MCP, and run a troubleshooting agent that diagnoses the issue and proposes a fix — pausing for human approval before touching anything.
+
+**Scenario throughout this post:** StreamAPI, a fictional SaaS platform. Customer `tai@streamapi.io` is getting 401 errors. We'll build the agent that figures out why.
+
+---
+
+## <Label color="teal">1</Label> The three pieces
+
+<FlowStep
+  steps={[
+    { title: "KB Ingestion",       body: "Convert your docs, runbooks, and known-issue catalogue into a searchable vector store. Runs offline — triggered by CI or a webhook when content changes.", color: "teal" },
+    { title: "MCP Integration",    body: "Your platform exposes an MCP server: get_customer_state, fetch_logs, apply_fix, send_notification. DeepAgents calls these the same way it calls any tool.", color: "green" },
+    { title: "Troubleshooting Agent", body: "DeepAgents orchestrates the investigation: search KB → inspect customer state → fetch logs → diagnose → propose fix → human approves → apply.", color: "amber" },
+  ]}
+/>
+
+These three pieces are independent. You can add them one at a time.
+
+---
+
+## <Label color="green">2</Label> KB ingestion pipeline
+
+<Concept term="Why a separate ingestion step?" category="design">
+  The agent queries the KB at runtime, but the KB itself is built offline. Keeping ingestion separate means the agent always queries a stable, pre-indexed store — not a live doc system that could be slow or unavailable mid-investigation.
+</Concept>
+
+Run this whenever your KB content changes — CI push, doc webhook, or a nightly cron:
+
+```python
+# ingest.py — run offline, not inside the agent
+from langchain_community.document_loaders import DirectoryLoader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_openai import OpenAIEmbeddings
+from langchain_community.vectorstores import Chroma
+
+# Load from wherever your KB lives
+# Swap for ConfluenceLoader, S3FileLoader, GitbookLoader, etc.
+docs = DirectoryLoader("./kb-source/", glob="**/*.md").load()
+
+# Chunk — 800 tokens is a good starting size for support docs
+chunks = RecursiveCharacterTextSplitter(
+    chunk_size=800,
+    chunk_overlap=100,
+).split_documents(docs)
+
+# Build and persist the vector store
+Chroma.from_documents(
+    chunks,
+    OpenAIEmbeddings(model="text-embedding-3-small"),
+    persist_directory="./kb",
+)
+print(f"Ingested {len(chunks)} chunks from {len(docs)} documents.")
+```
+
+**What goes in the KB:**
+
+<DataTable
+  headers={["Content type", "What to include", "Why"]}
+  rows={[
+    { "Content type": "Error runbooks",    "What to include": "401/403/429 patterns, root causes, resolution steps",       "Why": "Agent finds the right runbook before checking logs" },
+    { "Content type": "Known issues",      "What to include": "Bug catalogue with symptoms + workarounds",                  "Why": "Skips investigation for already-known problems" },
+    { "Content type": "API changelog",     "What to include": "Breaking changes, deprecated endpoints, key rotation policy", "Why": "Catches 'worked yesterday, broken today' root causes" },
+    { "Content type": "Customer tiers",    "What to include": "Pro/Enterprise feature flags, rate limits, SLA commitments", "Why": "Agent knows what the customer is entitled to" },
+    { "Content type": "Escalation paths",  "What to include": "When to page on-call, who owns billing vs. infra issues",   "Why": "Agent knows when to stop and hand off" },
+  ]}
+/>
+
+---
+
+## <Label color="amber">3</Label> Platform MCP server
+
+Your platform needs to expose an MCP server with at least these tools. The exact implementation is yours — DeepAgents calls them as black boxes:
+
+```python
+# platform_mcp_server.py — your platform code, not DeepAgents
+from mcp.server.fastmcp import FastMCP
+
+mcp = FastMCP("StreamAPI Platform")
+
+@mcp.tool()
+def get_customer_state(email: str) -> dict:
+    """Return account config, active API keys, tier, last login, feature flags."""
+    return your_db.query_customer(email)
+
+@mcp.tool()
+def fetch_logs(email: str, since: str, level: str = "ERROR") -> list[dict]:
+    """Return recent log entries for a customer. since accepts ISO8601."""
+    return your_logging.query(customer=email, since=since, level=level)
+
+@mcp.tool()
+def apply_fix(action: str, target: str, **kwargs) -> dict:
+    """Apply a remediation action. Supported: regenerate_key, reset_rate_limit, enable_feature."""
+    return your_admin.execute(action=action, target=target, **kwargs)
+
+@mcp.tool()
+def send_notification(email: str, subject: str, body: str) -> dict:
+    """Send an email to the customer."""
+    return your_mailer.send(to=email, subject=subject, body=body)
+
+if __name__ == "__main__":
+    mcp.run(transport="sse", host="0.0.0.0", port=8080)
+```
+
+<Callout color="amber">
+  DeepAgents will call `apply_fix` and `send_notification` automatically — but we'll add a human approval gate on those in the next step so nothing goes out unsupervised.
+</Callout>
+
+---
+
+## <Label color="rose">4</Label> Wiring DeepAgents
+
+Now connect all three pieces. MCP tools are async, so the agent setup lives in an async function:
+
+```python
+# agent.py
+import asyncio
+from langchain_anthropic import ChatAnthropic
+from langchain_community.vectorstores import Chroma
+from langchain_openai import OpenAIEmbeddings
+from langchain.tools.retriever import create_retriever_tool
+from langchain_mcp_adapters.client import MultiServerMCPClient
+from deepagents import create_deep_agent
+from deepagents.backends import FilesystemBackend
+from deepagents.middleware.filesystem import FilesystemPermission
+
+# ── KB retrieval tool (sync — built once at startup) ──────────────────────────
+
+kb_store = Chroma(
+    persist_directory="./kb",
+    embedding_function=OpenAIEmbeddings(model="text-embedding-3-small"),
+)
+kb_tool = create_retriever_tool(
+    kb_store.as_retriever(search_kwargs={"k": 5}),
+    name="search_kb",
+    description=(
+        "Search the StreamAPI knowledge base: runbooks, known issues, API changelog, "
+        "tier definitions, escalation paths. Always search this before checking logs."
+    ),
+)
+
+# ── Build agent (async because MCP tools require await) ───────────────────────
+
+async def build_agent():
+    mcp = MultiServerMCPClient({
+        "platform": {
+            "url": "http://localhost:8080/sse",
+            "transport": "sse",
+        }
+    })
+    platform_tools = await mcp.get_tools()   # get_customer_state, fetch_logs, apply_fix, send_notification
+
+    return create_deep_agent(
+        model=ChatAnthropic(model="claude-sonnet-4-5-20250929"),
+        tools=[kb_tool, *platform_tools],
+
+        # Runbooks + escalation rules always loaded
+        memory=["./AGENTS.md"],
+
+        # Domain knowledge loaded progressively per task
+        # ./skills/401-errors/SKILL.md  ← detailed 401 investigation checklist
+        # ./skills/customer-tiers/SKILL.md ← tier-specific SLA rules
+        skills=["./skills/"],
+
+        # Filesystem for scratch notes during investigation
+        backend=FilesystemBackend(root_dir="./workspace"),
+
+        permissions=[
+            # Deny writes to sensitive paths — paths MUST start with /
+            FilesystemPermission(operations=["read", "write"], paths=["/**/.env"],       mode="deny"),
+            FilesystemPermission(operations=["read", "write"], paths=["/billing/**"],    mode="deny"),
+            # HITL on customer data writes
+            FilesystemPermission(operations=["write"],          paths=["/customers/**"], mode="interrupt"),
+        ],
+
+        # Pause before apply_fix or send_notification — human approves
+        interrupt_on={
+            "apply_fix":         True,
+            "send_notification": True,
+        },
+
+        system_prompt="""You are a customer support agent for StreamAPI.
+
+When investigating an issue:
+1. search_kb first — find the relevant runbook or known issue
+2. get_customer_state — inspect their account, keys, tier, feature flags
+3. fetch_logs — find the specific error (use the customer's email and the reported timeframe)
+4. Diagnose the root cause precisely
+5. Propose a fix with rationale — you will pause for human approval before applying
+
+Always cite which KB article or log entry led to your conclusion.
+If the issue matches a known bug, say so and link the workaround.
+Escalate to on-call if you find data loss, security exposure, or cannot diagnose within 3 tool calls.
+""",
+    )
+
+agent = asyncio.run(build_agent())
+```
+
+---
+
+## <Label color="teal">5</Label> A real troubleshooting session
+
+Invoke the agent with the customer's report:
+
+```python
+# support_request.py
+result = agent.invoke({
+    "messages": [{
+        "role": "user",
+        "content": """
+        Customer: tai@streamapi.io
+        Reported: 2026-09-11 11:04pm
+        Issue: Getting 401 Unauthorized on all API calls since ~3pm today.
+        Blocking our release — we're on Pro tier, SLA applies.
+        """
+    }]
+})
+```
+
+Here's what the agent actually does:
+
+<FlowStep
+  steps={[
+    { title: "search_kb('401 unauthorized api key')", body: "Finds runbook: '401 errors after key rotation window'. Notes: Pro tier keys auto-rotate every 90 days; customers must update their env vars within 24h of rotation email.", color: "teal" },
+    { title: "get_customer_state('tai@streamapi.io')", body: "Returns: tier=Pro, last_key_rotation=2026-09-11T14:32Z (3:32pm — matches report), active_keys=1, key_status=rotated_pending_acknowledgement.", color: "green" },
+    { title: "fetch_logs(email, since='2026-09-11T15:00Z')", body: "Returns: 47 × 401 errors, all with auth_error='stale_key_presented'. Confirms stale API key is being presented — not a platform bug.", color: "amber" },
+    { title: "Diagnosis", body: "Root cause: customer's API key was auto-rotated at 3:32pm per policy. They're still sending requests with the old key. Runbook recommends: regenerate temp key + notify customer to update env.", color: "rose" },
+    { title: "PAUSE → Human approval", body: "Agent stops and surfaces: 'Propose apply_fix(action=regenerate_key, target=tai@streamapi.io) + send_notification with new key. Approve?' You inspect and click approve.", color: "teal" },
+    { title: "apply_fix + send_notification", body: "New key generated, customer notified with rotation instructions and new key. Agent logs: 'Issue resolved in 4 tool calls. Resolution time: ~45 seconds.'", color: "green" },
+  ]}
+/>
+
+<Callout color="green">
+  Without the agent: engineer spends 15–20 min switching between logs, docs, and admin panel. With it: 45 seconds from report to proposed fix, with a human still in the loop before anything is sent.
+</Callout>
+
+---
+
+## <Label color="amber">6</Label> AGENTS.md — what to put in memory
+
+The `memory=["./AGENTS.md"]` file is loaded on every session. Keep it focused on durable policy, not per-customer state:
+
+```markdown
+# StreamAPI Support Agent
+
+## Escalation rules
+- Data loss or security exposure → page on-call immediately, do not attempt fix
+- Customer on Enterprise tier → always loop in account manager before fixing
+- SLA breach (>4h open on Pro, >1h on Enterprise) → auto-escalate
+
+## Known platform issues (update weekly)
+- Key rotation emails sometimes land in spam → always mention this in notifications
+- Rate limit reset takes up to 5 min to propagate — wait before retesting
+
+## Tone
+- Be direct. No filler. Cite the specific log line or KB article.
+- Always tell the customer what you found, not just what you did.
+```
+
+---
+
+## What to set up in your project
+
+<DataTable
+  headers={["Step", "What you need", "Time estimate"]}
+  rows={[
+    { "Step": "KB ingestion",       "What you need": "Your docs in a readable format + `uv add langchain-community chromadb openai`", "Time estimate": "1–2h" },
+    { "Step": "MCP server",         "What you need": "Platform APIs wrapped with FastMCP (`uv add mcp`)", "Time estimate": "2–4h" },
+    { "Step": "Skills directory",   "What you need": "`./skills/401-errors/SKILL.md` with investigation checklist", "Time estimate": "30 min" },
+    { "Step": "AGENTS.md",          "What you need": "Escalation rules + known issues (see above)", "Time estimate": "30 min" },
+    { "Step": "Wire DeepAgents",    "What you need": "`uv add deepagents langchain-mcp-adapters`", "Time estimate": "1h" },
+    { "Step": "Test + tune prompts","What you need": "Run 5–10 real past tickets through the agent", "Time estimate": "2–3h" },
+  ]}
+/>
+
+<Callout color="amber">
+  Start with `interrupt_on` on every write tool until you trust the agent's judgment on your specific ticket patterns. Remove gates gradually as you gain confidence.
+</Callout>
+
+Install everything:
+
+```bash
+uv add deepagents langchain-mcp-adapters \
+       langchain-community langchain-text-splitters \
+       langchain-openai langchain-anthropic chromadb mcp
+```
+
+Sources: <a href="https://github.com/langchain-ai/deepagents">deepagents</a> · <a href="https://docs.langchain.com/oss/python/deepagents/overview">DeepAgents docs</a> · <a href="https://docs.langchain.com/oss/python/deepagents/permissions">Permissions</a> · <a href="https://github.com/modelcontextprotocol/python-sdk">MCP Python SDK</a> · <a href="https://python.langchain.com/docs/integrations/tools/mcp/">langchain-mcp-adapters</a>
