@@ -22,6 +22,8 @@ This post wires [DeepAgents](https://github.com/langchain-ai/deepagents) to do t
 
 **Scenario throughout this post:** StreamAPI, a fictional SaaS platform. Customer `tai@streamapi.io` is getting 401 errors. We'll build the agent that figures out why.
 
+This is the implementation-level companion to [Building Support Agents for Your Platform](/en/blog/building-support-agents-for-your-platform/), which covers the broader multi-agent topology, observability architecture, tenancy, evaluation, and production trade-offs. This post deliberately narrows to one DeepAgents-powered technical-support lane: KB retrieval + platform MCP tools + human approval before writes. It complements that architecture post; it does not replace it.
+
 ---
 
 ## <Label color="teal">1</Label> The three pieces
@@ -142,6 +144,7 @@ from langchain_mcp_adapters.client import MultiServerMCPClient
 from deepagents import create_deep_agent
 from deepagents.backends import FilesystemBackend
 from deepagents.middleware.filesystem import FilesystemPermission
+from langgraph.checkpoint.memory import MemorySaver
 
 # ── KB retrieval tool (sync — built once at startup) ──────────────────────────
 
@@ -192,6 +195,9 @@ async def build_agent():
             FilesystemPermission(operations=["write"],          paths=["/customers/**"], mode="interrupt"),
         ],
 
+        # Required for interrupt/resume state; use a durable saver in production
+        checkpointer=MemorySaver(),
+
         # Pause before apply_fix or send_notification — human approves
         interrupt_on={
             "apply_fix":         True,
@@ -213,31 +219,38 @@ Escalate to on-call if you find data loss, security exposure, or cannot diagnose
 """,
     )
 
-agent = asyncio.run(build_agent())
 ```
 
 ---
 
-## <Label color="teal">5</Label> A real troubleshooting session
+## <Label color="teal">5</Label> A complete troubleshooting session
 
 Invoke the agent with the customer's report:
 
 ```python
 # support_request.py
-result = agent.invoke({
-    "messages": [{
-        "role": "user",
-        "content": """
-        Customer: tai@streamapi.io
-        Reported: 2026-09-11 11:04pm
-        Issue: Getting 401 Unauthorized on all API calls since ~3pm today.
-        Blocking our release — we're on Pro tier, SLA applies.
-        """
-    }]
-})
+async def troubleshoot():
+    agent = await build_agent()
+    config = {"configurable": {"thread_id": "streamapi-tai-401"}}
+    return await agent.ainvoke(
+        {
+            "messages": [{
+                "role": "user",
+                "content": """
+                Customer: tai@streamapi.io
+                Reported: 2026-09-11 11:04pm
+                Issue: Getting 401 Unauthorized on all API calls since ~3pm today.
+                Blocking our release — we're on Pro tier, SLA applies.
+                """
+            }]
+        },
+        config=config,
+    )
+
+result = asyncio.run(troubleshoot())
 ```
 
-Here's what the agent actually does:
+For this fictional StreamAPI scenario, the intended run is:
 
 <FlowStep
   steps={[
@@ -246,13 +259,24 @@ Here's what the agent actually does:
     { title: "fetch_logs(email, since='2026-09-11T15:00Z')", body: "Returns: 47 × 401 errors, all with auth_error='stale_key_presented'. Confirms stale API key is being presented — not a platform bug.", color: "amber" },
     { title: "Diagnosis", body: "Root cause: customer's API key was auto-rotated at 3:32pm per policy. They're still sending requests with the old key. Runbook recommends: regenerate temp key + notify customer to update env.", color: "rose" },
     { title: "PAUSE → Human approval", body: "Agent stops and surfaces: 'Propose apply_fix(action=regenerate_key, target=tai@streamapi.io) + send_notification with new key. Approve?' You inspect and click approve.", color: "teal" },
-    { title: "apply_fix + send_notification", body: "New key generated, customer notified with rotation instructions and new key. Agent logs: 'Issue resolved in 4 tool calls. Resolution time: ~45 seconds.'", color: "green" },
+    { title: "apply_fix + send_notification", body: "After approval, a new key is generated and the customer is notified with rotation instructions. Expected audit entry: 'Issue resolved in 5 tool calls.' The ~45-second resolution time is an illustrative target, not a benchmark.", color: "green" },
   ]}
 />
 
 <Callout color="green">
-  Without the agent: engineer spends 15–20 min switching between logs, docs, and admin panel. With it: 45 seconds from report to proposed fix, with a human still in the loop before anything is sent.
+  As a planning target, automation can reduce the engineer's 15–20 minutes of tab-switching to a sub-minute proposed resolution — while the human approval gate remains in place.
 </Callout>
+
+The first `ainvoke` returns an interrupt before the write tools run. The approval handler resumes the same compiled agent with the same thread configuration:
+
+```python
+from langgraph.types import Command
+
+result = await agent.ainvoke(
+    Command(resume={"decisions": [{"type": "approve"}]}),
+    config=config,
+)
+```
 
 ---
 
