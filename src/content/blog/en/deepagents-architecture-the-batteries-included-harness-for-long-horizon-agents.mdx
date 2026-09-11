@@ -181,22 +181,19 @@ agent = create_deep_agent(
 # pauses before every edit/execute — approve, add guidance, or modify inputs
 ```
 
-Filesystem permission rules enforce the same principle at the tool level:
+Filesystem permissions use exactly two operations — `read` and `write` (which covers `write_file`, `edit_file`, and `delete`). Rules are evaluated top-down, first-match-wins:
 
 <EnforceRule
   methodLabel="Op"
   rules={[
-    { method: "READ",   action: ".env",          allowed: false },
-    { method: "WRITE",  action: ".env",          allowed: false },
-    { method: "DELETE", action: ".env",          allowed: false },
-    { method: "READ",   action: "/workspace/**", allowed: true  },
-    { method: "WRITE",  action: "/workspace/**", allowed: true  },
-    { method: "EDIT",   action: "/workspace/**", allowed: true  },
-    { method: "DELETE", action: "/workspace/**", allowed: true  },
+    { method: "READ",  action: ".env",          allowed: false },
+    { method: "WRITE", action: ".env",          allowed: false },
+    { method: "READ",  action: "/workspace/**", allowed: true  },
+    { method: "WRITE", action: "/workspace/**", allowed: true  },
   ]}
 />
 
-Rules are first-match-wins, evaluated top-down. Sandboxes enforce boundaries at the execution layer; the harness follows a "trust but verify" security model.
+The `mode` field on each permission also accepts `"interrupt"` instead of `"deny"` — this pauses execution for human approval rather than blocking outright. Sandboxes enforce boundaries at the tool level independently.
 
 ---
 
