@@ -61,77 +61,155 @@ The target flow is:
 
 ---
 
-## <Label color="teal">3</Label> Ingestion — one representation per content type
+## <Label color="teal">3</Label> Ingestion — event-driven, any file type
 
-Not everything should be embedded the same way. OpenAPI schemas lose structure when chunked as prose; Markdown docs lose context when embedded as individual sentences.
+Customers upload files, not a local directory. The ingestion pipeline is triggered by an upload event, downloads the file bytes from your download API, and dispatches to the right parser by content type. `resp.text` is wrong for binary formats — everything is streamed as bytes into a temp file first.
 
 ```python
-# ingest.py — run offline; triggered by CI merge or content webhook
-import base64, json, pickle, sqlite3
+# ingest_worker.py — triggered by upload event (SQS, webhook, Kafka, etc.)
+import base64, json, os, pickle, sqlite3, tempfile
 from pathlib import Path
-from langchain_community.document_loaders import DirectoryLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_aws import BedrockEmbeddings
 from langchain_community.vectorstores import Chroma
+from langchain_community.document_loaders import (
+    PyPDFLoader,
+    UnstructuredFileLoader,   # handles DOCX, XLSX, PPTX, HTML, TXT, MD, …
+)
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_litellm import ChatLiteLLM
 from langchain_core.documents import Document
-import os
+from langchain_core.document_loaders import BaseLoader
+import httpx
 
 embeddings = BedrockEmbeddings(
     model_id="amazon.titan-embed-text-v2:0",
     region_name=os.environ.get("AWS_REGION", "us-east-1"),
 )
-# Reasoning and multimodal calls — model ID set via LLM_MODEL env var
 vision = ChatLiteLLM(
     model=os.environ["LLM_MODEL"],
-    api_base=os.environ.get("LITELLM_API_BASE"),  # proxy base URL when using LiteLLM proxy
+    api_base=os.environ.get("LITELLM_API_BASE"),
 )
 
-# ── 1. Image-to-text: convert diagrams and screenshots to indexed prose ───────
-image_docs: list[Document] = []
-for img_path in sorted(Path("./kb-source").rglob("*.png")):
-    msg = vision.invoke([{
-        "role": "user",
-        "content": [
-            {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{base64.b64encode(img_path.read_bytes()).decode()}"}},
-            {"type": "text", "text": "Describe this diagram or screenshot concisely for a support agent knowledge base."},
-        ],
-    }])
-    image_docs.append(Document(page_content=msg.content, metadata={"source": str(img_path)}))
+IMAGE_TYPES = {"image/png", "image/jpeg", "image/webp"}
 
-# ── 2. Markdown KB: chunk and embed as searchable prose ──────────────────────
-docs = DirectoryLoader("./kb-source/", glob="**/*.md").load() + image_docs
-chunks = RecursiveCharacterTextSplitter(
-    chunk_size=800,
-    chunk_overlap=100,
-).split_documents(docs)
-Chroma.from_documents(chunks, embeddings, persist_directory="./kb-vector")
-# Persist chunks for BM25Retriever rebuild at startup
-pickle.dump(chunks, open("./kb-chunks.pkl", "wb"))
+# content-type → file extension (needed by parsers that sniff by extension)
+SUFFIXES = {
+    "application/pdf": ".pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation": ".pptx",
+    "text/html": ".html",
+    "text/plain": ".txt",
+    "text/markdown": ".md",
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/webp": ".webp",
+}
 
-# ── 3. OpenAPI: structured rows — service → path → method → operationId ──────
-conn = sqlite3.connect("./kb-openapi.db")
-conn.execute("""
-    CREATE TABLE IF NOT EXISTS operations (
-        service TEXT, path TEXT, method TEXT, operation_id TEXT,
-        summary TEXT, description TEXT, request_schema TEXT, response_schema TEXT
+
+class PlatformFileLoader(BaseLoader):
+    """Download one customer-uploaded file and yield parsed Documents."""
+
+    def __init__(self, file_id: str, tenant_id: str):
+        self.file_id = file_id
+        self.tenant_id = tenant_id   # from upload event, not from model
+
+    def lazy_load(self):
+        # Stream bytes — never resp.text; uploaded files are mostly binary
+        with httpx.stream(
+            "GET",
+            f"{os.environ['PLATFORM_API_BASE']}/files/{self.file_id}/download",
+            headers={"X-Tenant-ID": self.tenant_id},
+            timeout=60,
+        ) as resp:
+            resp.raise_for_status()
+            content_type = resp.headers.get("content-type", "").split(";")[0].strip()
+            suffix = SUFFIXES.get(content_type, ".bin")
+
+            with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+                for chunk in resp.iter_bytes():
+                    tmp.write(chunk)
+                tmp_path = tmp.name
+
+        # Dispatch by content type
+        meta = {"file_id": self.file_id, "tenant_id": self.tenant_id}
+        if content_type in IMAGE_TYPES:
+            # Images → Sonnet multimodal → text Document
+            data = Path(tmp_path).read_bytes()
+            msg = vision.invoke([{
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {
+                        "url": f"data:{content_type};base64,{base64.b64encode(data).decode()}",
+                    }},
+                    {"type": "text", "text": "Describe this diagram or screenshot concisely for a support agent KB."},
+                ],
+            }])
+            yield Document(page_content=msg.content, metadata=meta)
+        elif content_type == "application/pdf":
+            for doc in PyPDFLoader(tmp_path).load():
+                doc.metadata.update(meta)
+                yield doc
+        else:
+            # DOCX, XLSX, PPTX, HTML, TXT, MD — Unstructured handles all of these
+            for doc in UnstructuredFileLoader(tmp_path).load():
+                doc.metadata.update(meta)
+                yield doc
+
+
+def ingest_file(file_id: str, tenant_id: str) -> None:
+    """Called by the upload event handler for each new file."""
+    docs = list(PlatformFileLoader(file_id, tenant_id).lazy_load())
+    if not docs:
+        return
+
+    chunks = RecursiveCharacterTextSplitter(
+        chunk_size=800, chunk_overlap=100,
+    ).split_documents(docs)
+
+    # Tenant-scoped Chroma collection so retrieval is isolated per tenant
+    store = Chroma(
+        collection_name=f"kb-{tenant_id}",
+        embedding_function=embeddings,
+        persist_directory="./kb-vector",
     )
-""")
-spec = json.load(open("./openapi.json"))
-for path, methods in spec.get("paths", {}).items():
-    for method, op in methods.items():
-        conn.execute("INSERT INTO operations VALUES (?,?,?,?,?,?,?,?)", (
-            spec.get("info", {}).get("title", ""),
-            path, method.upper(),
-            op.get("operationId", ""),
-            op.get("summary", ""),
-            op.get("description", ""),
-            json.dumps(op.get("requestBody", {})),
-            json.dumps(op.get("responses", {})),
-        ))
-conn.commit()
-print(f"Indexed {conn.execute('SELECT COUNT(*) FROM operations').fetchone()[0]} operations.")
+    store.add_documents(chunks)
+
+    # Persist all chunks for BM25 rebuild (append to existing pickle if present)
+    pkl_path = Path(f"./kb-chunks-{tenant_id}.pkl")
+    existing = pickle.loads(pkl_path.read_bytes()) if pkl_path.exists() else []
+    pickle.dump(existing + chunks, pkl_path.open("wb"))
+
+
+# ── OpenAPI: structured rows — service → path → method → operationId ──────────
+# Run separately when the OpenAPI spec is published or updated.
+def ingest_openapi(spec_path: str, tenant_id: str) -> None:
+    conn = sqlite3.connect("./kb-openapi.db")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS operations (
+            tenant_id TEXT, service TEXT, path TEXT, method TEXT, operation_id TEXT,
+            summary TEXT, description TEXT, request_schema TEXT, response_schema TEXT
+        )
+    """)
+    spec = json.load(open(spec_path))
+    for path, methods in spec.get("paths", {}).items():
+        for method, op in methods.items():
+            conn.execute("INSERT INTO operations VALUES (?,?,?,?,?,?,?,?,?)", (
+                tenant_id,
+                spec.get("info", {}).get("title", ""),
+                path, method.upper(),
+                op.get("operationId", ""),
+                op.get("summary", ""),
+                op.get("description", ""),
+                json.dumps(op.get("requestBody", {})),
+                json.dumps(op.get("responses", {})),
+            ))
+    conn.commit()
 ```
+
+<Callout color="amber">
+  `tenant_id` comes from the upload event payload — verified server-side. It must never come from the file contents or from a model-supplied argument, because those are not authenticated.
+</Callout>
 
 <DataTable
   headers={["Content type", "Representation", "Why"]}
@@ -216,7 +294,8 @@ MCP tools are async, so the agent setup lives in an async function:
 
 ```python
 # agent.py
-import asyncio, pickle, sqlite3
+import asyncio, os, pickle, sqlite3
+from pathlib import Path
 from langchain_aws import BedrockEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain_community.retrievers import BM25Retriever
@@ -233,7 +312,6 @@ def make_model(**kw):
     """LiteLLM routes to any backend. LLM_MODEL must be set — no default.
     Credentials are per-backend: AWS IAM chain for Bedrock, ANTHROPIC_API_KEY,
     OPENAI_API_KEY, etc. Set LITELLM_API_BASE only when routing via a proxy."""
-    import os
     return ChatLiteLLM(
         model=os.environ["LLM_MODEL"],
         api_base=os.environ.get("LITELLM_API_BASE"),
@@ -241,66 +319,87 @@ def make_model(**kw):
         **kw,
     )
 
-# ── Retrieval tools ────────────────────────────────────────────────────────────
+# ── Retrieval tools — built per request with tenant_id baked in ───────────────
+# tenant_id comes from the authenticated request context, never from model args.
 
-_emb  = BedrockEmbeddings(model_id="amazon.titan-embed-text-v2:0", region_name="us-east-1")
-_vec  = Chroma(persist_directory="./kb-vector", embedding_function=_emb).as_retriever(
-    search_kwargs={"k": 5},
-)
-_bm25 = BM25Retriever.from_documents(pickle.load(open("./kb-chunks.pkl", "rb")), k=5)
-_kb_retriever = EnsembleRetriever(retrievers=[_bm25, _vec], weights=[0.4, 0.6])
+_emb = BedrockEmbeddings(model_id="amazon.titan-embed-text-v2:0",
+                          region_name=os.environ.get("AWS_REGION", "us-east-1"))
 
-@tool
-def search_kb(query: str) -> list[dict]:
-    """BM25 + Titan-vector ensemble search over Markdown KB: runbooks, known
-    issues, changelogs, tier definitions. Use for general KB questions.
-    Returns a list of {content, source} dicts."""
-    return [
-        {"content": d.page_content, "source": d.metadata.get("source", "")}
-        for d in _kb_retriever.invoke(query)
-    ]
-
-@tool
-def lookup_openapi(service: str, path: str = "", method: str = "") -> list[dict]:
-    """Structured lookup in the OpenAPI metadata store. Returns matching operations
-    with request/response schemas. Filter by service, path, or HTTP method.
-    Use for contract questions: 'does GET /orders accept a cursor param?'"""
-    conn = sqlite3.connect("./kb-openapi.db")
-    query = "SELECT * FROM operations WHERE service = ?"
-    params: list = [service]
-    if path:
-        query += " AND path LIKE ?"
-        params.append(f"%{path}%")
-    if method:
-        query += " AND method = ?"
-        params.append(method.upper())
-    rows = conn.execute(query, params).fetchall()
-    cols = ["service","path","method","operation_id","summary","description",
-            "request_schema","response_schema"]
-    return [dict(zip(cols, r)) for r in rows]
-
-@tool
-def catalog_count(entity: str) -> dict:
-    """Return a count of indexed entities: 'operations', 'docs', 'known_issues'.
-    Use for questions like 'how many APIs do we have?'"""
-    conn = sqlite3.connect("./kb-openapi.db")
-    if entity == "operations":
-        n = conn.execute("SELECT COUNT(*) FROM operations").fetchone()[0]
+def make_kb_tools(tenant_id: str):
+    """Return search_kb, lookup_openapi, catalog_count scoped to tenant_id."""
+    pkl_path = Path(f"./kb-chunks-{tenant_id}.pkl")
+    if pkl_path.exists():
+        bm25 = BM25Retriever.from_documents(pickle.loads(pkl_path.read_bytes()), k=5)
+        vec  = Chroma(
+            collection_name=f"kb-{tenant_id}",
+            embedding_function=_emb,
+            persist_directory="./kb-vector",
+        ).as_retriever(search_kwargs={"k": 5})
+        kb_retriever = EnsembleRetriever(retrievers=[bm25, vec], weights=[0.4, 0.6])
     else:
-        n = -1  # extend for other entity types
-    return {"entity": entity, "count": n}
+        kb_retriever = None
+
+    @tool
+    def search_kb(query: str) -> list[dict]:
+        """BM25 + Titan-vector ensemble search over the tenant's KB: runbooks,
+        known issues, changelogs, tier definitions. Use for general KB questions."""
+        if kb_retriever is None:
+            return []
+        return [{"content": d.page_content, "source": d.metadata.get("source", "")}
+                for d in kb_retriever.invoke(query)]
+
+    @tool
+    def lookup_openapi(service: str = "", path: str = "", method: str = "") -> list[dict]:
+        """Structured lookup in the tenant's OpenAPI metadata store.
+        Filter by service, path, or HTTP method.
+        Use for contract questions: 'does GET /orders accept a cursor param?'"""
+        conn = sqlite3.connect("./kb-openapi.db")
+        # Explicit column list — table has tenant_id first, then 8 data columns
+        sql = """SELECT service, path, method, operation_id, summary, description,
+                        request_schema, response_schema
+                   FROM operations WHERE tenant_id = ?"""
+        params: list = [tenant_id]
+        if service:
+            sql += " AND service = ?"
+            params.append(service)
+        if path:
+            sql += " AND path LIKE ?"
+            params.append(f"%{path}%")
+        if method:
+            sql += " AND method = ?"
+            params.append(method.upper())
+        rows = conn.execute(sql, params).fetchall()
+        cols = ["service", "path", "method", "operation_id", "summary",
+                "description", "request_schema", "response_schema"]
+        return [dict(zip(cols, r)) for r in rows]
+
+    @tool
+    def catalog_count(entity: str) -> dict:
+        """Return a count of indexed entities for this tenant: 'operations', 'docs'.
+        Use for questions like 'how many APIs do we have?'"""
+        conn = sqlite3.connect("./kb-openapi.db")
+        if entity == "operations":
+            n = conn.execute(
+                "SELECT COUNT(*) FROM operations WHERE tenant_id = ?", [tenant_id]
+            ).fetchone()[0]
+        else:
+            n = -1
+        return {"entity": entity, "count": n}
+
+    return search_kb, lookup_openapi, catalog_count
 
 
-# ── Build agent (async because MCP tools require await) ───────────────────────
+# ── Build agent ────────────────────────────────────────────────────────────────
 
-async def build_agent():
+async def build_agent(tenant_id: str):
+    search_kb, lookup_openapi, catalog_count = make_kb_tools(tenant_id)
     mcp = MultiServerMCPClient({
         "platform": {
             "url": "http://localhost:8080/sse",
             "transport": "sse",
         }
     })
-    platform_tools = await mcp.get_tools()   # get_customer_state, fetch_logs, apply_fix, send_notification
+    platform_tools = await mcp.get_tools()
 
     return create_deep_agent(
         model=make_model(),
@@ -370,7 +469,7 @@ Invoke the agent with the customer's report:
 ```python
 # support_request.py
 async def troubleshoot():
-    agent = await build_agent()
+    agent = await build_agent(tenant_id=auth_context.current_tenant_id())
     config = {"configurable": {"thread_id": "streamapi-tai-401"}}
     paused = await agent.ainvoke(
         {
@@ -589,37 +688,44 @@ Pin `LLM_MODEL` per environment. Run the same golden ticket benchmark (section 9
 
 ## <Label color="green">12</Label> Deploy the agent as a service
 
-Do not deploy the notebook or run `asyncio.run()` per customer request. Build the agent once when the service starts, expose an authenticated endpoint, and use a durable checkpointer/store in production:
+Build a tenant-scoped agent per request — one process-wide agent would answer every customer using the same KB. Cache agents per `tenant_id` to avoid rebuilding BM25 and MCP connections on every call:
 
 ```python
 # service.py
-from contextlib import asynccontextmanager
+import os
+from typing import Any
 from uuid import uuid4
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from pydantic import BaseModel
+
+app = FastAPI()
+
+# Cache keyed by tenant_id — avoids rebuilding BM25 and MCP connections
+# per-request. Invalidate an entry when that tenant's KB is re-indexed.
+_agent_cache: dict[str, Any] = {}
 
 class SupportRequest(BaseModel):
     customer_email: str
     report: str
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    app.state.agent = await build_agent()
-    yield
-
-app = FastAPI(lifespan=lifespan)
-
 @app.post("/v1/troubleshoot")
-async def troubleshoot(request: SupportRequest):
+async def troubleshoot(request: Request, body: SupportRequest):
+    # tenant_id injected by auth middleware — never read from request body
+    tenant_id: str = request.state.tenant_id
+
+    if tenant_id not in _agent_cache:
+        _agent_cache[tenant_id] = await build_agent(tenant_id=tenant_id)
+    agent = _agent_cache[tenant_id]
+
     thread_id = str(uuid4())
     config = {"configurable": {"thread_id": thread_id}}
-    result = await app.state.agent.ainvoke(
+    result = await agent.ainvoke(
         {
             "messages": [{
                 "role": "user",
                 "content": (
-                    f"Customer: {request.customer_email}\n"
-                    f"Report: {request.report}"
+                    f"Customer: {body.customer_email}\n"
+                    f"Report: {body.report}"
                 ),
             }]
         },
@@ -682,6 +788,7 @@ Install everything:
 uv add deepagents langchain langchain-mcp-adapters \
        langchain-community langchain-text-splitters langchain-aws \
        langchain-litellm litellm rank-bm25 \
+       unstructured pypdf \
        chromadb mcp httpx fastapi uvicorn
 ```
 
