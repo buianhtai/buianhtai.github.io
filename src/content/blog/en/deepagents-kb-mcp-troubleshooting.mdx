@@ -91,7 +91,8 @@ print(f"Ingested {len(chunks)} chunks from {len(docs)} documents.")
 
 ## <Label color="amber">3</Label> Platform MCP server
 
-Your platform needs to expose an MCP server with at least these tools. The exact implementation is yours — DeepAgents calls them as black boxes:
+Your platform needs to expose an MCP server with at least these tools. The exact implementation is yours — DeepAgents calls them as black boxes.
+
 Treat `email` as a lookup selector, not an authorization boundary. Every tool derives the tenant from the verified MCP request context before reading or mutating data:
 
 ```python
@@ -140,13 +141,16 @@ Now connect all three pieces. MCP tools are async, so the agent setup lives in a
 
 Before wiring the agent, separate **policy** from **state**. `memory=["./AGENTS.md"]` is a static prompt input — it is not a tenant database and should never contain customer-specific facts:
 
-| Data | Store it in |
-| --- | --- |
-| Escalation rules, tone, durable agent policy | `AGENTS.md` / static memory |
-| Current conversation and pending tool calls | A checkpointer, keyed by `thread_id` |
-| Customer account state, tickets, preferences, audit history | Tenant-scoped application database |
-| Cross-session agent facts | A persistent store, namespaced by tenant and user |
-| Runbooks and product documentation | The searchable KB |
+<DataTable
+  headers={["Data", "Store it in"]}
+  rows={[
+    { "Data": "Escalation rules, tone, durable agent policy", "Store it in": "`AGENTS.md` / static memory" },
+    { "Data": "Current conversation and pending tool calls", "Store it in": "A checkpointer, keyed by `thread_id`" },
+    { "Data": "Customer account state, tickets, preferences, audit history", "Store it in": "Tenant-scoped application database" },
+    { "Data": "Cross-session agent facts", "Store it in": "Persistent store, namespaced by tenant and user" },
+    { "Data": "Runbooks and product documentation", "Store it in": "The searchable KB" },
+  ]}
+/>
 
 The MCP server or HTTP tool must derive tenant identity from the verified request context. Never let the model choose the tenant boundary by passing an arbitrary `tenant_id` or email to an unrestricted database query.
 
@@ -326,16 +330,7 @@ The `memory=["./AGENTS.md"]` file is loaded on every session. It contains durabl
 - Always tell the customer what you found, not just what you did.
 ```
 
-For example, the platform tool can enforce tenant scope from authentication before querying the database:
-
-```python
-# Inside the MCP server (or a directly wrapped HTTP tool)
-async def get_customer_state(email: str) -> dict:
-    # `email` selects a customer inside the already-authenticated tenant.
-    tenant_id = auth_context.current_tenant_id()
-    return await customer_db.fetch_state(tenant_id=tenant_id, email=email)
-
-```
+The MCP implementation above is where this tenant check belongs. Whether the agent reaches it through MCP or a directly wrapped HTTP tool, the server must derive the tenant from verified authentication before querying or mutating customer data.
 
 If the agent needs durable facts across sessions, use a persistent store with a namespace such as `("tenant", tenant_id, "user", user_id)`. The current investigation still belongs to the checkpointer's `thread_id`; the database and store hold long-lived domain state.
 
