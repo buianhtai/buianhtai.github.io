@@ -232,7 +232,7 @@ Invoke the agent with the customer's report:
 async def troubleshoot():
     agent = await build_agent()
     config = {"configurable": {"thread_id": "streamapi-tai-401"}}
-    return await agent.ainvoke(
+    paused = await agent.ainvoke(
         {
             "messages": [{
                 "role": "user",
@@ -246,8 +246,9 @@ async def troubleshoot():
         },
         config=config,
     )
+    return agent, config, paused
 
-result = asyncio.run(troubleshoot())
+agent, config, result = asyncio.run(troubleshoot())
 ```
 
 For this fictional StreamAPI scenario, the intended run is:
@@ -267,15 +268,18 @@ For this fictional StreamAPI scenario, the intended run is:
   As a planning target, automation can reduce the engineer's 15–20 minutes of tab-switching to a sub-minute proposed resolution — while the human approval gate remains in place.
 </Callout>
 
-The first `ainvoke` returns an interrupt before the write tools run. The approval handler resumes the same compiled agent with the same thread configuration:
+The first `ainvoke` returns an interrupt before the write tools run. Keep the `agent` and `config` returned by `troubleshoot()` in the same async worker, then resume after the human approves both pending write actions:
 
 ```python
 from langgraph.types import Command
 
-result = await agent.ainvoke(
-    Command(resume={"decisions": [{"type": "approve"}]}),
-    config=config,
-)
+async def approve_and_resume(agent, config):
+    return await agent.ainvoke(
+        Command(resume={
+            "decisions": [{"type": "approve"}, {"type": "approve"}]
+        }),
+        config=config,
+    )
 ```
 
 ---
