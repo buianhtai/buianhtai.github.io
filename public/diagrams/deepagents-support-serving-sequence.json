@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "How the Support Agent Serves a Request",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "column_fit": "spread",
+    "viewBox": [1250, 700]
+  },
+  "participants": [
+    { "id": "user", "type": "external", "label": "Support user" },
+    { "id": "api", "type": "security", "label": "Support API" },
+    { "id": "agent", "type": "backend", "label": "DeepAgents" },
+    { "id": "postgres", "type": "database", "label": "PostgreSQL" },
+    { "id": "litellm", "type": "backend", "label": "LiteLLM" },
+    { "id": "mcp", "type": "backend", "label": "Platform MCP" },
+    { "id": "human", "type": "security", "label": "Approver" }
+  ],
+  "segments": [
+    { "from": 150, "to": 325, "label": "Static knowledge first" },
+    { "from": 335, "to": 450, "label": "Live evidence fallback" },
+    { "from": 460, "to": 605, "label": "Answer or approved action" }
+  ],
+  "messages": [
+    { "from": "user", "to": "api", "y": 165, "label": "POST /v1/troubleshoot", "variant": "emphasis" },
+    { "from": "api", "to": "agent", "y": 195, "label": "verified tenant + report", "variant": "security" },
+    { "from": "agent", "to": "postgres", "y": 225, "label": "hybrid search or exact SQL", "variant": "emphasis" },
+    { "from": "postgres", "to": "agent", "y": 255, "label": "scoped chunks + citations", "variant": "return" },
+    { "from": "agent", "to": "litellm", "y": 285, "label": "evaluate evidence" },
+    { "from": "litellm", "to": "agent", "y": 315, "label": "grounded or insufficient", "variant": "return" },
+    { "from": "agent", "to": "mcp", "y": 350, "label": "fetch customer state / logs", "variant": "dashed" },
+    { "from": "mcp", "to": "agent", "y": 380, "label": "tenant-scoped live evidence", "variant": "return" },
+    { "from": "agent", "to": "litellm", "y": 410, "label": "synthesize diagnosis" },
+    { "from": "litellm", "to": "agent", "y": 440, "label": "answer or proposed fix", "variant": "return" },
+    { "from": "agent", "to": "human", "y": 470, "label": "interrupt before write", "variant": "security" },
+    { "from": "human", "to": "agent", "y": 500, "label": "approve + resume thread", "variant": "security" },
+    { "from": "agent", "to": "mcp", "y": 530, "label": "apply approved fix", "variant": "emphasis" },
+    { "from": "mcp", "to": "agent", "y": 560, "label": "result + audit reference", "variant": "return" },
+    { "from": "agent", "to": "api", "y": 590, "label": "grounded response + citations", "variant": "return" }
+  ]
+}

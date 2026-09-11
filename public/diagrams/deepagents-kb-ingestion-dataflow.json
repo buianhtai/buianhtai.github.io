@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "Support Knowledge Ingestion and Organization",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "viewBox": [1080, 620]
+  },
+  "stages": [
+    { "label": "Knowledge sources" },
+    { "label": "Source adapters" },
+    { "label": "Normalize + govern" },
+    { "label": "PostgreSQL" },
+    { "label": "Agent tools" }
+  ],
+  "nodes": [
+    { "id": "uploads", "type": "external", "label": "Customer uploads", "sublabel": "tenant-private files", "stage": 0, "row": 0, "tag": "tenant", "width": 132 },
+    { "id": "mdx", "type": "external", "label": "API docs in MDX", "sublabel": "__platform__ guides", "stage": 0, "row": 1, "tag": "platform", "width": 132 },
+    { "id": "okf", "type": "external", "label": "OKF concepts", "sublabel": "__platform__ facts", "stage": 0, "row": 2, "tag": "platform", "width": 132 },
+    { "id": "file_adapter", "type": "backend", "label": "File adapter", "sublabel": "parser + Sonnet vision", "stage": 1, "row": 0, "width": 132 },
+    { "id": "mdx_export", "type": "backend", "label": "MDX export step", "sublabel": "clean text JSONL", "stage": 1, "row": 1, "width": 132 },
+    { "id": "okf_parser", "type": "backend", "label": "OKF parser", "sublabel": "frontmatter + body", "stage": 1, "row": 2, "width": 132 },
+    { "id": "normalize", "type": "security", "label": "Canonical documents", "sublabel": "chunk · scope_id · revision", "stage": 2, "row": 1, "tag": "origin + revision", "width": 140 },
+    { "id": "pgvector", "type": "database", "label": "PGVector", "sublabel": "scoped semantic chunks", "stage": 3, "row": 0, "width": 126 },
+    { "id": "fts", "type": "database", "label": "PostgreSQL FTS", "sublabel": "scoped terms + errors", "stage": 3, "row": 1, "width": 126 },
+    { "id": "okf_sql", "type": "database", "label": "OKF SQL", "sublabel": "platform facts + counts", "stage": 3, "row": 2, "width": 126 },
+    { "id": "tools", "type": "backend", "label": "KB tools", "sublabel": "platform + one tenant", "stage": 4, "row": 1, "tag": "serve", "width": 132 }
+  ],
+  "flows": [
+    { "from": "uploads", "to": "file_adapter", "label": "binary stream", "variant": "security" },
+    { "from": "mdx", "to": "mdx_export", "label": "docs build" },
+    { "from": "okf", "to": "okf_parser", "label": "concept files" },
+    { "from": "file_adapter", "to": "normalize", "label": "parsed text" },
+    { "from": "mdx_export", "to": "normalize", "label": "clean JSONL", "variant": "emphasis", "labelAt": [371, 238] },
+    { "from": "okf_parser", "to": "normalize", "label": "concept body" },
+    { "from": "normalize", "to": "pgvector", "label": "Titan vectors" },
+    { "from": "normalize", "to": "fts", "label": "weighted text", "route": "straight", "labelDy": 35 },
+    { "from": "okf_parser", "to": "okf_sql", "label": "typed fields", "variant": "emphasis", "route": "straight" },
+    { "from": "pgvector", "to": "tools", "label": "semantic" },
+    { "from": "fts", "to": "tools", "label": "exact terms", "route": "straight", "labelAt": [911, 238] },
+    { "from": "okf_sql", "to": "tools", "label": "contracts + counts", "variant": "emphasis" }
+  ]
+}
