@@ -67,27 +67,44 @@ Not everything should be embedded the same way. OpenAPI schemas lose structure w
 
 ```python
 # ingest.py — run offline; triggered by CI merge or content webhook
+import base64, json, pickle, sqlite3
+from pathlib import Path
 from langchain_community.document_loaders import DirectoryLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_openai import OpenAIEmbeddings
+from langchain_aws import BedrockEmbeddings
 from langchain_community.vectorstores import Chroma
-import json, sqlite3
+from langchain_litellm import ChatLiteLLM
 
-# ── 1. Markdown KB: embed as searchable prose ─────────────────────────────────
+embeddings = BedrockEmbeddings(
+    model_id="amazon.titan-embed-text-v2:0",
+    region_name="us-east-1",
+)
+vision = ChatLiteLLM(model="bedrock/anthropic.claude-sonnet-4-5-20250929-v1:0")
+
+# ── 1. Image-to-text: extract content from diagrams and screenshots ──────────
+# Run before chunking so embedded prose describes visual content accurately.
+def extract_image_text(img_path: Path) -> str:
+    data = base64.b64encode(img_path.read_bytes()).decode()
+    msg = vision.invoke([{
+        "role": "user",
+        "content": [
+            {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{data}"}},
+            {"type": "text", "text": "Describe this diagram or screenshot concisely for a support agent knowledge base."},
+        ],
+    }])
+    return msg.content
+
+# ── 2. Markdown KB: chunk and embed as searchable prose ──────────────────────
 docs = DirectoryLoader("./kb-source/", glob="**/*.md").load()
 chunks = RecursiveCharacterTextSplitter(
     chunk_size=800,
     chunk_overlap=100,
 ).split_documents(docs)
-Chroma.from_documents(
-    chunks,
-    OpenAIEmbeddings(model="text-embedding-3-small"),
-    persist_directory="./kb-vector",
-)
+Chroma.from_documents(chunks, embeddings, persist_directory="./kb-vector")
+# Persist chunks for BM25Retriever rebuild at startup
+pickle.dump(chunks, open("./kb-chunks.pkl", "wb"))
 
-# ── 2. OpenAPI: preserve structure as filterable rows ─────────────────────────
-# Keep service → path → method → operationId → request/response schema intact.
-# Embed only the description; filter on the structured fields at query time.
+# ── 3. OpenAPI: structured rows — service → path → method → operationId ──────
 conn = sqlite3.connect("./kb-openapi.db")
 conn.execute("""
     CREATE TABLE IF NOT EXISTS operations (
@@ -194,34 +211,48 @@ MCP tools are async, so the agent setup lives in an async function:
 
 ```python
 # agent.py
-import asyncio
-import sqlite3
-from langchain.chat_models import init_chat_model
-from langchain_openai import OpenAIEmbeddings
+import asyncio, pickle, sqlite3
+from langchain_aws import BedrockEmbeddings
 from langchain_community.vectorstores import Chroma
+from langchain_community.retrievers import BM25Retriever
+from langchain.retrievers import EnsembleRetriever
 from langchain_core.tools import tool
+from langchain_litellm import ChatLiteLLM
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from deepagents import create_deep_agent
 from deepagents.backends import FilesystemBackend
 from deepagents.middleware.filesystem import FilesystemPermission
 from langgraph.checkpoint.memory import MemorySaver
 
+def make_model(**kw):
+    """LiteLLM routes to any backend. Set LLM_MODEL env var to switch."""
+    return ChatLiteLLM(
+        model=__import__("os").getenv(
+            "LLM_MODEL",
+            "bedrock/anthropic.claude-sonnet-4-5-20250929-v1:0",
+        ),
+        temperature=0,
+        **kw,
+    )
+
 # ── Retrieval tools ────────────────────────────────────────────────────────────
 
-_kb_store = Chroma(
-    persist_directory="./kb-vector",
-    embedding_function=OpenAIEmbeddings(model="text-embedding-3-small"),
+_emb  = BedrockEmbeddings(model_id="amazon.titan-embed-text-v2:0", region_name="us-east-1")
+_vec  = Chroma(persist_directory="./kb-vector", embedding_function=_emb).as_retriever(
+    search_kwargs={"k": 5},
 )
-_kb_retriever = _kb_store.as_retriever(search_kwargs={"k": 5})
+_bm25 = BM25Retriever.from_documents(pickle.load(open("./kb-chunks.pkl", "rb")), k=5)
+_kb_retriever = EnsembleRetriever(retrievers=[_bm25, _vec], weights=[0.4, 0.6])
 
 @tool
 def search_kb(query: str) -> list[dict]:
-    """Hybrid BM25 + vector search over Markdown KB: runbooks, known issues,
-    changelogs, tier definitions. Use for general troubleshooting questions.
-    Returns a list of {content, source, score} dicts."""
-    docs = _kb_retriever.invoke(query)
-    return [{"content": d.page_content, "source": d.metadata.get("source", "")}
-            for d in docs]
+    """BM25 + Titan-vector ensemble search over Markdown KB: runbooks, known
+    issues, changelogs, tier definitions. Use for general KB questions.
+    Returns a list of {content, source} dicts."""
+    return [
+        {"content": d.page_content, "source": d.metadata.get("source", "")}
+        for d in _kb_retriever.invoke(query)
+    ]
 
 @tool
 def lookup_openapi(service: str, path: str = "", method: str = "") -> list[dict]:
@@ -521,40 +552,31 @@ Use direct HTTP for a few endpoints owned by the same team. Use MCP when capabil
 
 ---
 
-## <Label color="violet">11</Label> Choosing the LLM provider
+## <Label color="violet">11</Label> LiteLLM — one interface, any backend
 
-The agent loop is provider-neutral. Keep provider selection outside the prompt and inject a chat model at startup:
+[LiteLLM](https://github.com/BerriAI/litellm) gives DeepAgents a single `ChatLiteLLM` interface over every major provider. The only variable is the model string; no provider-specific client classes. For this stack Bedrock is the default — reasoning and multimodal calls both route through it:
 
 ```python
-import os
-from langchain.chat_models import init_chat_model
-
-MODEL_DEFAULTS = {
-    "anthropic": "anthropic:claude-sonnet-4-5-20250929",
-    "openai": "openai:gpt-4.1",
-    "bedrock": "bedrock_converse:anthropic.claude-sonnet-4-5-20250929-v1:0",
-}
-
-def make_model():
-    provider = os.getenv("LLM_PROVIDER", "anthropic")
-    model = os.getenv("LLM_MODEL", MODEL_DEFAULTS.get(provider, ""))
-    if not model:
-        raise ValueError(f"Unsupported LLM_PROVIDER: {provider}")
-    return init_chat_model(model, temperature=0)
+# Set in environment or secret manager — never in code
+# LLM_MODEL=bedrock/anthropic.claude-sonnet-4-5-20250929-v1:0   ← default
+# LLM_MODEL=anthropic/claude-sonnet-4-5-20250929                ← direct Anthropic
+# LLM_MODEL=openai/gpt-4.1                                      ← OpenAI
 ```
 
-Replace `model=ChatAnthropic(...)` in `build_agent()` with `model=make_model()`. Provider credentials stay in the runtime secret manager: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or AWS IAM/role credentials for Bedrock. Never put keys in `AGENTS.md`, the KB, tool arguments, or logs.
+`make_model()` in `agent.py` reads `LLM_MODEL` at startup and returns a `ChatLiteLLM` instance — no code change needed to switch backends. The same model handles both text reasoning and multimodal image-to-text in the ingestion pipeline.
 
 <DataTable
-  headers={["Provider", "Credentials", "Good default"]}
+  headers={["Backend", "LiteLLM model string", "Credentials"]}
   rows={[
-    { "Provider": "Anthropic", "Credentials": "`ANTHROPIC_API_KEY`", "Good default": "Strong reasoning and tool use" },
-    { "Provider": "OpenAI", "Credentials": "`OPENAI_API_KEY`", "Good default": "Broad model and platform ecosystem" },
-    { "Provider": "Amazon Bedrock", "Credentials": "IAM role / access policy", "Good default": "AWS boundary, regional deployment, enterprise governance" },
+    { "Backend": "Amazon Bedrock (default)", "LiteLLM model string": "`bedrock/anthropic.claude-sonnet-4-5-20250929-v1:0`", "Credentials": "IAM role or `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`" },
+    { "Backend": "Anthropic direct", "LiteLLM model string": "`anthropic/claude-sonnet-4-5-20250929`", "Credentials": "`ANTHROPIC_API_KEY`" },
+    { "Backend": "OpenAI", "LiteLLM model string": "`openai/gpt-4.1`", "Credentials": "`OPENAI_API_KEY`" },
   ]}
 />
 
-Pin a model per environment, run the same golden ticket set against each provider, and compare tool-call correctness, refusal behavior, latency, and cost before switching.
+Embeddings stay on `BedrockEmbeddings(model_id="amazon.titan-embed-text-v2:0")` — LiteLLM's embedding path works too, but the native `langchain_aws` class keeps the Bedrock IAM credential chain consistent.
+
+Pin `LLM_MODEL` per environment. Run the same golden ticket benchmark (section 9) against each backend before switching in production.
 
 ---
 
@@ -651,8 +673,8 @@ Install everything:
 
 ```bash
 uv add deepagents langchain langchain-mcp-adapters \
-       langchain-community langchain-text-splitters \
-       langchain-openai langchain-anthropic langchain-aws \
+       langchain-community langchain-text-splitters langchain-aws \
+       langchain-litellm litellm rank-bm25 \
        chromadb mcp httpx fastapi uvicorn
 ```
 
