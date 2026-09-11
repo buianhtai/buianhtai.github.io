@@ -77,6 +77,25 @@ There are two distinct knowledge sources. They use separate ingest paths and fee
 
 OKF does not replace OpenAPI or document-upload formats. An `API Endpoint` concept links to the canonical OpenAPI resource; customer files remain ordinary PDF, DOCX, or image payloads.
 
+One OKF concept is just a Markdown file. For an endpoint, keep the machine-queryable fields in frontmatter and the support guidance in the body:
+
+```markdown
+---
+type: API Endpoint
+title: GET /orders
+description: List orders with cursor pagination
+resource: openapi.yaml#/paths/~1orders/get
+tags: orders,pagination
+status: current
+stale_after: 2026-12-31
+---
+
+# GET /orders
+
+Use `cursor` from the previous response's `next_cursor` field.
+A missing cursor starts from the newest order. A malformed cursor returns `400`.
+```
+
 ```python
 # ingest_worker.py
 import base64, hashlib, os, psycopg, tempfile, yaml
