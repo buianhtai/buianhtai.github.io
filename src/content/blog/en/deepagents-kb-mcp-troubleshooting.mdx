@@ -137,7 +137,7 @@ if __name__ == "__main__":
 
 ## <Label color="rose">4</Label> Wiring DeepAgents
 
-Now connect all three pieces. MCP tools are async, so the agent setup lives in an async function:
+Now connect all three pieces.
 
 Before wiring the agent, separate **policy** from **state**. `memory=["./AGENTS.md"]` is a static prompt input — it is not a tenant database and should never contain customer-specific facts:
 
@@ -153,6 +153,8 @@ Before wiring the agent, separate **policy** from **state**. `memory=["./AGENTS.
 />
 
 The MCP server or HTTP tool must derive tenant identity from the verified request context. Never let the model choose the tenant boundary by passing an arbitrary `tenant_id` or email to an unrestricted database query.
+
+MCP tools are async, so the agent setup lives in an async function:
 
 ```python
 # agent.py
