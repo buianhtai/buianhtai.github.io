@@ -362,7 +362,162 @@ Install everything:
 ```bash
 uv add deepagents langchain-mcp-adapters \
        langchain-community langchain-text-splitters \
-       langchain-openai langchain-anthropic chromadb mcp
+       langchain-openai langchain-anthropic langchain-aws \
+       chromadb mcp httpx fastapi uvicorn
 ```
+
+---
+
+## <Label color="blue">7</Label> MCP or direct HTTP?
+
+MCP is a capability boundary, not a requirement. DeepAgents accepts ordinary LangChain tools too. For a small, stable internal API, a typed HTTP tool can be simpler than running an MCP server:
+
+```python
+# http_tools.py — fixed endpoint, typed inputs, no arbitrary URL access
+import os
+import httpx
+from langchain_core.tools import tool
+
+@tool
+async def fetch_logs_http(email: str, since: str, level: str = "ERROR") -> list[dict]:
+    """Read recent logs for a customer inside the authenticated tenant."""
+    tenant_id = auth_context.current_tenant_id()
+    async with httpx.AsyncClient(
+        base_url="https://api.streamapi.io",
+        timeout=10.0,
+    ) as client:
+        response = await client.get(
+            "/internal/logs",
+            params={"customer": email, "since": since, "level": level},
+            headers={
+                "Authorization": f"Bearer {os.environ['STREAMAPI_INTERNAL_TOKEN']}",
+                "X-Tenant-ID": tenant_id,
+            },
+        )
+        response.raise_for_status()
+        return response.json()
+```
+
+Pass `fetch_logs_http` directly in `tools=[...]` and remove `MultiServerMCPClient`. Keep the same tenant checks, timeouts, redaction, and `interrupt_on` rules. Never expose a generic `url` or raw `requests.get` tool to the model.
+
+Use direct HTTP for a few endpoints owned by the same team. Use MCP when capabilities are independently deployed, shared by multiple agents, or need standardized discovery and schemas.
+
+---
+
+## <Label color="violet">8</Label> Choosing the LLM provider
+
+The agent loop is provider-neutral. Keep provider selection outside the prompt and inject a chat model at startup:
+
+```python
+import os
+from langchain_anthropic import ChatAnthropic
+from langchain_openai import ChatOpenAI
+from langchain_aws import ChatBedrockConverse
+
+def make_model():
+    provider = os.getenv("LLM_PROVIDER", "anthropic")
+
+    if provider == "anthropic":
+        return ChatAnthropic(
+            model=os.getenv("LLM_MODEL", "claude-sonnet-4-5-20250929"),
+            temperature=0,
+        )
+    if provider == "openai":
+        return ChatOpenAI(
+            model=os.getenv("LLM_MODEL", "gpt-4.1"),
+            temperature=0,
+        )
+    if provider == "bedrock":
+        return ChatBedrockConverse(
+            model_id=os.getenv(
+                "LLM_MODEL",
+                "anthropic.claude-sonnet-4-5-20250929-v1:0",
+            ),
+            region_name=os.getenv("AWS_REGION", "us-east-1"),
+            temperature=0,
+        )
+    raise ValueError(f"Unsupported LLM_PROVIDER: {provider}")
+```
+
+Replace `model=ChatAnthropic(...)` in `build_agent()` with `model=make_model()`. Provider credentials stay in the runtime secret manager: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or AWS IAM/role credentials for Bedrock. Never put keys in `AGENTS.md`, the KB, tool arguments, or logs.
+
+<DataTable
+  headers={["Provider", "Credentials", "Good default"]}
+  rows={[
+    { "Provider": "Anthropic", "Credentials": "`ANTHROPIC_API_KEY`", "Good default": "Strong reasoning and tool use" },
+    { "Provider": "OpenAI", "Credentials": "`OPENAI_API_KEY`", "Good default": "Broad model and platform ecosystem" },
+    { "Provider": "Amazon Bedrock", "Credentials": "IAM role / access policy", "Good default": "AWS boundary, regional deployment, enterprise governance" },
+  ]}
+/>
+
+Pin a model per environment, run the same golden ticket set against each provider, and compare tool-call correctness, refusal behavior, latency, and cost before switching.
+
+---
+
+## <Label color="green">9</Label> Deploy the agent as a service
+
+Do not deploy the notebook or run `asyncio.run()` per customer request. Build the agent once when the service starts, expose an authenticated endpoint, and use a durable checkpointer/store in production:
+
+```python
+# service.py
+from contextlib import asynccontextmanager
+from uuid import uuid4
+from fastapi import FastAPI
+from pydantic import BaseModel
+
+class SupportRequest(BaseModel):
+    customer_email: str
+    report: str
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    app.state.agent = await build_agent()
+    yield
+
+app = FastAPI(lifespan=lifespan)
+
+@app.post("/v1/troubleshoot")
+async def troubleshoot(request: SupportRequest):
+    thread_id = str(uuid4())
+    config = {"configurable": {"thread_id": thread_id}}
+    result = await app.state.agent.ainvoke(
+        {
+            "messages": [{
+                "role": "user",
+                "content": (
+                    f"Customer: {request.customer_email}\n"
+                    f"Report: {request.report}"
+                ),
+            }]
+        },
+        config=config,
+    )
+    last_message = result["messages"][-1]
+    return {
+        "thread_id": thread_id,
+        "status": "interrupted_or_complete",
+        "reply": getattr(last_message, "content", str(last_message)),
+    }
+```
+
+The production request path is: authenticated API request → tenant context → agent service → KB + MCP/HTTP tools → checkpointer interrupt → approval endpoint or queue → resume the same `thread_id`. Put the agent behind your existing API gateway; do not expose the model or internal tools directly to the browser.
+
+Minimal container shape:
+
+```dockerfile
+FROM python:3.12-slim
+WORKDIR /app
+COPY pyproject.toml uv.lock ./
+RUN pip install uv && uv sync --frozen --no-dev
+COPY . .
+CMD ["uv", "run", "uvicorn", "service:app", "--host", "0.0.0.0", "--port", "8080"]
+```
+
+```bash
+docker build -t streamapi-support-agent .
+docker run --env-file .env -p 8080:8080 streamapi-support-agent
+```
+
+Before production, replace `MemorySaver()` with a durable checkpointer, replace the local Chroma directory with a persistent/vector service, store tenant facts in the application database, and add authentication, rate limits, audit logs, tracing, secret-manager injection, and an approval endpoint that resumes the stored thread.
 
 Sources: <a href="https://github.com/langchain-ai/deepagents">deepagents</a> · <a href="https://docs.langchain.com/oss/python/deepagents/overview">DeepAgents docs</a> · <a href="https://docs.langchain.com/oss/python/deepagents/permissions">Permissions</a> · <a href="https://github.com/modelcontextprotocol/python-sdk">MCP Python SDK</a> · <a href="https://python.langchain.com/docs/integrations/tools/mcp/">langchain-mcp-adapters</a>
