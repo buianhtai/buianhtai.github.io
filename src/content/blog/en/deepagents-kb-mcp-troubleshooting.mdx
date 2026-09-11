@@ -338,36 +338,6 @@ If the agent needs durable facts across sessions, use a persistent store with a 
 
 ---
 
-## What to set up in your project
-
-<DataTable
-  headers={["Step", "What you need", "Time estimate"]}
-  rows={[
-    { "Step": "KB ingestion",       "What you need": "Your docs in a readable format + `uv add langchain-community chromadb openai`", "Time estimate": "1–2h" },
-    { "Step": "MCP server",         "What you need": "Platform APIs wrapped with FastMCP (`uv add mcp`)", "Time estimate": "2–4h" },
-    { "Step": "Skills directory",   "What you need": "`./skills/401-errors/SKILL.md` with investigation checklist", "Time estimate": "30 min" },
-    { "Step": "AGENTS.md",         "What you need": "Escalation rules + known issues (see above)", "Time estimate": "30 min" },
-    { "Step": "Tenant data",        "What you need": "Customer DB + server-derived tenant context; never use model-supplied tenant IDs for authorization", "Time estimate": "Depends on your platform" },
-    { "Step": "Wire DeepAgents",    "What you need": "`uv add deepagents langchain-mcp-adapters`", "Time estimate": "1h" },
-    { "Step": "Test + tune prompts","What you need": "Run 5–10 real past tickets through the agent", "Time estimate": "2–3h" },
-  ]}
-/>
-
-<Callout color="amber">
-  Start with `interrupt_on` on every write tool until you trust the agent's judgment on your specific ticket patterns. Remove gates gradually as you gain confidence.
-</Callout>
-
-Install everything:
-
-```bash
-uv add deepagents langchain-mcp-adapters \
-       langchain-community langchain-text-splitters \
-       langchain-openai langchain-anthropic langchain-aws \
-       chromadb mcp httpx fastapi uvicorn
-```
-
----
-
 ## <Label color="blue">7</Label> MCP or direct HTTP?
 
 MCP is a capability boundary, not a requirement. DeepAgents accepts ordinary LangChain tools too. For a small, stable internal API, a typed HTTP tool can be simpler than running an MCP server:
@@ -410,33 +380,20 @@ The agent loop is provider-neutral. Keep provider selection outside the prompt a
 
 ```python
 import os
-from langchain_anthropic import ChatAnthropic
-from langchain_openai import ChatOpenAI
-from langchain_aws import ChatBedrockConverse
+from langchain.chat_models import init_chat_model
+
+MODEL_DEFAULTS = {
+    "anthropic": "anthropic:claude-sonnet-4-5-20250929",
+    "openai": "openai:gpt-4.1",
+    "bedrock": "bedrock_converse:anthropic.claude-sonnet-4-5-20250929-v1:0",
+}
 
 def make_model():
     provider = os.getenv("LLM_PROVIDER", "anthropic")
-
-    if provider == "anthropic":
-        return ChatAnthropic(
-            model=os.getenv("LLM_MODEL", "claude-sonnet-4-5-20250929"),
-            temperature=0,
-        )
-    if provider == "openai":
-        return ChatOpenAI(
-            model=os.getenv("LLM_MODEL", "gpt-4.1"),
-            temperature=0,
-        )
-    if provider == "bedrock":
-        return ChatBedrockConverse(
-            model_id=os.getenv(
-                "LLM_MODEL",
-                "anthropic.claude-sonnet-4-5-20250929-v1:0",
-            ),
-            region_name=os.getenv("AWS_REGION", "us-east-1"),
-            temperature=0,
-        )
-    raise ValueError(f"Unsupported LLM_PROVIDER: {provider}")
+    model = os.getenv("LLM_MODEL", MODEL_DEFAULTS.get(provider, ""))
+    if not model:
+        raise ValueError(f"Unsupported LLM_PROVIDER: {provider}")
+    return init_chat_model(model, temperature=0)
 ```
 
 Replace `model=ChatAnthropic(...)` in `build_agent()` with `model=make_model()`. Provider credentials stay in the runtime secret manager: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or AWS IAM/role credentials for Bedrock. Never put keys in `AGENTS.md`, the KB, tool arguments, or logs.
@@ -519,5 +476,35 @@ docker run --env-file .env -p 8080:8080 streamapi-support-agent
 ```
 
 Before production, replace `MemorySaver()` with a durable checkpointer, replace the local Chroma directory with a persistent/vector service, store tenant facts in the application database, and add authentication, rate limits, audit logs, tracing, secret-manager injection, and an approval endpoint that resumes the stored thread.
+
+## What to set up in your project
+
+<DataTable
+  headers={["Step", "What you need", "Time estimate"]}
+  rows={[
+    { "Step": "KB ingestion",       "What you need": "Your docs in a readable format + `uv add langchain-community chromadb openai`", "Time estimate": "1–2h" },
+    { "Step": "MCP server",         "What you need": "Platform APIs wrapped with FastMCP (`uv add mcp`)", "Time estimate": "2–4h" },
+    { "Step": "Skills directory",   "What you need": "`./skills/401-errors/SKILL.md` with investigation checklist", "Time estimate": "30 min" },
+    { "Step": "AGENTS.md",         "What you need": "Escalation rules + known issues (see above)", "Time estimate": "30 min" },
+    { "Step": "Tenant data",        "What you need": "Customer DB + server-derived tenant context; never use model-supplied tenant IDs for authorization", "Time estimate": "Depends on your platform" },
+    { "Step": "Wire DeepAgents",    "What you need": "`uv add deepagents langchain-mcp-adapters`", "Time estimate": "1h" },
+    { "Step": "LLM provider",      "What you need": "Anthropic, OpenAI, or Bedrock credentials + a pinned model ID", "Time estimate": "30 min" },
+    { "Step": "Deploy service",    "What you need": "FastAPI container, gateway auth, durable checkpointer, secret manager", "Time estimate": "1–2h" },
+    { "Step": "Test + tune prompts","What you need": "Run 5–10 real past tickets through the agent", "Time estimate": "2–3h" },
+  ]}
+/>
+
+<Callout color="amber">
+  Start with `interrupt_on` on every write tool until you trust the agent's judgment on your specific ticket patterns. Remove gates gradually as you gain confidence.
+</Callout>
+
+Install everything:
+
+```bash
+uv add deepagents langchain langchain-mcp-adapters \
+       langchain-community langchain-text-splitters \
+       langchain-openai langchain-anthropic langchain-aws \
+       chromadb mcp httpx fastapi uvicorn
+```
 
 Sources: <a href="https://github.com/langchain-ai/deepagents">deepagents</a> · <a href="https://docs.langchain.com/oss/python/deepagents/overview">DeepAgents docs</a> · <a href="https://docs.langchain.com/oss/python/deepagents/permissions">Permissions</a> · <a href="https://github.com/modelcontextprotocol/python-sdk">MCP Python SDK</a> · <a href="https://python.langchain.com/docs/integrations/tools/mcp/">langchain-mcp-adapters</a>
