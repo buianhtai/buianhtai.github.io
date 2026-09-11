@@ -477,6 +477,8 @@ docker run --env-file .env -p 8080:8080 streamapi-support-agent
 
 Before production, replace `MemorySaver()` with a durable checkpointer, replace the local Chroma directory with a persistent/vector service, store tenant facts in the application database, and add authentication, rate limits, audit logs, tracing, secret-manager injection, and an approval endpoint that resumes the stored thread.
 
+---
+
 ## What to set up in your project
 
 <DataTable
@@ -506,5 +508,6 @@ uv add deepagents langchain langchain-mcp-adapters \
        langchain-openai langchain-anthropic langchain-aws \
        chromadb mcp httpx fastapi uvicorn
 ```
+
 
 Sources: <a href="https://github.com/langchain-ai/deepagents">deepagents</a> · <a href="https://docs.langchain.com/oss/python/deepagents/overview">DeepAgents docs</a> · <a href="https://docs.langchain.com/oss/python/deepagents/permissions">Permissions</a> · <a href="https://github.com/modelcontextprotocol/python-sdk">MCP Python SDK</a> · <a href="https://python.langchain.com/docs/integrations/tools/mcp/">langchain-mcp-adapters</a>
