@@ -233,25 +233,37 @@ def _add_to_pg(docs: list[Document], tenant_id: str) -> None:
         chunk_size=800, chunk_overlap=100,
     ).split_documents(docs)
 
+    # Stable per-source positions overwrite edited chunks instead of accumulating them.
+    next_index: dict[str, int] = {}
     doc_ids = []
     for chunk in chunks:
         m = chunk.metadata
         origin = m.get("concept_id") or m.get("file_id") or m.get("source", "")
+        if not origin:
+            raise ValueError("Every document needs concept_id, file_id, or source metadata")
+        chunk_index = next_index.get(origin, 0)
+        next_index[origin] = chunk_index + 1
         doc_id = hashlib.sha256(
-            f"{tenant_id}:{origin}:{chunk.page_content}".encode()
+            f"{tenant_id}:{origin}:{chunk_index}".encode()
         ).hexdigest()
-        m.update({"tenant_id": tenant_id, "doc_id": doc_id})
+        m.update({
+            "tenant_id": tenant_id,
+            "origin": origin,
+            "chunk_index": chunk_index,
+            "doc_id": doc_id,
+        })
         doc_ids.append(doc_id)
 
-    PGVector(
+    pg_store = PGVector(
         connection=os.environ["DATABASE_URL"],
         embeddings=embeddings,
         collection_name=f"kb_{tenant_id.replace('-','_')}",
-    ).add_documents(chunks, ids=doc_ids)
+    )
 
     with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
         conn.execute("""CREATE TABLE IF NOT EXISTS kb_fts (
             tenant_id TEXT NOT NULL,
+            origin TEXT NOT NULL,
             doc_id TEXT NOT NULL,
             concept_id TEXT,
             concept_type TEXT,
@@ -268,24 +280,44 @@ def _add_to_pg(docs: list[Document], tenant_id: str) -> None:
             "CREATE INDEX IF NOT EXISTS kb_fts_search_idx "
             "ON kb_fts USING GIN (search_vector)"
         )
+        origins = sorted(next_index)
+        old_ids = {
+            row[0]
+            for origin in origins
+            for row in conn.execute(
+                "SELECT doc_id FROM kb_fts WHERE tenant_id = %s AND origin = %s",
+                (tenant_id, origin),
+            )
+        }
+        conn.commit()
+
+    # Existing positions are overwritten; only removed tail chunks need deletion.
+    pg_store.add_documents(chunks, ids=doc_ids)
+    stale_ids = list(old_ids - set(doc_ids))
+    if stale_ids:
+        pg_store.delete(ids=stale_ids)
+
+    with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
+        for origin in origins:
+            conn.execute(
+                "DELETE FROM kb_fts WHERE tenant_id = %s AND origin = %s",
+                (tenant_id, origin),
+            )
         for chunk in chunks:
             m = chunk.metadata
             conn.execute(
                 """INSERT INTO kb_fts
-                   (tenant_id, doc_id, concept_id, concept_type, title, status, content)
-                   VALUES (%s,%s,%s,%s,%s,%s,%s)
-                   ON CONFLICT (tenant_id, doc_id) DO UPDATE
-                   SET concept_id=EXCLUDED.concept_id,
-                       concept_type=EXCLUDED.concept_type,
-                       title=EXCLUDED.title,
-                       status=EXCLUDED.status,
-                       content=EXCLUDED.content""",
-                (tenant_id, m["doc_id"], m.get("concept_id", ""),
+                   (tenant_id, origin, doc_id, concept_id, concept_type,
+                    title, status, content)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s)""",
+                (tenant_id, m["origin"], m["doc_id"], m.get("concept_id", ""),
                  m.get("type", ""), m.get("title", ""), m.get("status", ""),
                  chunk.page_content),
             )
         conn.commit()
 ```
+
+The ID uses `(tenant, origin, chunk_index)`, not chunk content. Re-ingesting an edited source overwrites matching positions, removes obsolete tail chunks from pgvector, and replaces that source's full-text rows—so stale passages do not survive forever.
 
 <Callout color="amber">
   `tenant_id` comes from the upload event payload — verified server-side, never from file contents or model args.
