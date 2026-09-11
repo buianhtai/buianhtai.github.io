@@ -186,8 +186,8 @@ Filesystem permissions use exactly two operations — `read` and `write` (which 
 <EnforceRule
   methodLabel="Op"
   rules={[
-    { method: "READ",  action: ".env",          allowed: false },
-    { method: "WRITE", action: ".env",          allowed: false },
+    { method: "READ",  action: "/**/.env",      allowed: false },
+    { method: "WRITE", action: "/**/.env",      allowed: false },
     { method: "READ",  action: "/workspace/**", allowed: true  },
     { method: "WRITE", action: "/workspace/**", allowed: true  },
   ]}
