@@ -20,6 +20,7 @@ import ControlLoop from '../../../components/mdx/ControlLoop.astro';
 import EnforceRule from '../../../components/mdx/EnforceRule.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
 import Concept from '../../../components/mdx/Concept.astro';
+import DiagramEmbed from '../../../components/mdx/DiagramEmbed.astro';
 
 Every agent demo dies on turn three.
 
@@ -184,13 +185,13 @@ Filesystem permission rules enforce the same principle at the tool level:
 
 <EnforceRule
   rules={[
-    { method: "GET",    action: "/workspace/**",     allowed: true  },
-    { method: "PUT",    action: "/workspace/**",     allowed: true  },
-    { method: "DELETE", action: "/workspace/**",     allowed: true  },
-    { method: "PATCH",  action: "/workspace/src/**", allowed: true  },
-    { method: "GET",    action: ".env",              allowed: false },
-    { method: "PUT",    action: ".env",              allowed: false },
-    { method: "DELETE", action: ".env",              allowed: false },
+    { method: "READ",   action: ".env",          allowed: false },
+    { method: "WRITE",  action: ".env",          allowed: false },
+    { method: "DELETE", action: ".env",          allowed: false },
+    { method: "READ",   action: "/workspace/**", allowed: true  },
+    { method: "WRITE",  action: "/workspace/**", allowed: true  },
+    { method: "EDIT",   action: "/workspace/**", allowed: true  },
+    { method: "DELETE", action: "/workspace/**", allowed: true  },
   ]}
 />
 
@@ -202,17 +203,11 @@ Rules are first-match-wins, evaluated top-down. Sandboxes enforce boundaries at 
 
 Under the hood, DeepAgents is a declarative ordering of middleware over LangGraph. Every piece is replaceable — pass a custom `FilesystemMiddleware(tools=[...])`, swap the sub-agent definition, or wire in a hand-built `CompiledStateGraph` as a worker:
 
-<div style="border-radius: 8px; overflow: hidden;">
-  <iframe
-    src="/diagrams/deepagents-middleware-stack.html"
-    style="width: 100%; height: 540px; border: none; display: block;"
-    title="DeepAgents Middleware Stack Composition"
-    loading="lazy"
-  />
-</div>
-<p style="text-align: right; font-size: 0.8rem; margin-top: 0.3rem;">
-  <a href="/diagrams/deepagents-middleware-stack.html" target="_blank" rel="noopener">Open full diagram ↗</a>
-</p>
+<DiagramEmbed
+  src="/diagrams/deepagents-middleware-stack.html"
+  title="DeepAgents Middleware Stack Composition"
+  height={540}
+/>
 
 - **Override any piece without forking** — pass custom middleware via `middleware=` / `subagents=`; the stack is declarative.
 - **Any `CompiledStateGraph` is a sub-agent** — drop a hand-built LangGraph workflow in as a delegated worker.
@@ -239,17 +234,11 @@ The core insight of DeepAgents: the agent loop is not `model → tool → model`
   caption="Each turn is a full cycle: plan spawns isolated work, execution returns a compact result, and the checkpoint makes the whole thing resumable."
 />
 
-<div style="border-radius: 8px; overflow: hidden; margin-top: 1rem;">
-  <iframe
-    src="/diagrams/deepagents-execution-flow.html"
-    style="width: 100%; height: 520px; border: none; display: block;"
-    title="DeepAgents Long-Horizon Execution Flow"
-    loading="lazy"
-  />
-</div>
-<p style="text-align: right; font-size: 0.8rem; margin-top: 0.3rem;">
-  <a href="/diagrams/deepagents-execution-flow.html" target="_blank" rel="noopener">Open full diagram ↗</a>
-</p>
+<DiagramEmbed
+  src="/diagrams/deepagents-execution-flow.html"
+  title="DeepAgents Long-Horizon Execution Flow"
+  height={520}
+/>
 
 ### Minimal code
 

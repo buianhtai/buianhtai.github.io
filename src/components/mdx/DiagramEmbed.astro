@@ -1,0 +1,110 @@
+---
+/**
+ * DiagramEmbed — Responsive archify diagram embed.
+ *
+ * ≥640px: interactive iframe with pan/zoom/export
+ * <640px: tappable card linking to the standalone diagram page
+ *
+ * Usage:
+ *   <DiagramEmbed
+ *     src="/diagrams/deepagents-middleware-stack.html"
+ *     title="DeepAgents Middleware Stack"
+ *     height={540}
+ *   />
+ */
+interface Props {
+  src: string;
+  title: string;
+  height?: number;
+}
+const { src, title, height = 500 } = Astro.props;
+---
+
+<div class="de-wrap">
+  <!-- Desktop: interactive iframe -->
+  <div class="de-iframe-wrap">
+    <iframe
+      src={src}
+      style={`width:100%;height:${height}px;border:none;display:block;`}
+      title={title}
+      loading="lazy"
+    />
+  </div>
+
+  <!-- Mobile: tappable card -->
+  <a href={src} target="_blank" rel="noopener" class="de-card" aria-label={`Open ${title} in full`}>
+    <div class="de-card-icon">⬡</div>
+    <div class="de-card-body">
+      <span class="de-card-title">{title}</span>
+      <span class="de-card-cta">Tap to open interactive diagram ↗</span>
+    </div>
+  </a>
+
+  <p class="de-open-link">
+    <a href={src} target="_blank" rel="noopener">Open full diagram ↗</a>
+  </p>
+</div>
+
+<style>
+  .de-wrap { margin: 1.25rem 0; }
+
+  /* Desktop: show iframe, hide card */
+  .de-iframe-wrap { border-radius: 8px; overflow: hidden; }
+  .de-card { display: none; }
+
+  .de-open-link {
+    text-align: right;
+    font-size: 0.8rem;
+    margin-top: 0.3rem;
+    margin-bottom: 0;
+  }
+  .de-open-link a { color: var(--color-accent); }
+
+  /* Mobile: hide iframe, show card */
+  @media (max-width: 639px) {
+    .de-iframe-wrap { display: none; }
+
+    .de-card {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 1.25rem;
+      border: 1px solid var(--color-border);
+      border-left: 3px solid var(--color-accent);
+      background: var(--color-surface);
+      border-radius: 8px;
+      text-decoration: none;
+      color: inherit;
+      transition: background 0.15s;
+    }
+    .de-card:hover { background: var(--color-surface-2); }
+
+    .de-card-icon {
+      font-size: 2rem;
+      color: var(--color-accent);
+      flex-shrink: 0;
+      line-height: 1;
+    }
+
+    .de-card-body {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .de-card-title {
+      font-family: var(--font-mono, monospace);
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--color-text);
+    }
+
+    .de-card-cta {
+      font-size: 0.75rem;
+      color: var(--color-accent);
+    }
+
+    /* Hide the text link on mobile — card is the CTA */
+    .de-open-link { display: none; }
+  }
+</style>
