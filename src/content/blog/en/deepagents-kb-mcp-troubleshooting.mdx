@@ -92,6 +92,7 @@ print(f"Ingested {len(chunks)} chunks from {len(docs)} documents.")
 ## <Label color="amber">3</Label> Platform MCP server
 
 Your platform needs to expose an MCP server with at least these tools. The exact implementation is yours — DeepAgents calls them as black boxes:
+Treat `email` as a lookup selector, not an authorization boundary. Every tool derives the tenant from the verified MCP request context before reading or mutating data:
 
 ```python
 # platform_mcp_server.py — your platform code, not DeepAgents
@@ -102,22 +103,26 @@ mcp = FastMCP("StreamAPI Platform")
 @mcp.tool()
 def get_customer_state(email: str) -> dict:
     """Return account config, active API keys, tier, last login, feature flags."""
-    return your_db.query_customer(email)
+    tenant_id = auth_context.current_tenant_id()
+    return your_db.query_customer(tenant_id=tenant_id, email=email)
 
 @mcp.tool()
 def fetch_logs(email: str, since: str, level: str = "ERROR") -> list[dict]:
     """Return recent log entries for a customer. since accepts ISO8601."""
-    return your_logging.query(customer=email, since=since, level=level)
+    tenant_id = auth_context.current_tenant_id()
+    return your_logging.query(tenant_id=tenant_id, customer=email, since=since, level=level)
 
 @mcp.tool()
 def apply_fix(action: str, target: str, **kwargs) -> dict:
     """Apply a remediation action. Supported: regenerate_key, reset_rate_limit, enable_feature."""
-    return your_admin.execute(action=action, target=target, **kwargs)
+    tenant_id = auth_context.current_tenant_id()
+    return your_admin.execute(tenant_id=tenant_id, action=action, target=target, **kwargs)
 
 @mcp.tool()
 def send_notification(email: str, subject: str, body: str) -> dict:
     """Send an email to the customer."""
-    return your_mailer.send(to=email, subject=subject, body=body)
+    tenant_id = auth_context.current_tenant_id()
+    return your_mailer.send(tenant_id=tenant_id, to=email, subject=subject, body=body)
 
 if __name__ == "__main__":
     mcp.run(transport="sse", host="0.0.0.0", port=8080)
@@ -132,6 +137,18 @@ if __name__ == "__main__":
 ## <Label color="rose">4</Label> Wiring DeepAgents
 
 Now connect all three pieces. MCP tools are async, so the agent setup lives in an async function:
+
+Before wiring the agent, separate **policy** from **state**. `memory=["./AGENTS.md"]` is a static prompt input — it is not a tenant database and should never contain customer-specific facts:
+
+| Data | Store it in |
+| --- | --- |
+| Escalation rules, tone, durable agent policy | `AGENTS.md` / static memory |
+| Current conversation and pending tool calls | A checkpointer, keyed by `thread_id` |
+| Customer account state, tickets, preferences, audit history | Tenant-scoped application database |
+| Cross-session agent facts | A persistent store, namespaced by tenant and user |
+| Runbooks and product documentation | The searchable KB |
+
+The MCP server or HTTP tool must derive tenant identity from the verified request context. Never let the model choose the tenant boundary by passing an arbitrary `tenant_id` or email to an unrestricted database query.
 
 ```python
 # agent.py
@@ -177,6 +194,7 @@ async def build_agent():
         tools=[kb_tool, *platform_tools],
 
         # Runbooks + escalation rules always loaded
+        # Static policy only — never put customer state in AGENTS.md
         memory=["./AGENTS.md"],
 
         # Domain knowledge loaded progressively per task
@@ -197,6 +215,9 @@ async def build_agent():
 
         # Required for interrupt/resume state; use a durable saver in production
         checkpointer=MemorySaver(),
+
+        # Optional: durable cross-session facts, namespaced by tenant/user
+        # store=tenant_scoped_store,
 
         # Pause before apply_fix or send_notification — human approves
         interrupt_on={
@@ -286,7 +307,7 @@ async def approve_and_resume(agent, config):
 
 ## <Label color="amber">6</Label> AGENTS.md — what to put in memory
 
-The `memory=["./AGENTS.md"]` file is loaded on every session. Keep it focused on durable policy, not per-customer state:
+The `memory=["./AGENTS.md"]` file is loaded on every session. It contains durable policy only — escalation rules, tone, and known platform behavior. It is shared by the agent, not by an individual customer. Store account state, ticket history, preferences, and audit records in your tenant-scoped application database instead.
 
 ```markdown
 # StreamAPI Support Agent
@@ -305,6 +326,19 @@ The `memory=["./AGENTS.md"]` file is loaded on every session. Keep it focused on
 - Always tell the customer what you found, not just what you did.
 ```
 
+For example, the platform tool can enforce tenant scope from authentication before querying the database:
+
+```python
+# Inside the MCP server (or a directly wrapped HTTP tool)
+async def get_customer_state(email: str) -> dict:
+    # `email` selects a customer inside the already-authenticated tenant.
+    tenant_id = auth_context.current_tenant_id()
+    return await customer_db.fetch_state(tenant_id=tenant_id, email=email)
+
+```
+
+If the agent needs durable facts across sessions, use a persistent store with a namespace such as `("tenant", tenant_id, "user", user_id)`. The current investigation still belongs to the checkpointer's `thread_id`; the database and store hold long-lived domain state.
+
 ---
 
 ## What to set up in your project
@@ -315,7 +349,8 @@ The `memory=["./AGENTS.md"]` file is loaded on every session. Keep it focused on
     { "Step": "KB ingestion",       "What you need": "Your docs in a readable format + `uv add langchain-community chromadb openai`", "Time estimate": "1–2h" },
     { "Step": "MCP server",         "What you need": "Platform APIs wrapped with FastMCP (`uv add mcp`)", "Time estimate": "2–4h" },
     { "Step": "Skills directory",   "What you need": "`./skills/401-errors/SKILL.md` with investigation checklist", "Time estimate": "30 min" },
-    { "Step": "AGENTS.md",          "What you need": "Escalation rules + known issues (see above)", "Time estimate": "30 min" },
+    { "Step": "AGENTS.md",         "What you need": "Escalation rules + known issues (see above)", "Time estimate": "30 min" },
+    { "Step": "Tenant data",        "What you need": "Customer DB + server-derived tenant context; never use model-supplied tenant IDs for authorization", "Time estimate": "Depends on your platform" },
     { "Step": "Wire DeepAgents",    "What you need": "`uv add deepagents langchain-mcp-adapters`", "Time estimate": "1h" },
     { "Step": "Test + tune prompts","What you need": "Run 5–10 real past tickets through the agent", "Time estimate": "2–3h" },
   ]}
