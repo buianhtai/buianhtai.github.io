@@ -666,7 +666,7 @@ Before production, replace `MemorySaver()` with a durable checkpointer, replace 
     { "Step": "AGENTS.md",         "What you need": "Escalation rules + known issues (see above)", "Time estimate": "30 min" },
     { "Step": "Tenant data",        "What you need": "Customer DB + server-derived tenant context; never use model-supplied tenant IDs for authorization", "Time estimate": "Depends on your platform" },
     { "Step": "Wire DeepAgents",    "What you need": "`uv add deepagents langchain-mcp-adapters`", "Time estimate": "1h" },
-    { "Step": "LLM provider",      "What you need": "`LITELLM_API_KEY` + `LLM_MODEL` env var (e.g. `bedrock/anthropic.claude-sonnet-...`); optional `LITELLM_API_BASE` for proxy", "Time estimate": "30 min" },
+    { "Step": "LLM provider",      "What you need": "`LLM_MODEL` env var + per-backend credentials (AWS IAM for Bedrock, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`); `LITELLM_API_BASE` only for proxy path", "Time estimate": "30 min" },
     { "Step": "Deploy service",    "What you need": "FastAPI container, gateway auth, durable checkpointer, secret manager", "Time estimate": "1–2h" },
     { "Step": "Test + tune prompts","What you need": "Run 5–10 real past tickets through the agent", "Time estimate": "2–3h" },
   ]}
