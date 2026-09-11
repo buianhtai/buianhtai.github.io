@@ -125,7 +125,7 @@ DeepAgents isn't a new runtime. It's middleware layered over `create_agent` and 
       note: "The agent acts in this environment, not beside it."
     },
   ]}
-  arrows={["approve / gate", "delegate tasks", "load context", "act on environment"]}
+  arrows={["gate before act", "delegate isolated work", "load context"]}
   caption="Higher layers control how lower layers are used — steering gates delegation, delegation offloads context, context shapes execution."
 />
 
@@ -184,13 +184,13 @@ Filesystem permission rules enforce the same principle at the tool level:
 
 <EnforceRule
   rules={[
-    { method: "READ",  action: "/workspace/**",  allowed: true  },
-    { method: "WRITE", action: "/workspace/**",  allowed: true  },
-    { method: "READ",  action: ".env",           allowed: false },
-    { method: "WRITE", action: ".env",           allowed: false },
-    { method: "DELETE",action: ".env",           allowed: false },
-    { method: "PATCH", action: "/workspace/src/**", allowed: true  },
-    { method: "DELETE",action: "/workspace/**",  allowed: true  },
+    { method: "GET",    action: "/workspace/**",     allowed: true  },
+    { method: "PUT",    action: "/workspace/**",     allowed: true  },
+    { method: "DELETE", action: "/workspace/**",     allowed: true  },
+    { method: "PATCH",  action: "/workspace/src/**", allowed: true  },
+    { method: "GET",    action: ".env",              allowed: false },
+    { method: "PUT",    action: ".env",              allowed: false },
+    { method: "DELETE", action: ".env",              allowed: false },
   ]}
 />
 
