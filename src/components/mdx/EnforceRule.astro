@@ -7,9 +7,10 @@ interface Rule {
 
 interface Props {
   rules: Rule[];
+  methodLabel?: string;
 }
 
-const { rules } = Astro.props;
+const { rules, methodLabel = 'Method' } = Astro.props;
 
 const methodColors: Record<string, { bg: string; fg: string }> = {
   GET:    { bg: 'rgba(5,150,105,0.12)',  fg: '#059669' },
@@ -28,7 +29,7 @@ const fallbackMethod = { bg: 'rgba(148,163,184,0.12)', fg: '#94a3b8' };
 
 <div class="enforce-container">
   <div class="enforce-header">
-    <span class="enforce-header-cell enforce-col-method">Method</span>
+    <span class="enforce-header-cell enforce-col-method">{methodLabel}</span>
     <span class="enforce-header-cell enforce-col-action">Action</span>
     <span class="enforce-header-cell enforce-col-status">Status</span>
   </div>

@@ -28,34 +28,38 @@ Turn one: model calls a tool, gets a result. Turn two: it calls another. Turn th
 
 [DeepAgents](https://github.com/langchain-ai/deepagents) is LangChain's answer: an opinionated harness that ships the six things a long-horizon agent actually needs, built on LangGraph so every piece is production-grade from day one.
 
-<AgentMemoryMap
-  title="DeepAgents runtime topology"
-  nodes={[
-    { id: "user",      label: "Caller",          shape: "oval",     x: 50, y: 4,  color: "default", sub: "invoke()" },
-    { id: "harness",   label: "DeepAgents\nHarness", shape: "hexagon", x: 50, y: 26, color: "teal",    sub: "create_deep_agent()" },
-    { id: "hitl",      label: "HITL Gate",        shape: "diamond",  x: 82, y: 50, color: "rose",    sub: "interrupt_on" },
-    { id: "llm",       label: "LLM",              shape: "circle",   x: 18, y: 50, color: "violet",  sub: "any model" },
-    { id: "subagent",  label: "Sub-Agent",        shape: "hexagon",  x: 50, y: 50, color: "teal",    sub: "fresh context" },
-    { id: "tools",     label: "Tools + FS",       shape: "rect",     x: 50, y: 74, color: "green",   sub: "read / write / execute" },
-    { id: "memory",    label: "Memory + Skills",  shape: "cylinder", x: 18, y: 74, color: "amber",   sub: "AGENTS.md" },
-    { id: "langgraph", label: "LangGraph",        shape: "rect",     x: 82, y: 74, color: "default", sub: "checkpoint + stream" },
-    { id: "langsmith", label: "LangSmith",        shape: "cloud",    x: 50, y: 94, color: "default", sub: "trace / eval / deploy" },
-  ]}
-  edges={[
-    { from: "user",     to: "harness",   label: "invoke",     type: "call" },
-    { from: "harness",  to: "llm",       label: "reason",     type: "call" },
-    { from: "harness",  to: "subagent",  label: "delegate",   type: "call" },
-    { from: "harness",  to: "hitl",      label: "gate",       type: "feedback" },
-    { from: "harness",  to: "memory",    label: "recall",     type: "memory" },
-    { from: "subagent", to: "tools",     label: "act",        type: "call" },
-    { from: "llm",      to: "tools",     label: "tool call",  type: "call" },
-    { from: "tools",    to: "harness",   label: "result",     type: "feedback" },
-    { from: "harness",  to: "langgraph", label: "persist",    type: "data" },
-    { from: "langgraph",to: "langsmith", label: "trace",      type: "data" },
-  ]}
-  legend={true}
-  caption="Harness sits between the caller and everything else — routing, isolating, persisting, and gating before any action reaches the filesystem or network."
-/>
+<div style="overflow-x: auto; -webkit-overflow-scrolling: touch;">
+  <div style="min-width: 560px;">
+    <AgentMemoryMap
+      title="DeepAgents runtime topology"
+      nodes={[
+        { id: "user",      label: "Caller",          shape: "oval",     x: 50, y: 4,  color: "default", sub: "invoke()" },
+        { id: "harness",   label: "DeepAgents\nHarness", shape: "hexagon", x: 50, y: 26, color: "teal",    sub: "create_deep_agent()" },
+        { id: "hitl",      label: "HITL Gate",        shape: "diamond",  x: 82, y: 50, color: "rose",    sub: "interrupt_on" },
+        { id: "llm",       label: "LLM",              shape: "circle",   x: 18, y: 50, color: "violet",  sub: "any model" },
+        { id: "subagent",  label: "Sub-Agent",        shape: "hexagon",  x: 50, y: 50, color: "teal",    sub: "fresh context" },
+        { id: "tools",     label: "Tools + FS",       shape: "rect",     x: 50, y: 74, color: "green",   sub: "read / write / execute" },
+        { id: "memory",    label: "Memory + Skills",  shape: "cylinder", x: 18, y: 74, color: "amber",   sub: "AGENTS.md" },
+        { id: "langgraph", label: "LangGraph",        shape: "rect",     x: 82, y: 74, color: "default", sub: "checkpoint + stream" },
+        { id: "langsmith", label: "LangSmith",        shape: "cloud",    x: 50, y: 94, color: "default", sub: "trace / eval / deploy" },
+      ]}
+      edges={[
+        { from: "user",     to: "harness",   label: "invoke",     type: "call" },
+        { from: "harness",  to: "llm",       label: "reason",     type: "call" },
+        { from: "harness",  to: "subagent",  label: "delegate",   type: "call" },
+        { from: "harness",  to: "hitl",      label: "gate",       type: "feedback" },
+        { from: "harness",  to: "memory",    label: "recall",     type: "memory" },
+        { from: "subagent", to: "tools",     label: "act",        type: "call" },
+        { from: "llm",      to: "tools",     label: "tool call",  type: "call" },
+        { from: "tools",    to: "harness",   label: "result",     type: "feedback" },
+        { from: "harness",  to: "langgraph", label: "persist",    type: "data" },
+        { from: "langgraph",to: "langsmith", label: "trace",      type: "data" },
+      ]}
+      legend={true}
+      caption="Harness sits between the caller and everything else — routing, isolating, persisting, and gating before any action reaches the filesystem or network."
+    />
+  </div>
+</div>
 
 ---
 
@@ -184,6 +188,7 @@ agent = create_deep_agent(
 Filesystem permission rules enforce the same principle at the tool level:
 
 <EnforceRule
+  methodLabel="Op"
   rules={[
     { method: "READ",   action: ".env",          allowed: false },
     { method: "WRITE",  action: ".env",          allowed: false },
