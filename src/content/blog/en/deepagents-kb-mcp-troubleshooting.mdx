@@ -7,7 +7,7 @@ lang: "en"
 category: "ai"
 series: "ai-agent-tools"
 seriesOrder: 12
-draft: false
+draft: true
 postLayout: "foundations"
 ---
 import Label from '../../../components/mdx/Label.astro';
@@ -15,6 +15,7 @@ import Callout from '../../../components/mdx/Callout.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
 import Concept from '../../../components/mdx/Concept.astro';
+import DiagramEmbed from '../../../components/mdx/DiagramEmbed.astro';
 
 A customer emails at 11pm: *"Getting 401s since 3pm, blocking our release."* Your on-call engineer opens four browser tabs — docs, logs dashboard, admin panel, runbook — and starts the same manual investigation they've done a hundred times.
 
@@ -36,6 +37,12 @@ This is the implementation-level companion to [Building Support Agents for Your 
   ]}
 />
 
+<DiagramEmbed
+  src="/diagrams/deepagents-support-kb-architecture.html"
+  title="DeepAgents Customer Support Architecture"
+  height={620}
+/>
+
 These three pieces are independent. You can add them one at a time.
 
 ---
@@ -52,7 +59,7 @@ The target flow is:
   steps={[
     { title: "Query Analyzer", body: "Clean the query, expand abbreviations, extract filters (service name, error code, HTTP method), and classify intent: KB question, OpenAPI lookup, catalog count, or troubleshooting.", color: "teal" },
     { title: "Retrieval Router", body: "Select the right strategy based on the classifier output. Try the primary strategy; if evidence is insufficient, fall back to the next one (bounded at 2 retries to avoid loops).", color: "green" },
-    { title: "Vector / Hybrid", body: "BM25 + embedding similarity for general KB questions — runbooks, known issues, changelogs, tier rules. Hybrid beats pure vector on exact error codes and field names.", color: "amber" },
+    { title: "Vector / Hybrid", body: "PostgreSQL full-text search + Titan embeddings in pgvector for general KB questions — runbooks, known issues, changelogs, tier rules. Hybrid retrieval handles both exact error codes and semantic matches.", color: "amber" },
     { title: "Structured / SQL", body: "OpenAPI metadata lookup for contract questions. SQL/catalog query for counts and aggregates. No embedding involved — filter on pre-indexed fields.", color: "rose" },
     { title: "Tool fallback", body: "If KB retrieval is insufficient, call search_logs, get_trace, or search_known_issues. These are live tools, not static indexes — use them after static retrieval fails.", color: "violet" },
     { title: "Evaluator", body: "Verify the retrieved context actually supports a grounded answer. If not, request a different strategy or escalate. Never fabricate an answer when evidence is absent.", color: "blue" },
@@ -61,53 +68,97 @@ The target flow is:
 
 ---
 
-## <Label color="teal">3</Label> Ingestion — OKF bundles as the canonical KB format
+## <Label color="teal">3</Label> Ingestion — two tracks
 
-Instead of per-format dispatch (PDF → parser A, DOCX → parser B), adopt [Open Knowledge Format (OKF)](https://github.com/GoogleCloudPlatform/open-knowledge-format) as the canonical KB representation. Every concept — runbook, API endpoint, known issue, policy — becomes a markdown file with YAML frontmatter. The `type` field is the retrieval router; `status` and `stale_after` handle freshness; `tags` and `verified` handle trust.
+There are two distinct knowledge sources. They use separate ingest paths and feed the same tenant-scoped PostgreSQL retrieval layer:
 
-An OKF concept for an API endpoint looks like:
+- **Track A — Customer uploads**: PDFs, DOCX, images. Binary-safe streaming from the download API; Sonnet handles images. Output: prose chunks indexed by PostgreSQL full-text search and pgvector.
+- **Track B — OKF bundle**: Platform-maintained structured knowledge — API contracts, policies, metrics, known issues — authored as [OKF](https://github.com/GoogleCloudPlatform/open-knowledge-format) markdown concepts with YAML frontmatter. Frontmatter populates relational columns for exact queries; the body enters the same full-text and vector indexes.
 
-```markdown
----
-type: API Endpoint
-title: GET /v2/orders
-description: List orders for the authenticated customer. Supports cursor pagination.
-resource: https://api.streamapi.io/v2/orders
-tags: [orders, pagination, v2]
-status: current
-generated: { by: human:platform-team, at: 2026-09-11T00:00:00Z }
----
-
-## Parameters
-| Name   | In    | Required | Description                          |
-|--------|-------|----------|--------------------------------------|
-| cursor | query | No       | Opaque token from the previous page. |
-| limit  | query | No       | Max results per page. Default 20.    |
-
-## Errors
-- `401 Unauthorized` — stale or missing API key. See [key rotation runbook](/runbooks/key-rotation.md).
-```
-
-The ingestion worker loads OKF bundles from your platform's storage. YAML frontmatter fields become Chroma metadata — filterable at query time without re-embedding:
+OKF does not replace OpenAPI or document-upload formats. An `API Endpoint` concept links to the canonical OpenAPI resource; customer files remain ordinary PDF, DOCX, or image payloads.
 
 ```python
-# ingest_worker.py — triggered by bundle upload or CI push
-import os, pickle, yaml
+# ingest_worker.py
+import base64, hashlib, os, psycopg, tempfile, yaml
 from pathlib import Path
 from langchain_aws import BedrockEmbeddings
-from langchain_community.vectorstores import Chroma
+from langchain_postgres import PGVector
+from langchain_community.document_loaders import PyPDFLoader, UnstructuredFileLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_litellm import ChatLiteLLM
 from langchain_core.documents import Document
+from langchain_core.document_loaders import BaseLoader
+import httpx
 
 embeddings = BedrockEmbeddings(
     model_id="amazon.titan-embed-text-v2:0",
     region_name=os.environ.get("AWS_REGION", "us-east-1"),
 )
+vision = ChatLiteLLM(          # Sonnet 5 via LiteLLM for image-to-text
+    model=os.environ["LLM_MODEL"],
+    api_base=os.environ.get("LITELLM_API_BASE"),
+)
+IMAGE_TYPES = {"image/png", "image/jpeg", "image/webp"}
+SUFFIXES = {
+    "application/pdf": ".pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
+    "text/plain": ".txt", "text/markdown": ".md",
+    "image/png": ".png", "image/jpeg": ".jpg",
+}
 OKF_RESERVED = {"index.md", "log.md"}
 
+
+# ── Track A: Customer uploads ─────────────────────────────────────────────────
+
+class PlatformFileLoader(BaseLoader):
+    """Stream bytes from the download API; dispatch to the right parser."""
+    def __init__(self, file_id: str, tenant_id: str):
+        self.file_id, self.tenant_id = file_id, tenant_id
+
+    def lazy_load(self):
+        with httpx.stream(
+            "GET",
+            f"{os.environ['PLATFORM_API_BASE']}/files/{self.file_id}/download",
+            headers={"X-Tenant-ID": self.tenant_id}, timeout=60,
+        ) as resp:
+            resp.raise_for_status()
+            ct = resp.headers.get("content-type", "").split(";")[0].strip()
+            suffix = SUFFIXES.get(ct, ".bin")
+            with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+                for chunk in resp.iter_bytes():
+                    tmp.write(chunk)
+                tmp_path = tmp.name
+
+        meta = {"file_id": self.file_id, "tenant_id": self.tenant_id}
+        if ct in IMAGE_TYPES:
+            # Sonnet multimodal: images → text description → indexed prose
+            data = Path(tmp_path).read_bytes()
+            msg = vision.invoke([{"role": "user", "content": [
+                {"type": "image_url", "image_url": {
+                    "url": f"data:{ct};base64,{base64.b64encode(data).decode()}"}},
+                {"type": "text", "text": "Describe this diagram or screenshot concisely for a support KB."},
+            ]}])
+            yield Document(page_content=msg.content, metadata=meta)
+        elif ct == "application/pdf":
+            for doc in PyPDFLoader(tmp_path).load():
+                doc.metadata.update(meta); yield doc
+        else:
+            for doc in UnstructuredFileLoader(tmp_path).load():
+                doc.metadata.update(meta); yield doc
+
+
+def ingest_file(file_id: str, tenant_id: str) -> None:
+    docs = list(PlatformFileLoader(file_id, tenant_id).lazy_load())
+    if not docs:
+        return
+    _add_to_pg(docs, tenant_id)
+
+
+# ── Track B: OKF bundle (platform-maintained structured knowledge) ─────────────
+
 def load_okf_bundle(bundle_dir: str, tenant_id: str) -> list[Document]:
-    """Load all OKF concepts as Documents. Frontmatter scalar fields become
-    Chroma metadata so the agent can filter by type, tags, status at query time."""
+    """Parse OKF concepts. Frontmatter scalars → metadata; body → page_content."""
     docs = []
     for md_path in sorted(Path(bundle_dir).rglob("*.md")):
         if md_path.name in OKF_RESERVED:
@@ -115,41 +166,110 @@ def load_okf_bundle(bundle_dir: str, tenant_id: str) -> list[Document]:
         text = md_path.read_text(encoding="utf-8")
         if text.startswith("---"):
             _, fm_raw, body = text.split("---", 2)
-            frontmatter = yaml.safe_load(fm_raw) or {}
+            fm = yaml.safe_load(fm_raw) or {}
         else:
-            frontmatter, body = {}, text
+            fm, body = {}, text
         docs.append(Document(
             page_content=body.strip(),
             metadata={
                 "tenant_id": tenant_id,
                 "concept_id": str(md_path.relative_to(bundle_dir).with_suffix("")),
-                # Scalar OKF fields only — Chroma does not support nested dicts
-                **{k: str(v) for k, v in frontmatter.items()
+                **{k: str(v) for k, v in fm.items()
                    if isinstance(v, (str, int, float, bool))},
             },
         ))
     return docs
 
 
+def _index_okf_to_pg(docs: list[Document], tenant_id: str) -> None:
+    """Write OKF frontmatter into okf_concepts for exact SQL counts and lookups."""
+    with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
+        conn.execute("""CREATE TABLE IF NOT EXISTS okf_concepts (
+            tenant_id TEXT, concept_id TEXT, type TEXT, title TEXT,
+            description TEXT, resource TEXT, tags TEXT, status TEXT, stale_after TEXT
+        )""")
+        conn.execute("DELETE FROM okf_concepts WHERE tenant_id = %s", [tenant_id])
+        for doc in docs:
+            m = doc.metadata
+            conn.execute("INSERT INTO okf_concepts VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)", (
+                tenant_id, m.get("concept_id",""), m.get("type",""), m.get("title",""),
+                m.get("description",""), m.get("resource",""), m.get("tags",""),
+                m.get("status",""), m.get("stale_after",""),
+            ))
+        conn.commit()
+
+
 def ingest_bundle(bundle_dir: str, tenant_id: str) -> None:
     docs = load_okf_bundle(bundle_dir, tenant_id)
     if not docs:
         return
+    _index_okf_to_pg(docs, tenant_id)   # structured index for exact queries
+    _add_to_pg(docs, tenant_id)         # pgvector + PostgreSQL FTS
+
+
+# ── Shared: chunk and upsert into PostgreSQL pgvector + full-text search ───────
+
+def _add_to_pg(docs: list[Document], tenant_id: str) -> None:
     chunks = RecursiveCharacterTextSplitter(
         chunk_size=800, chunk_overlap=100,
     ).split_documents(docs)
-    Chroma(
-        collection_name=f"kb-{tenant_id}",
-        embedding_function=embeddings,
-        persist_directory="./kb-vector",
-    ).add_documents(chunks)
-    pkl_path = Path(f"./kb-chunks-{tenant_id}.pkl")
-    existing = pickle.loads(pkl_path.read_bytes()) if pkl_path.exists() else []
-    pickle.dump(existing + chunks, pkl_path.open("wb"))
+
+    doc_ids = []
+    for chunk in chunks:
+        m = chunk.metadata
+        origin = m.get("concept_id") or m.get("file_id") or m.get("source", "")
+        doc_id = hashlib.sha256(
+            f"{tenant_id}:{origin}:{chunk.page_content}".encode()
+        ).hexdigest()
+        m.update({"tenant_id": tenant_id, "doc_id": doc_id})
+        doc_ids.append(doc_id)
+
+    PGVector(
+        connection=os.environ["DATABASE_URL"],
+        embeddings=embeddings,
+        collection_name=f"kb_{tenant_id.replace('-','_')}",
+    ).add_documents(chunks, ids=doc_ids)
+
+    with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
+        conn.execute("""CREATE TABLE IF NOT EXISTS kb_fts (
+            tenant_id TEXT NOT NULL,
+            doc_id TEXT NOT NULL,
+            concept_id TEXT,
+            concept_type TEXT,
+            title TEXT,
+            status TEXT,
+            content TEXT NOT NULL,
+            search_vector TSVECTOR GENERATED ALWAYS AS (
+                setweight(to_tsvector('english', coalesce(title, '')), 'A') ||
+                setweight(to_tsvector('english', content), 'B')
+            ) STORED,
+            PRIMARY KEY (tenant_id, doc_id)
+        )""")
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS kb_fts_search_idx "
+            "ON kb_fts USING GIN (search_vector)"
+        )
+        for chunk in chunks:
+            m = chunk.metadata
+            conn.execute(
+                """INSERT INTO kb_fts
+                   (tenant_id, doc_id, concept_id, concept_type, title, status, content)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s)
+                   ON CONFLICT (tenant_id, doc_id) DO UPDATE
+                   SET concept_id=EXCLUDED.concept_id,
+                       concept_type=EXCLUDED.concept_type,
+                       title=EXCLUDED.title,
+                       status=EXCLUDED.status,
+                       content=EXCLUDED.content""",
+                (tenant_id, m["doc_id"], m.get("concept_id", ""),
+                 m.get("type", ""), m.get("title", ""), m.get("status", ""),
+                 chunk.page_content),
+            )
+        conn.commit()
 ```
 
 <Callout color="amber">
-  `tenant_id` comes from the upload event payload — verified server-side, never from file contents or model args. Non-OKF uploads (PDF, DOCX, images) go through a pre-processing step that converts them to OKF markdown before hitting this worker.
+  `tenant_id` comes from the upload event payload — verified server-side, never from file contents or model args.
 </Callout>
 
 <DataTable
@@ -157,7 +277,7 @@ def ingest_bundle(bundle_dir: str, tenant_id: str) -> None:
   rows={[
     { "OKF `type`": "`Playbook`", "Example concepts": "401 runbook, key-rotation steps, on-call escalation", "Retrieval filter": "General KB search; optionally filter `type=Playbook`" },
     { "OKF `type`": "`API Endpoint`", "Example concepts": "GET /orders, POST /keys/rotate, error code reference", "Retrieval filter": "`type=API Endpoint` + `resource` contains path/method" },
-    { "OKF `type`": "`Reference`", "Example concepts": "Known bugs, workarounds, release notes", "Retrieval filter": "`type=Reference` or symptom keyword match via BM25" },
+    { "OKF `type`": "`Reference`", "Example concepts": "Known bugs, workarounds, release notes", "Retrieval filter": "`type=Reference` or symptom keyword match via PostgreSQL FTS" },
     { "OKF `type`": "`Policy`", "Example concepts": "Rate limits, SLA commitments, tier entitlements", "Retrieval filter": "`type=Policy` + tier name in `tags`" },
     { "OKF `type`": "`Metric`", "Example concepts": "API call counts, error rate thresholds", "Retrieval filter": "`type=Metric`; `catalog_count` aggregates by this field" },
   ]}
@@ -234,12 +354,9 @@ MCP tools are async, so the agent setup lives in an async function:
 
 ```python
 # agent.py
-import asyncio, os, pickle
-from pathlib import Path
+import asyncio, hashlib, os, psycopg
 from langchain_aws import BedrockEmbeddings
-from langchain_community.vectorstores import Chroma
-from langchain_community.retrievers import BM25Retriever
-from langchain.retrievers import EnsembleRetriever
+from langchain_postgres import PGVector
 from langchain_core.tools import tool
 from langchain_litellm import ChatLiteLLM
 from langchain_mcp_adapters.client import MultiServerMCPClient
@@ -259,6 +376,7 @@ def make_model(**kw):
         **kw,
     )
 
+
 # ── Retrieval tools — built per request with tenant_id baked in ───────────────
 # tenant_id comes from the authenticated request context, never from model args.
 
@@ -267,89 +385,95 @@ _emb = BedrockEmbeddings(model_id="amazon.titan-embed-text-v2:0",
 
 def make_kb_tools(tenant_id: str):
     """Return search_kb, lookup_openapi, catalog_count scoped to tenant_id."""
-    pkl_path = Path(f"./kb-chunks-{tenant_id}.pkl")
-    if pkl_path.exists():
-        bm25 = BM25Retriever.from_documents(pickle.loads(pkl_path.read_bytes()), k=5)
-        vec_store = Chroma(
-            collection_name=f"kb-{tenant_id}",
-            embedding_function=_emb,
-            persist_directory="./kb-vector",
-        )
-        kb_retriever = EnsembleRetriever(
-            retrievers=[bm25, vec_store.as_retriever(search_kwargs={"k": 5})],
-            weights=[0.4, 0.6],
-        )
-    else:
-        vec_store = None
-        kb_retriever = None
+    pg_store = PGVector(
+        connection=os.environ["DATABASE_URL"],
+        embeddings=_emb,
+        collection_name=f"kb_{tenant_id.replace('-','_')}",
+    )
+
 
     @tool
     def search_kb(query: str, concept_type: str = "") -> list[dict]:
-        """BM25 + Titan-vector ensemble search over the tenant's OKF knowledge bundle.
-        Use concept_type to filter by OKF type (e.g. 'Playbook', 'Policy', 'Reference').
-        Leave empty for a broad search across all concept types."""
-        if kb_retriever is None:
-            return []
-        results = kb_retriever.invoke(query)
+        """Hybrid pgvector + PostgreSQL FTS over uploaded docs and OKF concepts."""
+        metadata_filter: dict = {"tenant_id": tenant_id}
         if concept_type:
-            results = [d for d in results if d.metadata.get("type", "") == concept_type]
-        return [
-            {
-                "content":    d.page_content,
-                "concept_id": d.metadata.get("concept_id", ""),
-                "type":       d.metadata.get("type", ""),
-                "title":      d.metadata.get("title", ""),
-                "status":     d.metadata.get("status", ""),
+            metadata_filter["type"] = concept_type
+        vector_docs = pg_store.similarity_search(
+            query, k=8, filter=metadata_filter,
+        )
+
+        sql = """WITH q AS (
+                     SELECT websearch_to_tsquery('english', %s) AS query
+                 )
+                 SELECT doc_id, concept_id, concept_type, title, status, content
+                 FROM kb_fts, q
+                 WHERE tenant_id = %s AND search_vector @@ q.query"""
+        params: list = [query, tenant_id]
+        if concept_type:
+            sql += " AND concept_type = %s"
+            params.append(concept_type)
+        sql += " ORDER BY ts_rank_cd(search_vector, q.query) DESC LIMIT 8"
+        with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
+            fts_rows = conn.execute(sql, params).fetchall()
+
+        # Reciprocal-rank fusion: reward chunks returned by both retrieval paths.
+        merged: dict[str, dict] = {}
+        for rank, doc in enumerate(vector_docs, start=1):
+            key = doc.metadata.get("doc_id") or hashlib.sha256(
+                doc.page_content.encode()
+            ).hexdigest()
+            merged[key] = {
+                "content": doc.page_content,
+                "concept_id": doc.metadata.get("concept_id", ""),
+                "type": doc.metadata.get("type", ""),
+                "title": doc.metadata.get("title", ""),
+                "status": doc.metadata.get("status", ""),
+                "_score": 1 / (60 + rank),
             }
-            for d in results
-        ]
+        for rank, row in enumerate(fts_rows, start=1):
+            item = merged.setdefault(row[0], {
+                "content": row[5],
+                "concept_id": row[1] or "",
+                "type": row[2] or "",
+                "title": row[3] or "",
+                "status": row[4] or "",
+                "_score": 0,
+            })
+            item["_score"] += 1 / (60 + rank)
+
+        ranked = sorted(merged.values(), key=lambda item: item["_score"], reverse=True)
+        return [{k: v for k, v in item.items() if k != "_score"} for item in ranked[:8]]
 
     @tool
     def lookup_openapi(path: str = "", method: str = "") -> list[dict]:
-        """Find API endpoint contracts from the OKF bundle using a dedicated
-        metadata-filtered vector search — not limited to the ensemble's k=5.
-        Filter by URL path fragment or HTTP method.
-        Use for: 'list every endpoint under /orders', 'does POST /keys accept X?'"""
-        if vec_store is None:
-            return []
-        query = f"{method} {path}".strip() or "API endpoint"
-        # Metadata filter scoped to this tenant and concept type
-        docs = vec_store.similarity_search(
-            query, k=20,
-            filter={"type": "API Endpoint", "tenant_id": tenant_id},
-        )
+        """Exact SQL lookup of API endpoint contracts from the OKF structured index.
+        Returns all matching rows — not limited by embedding similarity.
+        Use for: 'list every endpoint under /orders', 'does POST /keys/rotate exist?'"""
+        sql = """SELECT concept_id, title, resource, description, status
+                   FROM okf_concepts WHERE tenant_id = %s AND type = 'API Endpoint'"""
+        params: list = [tenant_id]
         if path:
-            docs = [d for d in docs
-                    if path.lower() in d.metadata.get("resource", "").lower()
-                    or path.lower() in d.metadata.get("title", "").lower()]
+            sql += " AND resource LIKE %s"; params.append(f"%{path}%")
         if method:
-            docs = [d for d in docs
-                    if method.upper() in d.metadata.get("title", "").upper()
-                    or method.upper() in d.metadata.get("resource", "").upper()]
+            sql += " AND title LIKE %s"; params.append(f"%{method.upper()}%")
+        with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
+            rows = conn.execute(sql, params).fetchall()
         return [
-            {
-                "concept_id": d.metadata.get("concept_id", ""),
-                "title":      d.metadata.get("title", ""),
-                "resource":   d.metadata.get("resource", ""),
-                "content":    d.page_content,
-            }
-            for d in docs
+            {"concept_id": r[0], "title": r[1], "resource": r[2],
+             "description": r[3], "status": r[4]}
+            for r in rows
         ]
 
     @tool
     def catalog_count(concept_type: str) -> dict:
-        """Count OKF concepts of a given type in the tenant's KB.
-        Use for questions like 'how many API endpoints do we have?'
-        Valid types: 'API Endpoint', 'Playbook', 'Policy', 'Reference', 'Metric'."""
-        if kb_retriever is None:
-            return {"concept_type": concept_type, "count": 0}
-        # Count by scanning BM25 source documents — no SQL needed
-        all_chunks = pickle.loads(Path(f"./kb-chunks-{tenant_id}.pkl").read_bytes())
-        seen = set()
-        for chunk in all_chunks:
-            if chunk.metadata.get("type") == concept_type:
-                seen.add(chunk.metadata.get("concept_id", chunk.metadata.get("source", "")))
-        return {"concept_type": concept_type, "count": len(seen)}
+        """Exact SQL count of OKF concepts of a given type for this tenant.
+        Use for: 'how many API endpoints do we have?', 'how many current policies?'"""
+        with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
+            n = conn.execute(
+                "SELECT COUNT(*) FROM okf_concepts WHERE tenant_id = %s AND type = %s",
+                [tenant_id, concept_type],
+            ).fetchone()[0]
+        return {"concept_type": concept_type, "count": n}
 
     return search_kb, lookup_openapi, catalog_count
 
@@ -558,7 +682,7 @@ A retrieval pipeline without measurements degrades silently. Build a benchmark s
 <DataTable
   headers={["Query class", "Example", "Primary strategy"]}
   rows={[
-    { "Query class": "General KB", "Example": "What happens if a Pro-tier customer misses a key rotation?", "Primary strategy": "`search_kb` hybrid" },
+    { "Query class": "General KB", "Example": "What happens if a Pro-tier customer misses a key rotation?", "Primary strategy": "`search_kb` pgvector + FTS hybrid" },
     { "Query class": "OpenAPI contract", "Example": "Does GET /orders accept a cursor parameter?", "Primary strategy": "`lookup_openapi` structured" },
     { "Query class": "Catalog count", "Example": "How many API operations does StreamAPI expose?", "Primary strategy": "`catalog_count` SQL" },
     { "Query class": "Troubleshooting", "Example": "Customer getting 401 since 3pm. Pro tier. What do I check?", "Primary strategy": "`search_kb` → `fetch_logs`" },
@@ -653,7 +777,7 @@ Pin `LLM_MODEL` per environment. Run the same golden ticket benchmark (section 9
 
 ## <Label color="green">12</Label> Deploy the agent as a service
 
-Build a tenant-scoped agent per request — one process-wide agent would answer every customer using the same KB. Cache agents per `tenant_id` to avoid rebuilding BM25 and MCP connections on every call:
+Build a tenant-scoped agent per request — one process-wide agent would answer every customer using the same KB. Cache agents per `tenant_id` to avoid rebuilding tenant-scoped retrieval tools and MCP connections on every call:
 
 ```python
 # service.py
@@ -665,8 +789,8 @@ from pydantic import BaseModel
 
 app = FastAPI()
 
-# Cache keyed by tenant_id — avoids rebuilding BM25 and MCP connections
-# per-request. Invalidate an entry when that tenant's KB is re-indexed.
+# Cache keyed by tenant_id — avoids rebuilding retrieval tools and MCP connections.
+# Invalidate an entry when that tenant's KB is re-indexed.
 _agent_cache: dict[str, Any] = {}
 
 class SupportRequest(BaseModel):
@@ -722,7 +846,7 @@ docker build -t streamapi-support-agent .
 docker run --env-file .env -p 8080:8080 streamapi-support-agent
 ```
 
-Before production, replace `MemorySaver()` with a durable checkpointer, replace the local Chroma directory with a persistent/vector service, store tenant facts in the application database, and add authentication, rate limits, audit logs, tracing, secret-manager injection, and an approval endpoint that resumes the stored thread.
+Before production, replace `MemorySaver()` with a durable checkpointer, run PostgreSQL/pgvector as a managed service with connection pooling and schema migrations, store tenant facts in the application database, and add authentication, rate limits, audit logs, tracing, secret-manager injection, and an approval endpoint that resumes the stored thread.
 
 ---
 
@@ -731,7 +855,7 @@ Before production, replace `MemorySaver()` with a durable checkpointer, replace 
 <DataTable
   headers={["Step", "What you need", "Time estimate"]}
   rows={[
-    { "Step": "KB ingestion",       "What you need": "`langchain-aws` (Titan embeddings) + `rank-bm25` + `chromadb`; set `AWS_REGION` and `LLM_MODEL`", "Time estimate": "1–2h" },
+    { "Step": "KB ingestion",       "What you need": "`langchain-aws` (Titan embeddings) + `langchain-postgres` + `psycopg`; PostgreSQL with pgvector and FTS", "Time estimate": "1–2h" },
     { "Step": "MCP server",         "What you need": "Platform APIs wrapped with FastMCP (`uv add mcp`)", "Time estimate": "2–4h" },
     { "Step": "Skills directory",   "What you need": "`./skills/401-errors/SKILL.md` with investigation checklist", "Time estimate": "30 min" },
     { "Step": "AGENTS.md",         "What you need": "Escalation rules + known issues (see above)", "Time estimate": "30 min" },
@@ -752,9 +876,9 @@ Install everything:
 ```bash
 uv add deepagents langchain langchain-mcp-adapters \
        langchain-community langchain-text-splitters langchain-aws \
-       langchain-litellm litellm rank-bm25 \
-       unstructured pypdf \
-       chromadb mcp httpx fastapi uvicorn
+       langchain-litellm litellm langchain-postgres 'psycopg[binary]' \
+       pyyaml unstructured pypdf \
+       mcp httpx fastapi uvicorn
 ```
 
-Sources: <a href="https://github.com/langchain-ai/deepagents">deepagents</a> · <a href="https://docs.langchain.com/oss/python/deepagents/overview">DeepAgents docs</a> · <a href="https://docs.langchain.com/oss/python/deepagents/permissions">Permissions</a> · <a href="https://github.com/modelcontextprotocol/python-sdk">MCP Python SDK</a> · <a href="https://python.langchain.com/docs/integrations/tools/mcp/">langchain-mcp-adapters</a>
+Sources: <a href="https://github.com/langchain-ai/deepagents">deepagents</a> · <a href="https://docs.langchain.com/oss/python/deepagents/overview">DeepAgents docs</a> · <a href="https://docs.langchain.com/oss/python/deepagents/permissions">Permissions</a> · <a href="https://github.com/modelcontextprotocol/python-sdk">MCP Python SDK</a> · <a href="https://python.langchain.com/docs/integrations/tools/mcp/">langchain-mcp-adapters</a> · <a href="https://github.com/GoogleCloudPlatform/open-knowledge-format">Open Knowledge Format</a> · <a href="https://github.com/GoogleCloudPlatform/open-knowledge-format/blob/main/SPEC.md">OKF specification</a>

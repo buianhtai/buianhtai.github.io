@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "DeepAgents Customer Support Architecture",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "viewBox": [1180, 680]
+  },
+  "components": [
+    { "id": "uploads", "type": "external", "label": "Customer uploads", "sublabel": "PDF · DOCX · images", "pos": [25, 75], "size": [155, 64] },
+    { "id": "okf", "type": "external", "label": "OKF bundle", "sublabel": "maintained concepts", "pos": [25, 200], "size": [155, 64] },
+    { "id": "ticket", "type": "external", "label": "Support request", "sublabel": "authenticated tenant", "pos": [25, 445], "size": [155, 64] },
+    { "id": "ingest", "type": "backend", "label": "Ingestion worker", "sublabel": "parse · chunk · normalize", "pos": [315, 135], "size": [175, 72] },
+    { "id": "agent", "type": "backend", "label": "DeepAgents service", "sublabel": "router · evaluator · HITL", "pos": [315, 415], "size": [175, 76] },
+    { "id": "sonnet", "type": "cloud", "label": "Bedrock Sonnet 5", "sublabel": "image-to-text", "pos": [735, 25], "size": [175, 68] },
+    { "id": "titan", "type": "cloud", "label": "Titan Embeddings V2", "sublabel": "chunk vectors", "pos": [735, 120], "size": [175, 68] },
+    { "id": "postgres", "type": "database", "label": "PostgreSQL", "sublabel": "pgvector · FTS · OKF SQL", "pos": [735, 215], "size": [175, 74] },
+    { "id": "litellm", "type": "backend", "label": "LiteLLM", "sublabel": "Sonnet reasoning route", "pos": [735, 320], "size": [175, 68] },
+    { "id": "mcp", "type": "backend", "label": "Platform MCP", "sublabel": "tenant-scoped live tools", "pos": [735, 415], "size": [175, 68] },
+    { "id": "human", "type": "security", "label": "Human approval", "sublabel": "interrupt before writes", "pos": [735, 510], "size": [175, 68] },
+    { "id": "platform", "type": "external", "label": "Platform APIs", "sublabel": "state · logs · fixes", "pos": [990, 415], "size": [165, 68] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "AI support service · server-derived tenant context", "wraps": ["ingest", "agent", "sonnet", "titan", "postgres", "litellm", "mcp", "human"], "pad": 22 }
+  ],
+  "connections": [
+    { "from": "uploads", "to": "ingest", "label": "binary-safe stream", "variant": "emphasis" },
+    { "from": "okf", "to": "ingest", "label": "frontmatter + body", "variant": "emphasis" },
+    { "from": "ingest", "to": "sonnet", "label": "images → text", "variant": "dashed" },
+    { "from": "ingest", "to": "titan", "label": "embed chunks", "labelAt": [680, 200] },
+    { "from": "ingest", "to": "postgres", "label": "FTS + metadata", "variant": "emphasis" },
+    { "from": "titan", "to": "postgres", "label": "vectors", "labelAt": [823, 202] },
+    { "from": "ticket", "to": "agent", "label": "tenant-scoped report", "variant": "security" },
+    { "from": "agent", "to": "postgres", "label": "hybrid search + exact SQL", "variant": "emphasis" },
+    { "from": "agent", "to": "litellm", "label": "reasoning", "labelAt": [675, 355] },
+    { "from": "agent", "to": "mcp", "label": "live tools + approved writes", "variant": "dashed", "labelAt": [530, 505] },
+    { "from": "agent", "to": "human", "label": "interrupt proposed write", "variant": "security" },
+    { "from": "mcp", "to": "platform", "label": "HTTP / API", "variant": "emphasis" }
+  ]
+}
