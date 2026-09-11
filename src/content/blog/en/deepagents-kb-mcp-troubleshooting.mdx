@@ -507,6 +507,107 @@ The serving rule is **static knowledge first, live tools second, writes last**. 
   ]}
 />
 
+### What actual requests and responses look like
+
+The agent does not always search everything. The wording of the request determines which source kinds are allowed for that retrieval call.
+
+**Case A — the user asks only about their uploaded document**
+
+> In our uploaded Acme Network Requirements document, which IPs should we allowlist?
+
+The router calls:
+
+```python
+search_kb(
+    query="Acme Network Requirements outbound IP allowlist",
+    source_kind="customer_upload",
+)
+```
+
+That choice searches only the authenticated tenant collection. It does not search another customer's files, platform MDX, or MCP:
+
+```text
+Allowlist 203.0.113.10/32 and 203.0.113.11/32.
+
+Evidence
+- Acme Network Requirements.pdf, “Outbound connectivity”, page 4
+  source=customer_upload · scope=tenant_acme
+
+Platform documentation and live customer state were not used.
+```
+
+**Case B — the user asks how to use a platform API**
+
+> How do I paginate `GET /orders`?
+
+The router uses two complementary sources:
+
+1. `search_kb(..., source_kind="platform_mdx")` for the explanation and example.
+2. `lookup_openapi(path="/orders", method="GET")` for the exact supported contract.
+
+The consolidated response separates guidance from contract facts:
+
+```text
+Call GET /orders without cursor for the first page. For the next page,
+send the previous response's next_cursor value as cursor. A malformed
+cursor returns 400.
+
+Example
+GET /orders?limit=100&cursor=eyJpZCI6...
+
+Evidence
+- Platform guide: /docs/api/orders/list, revision git:8f31a2c
+- API contract: openapi.yaml#/paths/~1orders/get
+```
+
+**Case C — the tenant document and current API contract disagree**
+
+> Our uploaded migration plan says to use `offset`. Can we use that with `/orders` v2?
+
+The agent retrieves the tenant document and the canonical platform contract, but it does not average the two answers:
+
+```text
+No for v2. Your uploaded migration plan describes the v1 offset flow,
+while the current v2 contract accepts cursor and does not define offset.
+Use next_cursor from each response.
+
+Conflict detected
+- Tenant document: Migration Plan.pdf, revision 2025-11 — uses offset
+- Canonical v2 contract: GET /orders — uses cursor
+
+Recommended next action
+Update the tenant migration plan before the rollout.
+```
+
+No MCP call is needed in these three cases because none asks about current runtime state. MCP becomes necessary for questions such as "why did this customer's request fail at 14:32?" or "is this feature enabled on their account?"
+
+### How results are consolidated
+
+<FlowStep
+  steps={[
+    { title: "Route", body: "Classify the request as tenant-document, platform-how-to, exact contract, mixed evidence, or live troubleshooting. This sets allowed source kinds and scopes.", color: "teal" },
+    { title: "Retrieve", body: "Run only the required searches. A mixed request may query both the tenant collection and shared platform knowledge; a tenant-only request does not.", color: "green" },
+    { title: "Fuse duplicates", body: "Reciprocal-rank fusion combines vector and FTS hits with the same doc_id. It ranks passages; it does not decide which source is true.", color: "amber" },
+    { title: "Build an evidence ledger", body: "Turn passages into claims with scope, source kind, origin, route, and revision. Group supporting claims and preserve contradictions.", color: "rose" },
+    { title: "Answer or escalate", body: "Generate one answer from supported claims, cite each material fact, list unresolved conflicts, and call MCP only when live evidence is required.", color: "violet" },
+  ]}
+/>
+
+Authority depends on the claim being answered:
+
+<DataTable
+  headers={["Claim", "Authoritative source", "Consolidation rule"]}
+  rows={[
+    { "Claim": "What the API accepts", "Authoritative source": "Current OKF/OpenAPI contract", "Consolidation rule": "Contract wins; flag older MDX or tenant instructions as stale" },
+    { "Claim": "How to use the API", "Authoritative source": "Current platform MDX", "Consolidation rule": "Use the guide for explanation; verify exact fields against the contract" },
+    { "Claim": "What the customer intended to configure", "Authoritative source": "That tenant's uploaded document", "Consolidation rule": "Keep tenant scope visible; do not generalize it into platform behavior" },
+    { "Claim": "What is configured or failing now", "Authoritative source": "Tenant-scoped MCP result", "Consolidation rule": "Prefer timestamped live state over static documentation" },
+    { "Claim": "Two sources conflict without clear ownership", "Authoritative source": "None", "Consolidation rule": "Expose the conflict and ask or escalate; never silently blend values" },
+  ]}
+/>
+
+The final answer should always contain four things: **direct answer, evidence, conflicts or uncertainty, and next action**. A high retrieval score is not evidence by itself; every material statement must trace back to a source record or live tool result.
+
 PostgreSQL serves the three static retrieval modes: pgvector for semantics, FTS for exact terms such as `401` or `next_cursor`, and relational SQL for endpoint existence and counts. MCP serves current operational state. The model never queries the database directly; it receives narrow tools that already enforce allowed scopes.
 
 Before wiring the agent, separate **policy** from **state**. `memory=["./AGENTS.md"]` is a static prompt input — it is not a tenant database and should never contain customer-specific facts:
@@ -579,18 +680,39 @@ def _store_for(scope_id: str) -> PGVector:
 def make_kb_tools(tenant_id: str):
     """Search shared platform knowledge plus one authenticated tenant scope."""
     scopes = [PLATFORM_SCOPE, tenant_id]
-    stores = [(scope_id, _store_for(scope_id)) for scope_id in scopes]
+    stores = {scope_id: _store_for(scope_id) for scope_id in scopes}
 
     @tool
-    def search_kb(query: str, concept_type: str = "") -> list[dict]:
-        """Hybrid search over platform MDX/OKF and this tenant's uploads."""
+    def search_kb(
+        query: str,
+        concept_type: str = "",
+        source_kind: str = "",
+    ) -> list[dict]:
+        """Hybrid KB search. source_kind: customer_upload, platform_mdx, okf, or empty."""
+        allowed_kinds = {"", "customer_upload", "platform_mdx", "okf"}
+        if source_kind not in allowed_kinds:
+            raise ValueError(f"source_kind must be one of {sorted(allowed_kinds)}")
+
+        if source_kind == "customer_upload":
+            query_scopes = [tenant_id]
+        elif source_kind in {"platform_mdx", "okf"}:
+            query_scopes = [PLATFORM_SCOPE]
+        else:
+            query_scopes = scopes
+
         vector_hits = []
-        for scope_id, store in stores:
+        for scope_id in query_scopes:
             metadata_filter: dict = {"scope_id": scope_id}
             if concept_type:
                 metadata_filter["type"] = concept_type
+            if source_kind:
+                metadata_filter["source_kind"] = source_kind
             for rank, doc in enumerate(
-                store.similarity_search(query, k=8, filter=metadata_filter),
+                stores[scope_id].similarity_search(
+                    query,
+                    k=8,
+                    filter=metadata_filter,
+                ),
                 start=1,
             ):
                 vector_hits.append((rank, doc))
@@ -598,19 +720,22 @@ def make_kb_tools(tenant_id: str):
         sql = """WITH q AS (
                      SELECT websearch_to_tsquery('english', %s) AS query
                  )
-                 SELECT doc_id, source_kind, origin, concept_id, concept_type,
-                        title, route, revision, status, content
+                 SELECT doc_id, scope_id, source_kind, origin, concept_id,
+                        concept_type, title, route, revision, status, content
                  FROM kb_fts, q
                  WHERE scope_id = ANY(%s) AND search_vector @@ q.query"""
-        params: list = [query, scopes]
+        params: list = [query, query_scopes]
         if concept_type:
             sql += " AND concept_type = %s"
             params.append(concept_type)
+        if source_kind:
+            sql += " AND source_kind = %s"
+            params.append(source_kind)
         sql += " ORDER BY ts_rank_cd(search_vector, q.query) DESC LIMIT 16"
         with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
             fts_rows = conn.execute(sql, params).fetchall()
 
-        # Reciprocal-rank fusion rewards chunks found by both retrieval paths.
+        # RRF ranks retrieval results. The evaluator decides whether claims agree.
         merged: dict[str, dict] = {}
         for rank, doc in vector_hits:
             m = doc.metadata
@@ -624,6 +749,7 @@ def make_kb_tools(tenant_id: str):
                 "title": m.get("title", ""),
                 "status": m.get("status", ""),
                 "source": {
+                    "scope": m.get("scope_id", ""),
                     "kind": m.get("source_kind", ""),
                     "origin": m.get("origin", ""),
                     "route": m.get("route", ""),
@@ -633,16 +759,17 @@ def make_kb_tools(tenant_id: str):
             }
         for rank, row in enumerate(fts_rows, start=1):
             item = merged.setdefault(row[0], {
-                "content": row[9],
-                "concept_id": row[3] or "",
-                "type": row[4] or "",
-                "title": row[5] or "",
-                "status": row[8] or "",
+                "content": row[10],
+                "concept_id": row[4] or "",
+                "type": row[5] or "",
+                "title": row[6] or "",
+                "status": row[9] or "",
                 "source": {
-                    "kind": row[1],
-                    "origin": row[2],
-                    "route": row[6] or "",
-                    "revision": row[7] or "",
+                    "scope": row[1],
+                    "kind": row[2],
+                    "origin": row[3],
+                    "route": row[7] or "",
+                    "revision": row[8] or "",
                 },
                 "_score": 0,
             })
@@ -743,22 +870,34 @@ async def build_agent(tenant_id: str):
 
         system_prompt="""You are a customer support agent for StreamAPI.
 
-**Retrieval strategy — follow this order for every question:**
-1. Analyze the query: clean it, classify intent, and identify the OKF concept type if applicable.
-2. For how-to questions, examples, runbooks, or customer-uploaded material → call search_kb. It searches `__platform__` plus the authenticated tenant, never other tenants.
-3. For exact API contract questions → call lookup_openapi with path/method filters.
-4. For counts → call catalog_count with the relevant concept_type.
-5. Evaluate whether the returned citations support the answer. If not, try the next static strategy (max 2 retries), then escalate.
-6. For current customer state or incident evidence → call platform MCP tools only after static retrieval establishes the expected behavior.
+**Retrieval strategy:**
+1. Classify the request: tenant document, platform how-to, exact contract, mixed evidence, or live troubleshooting.
+2. "Our uploaded document" → search_kb with source_kind='customer_upload'.
+3. Platform usage/how-to → search_kb with source_kind='platform_mdx'.
+4. Exact API fields, methods, or paths → lookup_openapi.
+5. Mixed tenant + platform questions → retrieve each source separately and preserve provenance.
+6. Fuse duplicate vector/FTS hits, then evaluate whether the evidence supports every material claim.
+7. Call platform MCP tools only for current customer state, logs, traces, or actions.
 
-**Investigation steps:**
-1. Classify and retrieve — pick the right strategy above.
-2. Call get_customer_state — inspect account, keys, tier, feature flags.
-3. Call fetch_logs — find the specific error with timestamp and tenant scope.
-4. Diagnose the root cause precisely. Cite the KB article, OpenAPI field, or log line.
-5. Propose a fix with rationale — you will pause for human approval before applying.
+**Conflict rules:**
+- API contract claims: current OKF/OpenAPI is authoritative.
+- Customer-intent claims: that tenant's uploaded document is authoritative.
+- Runtime-state claims: the timestamped MCP result is authoritative.
+- If ownership or freshness cannot resolve a conflict, expose it and escalate. Never average or silently choose.
 
-Escalate if: data loss or security exposure detected, cannot diagnose within 3 tool calls, or evidence is absent.
+**Live investigation only:**
+1. Retrieve static expected behavior.
+2. Call get_customer_state and fetch_logs with the authenticated tenant context.
+3. Compare expected behavior with current state, diagnose, and cite both.
+4. Propose a fix; pause for human approval before applying it.
+
+**Every response must contain:**
+1. Direct answer.
+2. Evidence with source kind, origin or route, and revision/timestamp.
+3. Conflicts or uncertainty, including "none found".
+4. Next action, or "none required".
+
+Escalate if: data loss or security exposure is detected, evidence is absent, a conflict cannot be resolved, or live troubleshooting cannot diagnose within 3 tool calls.
 """,
     )
 
