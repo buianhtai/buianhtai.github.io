@@ -30,9 +30,9 @@ This is the implementation-level companion to [Building Support Agents for Your 
 
 <FlowStep
   steps={[
-    { title: "KB Ingestion",       body: "Convert your docs, runbooks, and known-issue catalogue into a searchable vector store. Runs offline — triggered by CI or a webhook when content changes.", color: "teal" },
-    { title: "MCP Integration",    body: "Your platform exposes an MCP server: get_customer_state, fetch_logs, apply_fix, send_notification. DeepAgents calls these the same way it calls any tool.", color: "green" },
-    { title: "Troubleshooting Agent", body: "DeepAgents orchestrates the investigation: search KB → inspect customer state → fetch logs → diagnose → propose fix → human approves → apply.", color: "amber" },
+    { title: "KB Ingestion",       body: "Normalize Markdown, OpenAPI, changelogs, and known issues into the right representations: searchable text plus structured metadata. Runs offline when content changes.", color: "teal" },
+    { title: "MCP / HTTP Capabilities", body: "Expose platform operations such as get_customer_state, fetch_logs, apply_fix, and send_notification through MCP or typed HTTP tools.", color: "green" },
+    { title: "Troubleshooting Agent", body: "DeepAgents analyzes the query, chooses a retrieval strategy, evaluates evidence, retries with a bounded fallback when needed, and pauses before writes.", color: "amber" },
   ]}
 />
 
@@ -40,56 +40,92 @@ These three pieces are independent. You can add them one at a time.
 
 ---
 
-## <Label color="green">2</Label> KB ingestion pipeline
+## <Label color="green">2</Label> Retrieval is a strategy, not a single index
 
-<Concept term="Why a separate ingestion step?" category="design">
-  The agent queries the KB at runtime, but the KB itself is built offline. Keeping ingestion separate means the agent always queries a stable, pre-indexed store — not a live doc system that could be slow or unavailable mid-investigation.
+<Concept term="Why not just embed everything into one vector store?" category="design">
+  Vector similarity works for semantic questions, but breaks on exact lookups: "does the GET /orders endpoint accept a cursor parameter?" or "how many APIs do we have?" need structured access, not nearest-neighbour search. The agent decides which strategy fits the query — and retries with the next best option if the first returns insufficient evidence.
 </Concept>
 
-Run this whenever your KB content changes — CI push, doc webhook, or a nightly cron:
+The target flow is:
 
-```python
-# ingest.py — run offline, not inside the agent
-from langchain_community.document_loaders import DirectoryLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_openai import OpenAIEmbeddings
-from langchain_community.vectorstores import Chroma
-
-# Load from wherever your KB lives
-# Swap for ConfluenceLoader, S3FileLoader, GitbookLoader, etc.
-docs = DirectoryLoader("./kb-source/", glob="**/*.md").load()
-
-# Chunk — 800 tokens is a good starting size for support docs
-chunks = RecursiveCharacterTextSplitter(
-    chunk_size=800,
-    chunk_overlap=100,
-).split_documents(docs)
-
-# Build and persist the vector store
-Chroma.from_documents(
-    chunks,
-    OpenAIEmbeddings(model="text-embedding-3-small"),
-    persist_directory="./kb",
-)
-print(f"Ingested {len(chunks)} chunks from {len(docs)} documents.")
-```
-
-**What goes in the KB:**
-
-<DataTable
-  headers={["Content type", "What to include", "Why"]}
-  rows={[
-    { "Content type": "Error runbooks",    "What to include": "401/403/429 patterns, root causes, resolution steps",       "Why": "Agent finds the right runbook before checking logs" },
-    { "Content type": "Known issues",      "What to include": "Bug catalogue with symptoms + workarounds",                  "Why": "Skips investigation for already-known problems" },
-    { "Content type": "API changelog",     "What to include": "Breaking changes, deprecated endpoints, key rotation policy", "Why": "Catches 'worked yesterday, broken today' root causes" },
-    { "Content type": "Customer tiers",    "What to include": "Pro/Enterprise feature flags, rate limits, SLA commitments", "Why": "Agent knows what the customer is entitled to" },
-    { "Content type": "Escalation paths",  "What to include": "When to page on-call, who owns billing vs. infra issues",   "Why": "Agent knows when to stop and hand off" },
+<FlowStep
+  steps={[
+    { title: "Query Analyzer", body: "Clean the query, expand abbreviations, extract filters (service name, error code, HTTP method), and classify intent: KB question, OpenAPI lookup, catalog count, or troubleshooting.", color: "teal" },
+    { title: "Retrieval Router", body: "Select the right strategy based on the classifier output. Try the primary strategy; if evidence is insufficient, fall back to the next one (bounded at 2 retries to avoid loops).", color: "green" },
+    { title: "Vector / Hybrid", body: "BM25 + embedding similarity for general KB questions — runbooks, known issues, changelogs, tier rules. Hybrid beats pure vector on exact error codes and field names.", color: "amber" },
+    { title: "Structured / SQL", body: "OpenAPI metadata lookup for contract questions. SQL/catalog query for counts and aggregates. No embedding involved — filter on pre-indexed fields.", color: "rose" },
+    { title: "Tool fallback", body: "If KB retrieval is insufficient, call search_logs, get_trace, or search_known_issues. These are live tools, not static indexes — use them after static retrieval fails.", color: "violet" },
+    { title: "Evaluator", body: "Verify the retrieved context actually supports a grounded answer. If not, request a different strategy or escalate. Never fabricate an answer when evidence is absent.", color: "blue" },
   ]}
 />
 
 ---
 
-## <Label color="amber">3</Label> Platform MCP server
+## <Label color="teal">3</Label> Ingestion — one representation per content type
+
+Not everything should be embedded the same way. OpenAPI schemas lose structure when chunked as prose; Markdown docs lose context when embedded as individual sentences.
+
+```python
+# ingest.py — run offline; triggered by CI merge or content webhook
+from langchain_community.document_loaders import DirectoryLoader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_openai import OpenAIEmbeddings
+from langchain_community.vectorstores import Chroma
+import json, sqlite3
+
+# ── 1. Markdown KB: embed as searchable prose ─────────────────────────────────
+docs = DirectoryLoader("./kb-source/", glob="**/*.md").load()
+chunks = RecursiveCharacterTextSplitter(
+    chunk_size=800,
+    chunk_overlap=100,
+).split_documents(docs)
+Chroma.from_documents(
+    chunks,
+    OpenAIEmbeddings(model="text-embedding-3-small"),
+    persist_directory="./kb-vector",
+)
+
+# ── 2. OpenAPI: preserve structure as filterable rows ─────────────────────────
+# Keep service → path → method → operationId → request/response schema intact.
+# Embed only the description; filter on the structured fields at query time.
+conn = sqlite3.connect("./kb-openapi.db")
+conn.execute("""
+    CREATE TABLE IF NOT EXISTS operations (
+        service TEXT, path TEXT, method TEXT, operation_id TEXT,
+        summary TEXT, description TEXT, request_schema TEXT, response_schema TEXT
+    )
+""")
+spec = json.load(open("./openapi.json"))
+for path, methods in spec.get("paths", {}).items():
+    for method, op in methods.items():
+        conn.execute("INSERT INTO operations VALUES (?,?,?,?,?,?,?,?)", (
+            spec.get("info", {}).get("title", ""),
+            path, method.upper(),
+            op.get("operationId", ""),
+            op.get("summary", ""),
+            op.get("description", ""),
+            json.dumps(op.get("requestBody", {})),
+            json.dumps(op.get("responses", {})),
+        ))
+conn.commit()
+print(f"Indexed {conn.execute('SELECT COUNT(*) FROM operations').fetchone()[0]} operations.")
+```
+
+<DataTable
+  headers={["Content type", "Representation", "Why"]}
+  rows={[
+    { "Content type": "Error runbooks / guides", "Representation": "Hybrid vector + BM25 chunks with heading breadcrumb metadata", "Why": "Handles both semantic questions and exact error-code lookups" },
+    { "Content type": "Known issues", "Representation": "BM25-indexed prose, tagged with symptom keywords and affected version", "Why": "Exact symptom match beats embedding similarity for known bugs" },
+    { "Content type": "OpenAPI spec", "Representation": "Structured SQLite rows: service → path → method → operationId → schemas", "Why": "Contract questions need exact field lookup, not nearest-neighbour" },
+    { "Content type": "API changelog", "Representation": "Versioned vector chunks; filter on `api_version` at query time", "Why": "Prevents v1 answers reaching v2 customers" },
+    { "Content type": "Customer tiers / SLAs", "Representation": "Small structured table; looked up by tier name, not by embedding", "Why": "Rate limits and SLA values must be exact, not approximated" },
+    { "Content type": "Escalation paths", "Representation": "Vector chunks in KB, loaded into AGENTS.md policy summary", "Why": "Both runtime retrieval and static prompt need escalation rules" },
+  ]}
+/>
+
+---
+
+## <Label color="amber">4</Label> Platform MCP server
 
 Your platform needs to expose an MCP server with at least these tools. The exact implementation is yours — DeepAgents calls them as black boxes.
 
@@ -135,7 +171,7 @@ if __name__ == "__main__":
 
 ---
 
-## <Label color="rose">4</Label> Wiring DeepAgents
+## <Label color="rose">5</Label> Wiring DeepAgents
 
 Now connect all three pieces.
 
@@ -159,30 +195,64 @@ MCP tools are async, so the agent setup lives in an async function:
 ```python
 # agent.py
 import asyncio
-from langchain_anthropic import ChatAnthropic
-from langchain_community.vectorstores import Chroma
+import sqlite3
+from langchain.chat_models import init_chat_model
 from langchain_openai import OpenAIEmbeddings
-from langchain.tools.retriever import create_retriever_tool
+from langchain_community.vectorstores import Chroma
+from langchain_core.tools import tool
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from deepagents import create_deep_agent
 from deepagents.backends import FilesystemBackend
 from deepagents.middleware.filesystem import FilesystemPermission
 from langgraph.checkpoint.memory import MemorySaver
 
-# ── KB retrieval tool (sync — built once at startup) ──────────────────────────
+# ── Retrieval tools ────────────────────────────────────────────────────────────
 
-kb_store = Chroma(
-    persist_directory="./kb",
+_kb_store = Chroma(
+    persist_directory="./kb-vector",
     embedding_function=OpenAIEmbeddings(model="text-embedding-3-small"),
 )
-kb_tool = create_retriever_tool(
-    kb_store.as_retriever(search_kwargs={"k": 5}),
-    name="search_kb",
-    description=(
-        "Search the StreamAPI knowledge base: runbooks, known issues, API changelog, "
-        "tier definitions, escalation paths. Always search this before checking logs."
-    ),
-)
+_kb_retriever = _kb_store.as_retriever(search_kwargs={"k": 5})
+
+@tool
+def search_kb(query: str) -> list[dict]:
+    """Hybrid BM25 + vector search over Markdown KB: runbooks, known issues,
+    changelogs, tier definitions. Use for general troubleshooting questions.
+    Returns a list of {content, source, score} dicts."""
+    docs = _kb_retriever.invoke(query)
+    return [{"content": d.page_content, "source": d.metadata.get("source", "")}
+            for d in docs]
+
+@tool
+def lookup_openapi(service: str, path: str = "", method: str = "") -> list[dict]:
+    """Structured lookup in the OpenAPI metadata store. Returns matching operations
+    with request/response schemas. Filter by service, path, or HTTP method.
+    Use for contract questions: 'does GET /orders accept a cursor param?'"""
+    conn = sqlite3.connect("./kb-openapi.db")
+    query = "SELECT * FROM operations WHERE service = ?"
+    params: list = [service]
+    if path:
+        query += " AND path LIKE ?"
+        params.append(f"%{path}%")
+    if method:
+        query += " AND method = ?"
+        params.append(method.upper())
+    rows = conn.execute(query, params).fetchall()
+    cols = ["service","path","method","operation_id","summary","description",
+            "request_schema","response_schema"]
+    return [dict(zip(cols, r)) for r in rows]
+
+@tool
+def catalog_count(entity: str) -> dict:
+    """Return a count of indexed entities: 'operations', 'docs', 'known_issues'.
+    Use for questions like 'how many APIs do we have?'"""
+    conn = sqlite3.connect("./kb-openapi.db")
+    if entity == "operations":
+        n = conn.execute("SELECT COUNT(*) FROM operations").fetchone()[0]
+    else:
+        n = -1  # extend for other entity types
+    return {"entity": entity, "count": n}
+
 
 # ── Build agent (async because MCP tools require await) ───────────────────────
 
@@ -196,8 +266,8 @@ async def build_agent():
     platform_tools = await mcp.get_tools()   # get_customer_state, fetch_logs, apply_fix, send_notification
 
     return create_deep_agent(
-        model=ChatAnthropic(model="claude-sonnet-4-5-20250929"),
-        tools=[kb_tool, *platform_tools],
+        model=make_model(),
+        tools=[search_kb, lookup_openapi, catalog_count, *platform_tools],
 
         # Runbooks + escalation rules always loaded
         # Static policy only — never put customer state in AGENTS.md
@@ -233,16 +303,22 @@ async def build_agent():
 
         system_prompt="""You are a customer support agent for StreamAPI.
 
-When investigating an issue:
-1. search_kb first — find the relevant runbook or known issue
-2. get_customer_state — inspect their account, keys, tier, feature flags
-3. fetch_logs — find the specific error (use the customer's email and the reported timeframe)
-4. Diagnose the root cause precisely
-5. Propose a fix with rationale — you will pause for human approval before applying
+**Retrieval strategy — follow this order for every question:**
+1. Analyze the query: clean it, extract filters (service, error code, HTTP method), classify intent.
+2. For general KB questions → call search_kb.
+3. For OpenAPI contract questions → call lookup_openapi with service/path/method filters.
+4. For catalog counts → call catalog_count.
+5. After retrieval, evaluate: does the evidence actually answer the question? If not, try the next strategy (max 2 retries), then escalate.
+6. For live diagnostics after KB retrieval fails → call search_logs or get_trace from the platform tools.
 
-Always cite which KB article or log entry led to your conclusion.
-If the issue matches a known bug, say so and link the workaround.
-Escalate to on-call if you find data loss, security exposure, or cannot diagnose within 3 tool calls.
+**Investigation steps:**
+1. Classify and retrieve — pick the right strategy above.
+2. Call get_customer_state — inspect account, keys, tier, feature flags.
+3. Call fetch_logs — find the specific error with timestamp and tenant scope.
+4. Diagnose the root cause precisely. Cite the KB article, OpenAPI field, or log line.
+5. Propose a fix with rationale — you will pause for human approval before applying.
+
+Escalate if: data loss or security exposure detected, cannot diagnose within 3 tool calls, or evidence is absent.
 """,
     )
 
@@ -250,7 +326,7 @@ Escalate to on-call if you find data loss, security exposure, or cannot diagnose
 
 ---
 
-## <Label color="teal">5</Label> A complete troubleshooting session
+## <Label color="teal">6</Label> A complete troubleshooting session
 
 Invoke the agent with the customer's report:
 
@@ -282,7 +358,7 @@ For this fictional StreamAPI scenario, the intended run is:
 
 <FlowStep
   steps={[
-    { title: "search_kb('401 unauthorized api key')", body: "Finds runbook: '401 errors after key rotation window'. Notes: Pro tier keys auto-rotate every 90 days; customers must update their env vars within 24h of rotation email.", color: "teal" },
+    { title: "Query analyzer + search_kb", body: "Agent classifies the query as a runbook question, calls search_kb('401 unauthorized api key'), and finds the relevant runbook. Notes: Pro tier keys auto-rotate every 90 days.", color: "teal" },
     { title: "get_customer_state('tai@streamapi.io')", body: "Returns: tier=Pro, last_key_rotation=2026-09-11T14:32Z (3:32pm — matches report), active_keys=1, key_status=rotated_pending_acknowledgement.", color: "green" },
     { title: "fetch_logs(email, since='2026-09-11T15:00Z')", body: "Returns: 47 × 401 errors, all with auth_error='stale_key_presented'. Confirms stale API key is being presented — not a platform bug.", color: "amber" },
     { title: "Diagnosis", body: "Root cause: customer's API key was auto-rotated at 3:32pm per policy. They're still sending requests with the old key. Runbook recommends: regenerate temp key + notify customer to update env.", color: "rose" },
@@ -311,7 +387,41 @@ async def approve_and_resume(agent, config):
 
 ---
 
-## <Label color="amber">6</Label> AGENTS.md — what to put in memory
+## <Label color="rose">7</Label> Evaluator and tool fallback
+
+Retrieval can fail silently — the store returns five chunks, but none of them support the answer. An evaluator step catches this before the agent fabricates a response.
+
+```python
+EVALUATOR_PROMPT = """
+You are evaluating whether the retrieved context supports a grounded answer.
+
+Question: {question}
+Retrieved context:
+{context}
+
+Respond with:
+- SUPPORTED: context contains evidence for a direct answer. Cite the source.
+- INSUFFICIENT: context does not cover the question. Suggest the next strategy.
+- ESCALATE: question requires human judgment or live data that no tool can resolve.
+"""
+```
+
+Wire the evaluator as a post-retrieval step in your agent's system prompt or as a dedicated LangGraph node before the answer is emitted. Bound fallback retries at 2 — a third failure escalates rather than loops.
+
+Future tools to add as platform capabilities mature:
+
+<DataTable
+  headers={["Tool", "When to call", "Returns"]}
+  rows={[
+    { "Tool": "`search_logs`", "When to call": "KB retrieval finds a known error pattern but needs live evidence", "Returns": "Recent log lines for the customer and timeframe" },
+    { "Tool": "`get_trace`", "When to call": "Customer provides a traceId — first live tool to try for 5xx errors", "Returns": "Failing span, service, root error, correlated log lines" },
+    { "Tool": "`search_known_issues`", "When to call": "search_kb returns nothing; may be an unindexed production bug", "Returns": "Matching open or recently-resolved incidents" },
+  ]}
+/>
+
+---
+
+## <Label color="amber">8</Label> AGENTS.md — what to put in memory
 
 The `memory=["./AGENTS.md"]` file is loaded on every session. It contains durable policy only — escalation rules, tone, and known platform behavior. It is shared by the agent, not by an individual customer. Store account state, ticket history, preferences, and audit records in your tenant-scoped application database instead.
 
@@ -338,7 +448,44 @@ If the agent needs durable facts across sessions, use a persistent store with a 
 
 ---
 
-## <Label color="blue">7</Label> MCP or direct HTTP?
+## <Label color="teal">9</Label> Benchmark your retrieval pipeline
+
+A retrieval pipeline without measurements degrades silently. Build a benchmark set before shipping and run it on every significant change to the KB, chunking strategy, or model.
+
+**Query classes to cover:**
+
+<DataTable
+  headers={["Query class", "Example", "Primary strategy"]}
+  rows={[
+    { "Query class": "General KB", "Example": "What happens if a Pro-tier customer misses a key rotation?", "Primary strategy": "`search_kb` hybrid" },
+    { "Query class": "OpenAPI contract", "Example": "Does GET /orders accept a cursor parameter?", "Primary strategy": "`lookup_openapi` structured" },
+    { "Query class": "Catalog count", "Example": "How many API operations does StreamAPI expose?", "Primary strategy": "`catalog_count` SQL" },
+    { "Query class": "Troubleshooting", "Example": "Customer getting 401 since 3pm. Pro tier. What do I check?", "Primary strategy": "`search_kb` → `fetch_logs`" },
+    { "Query class": "Ambiguous / no answer", "Example": "Is the StreamAPI mobile app affected?", "Primary strategy": "Evaluator → ESCALATE" },
+  ]}
+/>
+
+**Metrics to measure:**
+
+<DataTable
+  headers={["Metric", "What it measures", "How to compute"]}
+  rows={[
+    { "Metric": "Retrieval hit rate", "What it measures": "Does the top-k result contain the correct evidence?", "How to compute": "Label a golden set; check if correct source is in results" },
+    { "Metric": "Answer correctness", "What it measures": "Is the final answer factually correct and grounded?", "How to compute": "LLM judge vs. reference answer; flag ungrounded claims" },
+    { "Metric": "Evaluator precision", "What it measures": "Does INSUFFICIENT correctly identify bad retrievals?", "How to compute": "Inject deliberately weak retrievals; measure detection rate" },
+    { "Metric": "Latency (p50/p95)", "What it measures": "End-to-end time from query to grounded answer", "How to compute": "Trace each tool call; total wall time per query class" },
+    { "Metric": "Token usage", "What it measures": "Context tokens consumed per query", "How to compute": "Sum input tokens across retrieval + evaluator + answer calls" },
+    { "Metric": "Cost per query", "What it measures": "Provider cost across the full pipeline", "How to compute": "Token usage × provider price per 1M tokens" },
+  ]}
+/>
+
+<Callout color="amber">
+  All timing, cost, and quality numbers in this table are the dimensions to measure — not fabricated benchmarks. Collect them against your own KB and provider before comparing strategies.
+</Callout>
+
+---
+
+## <Label color="blue">10</Label> MCP or direct HTTP?
 
 MCP is a capability boundary, not a requirement. DeepAgents accepts ordinary LangChain tools too. For a small, stable internal API, a typed HTTP tool can be simpler than running an MCP server:
 
@@ -374,7 +521,7 @@ Use direct HTTP for a few endpoints owned by the same team. Use MCP when capabil
 
 ---
 
-## <Label color="violet">8</Label> Choosing the LLM provider
+## <Label color="violet">11</Label> Choosing the LLM provider
 
 The agent loop is provider-neutral. Keep provider selection outside the prompt and inject a chat model at startup:
 
@@ -411,7 +558,7 @@ Pin a model per environment, run the same golden ticket set against each provide
 
 ---
 
-## <Label color="green">9</Label> Deploy the agent as a service
+## <Label color="green">12</Label> Deploy the agent as a service
 
 Do not deploy the notebook or run `asyncio.run()` per customer request. Build the agent once when the service starts, expose an authenticated endpoint, and use a durable checkpointer/store in production:
 
