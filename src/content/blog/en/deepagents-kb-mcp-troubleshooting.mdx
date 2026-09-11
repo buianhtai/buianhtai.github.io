@@ -61,165 +61,105 @@ The target flow is:
 
 ---
 
-## <Label color="teal">3</Label> Ingestion — event-driven, any file type
+## <Label color="teal">3</Label> Ingestion — OKF bundles as the canonical KB format
 
-Customers upload files, not a local directory. The ingestion pipeline is triggered by an upload event, downloads the file bytes from your download API, and dispatches to the right parser by content type. `resp.text` is wrong for binary formats — everything is streamed as bytes into a temp file first.
+Instead of per-format dispatch (PDF → parser A, DOCX → parser B), adopt [Open Knowledge Format (OKF)](https://github.com/GoogleCloudPlatform/open-knowledge-format) as the canonical KB representation. Every concept — runbook, API endpoint, known issue, policy — becomes a markdown file with YAML frontmatter. The `type` field is the retrieval router; `status` and `stale_after` handle freshness; `tags` and `verified` handle trust.
+
+An OKF concept for an API endpoint looks like:
+
+```markdown
+---
+type: API Endpoint
+title: GET /v2/orders
+description: List orders for the authenticated customer. Supports cursor pagination.
+resource: https://api.streamapi.io/v2/orders
+tags: [orders, pagination, v2]
+status: current
+generated: { by: human:platform-team, at: 2026-09-11T00:00:00Z }
+---
+
+## Parameters
+| Name   | In    | Required | Description                          |
+|--------|-------|----------|--------------------------------------|
+| cursor | query | No       | Opaque token from the previous page. |
+| limit  | query | No       | Max results per page. Default 20.    |
+
+## Errors
+- `401 Unauthorized` — stale or missing API key. See [key rotation runbook](/runbooks/key-rotation.md).
+```
+
+The ingestion worker loads OKF bundles from your platform's storage. YAML frontmatter fields become Chroma metadata — filterable at query time without re-embedding:
 
 ```python
-# ingest_worker.py — triggered by upload event (SQS, webhook, Kafka, etc.)
-import base64, json, os, pickle, sqlite3, tempfile
+# ingest_worker.py — triggered by bundle upload or CI push
+import os, pickle, yaml
 from pathlib import Path
 from langchain_aws import BedrockEmbeddings
 from langchain_community.vectorstores import Chroma
-from langchain_community.document_loaders import (
-    PyPDFLoader,
-    UnstructuredFileLoader,   # handles DOCX, XLSX, PPTX, HTML, TXT, MD, …
-)
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_litellm import ChatLiteLLM
 from langchain_core.documents import Document
-from langchain_core.document_loaders import BaseLoader
-import httpx
 
 embeddings = BedrockEmbeddings(
     model_id="amazon.titan-embed-text-v2:0",
     region_name=os.environ.get("AWS_REGION", "us-east-1"),
 )
-vision = ChatLiteLLM(
-    model=os.environ["LLM_MODEL"],
-    api_base=os.environ.get("LITELLM_API_BASE"),
-)
+OKF_RESERVED = {"index.md", "log.md"}
 
-IMAGE_TYPES = {"image/png", "image/jpeg", "image/webp"}
-
-# content-type → file extension (needed by parsers that sniff by extension)
-SUFFIXES = {
-    "application/pdf": ".pdf",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
-    "application/vnd.openxmlformats-officedocument.presentationml.presentation": ".pptx",
-    "text/html": ".html",
-    "text/plain": ".txt",
-    "text/markdown": ".md",
-    "image/png": ".png",
-    "image/jpeg": ".jpg",
-    "image/webp": ".webp",
-}
-
-
-class PlatformFileLoader(BaseLoader):
-    """Download one customer-uploaded file and yield parsed Documents."""
-
-    def __init__(self, file_id: str, tenant_id: str):
-        self.file_id = file_id
-        self.tenant_id = tenant_id   # from upload event, not from model
-
-    def lazy_load(self):
-        # Stream bytes — never resp.text; uploaded files are mostly binary
-        with httpx.stream(
-            "GET",
-            f"{os.environ['PLATFORM_API_BASE']}/files/{self.file_id}/download",
-            headers={"X-Tenant-ID": self.tenant_id},
-            timeout=60,
-        ) as resp:
-            resp.raise_for_status()
-            content_type = resp.headers.get("content-type", "").split(";")[0].strip()
-            suffix = SUFFIXES.get(content_type, ".bin")
-
-            with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-                for chunk in resp.iter_bytes():
-                    tmp.write(chunk)
-                tmp_path = tmp.name
-
-        # Dispatch by content type
-        meta = {"file_id": self.file_id, "tenant_id": self.tenant_id}
-        if content_type in IMAGE_TYPES:
-            # Images → Sonnet multimodal → text Document
-            data = Path(tmp_path).read_bytes()
-            msg = vision.invoke([{
-                "role": "user",
-                "content": [
-                    {"type": "image_url", "image_url": {
-                        "url": f"data:{content_type};base64,{base64.b64encode(data).decode()}",
-                    }},
-                    {"type": "text", "text": "Describe this diagram or screenshot concisely for a support agent KB."},
-                ],
-            }])
-            yield Document(page_content=msg.content, metadata=meta)
-        elif content_type == "application/pdf":
-            for doc in PyPDFLoader(tmp_path).load():
-                doc.metadata.update(meta)
-                yield doc
+def load_okf_bundle(bundle_dir: str, tenant_id: str) -> list[Document]:
+    """Load all OKF concepts as Documents. Frontmatter scalar fields become
+    Chroma metadata so the agent can filter by type, tags, status at query time."""
+    docs = []
+    for md_path in sorted(Path(bundle_dir).rglob("*.md")):
+        if md_path.name in OKF_RESERVED:
+            continue
+        text = md_path.read_text(encoding="utf-8")
+        if text.startswith("---"):
+            _, fm_raw, body = text.split("---", 2)
+            frontmatter = yaml.safe_load(fm_raw) or {}
         else:
-            # DOCX, XLSX, PPTX, HTML, TXT, MD — Unstructured handles all of these
-            for doc in UnstructuredFileLoader(tmp_path).load():
-                doc.metadata.update(meta)
-                yield doc
+            frontmatter, body = {}, text
+        docs.append(Document(
+            page_content=body.strip(),
+            metadata={
+                "tenant_id": tenant_id,
+                "concept_id": str(md_path.relative_to(bundle_dir).with_suffix("")),
+                # Scalar OKF fields only — Chroma does not support nested dicts
+                **{k: str(v) for k, v in frontmatter.items()
+                   if isinstance(v, (str, int, float, bool))},
+            },
+        ))
+    return docs
 
 
-def ingest_file(file_id: str, tenant_id: str) -> None:
-    """Called by the upload event handler for each new file."""
-    docs = list(PlatformFileLoader(file_id, tenant_id).lazy_load())
+def ingest_bundle(bundle_dir: str, tenant_id: str) -> None:
+    docs = load_okf_bundle(bundle_dir, tenant_id)
     if not docs:
         return
-
     chunks = RecursiveCharacterTextSplitter(
         chunk_size=800, chunk_overlap=100,
     ).split_documents(docs)
-
-    # Tenant-scoped Chroma collection so retrieval is isolated per tenant
-    store = Chroma(
+    Chroma(
         collection_name=f"kb-{tenant_id}",
         embedding_function=embeddings,
         persist_directory="./kb-vector",
-    )
-    store.add_documents(chunks)
-
-    # Persist all chunks for BM25 rebuild (append to existing pickle if present)
+    ).add_documents(chunks)
     pkl_path = Path(f"./kb-chunks-{tenant_id}.pkl")
     existing = pickle.loads(pkl_path.read_bytes()) if pkl_path.exists() else []
     pickle.dump(existing + chunks, pkl_path.open("wb"))
-
-
-# ── OpenAPI: structured rows — service → path → method → operationId ──────────
-# Run separately when the OpenAPI spec is published or updated.
-def ingest_openapi(spec_path: str, tenant_id: str) -> None:
-    conn = sqlite3.connect("./kb-openapi.db")
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS operations (
-            tenant_id TEXT, service TEXT, path TEXT, method TEXT, operation_id TEXT,
-            summary TEXT, description TEXT, request_schema TEXT, response_schema TEXT
-        )
-    """)
-    spec = json.load(open(spec_path))
-    for path, methods in spec.get("paths", {}).items():
-        for method, op in methods.items():
-            conn.execute("INSERT INTO operations VALUES (?,?,?,?,?,?,?,?,?)", (
-                tenant_id,
-                spec.get("info", {}).get("title", ""),
-                path, method.upper(),
-                op.get("operationId", ""),
-                op.get("summary", ""),
-                op.get("description", ""),
-                json.dumps(op.get("requestBody", {})),
-                json.dumps(op.get("responses", {})),
-            ))
-    conn.commit()
 ```
 
 <Callout color="amber">
-  `tenant_id` comes from the upload event payload — verified server-side. It must never come from the file contents or from a model-supplied argument, because those are not authenticated.
+  `tenant_id` comes from the upload event payload — verified server-side, never from file contents or model args. Non-OKF uploads (PDF, DOCX, images) go through a pre-processing step that converts them to OKF markdown before hitting this worker.
 </Callout>
 
 <DataTable
-  headers={["Content type", "Representation", "Why"]}
+  headers={["OKF `type`", "Example concepts", "Retrieval filter"]}
   rows={[
-    { "Content type": "Error runbooks / guides", "Representation": "Hybrid vector + BM25 chunks with heading breadcrumb metadata", "Why": "Handles both semantic questions and exact error-code lookups" },
-    { "Content type": "Known issues", "Representation": "BM25-indexed prose, tagged with symptom keywords and affected version", "Why": "Exact symptom match beats embedding similarity for known bugs" },
-    { "Content type": "OpenAPI spec", "Representation": "Structured SQLite rows: service → path → method → operationId → schemas", "Why": "Contract questions need exact field lookup, not nearest-neighbour" },
-    { "Content type": "API changelog", "Representation": "Versioned vector chunks; filter on `api_version` at query time", "Why": "Prevents v1 answers reaching v2 customers" },
-    { "Content type": "Customer tiers / SLAs", "Representation": "Small structured table; looked up by tier name, not by embedding", "Why": "Rate limits and SLA values must be exact, not approximated" },
-    { "Content type": "Escalation paths", "Representation": "Vector chunks in KB, loaded into AGENTS.md policy summary", "Why": "Both runtime retrieval and static prompt need escalation rules" },
+    { "OKF `type`": "`Playbook`", "Example concepts": "401 runbook, key-rotation steps, on-call escalation", "Retrieval filter": "General KB search; optionally filter `type=Playbook`" },
+    { "OKF `type`": "`API Endpoint`", "Example concepts": "GET /orders, POST /keys/rotate, error code reference", "Retrieval filter": "`type=API Endpoint` + `resource` contains path/method" },
+    { "OKF `type`": "`Reference`", "Example concepts": "Known bugs, workarounds, release notes", "Retrieval filter": "`type=Reference` or symptom keyword match via BM25" },
+    { "OKF `type`": "`Policy`", "Example concepts": "Rate limits, SLA commitments, tier entitlements", "Retrieval filter": "`type=Policy` + tier name in `tags`" },
+    { "OKF `type`": "`Metric`", "Example concepts": "API call counts, error rate thresholds", "Retrieval filter": "`type=Metric`; `catalog_count` aggregates by this field" },
   ]}
 />
 
@@ -294,7 +234,7 @@ MCP tools are async, so the agent setup lives in an async function:
 
 ```python
 # agent.py
-import asyncio, os, pickle, sqlite3
+import asyncio, os, pickle
 from pathlib import Path
 from langchain_aws import BedrockEmbeddings
 from langchain_community.vectorstores import Chroma
@@ -330,61 +270,86 @@ def make_kb_tools(tenant_id: str):
     pkl_path = Path(f"./kb-chunks-{tenant_id}.pkl")
     if pkl_path.exists():
         bm25 = BM25Retriever.from_documents(pickle.loads(pkl_path.read_bytes()), k=5)
-        vec  = Chroma(
+        vec_store = Chroma(
             collection_name=f"kb-{tenant_id}",
             embedding_function=_emb,
             persist_directory="./kb-vector",
-        ).as_retriever(search_kwargs={"k": 5})
-        kb_retriever = EnsembleRetriever(retrievers=[bm25, vec], weights=[0.4, 0.6])
+        )
+        kb_retriever = EnsembleRetriever(
+            retrievers=[bm25, vec_store.as_retriever(search_kwargs={"k": 5})],
+            weights=[0.4, 0.6],
+        )
     else:
+        vec_store = None
         kb_retriever = None
 
     @tool
-    def search_kb(query: str) -> list[dict]:
-        """BM25 + Titan-vector ensemble search over the tenant's KB: runbooks,
-        known issues, changelogs, tier definitions. Use for general KB questions."""
+    def search_kb(query: str, concept_type: str = "") -> list[dict]:
+        """BM25 + Titan-vector ensemble search over the tenant's OKF knowledge bundle.
+        Use concept_type to filter by OKF type (e.g. 'Playbook', 'Policy', 'Reference').
+        Leave empty for a broad search across all concept types."""
         if kb_retriever is None:
             return []
-        return [{"content": d.page_content, "source": d.metadata.get("source", "")}
-                for d in kb_retriever.invoke(query)]
+        results = kb_retriever.invoke(query)
+        if concept_type:
+            results = [d for d in results if d.metadata.get("type", "") == concept_type]
+        return [
+            {
+                "content":    d.page_content,
+                "concept_id": d.metadata.get("concept_id", ""),
+                "type":       d.metadata.get("type", ""),
+                "title":      d.metadata.get("title", ""),
+                "status":     d.metadata.get("status", ""),
+            }
+            for d in results
+        ]
 
     @tool
-    def lookup_openapi(service: str = "", path: str = "", method: str = "") -> list[dict]:
-        """Structured lookup in the tenant's OpenAPI metadata store.
-        Filter by service, path, or HTTP method.
-        Use for contract questions: 'does GET /orders accept a cursor param?'"""
-        conn = sqlite3.connect("./kb-openapi.db")
-        # Explicit column list — table has tenant_id first, then 8 data columns
-        sql = """SELECT service, path, method, operation_id, summary, description,
-                        request_schema, response_schema
-                   FROM operations WHERE tenant_id = ?"""
-        params: list = [tenant_id]
-        if service:
-            sql += " AND service = ?"
-            params.append(service)
+    def lookup_openapi(path: str = "", method: str = "") -> list[dict]:
+        """Find API endpoint contracts from the OKF bundle using a dedicated
+        metadata-filtered vector search — not limited to the ensemble's k=5.
+        Filter by URL path fragment or HTTP method.
+        Use for: 'list every endpoint under /orders', 'does POST /keys accept X?'"""
+        if vec_store is None:
+            return []
+        query = f"{method} {path}".strip() or "API endpoint"
+        # Metadata filter scoped to this tenant and concept type
+        docs = vec_store.similarity_search(
+            query, k=20,
+            filter={"type": "API Endpoint", "tenant_id": tenant_id},
+        )
         if path:
-            sql += " AND path LIKE ?"
-            params.append(f"%{path}%")
+            docs = [d for d in docs
+                    if path.lower() in d.metadata.get("resource", "").lower()
+                    or path.lower() in d.metadata.get("title", "").lower()]
         if method:
-            sql += " AND method = ?"
-            params.append(method.upper())
-        rows = conn.execute(sql, params).fetchall()
-        cols = ["service", "path", "method", "operation_id", "summary",
-                "description", "request_schema", "response_schema"]
-        return [dict(zip(cols, r)) for r in rows]
+            docs = [d for d in docs
+                    if method.upper() in d.metadata.get("title", "").upper()
+                    or method.upper() in d.metadata.get("resource", "").upper()]
+        return [
+            {
+                "concept_id": d.metadata.get("concept_id", ""),
+                "title":      d.metadata.get("title", ""),
+                "resource":   d.metadata.get("resource", ""),
+                "content":    d.page_content,
+            }
+            for d in docs
+        ]
 
     @tool
-    def catalog_count(entity: str) -> dict:
-        """Return a count of indexed entities for this tenant: 'operations', 'docs'.
-        Use for questions like 'how many APIs do we have?'"""
-        conn = sqlite3.connect("./kb-openapi.db")
-        if entity == "operations":
-            n = conn.execute(
-                "SELECT COUNT(*) FROM operations WHERE tenant_id = ?", [tenant_id]
-            ).fetchone()[0]
-        else:
-            n = -1
-        return {"entity": entity, "count": n}
+    def catalog_count(concept_type: str) -> dict:
+        """Count OKF concepts of a given type in the tenant's KB.
+        Use for questions like 'how many API endpoints do we have?'
+        Valid types: 'API Endpoint', 'Playbook', 'Policy', 'Reference', 'Metric'."""
+        if kb_retriever is None:
+            return {"concept_type": concept_type, "count": 0}
+        # Count by scanning BM25 source documents — no SQL needed
+        all_chunks = pickle.loads(Path(f"./kb-chunks-{tenant_id}.pkl").read_bytes())
+        seen = set()
+        for chunk in all_chunks:
+            if chunk.metadata.get("type") == concept_type:
+                seen.add(chunk.metadata.get("concept_id", chunk.metadata.get("source", "")))
+        return {"concept_type": concept_type, "count": len(seen)}
 
     return search_kb, lookup_openapi, catalog_count
 
@@ -440,12 +405,12 @@ async def build_agent(tenant_id: str):
         system_prompt="""You are a customer support agent for StreamAPI.
 
 **Retrieval strategy — follow this order for every question:**
-1. Analyze the query: clean it, extract filters (service, error code, HTTP method), classify intent.
-2. For general KB questions → call search_kb.
-3. For OpenAPI contract questions → call lookup_openapi with service/path/method filters.
-4. For catalog counts → call catalog_count.
-5. After retrieval, evaluate: does the evidence actually answer the question? If not, try the next strategy (max 2 retries), then escalate.
-6. For live diagnostics after KB retrieval fails → call search_logs or get_trace from the platform tools.
+1. Analyze the query: clean it, classify intent, and identify the OKF concept type if applicable.
+2. For general questions → call search_kb (optionally pass concept_type='Playbook', 'Policy', etc.).
+3. For API contract questions → call lookup_openapi with path/method filters.
+4. For counts → call catalog_count with the relevant concept_type.
+5. After retrieval, evaluate: does the evidence support the answer? If not, try the next strategy (max 2 retries), then escalate.
+6. For live diagnostics after KB retrieval fails → call search_logs or get_trace from platform tools.
 
 **Investigation steps:**
 1. Classify and retrieve — pick the right strategy above.
