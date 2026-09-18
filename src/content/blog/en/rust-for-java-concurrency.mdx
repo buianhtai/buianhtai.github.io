@@ -118,14 +118,14 @@ Instead of multiple threads reaching into the same shared memory, ownership of e
     { id: "rust", label: "Rust", color: "teal" },
   ]}
   steps={[
-    { id: "j1", lane: "java", label: "new Thread(...)" },
-    { id: "j2", lane: "java", label: "Shared mutable field", sub: "no ownership rule" },
-    { id: "j3", lane: "java", label: "synchronized(lock)", sub: "convention, not enforced" },
-    { id: "j4", lane: "java", label: "Data race", sub: "surfaces at runtime" },
-    { id: "r1", lane: "rust", label: "thread::spawn(...)" },
-    { id: "r2", lane: "rust", label: "Arc<Mutex<T>>", sub: "shared ownership" },
-    { id: "r3", lane: "rust", label: "Send + Sync check", sub: "the compiler proves it" },
-    { id: "r4", lane: "rust", label: "No data race", sub: "or it doesn't compile" },
+    { id: "j1", lane: "java", label: "new Thread(...)", icon: "lucide:git-branch" },
+    { id: "j2", lane: "java", label: "Shared mutable field", sub: "no ownership rule", icon: "lucide:database" },
+    { id: "j3", lane: "java", label: "synchronized(lock)", sub: "convention, not enforced", icon: "lucide:lock" },
+    { id: "j4", lane: "java", label: "Data race", sub: "surfaces at runtime", icon: "lucide:alert-triangle" },
+    { id: "r1", lane: "rust", label: "thread::spawn(...)", icon: "lucide:git-branch" },
+    { id: "r2", lane: "rust", label: "Arc<Mutex<T>>", sub: "shared ownership", icon: "lucide:database" },
+    { id: "r3", lane: "rust", label: "Send + Sync check", sub: "the compiler proves it", icon: "lucide:shield-check" },
+    { id: "r4", lane: "rust", label: "No data race", sub: "or it doesn't compile", icon: "lucide:check-circle" },
   ]}
   arrows={[
     { from: "j1", to: "j2" },

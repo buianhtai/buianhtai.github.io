@@ -100,12 +100,12 @@ Tokio typically runs many `Future`s cooperatively on a small pool of threads. A 
     { id: "rust", label: "Rust: async fn + Tokio", color: "teal" },
   ]}
   steps={[
-    { id: "j1", lane: "java", label: "supplyAsync(...)", sub: "starts immediately" },
-    { id: "j2", lane: "java", label: "Runs on Executor", sub: "eager — work begins now" },
-    { id: "j3", lane: "java", label: "Completes", sub: "callback fires" },
-    { id: "r1", lane: "rust", label: "async fn call()", sub: "returns a Future — does nothing yet" },
-    { id: "r2", lane: "rust", label: "Tokio polls it", sub: "runtime decides when to run" },
-    { id: "r3", lane: "rust", label: "Resolves", sub: ".await unwraps the value" },
+    { id: "j1", lane: "java", label: "supplyAsync(...)", sub: "starts immediately", icon: "lucide:zap" },
+    { id: "j2", lane: "java", label: "Runs on Executor", sub: "eager — work begins now", icon: "lucide:play" },
+    { id: "j3", lane: "java", label: "Completes", sub: "callback fires", icon: "lucide:check-circle" },
+    { id: "r1", lane: "rust", label: "async fn call()", sub: "returns a Future — does nothing yet", icon: "lucide:pause" },
+    { id: "r2", lane: "rust", label: "Tokio polls it", sub: "runtime decides when to run", icon: "lucide:refresh-cw" },
+    { id: "r3", lane: "rust", label: "Resolves", sub: ".await unwraps the value", icon: "lucide:check-circle" },
   ]}
   arrows={[
     { from: "j1", to: "j2" },

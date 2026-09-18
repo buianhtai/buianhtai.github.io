@@ -111,10 +111,10 @@ fn main() {
 <StateMachine
   title="Rc<T> reference count"
   states={[
-    { id: "created", label: "Created", sub: "Rc::new(x) — count = 1", initial: true, color: "teal" },
-    { id: "cloned", label: "Cloned", sub: "Rc::clone(&x) — count = 2", color: "amber" },
-    { id: "dropped_one", label: "One Dropped", sub: "clone dropped — count = 1", color: "blue" },
-    { id: "deallocated", label: "Deallocated", sub: "count hits 0 — value freed", final: true, color: "green" },
+    { id: "created", label: "Created", sub: "Rc::new(x) — count = 1", initial: true, color: "teal", icon: "lucide:plus-circle" },
+    { id: "cloned", label: "Cloned", sub: "Rc::clone(&x) — count = 2", color: "amber", icon: "lucide:copy" },
+    { id: "dropped_one", label: "One Dropped", sub: "clone dropped — count = 1", color: "blue", icon: "lucide:minus-circle" },
+    { id: "deallocated", label: "Deallocated", sub: "count hits 0 — value freed", final: true, color: "green", icon: "lucide:trash-2" },
   ]}
   transitions={[
     { from: "created", to: "cloned" },

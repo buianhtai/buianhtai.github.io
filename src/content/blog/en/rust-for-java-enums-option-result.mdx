@@ -13,7 +13,7 @@ postLayout: "foundations"
 import Label from '../../../components/mdx/Label.astro';
 import Callout from '../../../components/mdx/Callout.astro';
 import Concept from '../../../components/mdx/Concept.astro';
-import StateMachine from '../../../components/mdx/StateMachine.astro';
+import Flowchart from '../../../components/mdx/Flowchart.astro';
 
 Chapters 1-3 covered how Rust manages values and organizes behavior. This chapter is about something different: how Rust represents *facts that might not be true yet* — a value that might be missing, an operation that might fail, a status that could be one of several distinct shapes.
 
@@ -129,16 +129,21 @@ class Payment {
 
 Nothing stops you from constructing a `Payment` with `status = "AUTHORIZED"` and a `null` `transactionId` — that's an invalid state that *compiles fine* and blows up somewhere downstream. Rust's `PaymentState::Authorized` can't exist without its `transaction_id`; the invalid combination simply isn't constructible.
 
-<StateMachine
-  title="PaymentState transitions"
-  states={[
-    { id: "pending", label: "Pending", sub: "{ attempt: u8 }", initial: true, color: "teal" },
-    { id: "authorized", label: "Authorized", sub: "{ transaction_id }", color: "green", final: true },
-    { id: "declined", label: "Declined", sub: "{ reason: String }", color: "rose", final: true },
+<Flowchart
+  title="Did the charge succeed?"
+  nodes={[
+    { id: "pending", label: "Pending", shape: "oval", icon: "lucide:clock", sub: "{ attempt: u8 }" },
+    { id: "q", label: "Did the charge succeed?", shape: "diamond", icon: "lucide:help-circle" },
+    { id: "authorized", label: "Authorized", shape: "rect", color: "green", icon: "lucide:check-circle", sub: "{ transaction_id }" },
+    { id: "declined", label: "Declined", shape: "rect", color: "rose", icon: "lucide:x-circle", sub: "{ reason: String }" },
+    { id: "match", label: "match handles both, exhaustively", shape: "oval", icon: "lucide:shield-check" },
   ]}
-  transitions={[
-    { from: "pending", to: "authorized", label: "charge succeeds" },
-    { from: "pending", to: "declined", label: "charge fails" },
+  edges={[
+    { from: "pending", to: "q" },
+    { from: "q", to: "authorized", label: "yes" },
+    { from: "q", to: "declined", label: "no" },
+    { from: "authorized", to: "match" },
+    { from: "declined", to: "match" },
   ]}
   caption="Every variant carries exactly the data that state needs — there is no Authorized without a transaction_id, and no Declined without a reason."
 />
