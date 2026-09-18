@@ -1,23 +1,26 @@
 {
-  "schema_version": 1,
-  "diagram_type": "lifecycle",
+  "schema_version": 2,
+  "diagram_type": "workflow",
   "meta": {
-    "title": "A Borrow's Life: Shared or Exclusive, Never Both",
+    "title": "One Value, Two Kinds of Borrow — Never Both at Once",
     "quality_profile": "showcase"
   },
   "lanes": [
-    { "id": "main", "label": "One borrow's story" }
+    { "id": "read", "label": "Read-only path" },
+    { "id": "write", "label": "Exclusive-write path" }
   ],
-  "states": [
-    { "id": "owned", "type": "start", "label": "Owned", "sublabel": "let mut s = String::new()", "lane": "main", "col": 0 },
-    { "id": "shared", "type": "waiting", "label": "Shared Borrow", "sublabel": "&s — any number allowed", "lane": "main", "col": 1 },
-    { "id": "ended", "type": "active", "label": "Borrow Ends", "sublabel": "last use of the reference", "lane": "main", "col": 2 },
-    { "id": "reowned", "type": "success", "label": "Owner Reads Again", "sublabel": "s is usable directly", "lane": "main", "col": 3 }
+  "nodes": [
+    { "id": "owned", "lane": "read", "col": 0, "type": "backend", "label": "Owned Value", "sublabel": "let mut s = String::new()", "width": 160 },
+    { "id": "shared1", "lane": "read", "col": 1, "type": "database", "label": "&s borrow #1", "sublabel": "read only", "width": 150 },
+    { "id": "shared2", "lane": "read", "col": 2, "type": "database", "label": "&s borrow #2", "sublabel": "coexists with #1", "width": 150 },
+    { "id": "exclusive", "lane": "write", "col": 1, "type": "security", "label": "&mut s borrow", "sublabel": "exactly one at a time", "width": 150 },
+    { "id": "blocked", "lane": "write", "col": 2, "type": "external", "label": "Shared Borrow Blocked", "sublabel": "compile error if attempted", "width": 190 }
   ],
-  "transitions": [
-    { "id": "t1", "from": "owned", "to": "shared" },
-    { "id": "t2", "from": "shared", "to": "ended" },
-    { "id": "t3", "from": "ended", "to": "reowned" }
+  "edges": [
+    { "id": "e1", "from": "owned", "to": "shared1", "variant": "emphasis" },
+    { "id": "e2", "from": "owned", "to": "shared2", "variant": "emphasis" },
+    { "id": "e3", "from": "owned", "to": "exclusive", "label": "or, exclusively", "variant": "dashed" },
+    { "id": "e4", "from": "exclusive", "to": "blocked", "variant": "security", "role": "error" }
   ],
   "cards": [
     { "dot": "cyan", "title": "The one rule", "items": ["Any number of &T (shared) borrows can coexist", "Exactly one &mut T (exclusive) borrow is allowed, and never alongside a shared one"] },

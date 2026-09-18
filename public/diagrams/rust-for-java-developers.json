@@ -1,27 +1,30 @@
 {
-  "schema_version": 1,
-  "diagram_type": "lifecycle",
+  "schema_version": 2,
+  "diagram_type": "workflow",
   "meta": {
-    "title": "A Value's Life: Owned, Moved, Cloned, Dropped",
+    "title": "From One Owned Value: Move, Clone, or Borrow",
     "quality_profile": "showcase"
   },
   "lanes": [
-    { "id": "main", "label": "One value's story" }
+    { "id": "ownership", "label": "Ownership" },
+    { "id": "borrowing", "label": "Borrowing" }
   ],
-  "states": [
-    { "id": "owned", "type": "start", "label": "Owned", "sublabel": "let s = String::new()", "lane": "main", "col": 0 },
-    { "id": "moved", "type": "neutral", "label": "Moved", "sublabel": "let t = s; — s is dead", "lane": "main", "col": 1 },
-    { "id": "cloned", "type": "success", "label": "Cloned", "sublabel": "let u = t.clone()", "lane": "main", "col": 2 },
-    { "id": "dropped", "type": "failure", "label": "Dropped", "sublabel": "Drop::drop() runs once", "lane": "main", "col": 3 }
+  "mainPath": ["owned", "moved", "cloned"],
+  "nodes": [
+    { "id": "owned", "lane": "ownership", "col": 0, "type": "backend", "label": "Owned", "sublabel": "let s = String::new()", "width": 150 },
+    { "id": "moved", "lane": "ownership", "col": 1, "type": "external", "label": "Moved", "sublabel": "let t = s; — s is dead", "width": 150 },
+    { "id": "cloned", "lane": "ownership", "col": 2, "type": "backend", "label": "Cloned", "sublabel": "let u = t.clone()", "width": 150 },
+    { "id": "borrowed", "lane": "borrowing", "col": 1, "type": "security", "label": "Borrowed", "sublabel": "&s, temporary access", "width": 150 },
+    { "id": "scope_end", "lane": "borrowing", "col": 2, "type": "database", "label": "Scope Ends", "sublabel": "Drop never runs on a borrow", "width": 150 }
   ],
-  "transitions": [
-    { "id": "t1", "from": "owned", "to": "moved" },
-    { "id": "t2", "from": "moved", "to": "cloned" },
-    { "id": "t3", "from": "cloned", "to": "dropped" }
+  "edges": [
+    { "id": "e1", "from": "owned", "to": "moved", "variant": "emphasis" },
+    { "id": "e2", "from": "moved", "to": "cloned", "variant": "emphasis" },
+    { "id": "e3", "from": "owned", "to": "borrowed", "label": "&s, without moving", "variant": "dashed" },
+    { "id": "e4", "from": "borrowed", "to": "scope_end", "variant": "dashed" }
   ],
   "cards": [
     { "dot": "cyan", "title": "Move by default", "items": ["Assignment transfers ownership for non-Copy types", "The old binding (s) is permanently invalid after the move"] },
-    { "dot": "violet", "title": "Clone is opt-in", "items": ["clone() creates a fully independent copy", "Only pay the copy cost when you actually asked for it"] },
-    { "dot": "rose", "title": "Deterministic cleanup", "items": ["Whoever owns the value last runs Drop exactly once", "No garbage collector pause, no tracing, no finalizer queue"] }
+    { "dot": "violet", "title": "Borrowing is independent, not sequential", "items": ["You can borrow directly from Owned — moving or cloning first is not required", "A borrow never runs Drop; only the owner does, when it goes out of scope"] }
   ]
 }

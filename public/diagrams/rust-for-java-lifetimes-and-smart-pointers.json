@@ -1,23 +1,28 @@
 {
-  "schema_version": 1,
-  "diagram_type": "lifecycle",
+  "schema_version": 2,
+  "diagram_type": "workflow",
   "meta": {
     "title": "Rc<T>: A Lease That Ends When the Last Tenant Leaves",
     "quality_profile": "showcase"
   },
   "lanes": [
-    { "id": "main", "label": "Reference count" }
+    { "id": "count", "label": "Reference count" },
+    { "id": "mutate", "label": "Rc<RefCell<T>> mutation" }
   ],
-  "states": [
-    { "id": "created", "type": "start", "label": "Created", "sublabel": "Rc::new(x) — count = 1", "lane": "main", "col": 0 },
-    { "id": "cloned", "type": "active", "label": "Cloned", "sublabel": "Rc::clone(&x) — count = 2", "lane": "main", "col": 1 },
-    { "id": "dropped_one", "type": "waiting", "label": "One Dropped", "sublabel": "clone dropped — count = 1", "lane": "main", "col": 2 },
-    { "id": "deallocated", "type": "success", "label": "Deallocated", "sublabel": "count hits 0 — value freed", "lane": "main", "col": 3 }
+  "mainPath": ["created", "cloned", "dropped_one", "deallocated"],
+  "nodes": [
+    { "id": "created", "lane": "count", "col": 0, "type": "backend", "label": "Created", "sublabel": "Rc::new(x) — count = 1", "width": 150 },
+    { "id": "cloned", "lane": "count", "col": 1, "type": "database", "label": "Cloned", "sublabel": "Rc::clone(&x) — count = 2", "width": 150 },
+    { "id": "dropped_one", "lane": "count", "col": 2, "type": "external", "label": "One Dropped", "sublabel": "clone dropped — count = 1", "width": 150 },
+    { "id": "deallocated", "lane": "count", "col": 3, "type": "backend", "label": "Deallocated", "sublabel": "count hits 0 — value freed", "width": 150 },
+    { "id": "borrow_mut", "lane": "mutate", "col": 1, "type": "security", "label": "borrow_mut()", "sublabel": "runtime-checked, panics if already borrowed", "width": 180 }
   ],
-  "transitions": [
-    { "id": "t1", "from": "created", "to": "cloned" },
-    { "id": "t2", "from": "cloned", "to": "dropped_one" },
-    { "id": "t3", "from": "dropped_one", "to": "deallocated" }
+  "edges": [
+    { "id": "e1", "from": "created", "to": "cloned", "variant": "emphasis" },
+    { "id": "e2", "from": "cloned", "to": "dropped_one", "variant": "emphasis" },
+    { "id": "e3", "from": "dropped_one", "to": "deallocated", "variant": "emphasis" },
+    { "id": "e4", "from": "cloned", "to": "borrow_mut", "label": "either clone can mutate", "variant": "dashed" },
+    { "id": "e5", "from": "borrow_mut", "to": "dropped_one", "variant": "dashed" }
   ],
   "cards": [
     { "dot": "cyan", "title": "Rc counts, doesn't garbage-collect", "items": ["Every clone() increments a count; every drop decrements it", "The value is freed the instant the count reaches zero — no tracing, no pause"] },
