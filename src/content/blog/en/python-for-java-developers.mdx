@@ -1,0 +1,185 @@
+---
+title: "Python for Java Developers, Chapter 1: Names, Objects, and Mutability"
+description: "The first mental shift from Java to Python: variables are names, assignment never copies an object, and mutability—not static types—controls the bugs you need to see."
+pubDate: 2026-09-18
+tags: ["python", "java", "programming-languages", "tutorial"]
+lang: "en"
+category: "tutorial"
+series: "python-for-java-developers"
+seriesOrder: 1
+draft: false
+postLayout: "foundations"
+---
+import Label from '../../../components/mdx/Label.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+
+This is Chapter 1 of a series translating the Java mental model into Python. We will cover names and objects first, then functions and protocols, iterators and generators, exceptions, packaging, concurrency, and the parts of Python that become dangerous when Java assumptions stay hidden underneath.
+
+The first lesson is deceptively small: **a Python variable is a name attached to an object**. Assignment attaches another name. It does not copy the object, call a constructor, or change the object's type.
+
+## Explain it simply
+
+Imagine a room full of labeled boxes. The label is a variable name. The box is an object. You can put a second label on the same box, remove one label, or move a label to a different box. The box itself does not know which labels point at it.
+
+Java developers already use something close to this model for object references. The important difference is that Python makes the name/object relationship visible everywhere: even `int`, `str`, and `tuple` are objects, and the language does not give you a declaration that permanently binds a name to one class.
+
+```python
+items = ["java"]
+alias = items
+
+alias.append("python")
+print(items)  # ["java", "python"]
+```
+
+`items` and `alias` are two names for one list. The append mutates that list, so both names observe the change.
+
+## Find the crack in the Java intuition
+
+In Java, this also aliases one mutable object:
+
+```java
+var items = new ArrayList<String>();
+var alias = items;
+alias.add("java");
+System.out.println(items); // [java]
+```
+
+So far, there is no surprise. The trouble starts when a Python expression looks like a declaration but is not one:
+
+```python
+items = []
+items = ["python"]
+```
+
+The second line does not mutate the old list. It moves the `items` name to a new list. Any other name still pointing at the old list keeps seeing the old object.
+
+<DataTable
+  headers={["Operation", "What changes", "What does not change"]}
+  rows={[
+    { "Operation": "<code class=\"dt-code\">alias = items</code>", "What changes": "A second name points at the same object", "What does not change": "The object and its identity" },
+    { "Operation": "<code class=\"dt-code\">items.append(x)</code>", "What changes": "The existing list is mutated", "What does not change": "Which object each name references" },
+    { "Operation": "<code class=\"dt-code\">items = [x]</code>", "What changes": "The name is rebound to a new list", "What does not change": "Any aliases to the old list" },
+    { "Operation": "<code class=\"dt-code\">items.copy()</code>", "What changes": "A new, shallow list is created", "What does not change": "Nested objects inside the list" },
+  ]}
+  caption="Separate rebinding a name from mutating an object."
+/>
+
+## Formalize it precisely
+
+### 1. Names do not have declared types
+
+Java declarations make the intended type visible at the binding site:
+
+```java
+List<String> names = new ArrayList<>();
+```
+
+Python binds a name at runtime:
+
+```python
+names = []
+names = "not a list anymore"
+```
+
+This is legal because the name has no permanent declared type. The object currently referenced by `names` has a type; the name itself is just a lookup key.
+
+That does not mean Python has no types. It means type checking happens through the object and the operations you perform, not through a declaration that prevents every later rebinding.
+
+### 2. `is` and `==` answer different questions
+
+Use `==` to ask whether two objects have equal values. Use `is` to ask whether they are the exact same object.
+
+```python
+left = [1, 2]
+right = [1, 2]
+
+print(left == right)  # True: equal contents
+print(left is right)  # False: different list objects
+
+alias = left
+print(alias is left)  # True: same object
+```
+
+The practical rule is narrow: use `is None` for the singleton `None`; use `==` for ordinary value comparisons. Do not use `is` as a faster-looking spelling of equality.
+
+### 3. Mutability is the boundary that matters
+
+Immutable objects cannot be changed in place. An operation that appears to update them creates a new object and returns or rebinds it:
+
+```python
+count = 1
+other = count
+count += 1
+
+print(count)  # 2
+print(other)  # 1
+```
+
+The integer `1` was not modified. `count += 1` computes a new integer and points `count` at it. `other` remains attached to the old integer object.
+
+Lists, dictionaries, and sets are mutable. Strings, integers, tuples, and booleans are immutable. A tuple can still contain a mutable object, so immutability is shallow with respect to its container:
+
+```python
+box = (["java"],)
+box[0].append("python")  # allowed: the nested list is mutable
+# box[0] = []             # TypeError: the tuple slot cannot be replaced
+```
+
+### 4. Function arguments pass object references
+
+Python does not copy an argument just because it crosses a function boundary:
+
+```python
+def add_language(languages):
+    languages.append("python")
+
+languages = ["java"]
+add_language(languages)
+print(languages)  # ["java", "python"]
+```
+
+The function received another name for the same list. Rebinding the parameter would be different:
+
+```python
+def replace_languages(languages):
+    languages = ["python"]
+
+languages = ["java"]
+replace_languages(languages)
+print(languages)  # ["java"]
+```
+
+The function's local `languages` name moved. The caller's name did not.
+
+<Callout color="teal">
+Before reading a Python function, ask two separate questions: can it mutate an object I passed in, and can it rebind my name? The first can affect the caller; the second cannot.
+</Callout>
+
+## The defensive-copy decision
+
+A Java method often communicates ownership through conventions, interfaces, or explicit copying. In Python, decide deliberately when accepting a mutable value:
+
+```python
+def add_tag(tags, tag):
+    """Mutates the caller's list — document that contract."""
+    tags.append(tag)
+
+
+def with_tag(tags, tag):
+    """Returns a new list — leaves the caller's list alone."""
+    return [*tags, tag]
+```
+
+Neither style is universally correct. Mutation is useful for a local builder with one clear owner. Returning a new value is safer at an API boundary, especially when callers may share the object.
+
+## Teach it back
+
+You should now be able to answer these without looking back:
+
+1. Why do `alias.append("x")` and `items = ["x"]` have different effects on aliases?
+2. When should you use `is None` instead of `== None`?
+3. Why does rebinding a function parameter not rebind the caller's variable?
+4. When would returning a new list be safer than mutating the one you received?
+
+Chapter 2 turns this object model into Python's function model: duck typing, protocols, default arguments, and the difference between accepting a capability and requiring a class.

@@ -33,5 +33,12 @@
     "description": "A Feynman-method series translating the Java mental model into Rust, one concept at a time: ownership, borrowing, traits, enums, lifetimes, smart pointers, concurrency, async, and the parts Java has no equivalent for.",
     "lang": "Rust",
     "link": null
+  },
+  {
+    "id": "python-for-java-developers",
+    "title": "Python for Java Developers",
+    "description": "A practical translation of Java habits into Python: names, objects, protocols, iteration, exceptions, packaging, concurrency, and the runtime trade-offs beneath the syntax.",
+    "lang": "Python",
+    "link": null
   }
 ]
