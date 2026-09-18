@@ -29,7 +29,7 @@ items = ["java"]
 alias = items
 
 alias.append("python")
-print(items)  # ["java", "python"]
+print(items)  # ['java', 'python']
 ```
 
 `items` and `alias` are two names for one list. The append mutates that list, so both names observe the change.
@@ -57,10 +57,10 @@ The second line does not mutate the old list. It moves the `items` name to a new
 <DataTable
   headers={["Operation", "What changes", "What does not change"]}
   rows={[
-    { "Operation": "<code class=\"dt-code\">alias = items</code>", "What changes": "A second name points at the same object", "What does not change": "The object and its identity" },
-    { "Operation": "<code class=\"dt-code\">items.append(x)</code>", "What changes": "The existing list is mutated", "What does not change": "Which object each name references" },
-    { "Operation": "<code class=\"dt-code\">items = [x]</code>", "What changes": "The name is rebound to a new list", "What does not change": "Any aliases to the old list" },
-    { "Operation": "<code class=\"dt-code\">items.copy()</code>", "What changes": "A new, shallow list is created", "What does not change": "Nested objects inside the list" },
+    { "Operation": "alias = items", "What changes": "A second name points at the same object", "What does not change": "The object and its identity" },
+    { "Operation": "items.append(x)", "What changes": "The existing list is mutated", "What does not change": "Which object each name references" },
+    { "Operation": "items = [x]", "What changes": "The name is rebound to a new list", "What does not change": "Any aliases to the old list" },
+    { "Operation": "items.copy()", "What changes": "A new, shallow list is created", "What does not change": "Nested objects inside the list" },
   ]}
   caption="Separate rebinding a name from mutating an object."
 />
@@ -136,7 +136,7 @@ def add_language(languages):
 
 languages = ["java"]
 add_language(languages)
-print(languages)  # ["java", "python"]
+print(languages)  # ['java', 'python']
 ```
 
 The function received another name for the same list. Rebinding the parameter would be different:
@@ -147,7 +147,7 @@ def replace_languages(languages):
 
 languages = ["java"]
 replace_languages(languages)
-print(languages)  # ["java"]
+print(languages)  # ['java']
 ```
 
 The function's local `languages` name moved. The caller's name did not.
