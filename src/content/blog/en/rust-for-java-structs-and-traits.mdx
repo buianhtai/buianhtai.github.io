@@ -1,0 +1,144 @@
+---
+title: "Rust for Java Developers, Chapter 3: Structs, Traits, and No Inheritance"
+description: "Rust splits what Java's class bundles together: data lives in a struct, behavior lives in impl blocks, and there is no extends keyword at all. Composition does the work instead."
+pubDate: 2026-09-18
+tags: ["rust", "java", "programming-languages", "systems-programming", "tutorial"]
+lang: "en"
+category: "tutorial"
+series: "rust-for-java-developers"
+seriesOrder: 3
+draft: false
+postLayout: "foundations"
+---
+import Label from '../../../components/mdx/Label.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import Concept from '../../../components/mdx/Concept.astro';
+import DiagramEmbed from '../../../components/mdx/DiagramEmbed.astro';
+
+Chapters 1 and 2 covered how Rust manages *values*. Now we get to how Rust organizes *code around* those values — and this is where the biggest structural difference from Java shows up: Rust has no class inheritance at all.
+
+## Explain it simply
+
+Think of Java's `class` as a fully assembled LEGO model that comes glued together at the factory: the shape (fields) and the way it works (methods) are permanently one object, and if you want a new model that's "mostly the same but slightly different," you snap a new piece on top of the old one — that's `extends`. Each new subclass is built directly on the exact model beneath it, layer by layer, like a nesting doll.
+
+Rust gives you loose LEGO bricks instead. A `struct` is just a shape — plain data, nothing glued to it yet. An `impl` block is a separate set of instructions that says "here's how to use this shape." And if you want to combine behaviors, you don't build a taller nesting doll — you snap bricks together side by side. A struct can *hold* another struct or a trait object as a field, but it can never *become* another struct the way a Java subclass becomes its superclass.
+
+## Find the crack
+
+Your Java instinct says: "if two things share behavior, put that behavior in a shared superclass and extend it." That instinct built an entire generation of `AbstractBaseServiceImpl` hierarchies — and it also caused the exact problem object-oriented design patterns spent decades working around: what happens when a class needs to share behavior from *two* unrelated hierarchies? Java's answer is interfaces (which give you a contract, not implementation) or ugly composition workarounds bolted onto an inheritance-shaped codebase.
+
+Rust never lets that problem start, because there's no inheritance to reach for in the first place. Composition isn't a design pattern you adopt when inheritance gets awkward — it's the *only* tool you have, from day one.
+
+## Formalize it precisely
+
+<Label color="teal">1</Label> Struct = data, impl = behavior, kept apart on purpose
+
+```rust
+pub struct Account {
+    id: String,
+    balance: i32,
+}
+
+impl Account {
+    pub fn new(id: impl Into<String>) -> Self {
+        Self { id: id.into(), balance: 0 }
+    }
+
+    pub fn deposit(&mut self, amount: i32) {
+        self.balance += amount;
+    }
+
+    pub fn balance(&self) -> i32 {
+        self.balance
+    }
+}
+```
+
+Compare to Java, where the same information and behavior live in one declaration:
+
+```java
+public final class Account {
+    private final String id;
+    private int balance;
+
+    public Account(String id) { this.id = id; }
+    public void deposit(int amount) { balance += amount; }
+    public int balance() { return balance; }
+}
+```
+
+Functionally similar — but notice the method receivers in Rust: `&mut self` for `deposit` (needs to change the struct, so it needs an exclusive borrow — Chapter 2's rule, still in force) and `&self` for `balance` (just reads). Java has no equivalent annotation; you'd have to read the method body to know which one mutates.
+
+<Label color="green">2</Label> Traits are Rust's interfaces — with a dispatch decision Java doesn't force on you
+
+```rust
+trait PaymentGateway {
+    fn charge(&self, amount: i32) -> Result<String, String>;
+}
+
+struct StripeGateway;
+
+impl PaymentGateway for StripeGateway {
+    fn charge(&self, amount: i32) -> Result<String, String> {
+        Ok(format!("charged {amount} cents via stripe"))
+    }
+}
+```
+
+Now you must choose *how* that trait gets used, and Rust makes you say so explicitly:
+
+```rust
+// Static dispatch — the concrete type is known at compile time,
+// the compiler can inline the call, no runtime lookup.
+fn checkout_generic<G: PaymentGateway>(gateway: &G, amount: i32) -> Result<String, String> {
+    gateway.charge(amount)
+}
+
+// Dynamic dispatch — the concrete type is decided at runtime,
+// useful when different gateways need to live in the same collection.
+fn checkout_dyn(gateway: &dyn PaymentGateway, amount: i32) -> Result<String, String> {
+    gateway.charge(amount)
+}
+```
+
+Java's `interface PaymentGateway` with a single implementing class doesn't force this choice — the JVM always does something closer to the dynamic-dispatch path underneath. Rust hands you both options because sometimes the performance and flexibility tradeoff genuinely matters, and it wants you to decide on purpose rather than by default.
+
+<Label color="amber">3</Label> Composition replaces `extends` — has-a instead of is-a
+
+```rust
+struct AuditLog {
+    entries: Vec<String>,
+}
+
+struct OrderService<G: PaymentGateway> {
+    gateway: G,
+    audit: AuditLog,
+}
+
+impl<G: PaymentGateway> OrderService<G> {
+    fn place_order(&mut self, amount: i32) -> Result<String, String> {
+        let receipt = self.gateway.charge(amount)?;
+        self.audit.entries.push(String::from("charged"));
+        Ok(receipt)
+    }
+}
+```
+
+`OrderService` doesn't *become* a `PaymentGateway` or an `AuditLog` — it *holds* one of each as a field. Swap `StripeGateway` for a `PaypalGateway` and `OrderService`'s definition never changes. There's no shared base class to worry about breaking for every other subclass when you touch it.
+
+<DiagramEmbed
+  src="/diagrams/rust-for-java-structs-and-traits.html"
+  title="Composition, not inheritance: OrderService has-a, not is-a"
+  height={480}
+/>
+
+<Callout color="teal">
+  When you catch yourself thinking "I'll just extend the base class," ask instead: "what field could I add that gives me this behavior?" That question is composition, and in Rust it's not a workaround — it's the design.
+</Callout>
+
+## Teach it back
+
+1. Why can't a Rust struct "extend" another struct the way a Java class extends another class? What has to happen instead if you want to reuse behavior?
+2. What's the actual difference between `fn f<G: PaymentGateway>(g: &G)` and `fn f(g: &dyn PaymentGateway)` — and when would you pick the second one over the first?
+3. In the `OrderService` example, what would you have to change if you wanted to add a second payment gateway for a different currency? Would `OrderService`'s own code need to change?
+4. Why does `deposit(&mut self, ...)` need `&mut self` while `balance(&self)` only needs `&self` — and what would happen if you tried to call `deposit` through a shared `&Account` reference?

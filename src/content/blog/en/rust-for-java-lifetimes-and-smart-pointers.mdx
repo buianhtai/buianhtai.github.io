@@ -1,0 +1,126 @@
+---
+title: "Rust for Java Developers, Chapter 6: Lifetimes and Smart Pointers"
+description: "Lifetimes are not manual memory management — they're the compiler proving a reference can't outlive its data. Box, Rc, and RefCell give you the shared-object flexibility Java's GC provides for free, but opt-in and visible."
+pubDate: 2026-09-18
+tags: ["rust", "java", "programming-languages", "systems-programming", "tutorial"]
+lang: "en"
+category: "tutorial"
+series: "rust-for-java-developers"
+seriesOrder: 6
+draft: false
+postLayout: "foundations"
+---
+import Label from '../../../components/mdx/Label.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import DiagramEmbed from '../../../components/mdx/DiagramEmbed.astro';
+
+Chapters 1 and 2 built the core rule: one owner, borrows are shared-or-exclusive. This chapter covers two things people usually lump together with "hard Rust stuff" but which solve different problems: lifetime annotations (proving a borrow is safe) and smart pointers (getting shared-ownership flexibility back, on purpose, when a single owner genuinely isn't enough).
+
+## Explain it simply
+
+**Lifetimes**: imagine a coat-check ticket. The ticket is only good as long as the coat is still hanging on the rack. If someone throws the coat away, the ticket becomes worthless paper — and a good coat-check system would refuse to hand out a ticket for a coat that's already scheduled to be thrown away five minutes from now. A lifetime annotation is Rust's way of writing on the ticket: "this ticket is only valid for as long as *that specific coat* exists."
+
+**Smart pointers**: imagine an apartment lease with multiple names on it. Nobody "owns" the apartment alone — the lease exists as long as at least one tenant is still on it. The building manager (the allocator) doesn't reclaim the apartment until the last name is crossed off. That's `Rc<T>`: reference-counted shared ownership, with cleanup happening the instant the last owner leaves.
+
+## Find the crack
+
+Java doesn't need coat-check tickets, because every coat lives in a warehouse that never throws anything away until nobody could possibly still want it — the garbage collector traces every reachable reference and only cleans up what's truly unreachable. You can hand out as many references to the same object as you want, forever, and never think about it.
+
+Rust's compiler doesn't trace anything at runtime. It has to *prove*, while compiling, that no reference outlives its data — and for that, it sometimes needs you to write down, explicitly, "this returned reference lives exactly as long as that input." That's what a lifetime parameter is: not a memory management technique, just an assertion the compiler checks.
+
+## Formalize it precisely
+
+<Label color="teal">1</Label> A lifetime annotation, read correctly
+
+```rust
+fn longest<'a>(x: &'a str, y: &'a str) -> &'a str {
+    if x.len() > y.len() { x } else { y }
+}
+
+fn main() {
+    let a = String::from("Java");
+    let b = String::from("Rust");
+    println!("{}", longest(&a, &b)); // "Java"
+}
+```
+
+`'a` doesn't create or extend a lifetime — it *names* a relationship: "whatever I return lives at most as long as the shorter-lived of `x` and `y`." Without that annotation, the compiler can't tell which input the returned reference is tied to, so it can't prove the caller won't hold onto a dangling reference after one of the inputs is dropped.
+
+Most functions never need this written out explicitly — the compiler infers it automatically (a feature called lifetime elision) for the overwhelmingly common single-reference-in-single-reference-out shape. You reach for `'a` only when a function's signature has more than one plausible relationship and the compiler needs disambiguation.
+
+<Label color="green">2</Label> `Box<T>` — Rust's explicit opt-in to heap allocation
+
+```rust
+enum TreeNode {
+    Leaf(i32),
+    Node(Box<TreeNode>, Box<TreeNode>),
+}
+
+fn sum(tree: &TreeNode) -> i32 {
+    match tree {
+        TreeNode::Leaf(value) => *value,
+        TreeNode::Node(left, right) => sum(left) + sum(right),
+    }
+}
+```
+
+A recursive type like `TreeNode` can't exist without `Box`: without it, the compiler would need to know `TreeNode`'s size at compile time, and a `TreeNode` that contains a `TreeNode` that contains a `TreeNode`... has no fixed size. `Box<TreeNode>` is a pointer to a heap allocation with a known, fixed size, breaking the recursion. In Java, this problem doesn't exist because *every* non-primitive value is already a heap pointer by default — Rust makes you ask for that explicitly, only where you actually need it.
+
+<Label color="amber">3</Label> `Rc<T>` — shared ownership, for when one owner truly isn't enough
+
+```rust
+use std::rc::Rc;
+
+let shared = Rc::new(String::from("config"));
+println!("count: {}", Rc::strong_count(&shared)); // 1
+
+let second = Rc::clone(&shared);
+println!("count: {}", Rc::strong_count(&shared)); // 2
+
+drop(second);
+println!("count: {}", Rc::strong_count(&shared)); // back to 1
+```
+
+Every `Rc::clone` increments a count; every drop decrements it; the value is deallocated the instant the count hits zero. Java doesn't need this because the GC already permits arbitrary numbers of references to any object — `Rc` is Rust manually recreating just enough of that flexibility, in the one place a program actually needs several owners of the same data, without paying for a GC everywhere else.
+
+<Label color="rose">4</Label> `RefCell<T>` — mutation through a shared reference, checked at runtime
+
+`Rc<T>` alone only gives you shared *read* access — Chapter 2's "many readers" rule still applies. To mutate through a shared `Rc`, wrap the inner value in `RefCell<T>`, which moves the borrow-checking rule from compile time to runtime:
+
+```rust
+use std::cell::RefCell;
+use std::rc::Rc;
+
+struct Counter {
+    count: RefCell<i32>,
+}
+
+fn main() {
+    let counter = Rc::new(Counter { count: RefCell::new(0) });
+    let handle = Rc::clone(&counter);
+
+    *handle.count.borrow_mut() += 1;
+    *counter.count.borrow_mut() += 1;
+
+    println!("{}", counter.count.borrow()); // 2
+}
+```
+
+`borrow_mut()` panics at runtime if a borrow is already active — the same "many readers or one writer" rule from Chapter 2, just enforced by a check inside `RefCell` instead of by the compiler. `Rc<RefCell<T>>` is the standard pattern for shared, mutable, single-threaded state — think a simple tree with parent/child links, or a small graph where nodes need to reference each other.
+
+<DiagramEmbed
+  src="/diagrams/rust-for-java-lifetimes-and-smart-pointers.html"
+  title="Rc<T>: a lease that ends when the last tenant leaves"
+  height={420}
+/>
+
+<Callout color="teal">
+  If you're fighting the borrow checker on a graph, tree, or anything with cyclical or shared references, that's usually the signal to reach for `Rc<RefCell<T>>` rather than fighting harder for a single-owner design. It's not "cheating" — it's the tool built for exactly that shape of problem.
+</Callout>
+
+## Teach it back
+
+1. What does the `'a` in `fn longest<'a>(x: &'a str, y: &'a str) -> &'a str` actually assert, and why doesn't every function need one?
+2. Why can't `enum TreeNode { Node(TreeNode, TreeNode) }` compile without wrapping the recursive fields in `Box`? What problem does `Box` solve that Java programmers never have to think about?
+3. What's the difference between what `Rc<T>` gives you and what `Rc<RefCell<T>>` gives you? Why do you need the second one to mutate shared data?
+4. If `Rc::strong_count` reaches zero, what happens to the value — and how is the *timing* of that different from when a Java object with zero remaining references gets collected?

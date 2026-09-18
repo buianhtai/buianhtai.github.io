@@ -1,0 +1,147 @@
+---
+title: "Rust for Java Developers, Chapter 4: Enums, Option, and Result"
+description: "Java lets you construct half-finished objects and silently return null. Rust's enums make invalid states impossible to build, and Option/Result make absence and failure part of the type signature."
+pubDate: 2026-09-18
+tags: ["rust", "java", "programming-languages", "systems-programming", "tutorial"]
+lang: "en"
+category: "tutorial"
+series: "rust-for-java-developers"
+seriesOrder: 4
+draft: false
+postLayout: "foundations"
+---
+import Label from '../../../components/mdx/Label.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import Concept from '../../../components/mdx/Concept.astro';
+import DiagramEmbed from '../../../components/mdx/DiagramEmbed.astro';
+
+Chapters 1-3 covered how Rust manages values and organizes behavior. This chapter is about something different: how Rust represents *facts that might not be true yet* — a value that might be missing, an operation that might fail, a status that could be one of several distinct shapes.
+
+## Explain it simply
+
+Picture a vending machine slot shaped exactly like the snack it dispenses. When you press the button, one of two things happens: either the snack drops into the tray (and you can feel it's there), or the slot stays empty and a little light blinks "sold out." There's no third option where the machine hands you an invisible snack and lets you walk away thinking you got something. The shape of the interaction forces you to notice which outcome happened.
+
+Rust's `Option<T>` and `Result<T, E>` are that vending machine slot, built into the type system. A function that might not have an answer returns `Option<T>` — you *must* check whether it's `Some(value)` or `None` before you can use the value. A function that might fail returns `Result<T, E>` — you must check whether it's `Ok(value)` or `Err(error)`.
+
+## Find the crack
+
+Java's equivalent is `null` — and `null` is not a shaped slot, it's a silent trapdoor. Any method that returns an object type can secretly return `null` instead, and the compiler does not require you to check for it:
+
+```java
+User user = findUser("u-42"); // might be null — nothing in the signature says so
+System.out.println(user.getName()); // NullPointerException if it was null
+```
+
+The type `User` looks identical whether the method actually found a user or not. You find out the difference only when the `NullPointerException` fires — possibly in production, possibly for an input path nobody tested. `Optional<User>` exists in modern Java specifically to patch this, but it's opt-in: nothing stops a method from returning a bare, nullable `User` instead, and nothing stops you from calling `.get()` on an empty `Optional` without checking `.isPresent()` first.
+
+This is the actual crack in the analogy: Java's "empty slot" is invisible until you reach into it. Rust's is physically a different shape you can't ignore.
+
+## Formalize it precisely
+
+<Label color="teal">1</Label> `Option<T>` makes "might not exist" part of the type
+
+```rust
+fn find_user(id: &str) -> Option<String> {
+    if id == "u-42" {
+        Some(String::from("Ada"))
+    } else {
+        None
+    }
+}
+
+fn main() {
+    match find_user("u-42") {
+        Some(name) => println!("found: {name}"),
+        None => println!("no such user"),
+    }
+
+    // or, with a fallback:
+    let display_name = find_user("missing").unwrap_or_else(|| String::from("anonymous"));
+    println!("{display_name}");
+}
+```
+
+There is no way to accidentally treat `Option<String>` as a plain `String` — the compiler simply won't let you call `.len()` on it without unwrapping first. The `None` case isn't a possibility you might forget to handle; it's a value shape you're forced to acknowledge.
+
+<Label color="amber">2</Label> `Result<T, E>` makes failure a value, not a surprise exception
+
+```rust
+fn parse_port(input: &str) -> Result<u16, String> {
+    input.parse::<u16>().map_err(|_| format!("invalid port: {input}"))
+}
+
+fn main() {
+    match parse_port("8080") {
+        Ok(port) => println!("listening on {port}"),
+        Err(message) => eprintln!("config error: {message}"),
+    }
+}
+```
+
+Compare to Java, where the failure path is invisible unless you read the method's declared (or undeclared) exceptions:
+
+```java
+int parsePort(String input) {
+    return Integer.parseInt(input); // throws NumberFormatException — not declared, easy to miss
+}
+```
+
+`Integer.parseInt` can throw, but Java's unchecked exceptions don't force the caller to acknowledge that. `Result<T, E>` puts the failure right in the return type — you cannot get the `u16` out without confronting the possibility of an `Err` first.
+
+<Label color="green">3</Label> The `?` operator propagates failure without hiding it
+
+```rust
+fn load_port_from_env() -> Result<u16, String> {
+    let raw = std::env::var("PORT").map_err(|_| String::from("PORT not set"))?;
+    parse_port(&raw)
+}
+```
+
+`?` means: "if this is `Err`, return that error from the current function immediately; otherwise, keep going with the `Ok` value." It keeps the success path readable while still making every failure path an explicit, visible return — nothing propagates silently the way an unchecked Java exception can travel up ten stack frames before anyone handles it.
+
+<Label color="rose">4</Label> Enums make invalid combinations impossible to construct
+
+```rust
+enum PaymentState {
+    Pending { attempt: u8 },
+    Authorized { transaction_id: String },
+    Declined { reason: String },
+}
+
+fn describe(state: &PaymentState) -> String {
+    match state {
+        PaymentState::Pending { attempt } => format!("attempt {attempt}"),
+        PaymentState::Authorized { transaction_id } => format!("approved: {transaction_id}"),
+        PaymentState::Declined { reason } => format!("declined: {reason}"),
+    }
+}
+```
+
+Compare to the Java shape this usually takes — one class with optional, nullable fields for every possible state:
+
+```java
+class Payment {
+    String status;          // "PENDING", "AUTHORIZED", "DECLINED" — a string, easy to typo
+    String transactionId;   // null unless AUTHORIZED — but nothing enforces that
+    String declineReason;   // null unless DECLINED — same problem
+}
+```
+
+Nothing stops you from constructing a `Payment` with `status = "AUTHORIZED"` and a `null` `transactionId` — that's an invalid state that *compiles fine* and blows up somewhere downstream. Rust's `PaymentState::Authorized` can't exist without its `transaction_id`; the invalid combination simply isn't constructible.
+
+<DiagramEmbed
+  src="/diagrams/rust-for-java-enums-option-result.html"
+  title="PaymentState: every variant carries its own facts"
+  height={460}
+/>
+
+<Callout color="teal">
+  `match` on an enum must be exhaustive. Add a `Refunded` variant to `PaymentState` next month, and every existing `match` that doesn't handle it stops compiling — the compiler hands you the exact list of places that need updating, instead of you discovering the gap when a refund silently falls through a Java `switch` with no `default`.
+</Callout>
+
+## Teach it back
+
+1. What's the actual difference between Java's `null` and Rust's `Option::None` — not in what they represent, but in what the compiler forces you to do about them?
+2. Why can't you construct a `PaymentState::Authorized` value without a `transaction_id`, and what Java code pattern does this directly prevent?
+3. What does the `?` operator do, and how is that different from a Java method just letting an exception propagate up the call stack?
+4. If you added a `Refunded { amount: i32 }` variant to `PaymentState`, what would happen to the `describe` function above, and why is that a feature rather than a bug?

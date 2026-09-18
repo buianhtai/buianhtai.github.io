@@ -1,0 +1,144 @@
+---
+title: "Rust for Java Developers, Chapter 5: Iterators and Cargo"
+description: "Rust iterators look like Java Streams but carry ownership information Streams don't. Cargo replaces Maven, Gradle, JUnit, and your formatter with one toolchain."
+pubDate: 2026-09-18
+tags: ["rust", "java", "programming-languages", "systems-programming", "tutorial"]
+lang: "en"
+category: "tutorial"
+series: "rust-for-java-developers"
+seriesOrder: 5
+draft: false
+postLayout: "foundations"
+---
+import Label from '../../../components/mdx/Label.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import DiagramEmbed from '../../../components/mdx/DiagramEmbed.astro';
+
+Two unrelated-sounding topics, one chapter, because they share a theme: both are places where Rust takes something Java does with a heavier runtime mechanism and does it with a compile-time one instead.
+
+## Explain it simply
+
+Think of a recipe card: "take the eggs, crack them, whisk them, pour into the pan." Writing that card down does not cook anything. Nothing happens until someone actually walks into the kitchen and starts following the steps.
+
+A chain of Rust iterator calls — `.filter(...).map(...)` — is a recipe card. `vec.iter().filter(|x| x.is_valid()).map(|x| x.total())` builds up a *plan*, but nothing runs yet. Only when you call something that actually needs the answer — `.sum()`, `.collect()`, a `for` loop — does the kitchen start cooking, one item flowing through every step before the next item starts.
+
+## Find the crack
+
+Java Streams work almost exactly the same way — they're also lazy, and a `Stream` pipeline also does nothing until a terminal operation runs. So where's the actual difference? It's not laziness. It's **ownership**, the thing every previous chapter has been building toward.
+
+```java
+List<String> names = List.of("Ada", "Grace");
+names.stream().forEach(name -> System.out.println(name)); // just reads
+```
+
+Java's Stream API doesn't ask "do you want to read these, mutate them, or take them and destroy the original list?" — it's all just references, same as everywhere else in Java. Rust's iterators ask that question explicitly, every time, because Chapters 1 and 2 established that every value has exactly one owner and borrows come in shared-or-exclusive flavors — iterators aren't exempt from that rule.
+
+## Formalize it precisely
+
+<Label color="teal">1</Label> Three ways to iterate, three different ownership stories
+
+```rust
+let names = vec![String::from("Ada"), String::from("Grace")];
+
+for name in names.iter() {          // &String — reads, names still usable after
+    println!("{name}");
+}
+println!("{}", names.len());        // fine — names was only borrowed
+
+for name in names.into_iter() {     // String — takes ownership, consumes the Vec
+    println!("{name}");
+}
+// println!("{}", names.len());     // error: names was moved
+```
+
+`.iter()` yields `&T` (shared borrows — Chapter 2's rule). `.iter_mut()` yields `&mut T` (exclusive borrows). `.into_iter()` yields owned `T` values and consumes the collection in the process — it *moves* every element out, exactly like Chapter 1's move semantics. Java's `Stream` has no equivalent three-way split; it's always "just references."
+
+<Label color="green">2</Label> Adapters are lazy; only a terminal op does work
+
+```rust
+let orders = vec![("paid", 1200), ("pending", 500), ("paid", 800)];
+
+let total: i32 = orders
+    .iter()
+    .filter(|(status, _)| *status == "paid")
+    .map(|(_, cents)| cents)
+    .sum(); // nothing above this line ran until .sum() pulled values through
+
+println!("{total}"); // 2000
+```
+
+The Java equivalent reads almost identically:
+
+```java
+int total = orders.stream()
+    .filter(order -> order.status().equals("paid"))
+    .mapToInt(Order::cents)
+    .sum();
+```
+
+Both are lazy pipelines. The practical difference shows up in what the compiler can do with the Rust version: because ownership and types are fully known at compile time, the compiler frequently turns the whole chain into the same machine code as a hand-written loop — no generic `Stream` object materializes at runtime the way Java's does.
+
+<Label color="amber">3</Label> Cargo: one toolchain instead of five
+
+A typical Java project reaches for Maven or Gradle for builds, JUnit for tests, Checkstyle or Spotless for style, and a separate CI step to glue them together. Cargo folds all of that into one command surface:
+
+```bash
+cargo new billing-api
+cargo build      # compile
+cargo test       # run unit + integration tests
+cargo fmt        # format — one canonical style, no config wars
+cargo clippy     # lint — semantic suggestions, not just style
+cargo run        # build and execute
+```
+
+`Cargo.toml` is the manifest — comparable to `pom.xml` or `build.gradle`:
+
+```toml
+[package]
+name = "billing-api"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+```
+
+<Label color="rose">4</Label> Start with a library crate, not one big main.rs
+
+The Rust-specific mistake mirrors a very Java-specific one: cramming everything into one class (or here, one `main.rs`). Structure a project as a thin binary that depends on a real library crate instead:
+
+```text
+billing/
+├── Cargo.toml            # workspace manifest — one Cargo.lock for both crates
+├── billing-domain/
+│   ├── Cargo.toml
+│   └── src/lib.rs        # structs, enums, traits — no I/O, fully unit-testable
+└── billing-api/
+    ├── Cargo.toml
+    └── src/main.rs       # thin: parses config, wires billing-domain, starts serving
+```
+
+```toml
+# top-level Cargo.toml
+[workspace]
+members = ["billing-domain", "billing-api"]
+```
+
+Now `billing-domain`'s tests run without ever starting an HTTP server, and `cargo build -p billing-domain` compiles only what changed — the same instinct behind a well-factored multi-module Maven project, minus the multi-module Maven ceremony.
+
+<DiagramEmbed
+  src="/diagrams/rust-for-java-iterators-and-cargo.html"
+  title="One workspace, one Cargo.lock, one build"
+  height={420}
+/>
+
+<Callout color="teal">
+  If a Rust iterator chain won't compile, the fix is almost always about which of `.iter()`, `.iter_mut()`, or `.into_iter()` the pipeline actually needs — not a syntax problem. Ask "do I need to read, change, or consume this collection?" before reaching for `.clone()`.
+</Callout>
+
+## Teach it back
+
+1. What's the actual difference between `.iter()` and `.into_iter()` on a `Vec<String>`, and what happens to the original `Vec` after each?
+2. Why can Rust's compiler often turn an iterator chain into the same machine code as a hand-written loop, when Java's Stream pipeline can't be optimized quite as aggressively?
+3. What single command replaces the combined role of Maven/Gradle, JUnit's test runner, and a separate formatter in a Rust project?
+4. Why would you structure a new project as a binary crate depending on a library crate, instead of putting everything in `main.rs`? What does the library crate gain that the binary doesn't have to worry about?

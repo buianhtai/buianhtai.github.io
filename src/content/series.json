@@ -26,5 +26,12 @@
     "description": "First-principles coverage of CS fundamentals, systems internals, distributed systems, design patterns, and engineering craft — the bedrock beneath every framework and tool.",
     "lang": "multi",
     "link": null
+  },
+  {
+    "id": "rust-for-java-developers",
+    "title": "Rust for Java Developers",
+    "description": "A Feynman-method series translating the Java mental model into Rust, one concept at a time: ownership, borrowing, traits, enums, lifetimes, smart pointers, concurrency, async, and the parts Java has no equivalent for.",
+    "lang": "Rust",
+    "link": null
   }
 ]

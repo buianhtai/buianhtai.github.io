@@ -1,0 +1,126 @@
+---
+title: "Rust for Java Developers, Chapter 2: Borrowing"
+description: "Java lets you read and mutate through any reference, anytime, from anywhere. Rust's borrow checker enforces a single rule instead — and catches a whole category of bugs before the program ever runs."
+pubDate: 2026-09-18
+tags: ["rust", "java", "programming-languages", "systems-programming", "tutorial"]
+lang: "en"
+category: "tutorial"
+series: "rust-for-java-developers"
+seriesOrder: 2
+draft: false
+postLayout: "foundations"
+---
+import Label from '../../../components/mdx/Label.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import Concept from '../../../components/mdx/Concept.astro';
+import DiagramEmbed from '../../../components/mdx/DiagramEmbed.astro';
+
+Chapter 1 covered ownership: one value, one owner, cleanup happens exactly once. But if ownership were the whole story, every function call would need to take (and give back) full ownership of everything it touches — unworkable. Most of the time you just want to *look at* a value, or *temporarily change* it, without taking it over. That's borrowing.
+
+## Explain it simply
+
+Back to the library. Alice owns the book — her name is on the card. She doesn't have to hand over ownership every time someone wants to read it. She can **lend** it out instead.
+
+If she lends it for *reading only*, she can lend it to as many people as she wants at once — ten people can all be reading photocopied pages from the same book simultaneously, no conflict, nobody's writing in it.
+
+But if someone wants to **write notes in the margins**, that's different. Only one person can have the book checked out for writing at a time, and while they have it, nobody else — not even Alice — gets to read or write in it either. You can't safely read a page someone else is actively scribbling on.
+
+**Many readers, or exactly one writer. Never both.**
+
+## Find the crack
+
+In Java, references don't come with a "read-only" or "exclusive" mode. Any reference can call any mutating method, at any time, regardless of who else is holding a reference to the same object. This is exactly how you get bugs like this:
+
+```java
+List<String> names = new ArrayList<>(List.of("Ada", "Grace", "Linus"));
+
+for (String name : names) {
+    if (name.equals("Grace")) {
+        names.remove(name); // ConcurrentModificationException at runtime
+    }
+}
+```
+
+You're iterating (effectively "reading") the list while also mutating it. Java doesn't stop you from writing this code — it throws `ConcurrentModificationException` the moment it actually runs and notices the list changed mid-iteration. The bug is real, but you only find out at runtime, and only if that code path actually executes during testing.
+
+This is precisely the class of bug the "many readers or one writer" rule exists to prevent — Rust just enforces it at compile time instead of discovering it at runtime.
+
+## Formalize it precisely
+
+<Label color="teal">1</Label> `&T` is a shared, read-only borrow
+
+```rust
+fn print_length(text: &String) -> usize {
+    println!("{text}");
+    text.len()
+}
+
+fn main() {
+    let message = String::from("hello");
+    let a = &message;
+    let b = &message;
+    println!("{a} and {b} coexist fine"); // many shared borrows: OK
+    print_length(&message);
+}
+```
+
+Any number of `&T` references can exist at the same time. None of them can mutate. This is the equivalent of ten people reading photocopies — completely safe, because nobody's changing anything underneath anyone else.
+
+<Label color="amber">2</Label> `&mut T` is exclusive — and the compiler proves it
+
+```rust
+fn append_suffix(text: &mut String) {
+    text.push_str("!");
+}
+
+fn main() {
+    let mut message = String::from("hello");
+    append_suffix(&mut message);
+    println!("{message}"); // "hello!"
+}
+```
+
+Now try to break the rule directly — hold a shared borrow and a mutable borrow of the same value at the same time:
+
+```rust
+fn main() {
+    let mut names = vec![String::from("Ada"), String::from("Grace")];
+
+    let first = &names[0];        // shared borrow starts
+    names.push(String::from("Linus")); // error: cannot borrow `names` as mutable
+    println!("{first}");          //   because it is also borrowed as immutable
+}
+```
+
+This is the Rust equivalent of the Java `ConcurrentModificationException` above — except it's a compile error, not a runtime exception that only fires if that exact code path executes. You cannot ship this bug.
+
+<Label color="green">3</Label> A borrow ends at its last use, not at the end of the block
+
+```rust
+fn main() {
+    let mut names = vec![String::from("Ada"), String::from("Grace")];
+
+    let first = &names[0];
+    println!("{first}");          // last use of `first` — the borrow ends right here
+    names.push(String::from("Linus")); // fine: no shared borrow is still alive
+}
+```
+
+This trips people up coming from languages with block-scoped everything: the shared borrow of `first` doesn't live until the closing `}` — it lives only until its last actual use. The compiler tracks this precisely (a feature called *non-lexical lifetimes*), so code that "looks like" it should conflict often compiles cleanly, as long as the borrows genuinely don't overlap in time.
+
+<DiagramEmbed
+  src="/diagrams/rust-for-java-borrowing.html"
+  title="A borrow's life: shared or exclusive, never both"
+  height={480}
+/>
+
+<Callout color="amber">
+  A function signature in Rust is a contract, visible without reading the body: `&T` means "I only read this," `&mut T` means "I need exclusive access to change this," and plain `T` means "I'm taking ownership, you won't get it back unless I hand it back." In Java, you'd have to read the whole method body (or trust the documentation) to know which of these applies.
+</Callout>
+
+## Teach it back
+
+1. Why does Rust let you have ten `&T` borrows at once, but only ever one `&mut T`?
+2. In the `ConcurrentModificationException` example, what's the Rust borrow-checker error that would catch the equivalent bug, and *when* would you see it — compile time or run time?
+3. What does it mean for a borrow to "end at its last use"? Why does that matter for whether two borrows are allowed to coexist?
+4. If a Rust function takes `&mut Vec<String>`, what does that signature tell you about what the function is allowed to do, without reading a single line of its body?

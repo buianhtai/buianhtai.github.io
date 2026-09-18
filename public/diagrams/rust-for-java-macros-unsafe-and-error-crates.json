@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "unsafe Lives at a Narrow, Deliberate Boundary",
+    "quality_profile": "showcase"
+  },
+  "layout": {
+    "mode": "grid",
+    "cols": 1,
+    "gapX": 0,
+    "gapY": 80,
+    "cellW": 260,
+    "cellH": 64
+  },
+  "components": [
+    { "id": "app", "type": "frontend", "label": "Your application", "sublabel": "100% safe Rust", "row": 0, "col": 0 },
+    { "id": "wrapper", "type": "backend", "label": "safe-wrapper crate", "sublabel": "safe API, no unsafe here", "row": 1, "col": 0 },
+    { "id": "unsafe_mod", "type": "security", "label": "ffi module", "sublabel": "one small unsafe block", "row": 2, "col": 0 },
+    { "id": "clib", "type": "external", "label": "C library", "sublabel": "outside Rust's safety net", "row": 3, "col": 0 }
+  ],
+  "connections": [
+    { "id": "c1", "from": "app", "to": "wrapper" },
+    { "id": "c2", "from": "wrapper", "to": "unsafe_mod" },
+    { "id": "c3", "from": "unsafe_mod", "to": "clib" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "unsafe is narrow, not viral", "items": ["Only the ffi module contains unsafe blocks — the wrapper crate's public API is fully safe", "The borrow checker stays fully active everywhere else in the same file"] },
+    { "dot": "rose", "title": "You'll read it more than write it", "items": ["Most Rust developers never write unsafe directly", "You will see it constantly in dependencies doing FFI or low-level data structures"] }
+  ]
+}

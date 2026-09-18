@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "diagram_type": "lifecycle",
+  "meta": {
+    "title": "A Value's Life: Owned, Moved, Cloned, Dropped",
+    "quality_profile": "showcase"
+  },
+  "lanes": [
+    { "id": "main", "label": "One value's story" }
+  ],
+  "states": [
+    { "id": "owned", "type": "start", "label": "Owned", "sublabel": "let s = String::new()", "lane": "main", "col": 0 },
+    { "id": "moved", "type": "neutral", "label": "Moved", "sublabel": "let t = s; — s is dead", "lane": "main", "col": 1 },
+    { "id": "cloned", "type": "success", "label": "Cloned", "sublabel": "let u = t.clone()", "lane": "main", "col": 2 },
+    { "id": "dropped", "type": "failure", "label": "Dropped", "sublabel": "Drop::drop() runs once", "lane": "main", "col": 3 }
+  ],
+  "transitions": [
+    { "id": "t1", "from": "owned", "to": "moved" },
+    { "id": "t2", "from": "moved", "to": "cloned" },
+    { "id": "t3", "from": "cloned", "to": "dropped" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Move by default", "items": ["Assignment transfers ownership for non-Copy types", "The old binding (s) is permanently invalid after the move"] },
+    { "dot": "violet", "title": "Clone is opt-in", "items": ["clone() creates a fully independent copy", "Only pay the copy cost when you actually asked for it"] },
+    { "dot": "rose", "title": "Deterministic cleanup", "items": ["Whoever owns the value last runs Drop exactly once", "No garbage collector pause, no tracing, no finalizer queue"] }
+  ]
+}

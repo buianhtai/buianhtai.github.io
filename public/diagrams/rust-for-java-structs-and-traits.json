@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Composition, Not Inheritance: OrderService Has-A, Not Is-A",
+    "quality_profile": "showcase"
+  },
+  "layout": {
+    "mode": "grid",
+    "cols": 3,
+    "gapX": 70,
+    "gapY": 70,
+    "cellW": 210,
+    "cellH": 64
+  },
+  "components": [
+    { "id": "service", "type": "backend", "label": "OrderService", "sublabel": "struct — owns two fields", "row": 0, "col": 1 },
+    { "id": "gateway", "type": "security", "label": "dyn PaymentGateway", "sublabel": "trait object field", "row": 1, "col": 0 },
+    { "id": "audit", "type": "database", "label": "AuditLog", "sublabel": "plain struct field", "row": 1, "col": 2 },
+    { "id": "stripe", "type": "external", "label": "StripeGateway", "sublabel": "impl PaymentGateway", "row": 2, "col": 0 }
+  ],
+  "connections": [
+    { "id": "c1", "from": "service", "to": "gateway" },
+    { "id": "c2", "from": "service", "to": "audit" },
+    { "id": "c3", "from": "stripe", "to": "gateway" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Has-a, not is-a", "items": ["OrderService holds a trait object and a struct as fields — it does not extend either", "Swap StripeGateway for a different PaymentGateway impl without touching OrderService"] },
+    { "dot": "violet", "title": "No base class required", "items": ["The trait defines the contract; any type can implement it", "Composition wires behavior together at the field level, not through a class hierarchy"] }
+  ]
+}

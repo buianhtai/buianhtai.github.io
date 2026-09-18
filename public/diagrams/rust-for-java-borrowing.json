@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "diagram_type": "lifecycle",
+  "meta": {
+    "title": "A Borrow's Life: Shared or Exclusive, Never Both",
+    "quality_profile": "showcase"
+  },
+  "lanes": [
+    { "id": "main", "label": "One borrow's story" }
+  ],
+  "states": [
+    { "id": "owned", "type": "start", "label": "Owned", "sublabel": "let mut s = String::new()", "lane": "main", "col": 0 },
+    { "id": "shared", "type": "waiting", "label": "Shared Borrow", "sublabel": "&s — any number allowed", "lane": "main", "col": 1 },
+    { "id": "ended", "type": "active", "label": "Borrow Ends", "sublabel": "last use of the reference", "lane": "main", "col": 2 },
+    { "id": "reowned", "type": "success", "label": "Owner Reads Again", "sublabel": "s is usable directly", "lane": "main", "col": 3 }
+  ],
+  "transitions": [
+    { "id": "t1", "from": "owned", "to": "shared" },
+    { "id": "t2", "from": "shared", "to": "ended" },
+    { "id": "t3", "from": "ended", "to": "reowned" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "The one rule", "items": ["Any number of &T (shared) borrows can coexist", "Exactly one &mut T (exclusive) borrow is allowed, and never alongside a shared one"] },
+    { "dot": "violet", "title": "Non-lexical lifetimes", "items": ["A borrow ends at its last use, not at the end of the enclosing block", "This is why code that looks like it should conflict often compiles fine"] }
+  ]
+}

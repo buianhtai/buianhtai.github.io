@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "diagram_type": "lifecycle",
+  "meta": {
+    "title": "Rc<T>: A Lease That Ends When the Last Tenant Leaves",
+    "quality_profile": "showcase"
+  },
+  "lanes": [
+    { "id": "main", "label": "Reference count" }
+  ],
+  "states": [
+    { "id": "created", "type": "start", "label": "Created", "sublabel": "Rc::new(x) — count = 1", "lane": "main", "col": 0 },
+    { "id": "cloned", "type": "active", "label": "Cloned", "sublabel": "Rc::clone(&x) — count = 2", "lane": "main", "col": 1 },
+    { "id": "dropped_one", "type": "waiting", "label": "One Dropped", "sublabel": "clone dropped — count = 1", "lane": "main", "col": 2 },
+    { "id": "deallocated", "type": "failure", "label": "Deallocated", "sublabel": "count hits 0 — value freed", "lane": "main", "col": 3 }
+  ],
+  "transitions": [
+    { "id": "t1", "from": "created", "to": "cloned" },
+    { "id": "t2", "from": "cloned", "to": "dropped_one" },
+    { "id": "t3", "from": "dropped_one", "to": "deallocated" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Rc counts, doesn't garbage-collect", "items": ["Every clone() increments a count; every drop decrements it", "The value is freed the instant the count reaches zero — no tracing, no pause"] },
+    { "dot": "violet", "title": "Rc<RefCell<T>> for shared mutation", "items": ["Rc alone only gives shared read access", "Wrap the inner value in RefCell to mutate through a shared Rc, checked at runtime"] }
+  ]
+}

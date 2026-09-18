@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "diagram_type": "lifecycle",
+  "meta": {
+    "title": "PaymentState: Every Variant Carries Its Own Facts",
+    "quality_profile": "showcase"
+  },
+  "lanes": [
+    { "id": "main", "label": "PaymentState" }
+  ],
+  "states": [
+    { "id": "pending", "type": "start", "label": "Pending", "sublabel": "{ attempt: u8 }", "lane": "main", "col": 0 },
+    { "id": "authorized", "type": "success", "label": "Authorized", "sublabel": "{ transaction_id }", "lane": "main", "col": 1 },
+    { "id": "settled", "type": "neutral", "label": "match Requires Both", "sublabel": "exhaustive, compiler-checked", "lane": "main", "col": 2 }
+  ],
+  "transitions": [
+    { "id": "t1", "from": "pending", "to": "authorized" },
+    { "id": "t2", "from": "authorized", "to": "settled" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Each variant carries its own data", "items": ["Authorized always has a transaction_id; Declined always has a reason (not shown — a sibling terminal variant)", "There's no way to construct an Authorized state missing its transaction_id"] },
+    { "dot": "rose", "title": "match must be exhaustive", "items": ["Add a Refunded variant later, and every match without it fails to compile", "The compiler becomes a checklist for every place that needs updating"] }
+  ]
+}

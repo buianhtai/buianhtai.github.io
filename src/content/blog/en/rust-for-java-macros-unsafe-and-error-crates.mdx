@@ -1,0 +1,127 @@
+---
+title: "Rust for Java Developers, Chapter 9: Macros, unsafe, and Production Error Handling"
+description: "Derive macros, the scoped truth about unsafe, thiserror and anyhow for real error handling, and a four-exercise capstone to close the series."
+pubDate: 2026-09-18
+tags: ["rust", "java", "programming-languages", "systems-programming", "tutorial"]
+lang: "en"
+category: "tutorial"
+series: "rust-for-java-developers"
+seriesOrder: 9
+draft: false
+postLayout: "foundations"
+---
+import Label from '../../../components/mdx/Label.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import DiagramEmbed from '../../../components/mdx/DiagramEmbed.astro';
+
+This is the last chapter. Three loose ends before the send-off: the macros you'll read constantly but rarely write, `unsafe` and what it actually means, and the error-handling crates every real Rust project reaches for almost immediately.
+
+## Explain it simply
+
+**Macros**: think of a form letter with fill-in-the-blank fields. You don't write "Dear [NAME], your order [ORDER_ID] has shipped" by hand for every customer — you write the template once, and something fills in the blanks automatically for each case. `#[derive(Debug)]` is exactly that: instead of hand-writing a `to_string`-style method for every struct, you ask the compiler to fill in the template.
+
+**`unsafe`**: think of a surgeon's scalpel. A scalpel is genuinely dangerous — used carelessly, it causes real harm. But a surgeon doesn't operate with the scalpel out the entire day; it's picked up for one precise incision, used exactly where needed, and set back down. The rest of the operation still follows every normal safety procedure.
+
+## Find the crack
+
+Java's rough equivalent of a derive macro is Lombok's `@Data` or `@Getter` — but Lombok is a third-party annotation processor bolted onto `javac` from the outside. Rust's derive macros are a first-class compiler feature; every Rust developer has them without installing anything extra.
+
+And here's the crack in the scalpel analogy that matters most: people coming from a language with no `unsafe` keyword at all often assume it's a "mode switch" — flip it on, and now anything goes for the rest of the file. That's wrong. `unsafe` is scoped exactly to the block (or function) it's written on. The borrow checker, move semantics, and every other rule from the first eight chapters keep running everywhere else, including the very next line after the `unsafe` block closes.
+
+## Formalize it precisely
+
+<Label color="teal">1</Label> Derive macros — compiler-generated boilerplate
+
+```rust
+#[derive(Debug, Clone, PartialEq)]
+struct Order {
+    id: String,
+    total_cents: i32,
+}
+
+fn main() {
+    let a = Order { id: String::from("o-1"), total_cents: 1200 };
+    let b = a.clone();
+    println!("{a:?}");       // Debug — auto-generated pretty-print
+    println!("{}", a == b);  // PartialEq — auto-generated field-by-field comparison
+}
+```
+
+Compare to the Lombok equivalent:
+
+```java
+@Data // Lombok annotation processor generates equals/hashCode/toString/getters at compile time
+class Order {
+    private final String id;
+    private final int totalCents;
+}
+```
+
+Same motivation — stop hand-writing boilerplate — different mechanism. `macro_rules!` (Rust's other macro flavor, for writing your own) is worth recognizing by sight, but you'll spend far more time reading `#[derive(...)]` on other people's structs than writing custom macros yourself.
+
+<Label color="amber">2</Label> `unsafe` — narrow, scoped, and rare to write
+
+```rust
+fn first_byte(data: &[u8]) -> u8 {
+    unsafe {
+        *data.as_ptr() // raw pointer dereference — one of the few unsafe operations
+    }
+}
+// everything outside the `unsafe { }` block is checked exactly as normal
+```
+
+`unsafe` permits exactly four things: dereferencing a raw pointer, calling an unsafe function (including FFI calls into C), mutating a `static` variable, and implementing an unsafe trait. It does **not** disable the borrow checker for the rest of the function, the file, or the crate. You will almost never need to write it yourself — but you'll see it constantly inside dependencies that talk to C libraries or implement very low-level data structures, always contained to a small, deliberate module rather than spread across a codebase.
+
+<Label color="green">3</Label> `thiserror` and `anyhow` — Result grows up
+
+Chapter 4 introduced `Result<T, E>`. In a real project, `E` quickly needs to be more than a bare `String`. Two crates cover almost every case:
+
+```rust
+// Library code — a precise, typed error enum callers can match on
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+enum ConfigError {
+    #[error("missing environment variable: {0}")]
+    MissingVar(String),
+    #[error("invalid port: {0}")]
+    InvalidPort(String),
+}
+```
+
+```rust
+// Application code — ergonomic error context, less concerned with exact type
+use anyhow::{Context, Result};
+
+fn load_config() -> Result<String> {
+    std::env::var("PORT").context("failed to read PORT from environment")
+}
+```
+
+`thiserror` is for library-facing code where callers benefit from matching on a specific error variant. `anyhow` is for application-facing code where you mostly want good error messages with context, not a taxonomy. Almost every real Rust project pulls in one or both within its first few files.
+
+<DiagramEmbed
+  src="/diagrams/rust-for-java-macros-unsafe-and-error-crates.html"
+  title="unsafe lives at a narrow, deliberate boundary"
+  height={520}
+/>
+
+## Your capstone: build these four things before your next real project
+
+Reading nine chapters teaches you to recognize Rust. Building these four small things is what actually teaches you to write it.
+
+1. **Feel move vs. borrow vs. clone.** Implement the same small function three ways: taking `String` by value, taking `&str` by reference, and taking `String` and cloning internally. Notice exactly which callers each version forces to give up ownership.
+2. **Model a state machine.** Pick a real process you understand (an order, a job, a login flow) and represent every state as an `enum` variant with the data that state actually needs. Write an exhaustive `match` over it, then add one new state and watch the compiler tell you everywhere that needs updating.
+3. **Define a trait-based boundary.** Write a small `trait Repository` with `save` and `find` methods, implement it once with an in-memory `Vec`, and once with a real backend (SQLite is a good small target). Your application code should depend only on the trait.
+4. **Split a CLI into three crates.** Take a small command-line tool and split it into a `domain` crate (no I/O), a thin `main.rs` binary, and one infra crate for whatever it talks to (a file, an API, a database). Confirm the domain crate compiles and its tests run with zero network or filesystem access.
+
+<Callout color="teal">
+  If you can explain to a Java colleague — out loud, without notes — why Rust has no garbage collector, why it has no `null`, and why a forgotten `synchronized` in Java can compile fine but fail in production while the Rust equivalent won't compile at all, you've absorbed the actual point of this series. Everything else is syntax you'll pick up as you go.
+</Callout>
+
+## Teach it back — the capstone check
+
+1. Why doesn't `unsafe` disable the borrow checker for the rest of the file it's used in?
+2. When would you reach for `thiserror` over `anyhow`, and why does that distinction matter at a library boundary versus an application boundary?
+3. Pick one of the four capstone exercises above and describe, in your own words, what specifically it's meant to teach you — not what code to write, but what understanding it's testing.
+4. Can you now explain to a Java colleague, in plain language, why Rust has no garbage collector and no `null`?
