@@ -3,7 +3,15 @@
   "diagram_type": "workflow",
   "meta": {
     "title": "Rc<T>: A Lease That Ends When the Last Tenant Leaves",
-    "quality_profile": "showcase"
+    "quality_profile": "showcase",
+    "legend": {
+      "entries": {
+        "backend": { "label": "Rc lifecycle event" },
+        "database": { "label": "Clone (refcount++)" },
+        "external": { "label": "Drop (refcount--)" },
+        "security": { "label": "RefCell runtime borrow" }
+      }
+    }
   },
   "lanes": [
     { "id": "count", "label": "Reference count" },

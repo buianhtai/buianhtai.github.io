@@ -3,7 +3,15 @@
   "diagram_type": "architecture",
   "meta": {
     "title": "Composition, Not Inheritance: OrderService Has-A, Not Is-A",
-    "quality_profile": "showcase"
+    "quality_profile": "showcase",
+    "legend": {
+      "entries": {
+        "backend": { "label": "Struct (owns fields)" },
+        "security": { "label": "Trait object field" },
+        "database": { "label": "Plain struct field" },
+        "external": { "label": "Trait implementation" }
+      }
+    }
   },
   "layout": {
     "mode": "grid",

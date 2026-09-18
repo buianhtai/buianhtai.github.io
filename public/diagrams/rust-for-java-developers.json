@@ -3,7 +3,15 @@
   "diagram_type": "workflow",
   "meta": {
     "title": "From One Owned Value: Move, Clone, or Borrow",
-    "quality_profile": "showcase"
+    "quality_profile": "showcase",
+    "legend": {
+      "entries": {
+        "backend": { "label": "Owned value" },
+        "external": { "label": "Moved (old binding dead)" },
+        "security": { "label": "Borrowed (temporary access)" },
+        "database": { "label": "Borrow scope ends" }
+      }
+    }
   },
   "lanes": [
     { "id": "ownership", "label": "Ownership" },

@@ -3,7 +3,15 @@
   "diagram_type": "workflow",
   "meta": {
     "title": "One Value, Two Kinds of Borrow — Never Both at Once",
-    "quality_profile": "showcase"
+    "quality_profile": "showcase",
+    "legend": {
+      "entries": {
+        "backend": { "label": "Owned value" },
+        "database": { "label": "Shared borrow (&T)" },
+        "security": { "label": "Exclusive borrow (&mut T)" },
+        "external": { "label": "Compile error" }
+      }
+    }
   },
   "lanes": [
     { "id": "read", "label": "Read-only path" },

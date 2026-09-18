@@ -3,7 +3,14 @@
   "diagram_type": "workflow",
   "meta": {
     "title": "PaymentState: Every Variant Carries Its Own Facts",
-    "quality_profile": "showcase"
+    "quality_profile": "showcase",
+    "legend": {
+      "entries": {
+        "backend": { "label": "Enum variant" },
+        "database": { "label": "Success variant" },
+        "security": { "label": "Failure variant" }
+      }
+    }
   },
   "lanes": [
     { "id": "success", "label": "Approved path" },

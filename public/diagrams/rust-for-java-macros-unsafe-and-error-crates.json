@@ -3,7 +3,15 @@
   "diagram_type": "architecture",
   "meta": {
     "title": "unsafe Lives at a Narrow, Deliberate Boundary",
-    "quality_profile": "showcase"
+    "quality_profile": "showcase",
+    "legend": {
+      "entries": {
+        "frontend": { "label": "Safe application code" },
+        "backend": { "label": "Safe wrapper crate" },
+        "security": { "label": "unsafe block" },
+        "external": { "label": "Foreign C code" }
+      }
+    }
   },
   "layout": {
     "mode": "grid",

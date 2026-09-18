@@ -3,7 +3,13 @@
   "diagram_type": "architecture",
   "meta": {
     "title": "One Workspace, One Cargo.lock, One Build",
-    "quality_profile": "showcase"
+    "quality_profile": "showcase",
+    "legend": {
+      "entries": {
+        "frontend": { "label": "Binary crate" },
+        "backend": { "label": "Library crate" }
+      }
+    }
   },
   "layout": {
     "mode": "grid",

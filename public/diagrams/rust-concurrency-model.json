@@ -5,6 +5,14 @@
     "title": "Concurrency: JVM Threads vs Rust Ownership",
     "quality_profile": "showcase",
     "output": "public/diagrams/rust-concurrency-model.html",
+    "legend": {
+      "entries": {
+        "backend": { "label": "Thread spawn" },
+        "database": { "label": "Shared state" },
+        "security": { "label": "Safety mechanism" },
+        "external": { "label": "Outcome" }
+      }
+    },
     "views": [
       { "id": "java-path", "label": "Java path", "focus": ["j_thread", "j_shared", "j_sync", "j_race"], "note": "The compiler does not check thread safety; a missed lock is a runtime data race." },
       { "id": "rust-path", "label": "Rust path", "focus": ["r_thread", "r_shared", "r_compiler", "r_safe"], "note": "Send and Sync are compile-time proofs; unsynchronized sharing fails to compile." }

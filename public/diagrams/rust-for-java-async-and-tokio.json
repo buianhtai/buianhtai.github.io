@@ -3,7 +3,13 @@
   "diagram_type": "workflow",
   "meta": {
     "title": "Async Execution: Eager Future vs Poll-Driven Future",
-    "quality_profile": "showcase"
+    "quality_profile": "showcase",
+    "legend": {
+      "entries": {
+        "backend": { "label": "Task creation" },
+        "external": { "label": "Outcome" }
+      }
+    }
   },
   "lanes": [
     { "id": "java", "label": "Java: CompletableFuture", "variant": "exception" },
