@@ -13,6 +13,7 @@ postLayout: "foundations"
 import Label from '../../../components/mdx/Label.astro';
 import Callout from '../../../components/mdx/Callout.astro';
 import StateMachine from '../../../components/mdx/StateMachine.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
 
 Chapters 1 and 2 built the core rule: one owner, borrows are shared-or-exclusive. This chapter covers two things people usually lump together with "hard Rust stuff" but which solve different problems: lifetime annotations (proving a borrow is safe) and smart pointers (getting shared-ownership flexibility back, on purpose, when a single owner genuinely isn't enough).
 
@@ -27,6 +28,17 @@ Chapters 1 and 2 built the core rule: one owner, borrows are shared-or-exclusive
 Java doesn't need coat-check tickets, because every coat lives in a warehouse that never throws anything away until nobody could possibly still want it — the garbage collector traces every reachable reference and only cleans up what's truly unreachable. You can hand out as many references to the same object as you want, forever, and never think about it.
 
 Rust's compiler doesn't trace anything at runtime. It has to *prove*, while compiling, that no reference outlives its data — and for that, it sometimes needs you to write down, explicitly, "this returned reference lives exactly as long as that input." That's what a lifetime parameter is: not a memory management technique, just an assertion the compiler checks.
+
+<DataTable
+  headers={["Concept", "Java", "Rust"]}
+  rows={[
+    { "Concept": "Reference validity", "Java": "GC traces reachability at runtime; a reference is always valid as long as it's reachable", "Rust": "Compiler proves at compile time that no reference outlives its data; lifetime params make that relationship explicit when needed" },
+    { "Concept": "Heap allocation", "Java": "Implicit — every non-primitive object already lives on the heap", "Rust": "Explicit opt-in via `Box<T>`, used mainly for recursive types or large stack values" },
+    { "Concept": "Multiple owners of one value", "Java": "Free — the GC permits unlimited references to any object", "Rust": "`Rc<T>` — reference-counted, freed the instant the count reaches zero" },
+    { "Concept": "Mutating through a shared reference", "Java": "Always allowed — no aliasing rule to satisfy", "Rust": "`RefCell<T>` — allowed, but checked at runtime via `borrow_mut()`, panics on violation" },
+  ]}
+  caption="Java gets this flexibility from the GC tracing every reference at runtime. Rust recreates just enough of it, opt-in, exactly where a single owner isn't enough."
+/>
 
 ## Formalize it precisely
 

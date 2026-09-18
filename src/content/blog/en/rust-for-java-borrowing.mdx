@@ -14,6 +14,7 @@ import Label from '../../../components/mdx/Label.astro';
 import Callout from '../../../components/mdx/Callout.astro';
 import Concept from '../../../components/mdx/Concept.astro';
 import Flowchart from '../../../components/mdx/Flowchart.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
 
 Chapter 1 covered ownership: one value, one owner, cleanup happens exactly once. But if ownership were the whole story, every function call would need to take (and give back) full ownership of everything it touches — unworkable. Most of the time you just want to *look at* a value, or *temporarily change* it, without taking it over. That's borrowing.
 
@@ -44,6 +45,16 @@ for (String name : names) {
 You're iterating (effectively "reading") the list while also mutating it. Java doesn't stop you from writing this code — it throws `ConcurrentModificationException` the moment it actually runs and notices the list changed mid-iteration. The bug is real, but you only find out at runtime, and only if that code path actually executes during testing.
 
 This is precisely the class of bug the "many readers or one writer" rule exists to prevent — Rust just enforces it at compile time instead of discovering it at runtime.
+
+<DataTable
+  headers={["Concept", "Java", "Rust"]}
+  rows={[
+    { "Concept": "Reading while mutating", "Java": "Compiles fine; fails at runtime as ConcurrentModificationException, only if that path executes", "Rust": "Compile error — the borrow checker rejects it before the program runs" },
+    { "Concept": "Multiple readers", "Java": "No distinction — any reference can read or write at any time", "Rust": "Any number of `&T` shared borrows can coexist safely" },
+    { "Concept": "Exclusive write access", "Java": "Not modeled by the type system — enforced only by convention or `synchronized`", "Rust": "Exactly one `&mut T` at a time, and never alongside a shared borrow" },
+  ]}
+  caption="Java's aliasing rules are convention. Rust's are compiler-checked."
+/>
 
 ## Formalize it precisely
 

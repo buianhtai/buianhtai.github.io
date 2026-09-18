@@ -31,6 +31,12 @@ bd close <id>         # Complete work
 bd sync               # Sync with git
 ```
 
+## Diagrams for future posts
+
+- **Python-related posts**: use the `diagram-design` skill (github.com/cathrynlavery/diagram-design, installed at `~/.claude/skills/diagram-design`) for new diagrams, not archify. A project profile is pinned via the repo-root `.diagram-design` marker (`profile: blogs-dark-terminal`, resolving to `~/.diagram-design/profiles/blogs-dark-terminal.md`).
+  - **Unresolved before first use**: (1) MDX integration is undecided — likely extract inline SVG into the page rather than iframing standalone HTML (avoids the DiagramEmbed clipping/chrome-mismatch issues hit in the Rust series). (2) The profile bakes fixed hex colors into static SVG, so it renders correctly only in this site's default dark theme, not the other 9 runtime themes (light/dracula/nord/etc. in `src/styles/global.css`) — native MDX components avoid this by using `var(--color-*)`. Decide both before the first Python post ships a diagram.
+- **Any post teaching a language/paradigm concept** (not real system architecture): prefer a decision-diamond Flowchart ("do you need X or Y?") over an abstract state machine — see `rust-for-java-borrowing.mdx` for the working pattern. If the point is comparing two languages/approaches, the diagram must show both sides (a two-lane Swimlane or a Java-column/Rust-column CompareTable) — a diagram of only one side doesn't teach the mapping.
+
 ## Landing the Plane (Session Completion)
 
 **When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.

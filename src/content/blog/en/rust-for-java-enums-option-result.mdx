@@ -14,6 +14,7 @@ import Label from '../../../components/mdx/Label.astro';
 import Callout from '../../../components/mdx/Callout.astro';
 import Concept from '../../../components/mdx/Concept.astro';
 import Flowchart from '../../../components/mdx/Flowchart.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
 
 Chapters 1-3 covered how Rust manages values and organizes behavior. This chapter is about something different: how Rust represents *facts that might not be true yet* — a value that might be missing, an operation that might fail, a status that could be one of several distinct shapes.
 
@@ -35,6 +36,16 @@ System.out.println(user.getName()); // NullPointerException if it was null
 The type `User` looks identical whether the method actually found a user or not. You find out the difference only when the `NullPointerException` fires — possibly in production, possibly for an input path nobody tested. `Optional<User>` exists in modern Java specifically to patch this, but it's opt-in: nothing stops a method from returning a bare, nullable `User` instead, and nothing stops you from calling `.get()` on an empty `Optional` without checking `.isPresent()` first.
 
 This is the actual crack in the analogy: Java's "empty slot" is invisible until you reach into it. Rust's is physically a different shape you can't ignore.
+
+<DataTable
+  headers={["Concept", "Java", "Rust"]}
+  rows={[
+    { "Concept": "Absent value", "Java": "`null` — any reference type, no compiler check required", "Rust": "`Option<T>` — must match `Some`/`None` before using the value" },
+    { "Concept": "Operation that can fail", "Java": "Checked or unchecked exception, easy to forget to catch", "Rust": "`Result<T, E>` — failure is part of the return type" },
+    { "Concept": "Status with multiple shapes", "Java": "A string field or int constant, plus nullable side fields per state", "Rust": "An `enum` where each variant carries exactly its own required data" },
+  ]}
+  caption="Java patches this gap with Optional and exceptions; Rust makes it part of every function signature by default."
+/>
 
 ## Formalize it precisely
 
