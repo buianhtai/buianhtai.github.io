@@ -1,0 +1,666 @@
+---
+title: "Rust for Java Developers: A Mental Model That Transfers"
+description: "Learn Rust by translating the Java concepts you already know: ownership instead of garbage collection, traits instead of inheritance, Result instead of exceptions, and Cargo instead of Maven."
+pubDate: 2026-09-18
+tags: ["rust", "java", "programming-languages", "systems-programming", "tutorial"]
+lang: "en"
+category: "tutorial"
+draft: true
+postLayout: "foundations"
+---
+import Label from '../../../components/mdx/Label.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import Concept from '../../../components/mdx/Concept.astro';
+import DiagramEmbed from '../../../components/mdx/DiagramEmbed.astro';
+
+If you already write Java, Rust does not ask you to forget everything. It asks you to make several runtime assumptions explicit at compile time.
+
+Java gives you a managed heap, garbage collection, class inheritance, `null`, exceptions, reflection, and a runtime that can discover many problems after the program starts. Rust gives you ownership, borrowing, traits, algebraic data types, explicit errors, and a compiler that rejects many invalid states before a binary exists.
+
+That difference is the central translation:
+
+> **Java manages object lifetime for you. Rust makes lifetime and access part of the type-checked design.**
+
+This is not a syntax cheat sheet. It is a map from the Java mental model to the Rust mental model, with small examples you can compile and extend.
+
+<Callout color="teal">
+  Do not learn Rust by translating every Java line literally. Translate the responsibility behind the line: who owns this data, who may mutate it, what states are possible, and how can failure be represented?
+</Callout>
+
+## <Label color="teal">1</Label> The map at a glance
+
+<DataTable
+  headers={["Java concept", "Rust concept", "Important difference"]}
+  rows={[
+    { "Java concept": "class + fields + methods", "Rust concept": "struct + impl", "Important difference": "Data and behavior are separate declarations; no implicit inheritance" },
+    { "Java concept": "interface", "Rust concept": "trait", "Important difference": "Traits describe shared behavior and can carry bounds" },
+    { "Java concept": "new object reference", "Rust concept": "owned value", "Important difference": "Assignment can move the value instead of copying a reference" },
+    { "Java concept": "garbage collector", "Rust concept": "ownership + Drop", "Important difference": "Cleanup is deterministic and usually has no tracing pause" },
+    { "Java concept": "null / Optional", "Rust concept": "Option<T>", "Important difference": "The compiler requires you to handle Some and None" },
+    { "Java concept": "checked or unchecked exception", "Rust concept": "Result<T, E>", "Important difference": "Failure is a value in the function signature" },
+    { "Java concept": "sealed hierarchy + switch", "Rust concept": "enum + match", "Important difference": "Exhaustiveness is a normal control-flow guarantee" },
+    { "Java concept": "Maven / Gradle + JAR", "Rust concept": "Cargo + crate", "Important difference": "The package manager, compiler, test runner, and formatter are one toolchain" },
+    { "Java concept": "synchronized / ExecutorService", "Rust concept": "Send + Sync + Mutex / channels", "Important difference": "Thread-safety constraints are checked in types" },
+  ]}
+/>
+
+The rest of the article explains why these mappings work, where they stop being equivalent, and what to write instead.
+
+## <Label color="green">2</Label> Start with values, not object references
+
+In Java, a variable of a class type normally contains a reference to an object on the heap:
+
+```java
+var first = new ArrayList<String>();
+var second = first;
+
+second.add("rust");
+System.out.println(first); // [rust]
+```
+
+`first` and `second` refer to the same object. The garbage collector eventually discovers that the object is unreachable. The assignment itself does not change which variable is allowed to use the object.
+
+Rust separates **the value** from **the references that temporarily access it**:
+
+```rust
+let first = vec![String::from("java")];
+let second = first;
+
+// println!("{first:?}"); // error: borrow of moved value: `first`
+println!("{second:?}");
+```
+
+For a `Vec<String>`, assignment moves ownership. There is still one vector allocation and one owner. Rust rejects using `first` after the move because that would make it unclear which binding is responsible for cleanup.
+
+If you need two independent values, say so:
+
+```rust
+let first = vec![String::from("java")];
+let second = first.clone();
+
+println!("{first:?}");
+println!("{second:?}");
+```
+
+This is the first habit to build:
+
+1. Ask who owns the value.
+2. Move it when ownership should transfer.
+3. Borrow it when a function only needs temporary access.
+4. Clone it only when an independent copy is actually required.
+
+<DiagramEmbed
+  src="/diagrams/rust-for-java-devs.html"
+  title="Rust ownership, borrowing, and Java-to-Rust concept map"
+  height={760}
+/>
+
+### Java's reference copy vs Rust's ownership move
+
+A Java reference assignment copies a handle. A Rust assignment may move an owned value, but small `Copy` types behave differently:
+
+```rust
+let a = 42;
+let b = a;
+println!("{a} {b}"); // both are valid: integers implement Copy
+```
+
+Types such as integers, booleans, and immutable character values are cheap to copy. Heap-owning types such as `String`, `Vec<T>`, and `Box<T>` normally move. You do not memorize this as a list forever; compiler errors and type definitions make the distinction visible.
+
+## <Label color="amber">3</Label> Borrowing replaces many defensive copies
+
+Java methods receive references freely. Rust methods must state whether they take ownership, borrow immutably, or borrow mutably:
+
+```rust
+fn length(text: &String) -> usize {
+    text.len()
+}
+
+fn append_suffix(text: &mut String) {
+    text.push_str("!");
+}
+
+fn consume(text: String) -> usize {
+    text.len()
+    // text is dropped here
+}
+
+fn main() {
+    let mut message = String::from("hello");
+    println!("{}", length(&message));
+    append_suffix(&mut message);
+    let bytes = consume(message);
+    println!("{bytes}");
+}
+```
+
+The Java translation would use one `String` reference for all three methods. The Rust signatures communicate three different contracts:
+
+- `&String`: I may read the value but do not own it.
+- `&mut String`: I may change the value, and I need exclusive access for the borrow's lifetime.
+- `String`: I own the value and can decide when it is consumed or dropped.
+
+The borrow checker enforces the aliasing rule:
+
+> **Many readers or one writer, but never both at the same time.**
+
+```rust
+let mut names = vec![String::from("Ada")];
+
+let first = &names[0];
+let second = &names[0];
+println!("{first} and {second}"); // shared borrows may coexist
+
+let writable = &mut names;
+writable.push(String::from("Grace"));
+```
+
+The mutable borrow is allowed only after the shared borrows are no longer used. Rust uses the last-use point, not merely the enclosing braces, whenever non-lexical lifetimes can prove the borrow has ended.
+
+<Concept term="Borrowing is not a slower form of ownership" category="ownership">
+  A reference is a permission to access a value, not another owner. It does not run cleanup, extend the value beyond its owner, or make a second copy of the allocation.
+</Concept>
+
+### What the compiler is protecting
+
+This Java code compiles, but the aliasing relationship is implicit:
+
+```java
+void rename(List<String> names) {
+    String first = names.get(0);
+    names.clear();
+    System.out.println(first); // still a valid String object
+}
+```
+
+Rust's equivalent must make the relationship explicit. If clearing a collection would invalidate a reference into it, the compiler stops the program before a dangling reference can exist. That restriction is not bureaucracy; it is the reason safe Rust can avoid a garbage collector while preserving memory safety.
+
+## <Label color="teal">4</Label> Structs and `impl` blocks replace most classes
+
+A Java class combines storage, constructors, methods, visibility, inheritance, and often lifecycle hooks:
+
+```java
+public final class Account {
+    private final String id;
+    private int balance;
+
+    public Account(String id) {
+        this.id = id;
+    }
+
+    public void deposit(int amount) {
+        balance += amount;
+    }
+}
+```
+
+Rust separates the data declaration from its behavior:
+
+```rust
+pub struct Account {
+    id: String,
+    balance: i32,
+}
+
+impl Account {
+    pub fn new(id: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            balance: 0,
+        }
+    }
+
+    pub fn deposit(&mut self, amount: i32) {
+        self.balance += amount;
+    }
+}
+```
+
+The important translation is not `class` → `struct`. It is:
+
+- fields are private by default;
+- constructors are ordinary associated functions, commonly named `new`;
+- methods take `self`, `&self`, or `&mut self` explicitly;
+- `impl` blocks can be split across files or used to implement a trait;
+- there is no implicit superclass field or virtual method table.
+
+Use `&self` for read-only methods and `&mut self` for methods that change state:
+
+```rust
+impl Account {
+    pub fn id(&self) -> &str {
+        &self.id
+    }
+
+    pub fn balance(&self) -> i32 {
+        self.balance
+    }
+}
+```
+
+Returning `&str` borrows a slice of the account's `String`. Returning `String` would allocate or transfer an owned copy. This choice is part of the API design, not an optimization left for later.
+
+## <Label color="green">5</Label> Traits replace interfaces; composition replaces inheritance
+
+A Java interface can define a contract implemented by unrelated classes:
+
+```java
+interface PaymentGateway {
+    Receipt charge(Money amount);
+}
+
+final class StripeGateway implements PaymentGateway {
+    public Receipt charge(Money amount) {
+        // call Stripe
+    }
+}
+```
+
+Rust expresses the contract as a trait:
+
+```rust
+trait PaymentGateway {
+    fn charge(&self, amount: Money) -> Result<Receipt, PaymentError>;
+}
+
+struct StripeGateway {
+    client: HttpClient,
+}
+
+impl PaymentGateway for StripeGateway {
+    fn charge(&self, amount: Money) -> Result<Receipt, PaymentError> {
+        self.client.charge(amount)
+    }
+}
+```
+
+Traits can be used in two different ways. Generic bounds are usually statically dispatched:
+
+```rust
+fn checkout<G: PaymentGateway>(gateway: &G, amount: Money) -> Result<Receipt, PaymentError> {
+    gateway.charge(amount)
+}
+```
+
+A trait object is dynamically dispatched and is useful when the concrete type varies at runtime:
+
+```rust
+fn checkout(gateway: &dyn PaymentGateway, amount: Money) -> Result<Receipt, PaymentError> {
+    gateway.charge(amount)
+}
+```
+
+The Java translation is roughly “generic interface call” versus “interface reference,” but Rust makes the dispatch choice visible. Use generics when the concrete type can be known at compile time. Use `dyn Trait` when a runtime collection of different implementations is the actual requirement.
+
+### No class inheritance
+
+Rust does not provide Java-style implementation inheritance. Reuse behavior through composition and traits:
+
+```rust
+struct AuditLog {
+    entries: Vec<String>,
+}
+
+struct OrderService<G> {
+    gateway: G,
+    audit: AuditLog,
+}
+
+impl<G: PaymentGateway> OrderService<G> {
+    fn place_order(&mut self, amount: Money) -> Result<Receipt, PaymentError> {
+        let receipt = self.gateway.charge(amount)?;
+        self.audit.entries.push(String::from("charged"));
+        Ok(receipt)
+    }
+}
+```
+
+This design makes dependencies explicit. A service “has an” audit log and gateway; it does not secretly inherit fields and behavior from a base class.
+
+## <Label color="amber">6</Label> `enum` and `match` replace many class hierarchies
+
+Java sealed interfaces and pattern matching are close to Rust's algebraic data types, but Rust has used this model from the beginning:
+
+```rust
+enum PaymentState {
+    Pending { attempt: u8 },
+    Authorized { transaction_id: String },
+    Declined { reason: String },
+}
+
+fn describe(state: PaymentState) -> String {
+    match state {
+        PaymentState::Pending { attempt } => format!("attempt {attempt}"),
+        PaymentState::Authorized { transaction_id } => format!("approved: {transaction_id}"),
+        PaymentState::Declined { reason } => format!("declined: {reason}"),
+    }
+}
+```
+
+Every variant can carry different data. `match` must cover every variant, so adding `Refunded` later produces compile errors at every match that needs a decision.
+
+This is safer than a string status or a nullable field pair:
+
+```java
+// Valid-looking but ambiguous states:
+class Payment {
+    String status;
+    String transactionId;
+    String declineReason;
+}
+```
+
+The Rust type makes invalid combinations harder to represent. `Authorized` has a transaction ID; `Declined` has a reason; `Pending` has an attempt count. The compiler becomes a checklist when the domain changes.
+
+## <Label color="rose">7</Label> `Option<T>` replaces nullable references
+
+Java's `null` can appear in almost any reference position. A method returning `User` may return a user or `null`, and the contract is often documented rather than enforced.
+
+Rust puts absence in the type:
+
+```rust
+fn find_user(id: &str) -> Option<User> {
+    // Some(user) or None
+}
+
+if let Some(user) = find_user("u-42") {
+    println!("{}", user.name());
+}
+```
+
+For a value with a fallback:
+
+```rust
+let display_name = find_user("u-42")
+    .map(|user| user.name().to_owned())
+    .unwrap_or_else(|| String::from("anonymous"));
+```
+
+The most useful methods resemble Java's `Optional`, but the compiler applies the rule everywhere:
+
+- `map` transforms the value inside `Some`;
+- `and_then` chains another operation that may return `None`;
+- `unwrap_or` supplies a cheap fallback;
+- `ok_or` converts absence into a domain error;
+- `?` propagates a `None` from a function that returns `Option`.
+
+Avoid starting with `unwrap()` as a replacement for every null check. It is an assertion that the value exists; if the assertion is false, the process panics. Prefer a deliberate fallback, propagation, or error.
+
+## <Label color="rose">8</Label> `Result<T, E>` replaces exception-driven control flow
+
+Java methods can signal failure through checked exceptions, unchecked exceptions, sentinel values, or documentation. Rust makes ordinary recoverable failure a return value:
+
+```rust
+fn read_config(path: &str) -> Result<Config, ConfigError> {
+    let text = std::fs::read_to_string(path)?;
+    let config = text.parse::<Config>()?;
+    Ok(config)
+}
+```
+
+The `?` operator means: return the success value, or return the error from the current function. It keeps the happy path readable without hiding the failure contract.
+
+At the boundary, handle the error explicitly:
+
+```rust
+fn main() {
+    match read_config("app.toml") {
+        Ok(config) => run(config),
+        Err(error) => {
+            eprintln!("configuration failed: {error}");
+            std::process::exit(1);
+        }
+    }
+}
+```
+
+Use `thiserror` or a project-specific enum when errors cross a library boundary; use `anyhow` in an application boundary when you need context more than a machine-readable error taxonomy. The key design remains the same: failure is visible in the function signature.
+
+<FlowStep
+  steps={[
+    { title: "Call", body: "A function returns Result<T, E>; the caller sees success and failure in the type.", color: "teal" },
+    { title: "Propagate", body: "Use ? when the current function can return the same kind of failure.", color: "amber" },
+    { title: "Translate", body: "Use map_err when a lower-level error needs a domain-level meaning.", color: "rose" },
+    { title: "Handle", body: "At the boundary, match the result and decide whether to retry, report, or exit.", color: "green" },
+  ]}
+/>
+
+## <Label color="teal">9</Label> Iterators are lazy pipelines, not collections
+
+Java developers already know the stream vocabulary. Rust iterators use similar ideas but are part of the core language and are commonly zero-cost after compilation:
+
+```rust
+let total: i32 = orders
+    .iter()
+    .filter(|order| order.is_paid())
+    .map(|order| order.total_cents())
+    .sum();
+```
+
+The translation is close to:
+
+```java
+var total = orders.stream()
+    .filter(Order::isPaid)
+    .mapToInt(Order::totalCents)
+    .sum();
+```
+
+The important differences are ownership and laziness:
+
+- `.iter()` yields shared references;
+- `.iter_mut()` yields mutable references;
+- `.into_iter()` consumes the collection and yields owned values;
+- adapters such as `map` and `filter` do no work until a terminal operation runs;
+- the compiler can specialize many iterator chains instead of requiring a general-purpose stream object.
+
+If a Rust iterator does not compile, inspect which ownership mode the pipeline needs before adding `.clone()` everywhere.
+
+## <Label color="violet">10</Label> Cargo is Maven, Gradle, test runner, formatter, and more
+
+A Java project commonly combines `pom.xml` or `build.gradle`, Maven or Gradle commands, JUnit, Checkstyle, and a separate formatter. Rust centralizes the common workflow in Cargo:
+
+```bash
+cargo new billing-service
+cargo check
+cargo build
+cargo test
+cargo fmt
+cargo clippy -- -D warnings
+cargo run
+```
+
+`Cargo.toml` is the package manifest:
+
+```toml
+[package]
+name = "billing-service"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+thiserror = "2"
+```
+
+The vocabulary maps like this:
+
+- a **package** has a `Cargo.toml`;
+- a **crate** is a compilation unit, either a binary or a library;
+- a **module** organizes names inside a crate;
+- a **workspace** groups related packages and shares a lockfile and target directory;
+- `cargo test` discovers unit and integration tests;
+- `cargo fmt` uses `rustfmt`;
+- `cargo clippy` is the linter with semantic suggestions.
+
+A common Java-to-Rust migration mistake is putting every module into `main.rs`, just as a new Java developer might put everything into one class. Start with a library crate for domain behavior and a small binary crate for wiring:
+
+```text
+billing/
+├── Cargo.toml          # workspace manifest
+├── crates/
+│   ├── billing-domain/
+│   │   └── src/lib.rs  # structs, enums, traits
+│   └── billing-http/
+│       └── src/lib.rs  # HTTP adapter
+└── apps/
+    └── billing-api/
+        └── src/main.rs # composition root
+```
+
+<DiagramEmbed
+  src="/diagrams/rust-concurrency-model.html"
+  title="Java JVM threading compared with Rust ownership-based concurrency"
+  height={680}
+/>
+
+## <Label color="green">11</Label> Concurrency: locks are still available, but the compiler checks the boundary
+
+Java gives you threads, monitors, locks, atomics, executors, and a memory model. Rust gives you those building blocks plus types that describe whether a value can cross a thread boundary.
+
+```rust
+use std::sync::{Arc, Mutex};
+use std::thread;
+
+let counter = Arc::new(Mutex::new(0));
+let mut workers = Vec::new();
+
+for _ in 0..4 {
+    let counter = Arc::clone(&counter);
+    workers.push(thread::spawn(move || {
+        let mut value = counter.lock().expect("mutex is not poisoned");
+        *value += 1;
+    }));
+}
+
+for worker in workers {
+    worker.join().expect("worker panicked");
+}
+```
+
+The Java equivalent also uses shared ownership plus synchronization. Rust's difference is that `thread::spawn` requires the moved closure and captured data to satisfy the thread lifetime and `Send` rules. A type that cannot safely move to another thread is rejected at compile time.
+
+- `Send`: a value can be moved to another thread.
+- `Sync`: a shared reference `&T` can be used from multiple threads.
+- `Arc<T>`: atomically reference-counted shared ownership.
+- `Mutex<T>`: exclusive access to interior data at runtime.
+- channels: transfer ownership of messages instead of sharing mutable state.
+
+Rust does not eliminate deadlocks or logical races. It eliminates an important class of data races and dangling-reference bugs, while leaving synchronization design to you.
+
+## <Label color="amber">12</Label> A practical learning sequence
+
+Do not begin by translating a large Spring service. Build four small programs where each one teaches one rule:
+
+<FlowStep
+  steps={[
+    { title: "1. Ownership", body: "Write a CLI that reads a file into a String, moves it into a parser, and returns a domain value.", color: "teal" },
+    { title: "2. Borrowing", body: "Refactor the parser to borrow &str and &mut state instead of cloning every intermediate value.", color: "violet" },
+    { title: "3. Errors", body: "Replace exceptions with Result and define a small error enum for I/O, parsing, and validation.", color: "amber" },
+    { title: "4. Architecture", body: "Split the CLI into domain, application, and infrastructure crates connected by traits.", color: "green" },
+  ]}
+/>
+
+### Exercise 1: move, borrow, and clone
+
+Implement this function three ways and explain the ownership contract of each:
+
+```rust
+fn normalize(input: String) -> String {
+    input.trim().to_lowercase()
+}
+```
+
+Then compare it with:
+
+```rust
+fn normalize_borrowed(input: &str) -> String {
+    input.trim().to_lowercase()
+}
+```
+
+The second version accepts a `String`, a string slice, or a literal without taking ownership. It returns an owned `String` because the normalized result may need a new allocation.
+
+### Exercise 2: model a state machine
+
+Translate a Java status field into a Rust enum:
+
+```rust
+enum JobState {
+    Queued,
+    Running { worker_id: String },
+    Succeeded { output_path: String },
+    Failed { message: String },
+}
+```
+
+Write a `match` that formats each state. Add `Cancelled` and let the compiler show you where the behavior is incomplete.
+
+### Exercise 3: make a boundary explicit
+
+Define a trait for a repository:
+
+```rust
+trait JobRepository {
+    fn save(&mut self, job: Job) -> Result<(), RepositoryError>;
+    fn find(&self, id: &str) -> Result<Option<Job>, RepositoryError>;
+}
+```
+
+Implement it with an in-memory vector first. Then implement it with PostgreSQL or SQLite. The application code should depend on the trait, not the concrete database driver.
+
+## <Label color="rose">13</Label> Common Java-to-Rust mistakes
+
+### Mistake: cloning until the compiler stops complaining
+
+`clone()` is sometimes correct, but it can hide an unclear ownership design and copy large data. First ask whether the callee should borrow `&T`, take `&mut T`, or consume `T`.
+
+### Mistake: recreating a class hierarchy with enums everywhere
+
+Enums are excellent for a closed set of states. Traits and composition are better when new implementations should be added without editing one central type. Choose based on whether the set is closed or open.
+
+### Mistake: using `unwrap()` as a null-check replacement
+
+`unwrap()` converts an absent or failed value into a panic. Use `match`, `if let`, combinators, or `?` when the condition is ordinary control flow.
+
+### Mistake: treating lifetimes as manual memory management
+
+You usually do not write lifetime annotations first. Start with ownership and borrowing. Add a lifetime when the compiler needs help expressing that one reference cannot outlive another:
+
+```rust
+fn first_word<'a>(text: &'a str) -> &'a str {
+    text.split_whitespace().next().unwrap_or("")
+}
+```
+
+The lifetime says the returned slice is tied to `text`; it does not keep the string alive and it does not run cleanup.
+
+### Mistake: expecting a garbage collector to hide architecture problems
+
+Rust makes long-lived state, shared ownership, and cross-thread access visible. That can feel strict when translating a Java service, but it gives you a better question at each boundary: who owns this data, and for how long?
+
+## <Label color="teal">14</Label> The working mental model
+
+When writing Rust from a Java background, keep this checklist beside your editor:
+
+1. **What is the owned value?** Name the owner before naming the references.
+2. **Should this function consume, read, or mutate?** Choose `T`, `&T`, or `&mut T`.
+3. **Can an invalid state be represented?** Prefer `enum`, `Option`, and `Result` over sentinel fields.
+4. **Is this behavior open or closed?** Use traits for extensible behavior; enums for a closed set of variants.
+5. **Where is the boundary?** Keep I/O in adapters and domain rules in a crate that can compile without infrastructure.
+6. **What does concurrency require?** Move messages or use `Arc<Mutex<T>>`; let `Send` and `Sync` describe the thread boundary.
+7. **What does the compiler prove?** Treat each error as a design question, not an obstacle to suppress.
+
+Rust becomes much less mysterious when you stop seeing ownership as a collection of syntax rules. It is a replacement for several implicit Java runtime contracts: lifetime, aliasing, nullability, failure, and thread safety.
+
+Once those contracts are explicit, the code often gets simpler. The compiler carries more of the explanation, and the runtime has fewer invalid states to discover.
+
+## Further reading
+
+- [The Rust Book](https://doc.rust-lang.org/book/)
+- [Ownership and moves](https://doc.rust-lang.org/book/ch04-00-understanding-ownership.html)
+- [Traits](https://doc.rust-lang.org/book/ch10-02-traits.html)
+- [Error handling](https://doc.rust-lang.org/book/ch09-00-error-handling.html)
+- [Fearless concurrency](https://doc.rust-lang.org/book/ch16-00-concurrency.html)

@@ -454,6 +454,7 @@ const hubLabel = category === 'foundations' ? 'foundations' : 'blog';
   }
   @media (min-width: 1024px) {
     .f-col-center {
+      grid-column: 2;
       padding: 2.5rem 3rem 4rem;
       border-right: 1px solid var(--f-border);
     }
@@ -465,7 +466,10 @@ const hubLabel = category === 'foundations' ? 'foundations' : 'blog';
     padding: 2rem 2rem 2rem 1.5rem;
   }
   @media (min-width: 1024px) {
-    .f-col-right { display: block; }
+    .f-col-right {
+      grid-column: 3;
+      display: block;
+    }
   }
 
   /* ── Post header ── */

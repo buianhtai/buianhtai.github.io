@@ -1,0 +1,45 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Concurrency: JVM Threads vs Rust Ownership",
+    "quality_profile": "showcase",
+    "output": "public/diagrams/rust-concurrency-model.html",
+    "views": [
+      { "id": "java-path", "label": "Java path", "focus": ["j_thread", "j_shared", "j_sync", "j_race"], "note": "The compiler does not check thread safety; a missed lock is a runtime data race." },
+      { "id": "rust-path", "label": "Rust path", "focus": ["r_thread", "r_shared", "r_compiler", "r_safe"], "note": "Send and Sync are compile-time proofs; unsynchronized sharing fails to compile." }
+    ]
+  },
+  "lanes": [
+    { "id": "java", "label": "Java (JVM)", "variant": "exception" },
+    { "id": "rust", "label": "Rust" }
+  ],
+  "phases": [
+    { "id": "spawn", "label": "Spawn", "fromCol": 0, "toCol": 1 },
+    { "id": "share", "label": "Share state", "fromCol": 2, "toCol": 3 },
+    { "id": "outcome", "label": "Outcome", "fromCol": 4, "toCol": 5 }
+  ],
+  "mainPath": ["j_thread", "j_shared", "j_sync", "j_race"],
+  "nodes": [
+    { "id": "j_thread", "lane": "java", "col": 0, "type": "backend", "label": "new Thread(...)" , "sublabel": "or ExecutorService", "width": 160 },
+    { "id": "j_shared", "lane": "java", "col": 1, "type": "database", "label": "Shared mutable field", "sublabel": "plain reference, no ownership rule", "width": 160 },
+    { "id": "j_sync", "lane": "java", "col": 2, "type": "security", "label": "synchronized(lock)", "sublabel": "convention, not enforced", "tag": "easy to forget", "width": 160 },
+    { "id": "j_race", "lane": "java", "col": 3, "type": "external", "label": "Data race", "sublabel": "surfaces at runtime", "width": 160 },
+    { "id": "r_thread", "lane": "rust", "col": 0, "type": "backend", "label": "thread::spawn(...)" , "sublabel": "closure must be 'static", "width": 160 },
+    { "id": "r_shared", "lane": "rust", "col": 1, "type": "database", "label": "Arc<Mutex<T>>", "sublabel": "shared ownership + interior mutability", "width": 160 },
+    { "id": "r_compiler", "lane": "rust", "col": 2, "type": "security", "label": "Send + Sync check", "sublabel": "compiler proves thread safety", "tag": "checked at compile time", "width": 160 },
+    { "id": "r_safe", "lane": "rust", "col": 3, "type": "external", "label": "No data race", "sublabel": "or it does not compile", "width": 160 }
+  ],
+  "edges": [
+    { "id": "j-spawn-share", "from": "j_thread", "to": "j_shared", "variant": "default" },
+    { "id": "j-share-sync", "from": "j_shared", "to": "j_sync", "variant": "security" },
+    { "id": "j-sync-race", "from": "j_sync", "to": "j_race", "variant": "security", "role": "error" },
+    { "id": "r-spawn-share", "from": "r_thread", "to": "r_shared", "variant": "default" },
+    { "id": "r-share-compiler", "from": "r_shared", "to": "r_compiler", "variant": "emphasis" },
+    { "id": "r-compiler-safe", "from": "r_compiler", "to": "r_safe", "variant": "emphasis", "role": "return" }
+  ],
+  "cards": [
+    { "dot": "rose", "title": "Java: convention-based safety", "items": ["synchronized and volatile are correct only if every access site remembers to use them", "A forgotten lock compiles fine and fails under load"] },
+    { "dot": "cyan", "title": "Rust: type-level proof", "items": ["Send means a type can move to another thread; Sync means &T can be shared across threads", "A type missing Send/Sync fails to compile inside thread::spawn"] }
+  ]
+}
