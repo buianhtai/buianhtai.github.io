@@ -13,6 +13,7 @@ postLayout: "foundations"
 import Label from '../../../components/mdx/Label.astro';
 import Callout from '../../../components/mdx/Callout.astro';
 import Flowchart from '../../../components/mdx/Flowchart.astro';
+import CompareTable from '../../../components/mdx/CompareTable.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
 
 This is Chapter 1 of a series translating the Java mental model into Python. We will cover names and objects first, then functions and protocols, iterators and generators, exceptions, packaging, concurrency, and the parts of Python that become dangerous when Java assumptions stay hidden underneath.
@@ -65,6 +66,21 @@ The second line does not mutate the old list. It moves the `items` name to a new
   ]}
   caption="Separate rebinding a name from mutating an object."
 />
+
+<CompareTable
+  products={[
+    { name: "Java reference" },
+    { name: "Python name", highlight: true },
+  ]}
+  features={[
+    { label: "Assignment", values: ["copies a reference", "binds another name"] },
+    { label: "Mutation", values: ["aliases observe it", "aliases observe it"] },
+    { label: "Rebinding", values: ["variable points elsewhere", "name points elsewhere"] },
+    { label: "Declared variable type", values: ["yes", "no — object has the type"] },
+  ]}
+  caption="Both languages can alias mutable objects; Python makes the name/object boundary more explicit."
+/>
+
 <Flowchart
   title="What does this Python statement do?"
   nodes={[
@@ -169,6 +185,7 @@ print(languages)  # ['java']
 ```
 
 The function's local `languages` name moved. The caller's name did not.
+
 <Flowchart
   title="What happens when a function receives a mutable object?"
   nodes={[
