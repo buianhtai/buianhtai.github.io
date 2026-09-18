@@ -1,0 +1,302 @@
+<details class="names-deck not-prose" data-names-deck>
+  <summary>
+    <span class="summary-kicker">Interactive lesson · 6 scenes</span>
+    <strong>See names, objects, mutation, and rebinding happen</strong>
+    <span class="summary-action">Open presentation →</span>
+  </summary>
+
+  <div class="deck-shell" aria-label="Interactive presentation: Python names, objects, and mutability" tabindex="0">
+    <header class="deck-header">
+      <div>
+        <p>Python for Java Developers · Chapter 1</p>
+        <h2 data-scene-title>Predict before you trace</h2>
+      </div>
+      <span class="deck-progress" data-progress>01 / 06</span>
+    </header>
+
+    <div class="scene-stage">
+      <section class="scene" data-scene data-title="Predict before you trace">
+        <div class="scene-copy">
+          <span class="scene-label">01 · Predict</span>
+          <h3>What does <code>first</code> print?</h3>
+          <pre><code>first = ["java"]
+second = first
+second.append("python")
+
+print(first)</code></pre>
+          <div class="answer-grid" role="group" aria-label="Prediction choices">
+            <button type="button" data-answer="copy"><code>["java"]</code></button>
+            <button type="button" data-answer="alias"><code>["java", "python"]</code></button>
+            <button type="button" data-answer="error"><code>TypeError</code></button>
+          </div>
+          <p class="answer-feedback" data-answer-feedback aria-live="polite">Choose before advancing. Your Java reference intuition helps—but Python’s name model goes further.</p>
+        </div>
+        <div class="terminal-card" aria-hidden="true">
+          <span>$ python names.py</span>
+          <strong data-terminal-output>?</strong>
+        </div>
+      </section>
+
+      <section class="scene" data-scene data-title="Assignment binds names" hidden>
+        <div class="scene-copy">
+          <span class="scene-label">02 · Bind</span>
+          <h3>Assignment does not copy the list</h3>
+          <p><code>second = first</code> creates another binding to the same object. The list does not know or care how many names reach it.</p>
+          <pre><code>first = ["java"]
+second = first</code></pre>
+        </div>
+        <div class="object-graph" aria-label="first and second both point to one list object">
+          <div class="name-stack">
+            <span class="name-node">first</span>
+            <span class="name-node">second</span>
+          </div>
+          <div class="arrows" aria-hidden="true"><span>╲</span><span>╱</span></div>
+          <div class="object-node"><small>list · object A</small><strong>["java"]</strong></div>
+        </div>
+      </section>
+
+      <section class="scene" data-scene data-title="Mutation and rebinding diverge" hidden>
+        <div class="scene-copy">
+          <span class="scene-label">03 · Change one operation</span>
+          <h3>Mutation changes the object. Rebinding moves one name.</h3>
+          <div class="operation-tabs" role="tablist" aria-label="Choose an operation">
+            <button type="button" role="tab" aria-selected="true" data-operation="mutate"><code>second.append("python")</code></button>
+            <button type="button" role="tab" aria-selected="false" data-operation="rebind"><code>second = ["python"]</code></button>
+          </div>
+          <p data-operation-copy>Both names still reach object A, so both observe the appended value.</p>
+        </div>
+        <div class="object-graph graph-operation" data-operation-graph="mutate" aria-live="polite">
+          <div class="name-stack">
+            <span class="name-node">first</span>
+            <span class="name-node">second</span>
+          </div>
+          <div class="arrows" aria-hidden="true"><span>╲</span><span>╱</span></div>
+          <div class="object-pair">
+            <div class="object-node object-a"><small>list · object A</small><strong>["java", "python"]</strong></div>
+            <div class="object-node object-b"><small>list · object B</small><strong>["python"]</strong></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="scene" data-scene data-title="The tuple trap runs in two stages" hidden>
+        <div class="scene-copy">
+          <span class="scene-label">04 · Edge case</span>
+          <h3>Can mutation happen before an exception?</h3>
+          <pre><code>box = (["java"],)
+box[0] += ["python"]</code></pre>
+          <button class="run-edge" type="button" data-run-edge>Run line by line</button>
+          <p data-edge-copy><strong>Before:</strong> the tuple contains one mutable list.</p>
+        </div>
+        <ol class="edge-trace" aria-label="Tuple augmented-assignment trace">
+          <li data-edge-step="1"><span>1</span><p><code>list.__iadd__</code> mutates the nested list.</p></li>
+          <li data-edge-step="2"><span>2</span><p>Python tries to assign the result back into tuple slot <code>0</code>.</p></li>
+          <li data-edge-step="3"><span>3</span><p><code>TypeError</code>: tuples reject item assignment—but the list is already changed.</p></li>
+        </ol>
+      </section>
+
+      <section class="scene" data-scene data-title="Transfer the model from Java" hidden>
+        <div class="scene-copy">
+          <span class="scene-label">05 · Java bridge</span>
+          <h3>Reuse your reference intuition, then remove the declaration</h3>
+          <p>Both languages can alias a mutable object. Python’s extra shift: the name itself has no permanent declared class, and operators dispatch through the current object’s protocol.</p>
+        </div>
+        <div class="language-lanes">
+          <div><strong>Java</strong><pre><code>List&lt;String&gt; first =
+    new ArrayList&lt;&gt;();
+List&lt;String&gt; second = first;</code></pre><p>The variable declaration constrains later assignments.</p></div>
+          <div><strong>Python</strong><pre><code>first = []
+second = first
+first = "now a string"</code></pre><p>The name can be rebound; the objects retain their own types.</p></div>
+        </div>
+      </section>
+
+      <section class="scene" data-scene data-title="Explain the invariant" hidden>
+        <div class="scene-copy">
+          <span class="scene-label">06 · Explain it back</span>
+          <h3>Complete the model without saying “Python is pass-by-reference”</h3>
+          <p>Why does mutating a parameter affect the caller, while rebinding that parameter does not?</p>
+          <button class="reveal-model" type="button" data-reveal aria-expanded="false">Reveal model answer</button>
+          <blockquote data-model-answer hidden>A function call binds a local parameter name to the same object supplied by the caller. Mutation changes that shared object. Rebinding changes only the function’s local name; it cannot move the caller’s name.</blockquote>
+        </div>
+        <div class="invariant-card">
+          <span>The invariant</span>
+          <strong>Names are local bindings.<br />Objects carry identity, type, and state.</strong>
+        </div>
+      </section>
+    </div>
+
+    <footer class="deck-controls">
+      <button type="button" data-prev disabled>← Previous</button>
+      <div class="scene-dots" role="tablist" aria-label="Presentation scenes">
+        {Array.from({ length: 6 }, (_, index) => (
+          <button type="button" role="tab" data-go={index} aria-selected={index === 0 ? 'true' : 'false'} aria-label={`Go to scene ${index + 1}`}></button>
+        ))}
+      </div>
+      <button type="button" data-next>Next →</button>
+    </footer>
+    <p class="deck-hint">Use Previous/Next or ← → keys. The full explanation, edge cases, and internals continue below.</p>
+  </div>
+</details>
+
+<script>
+  document.querySelectorAll<HTMLElement>('[data-names-deck]').forEach((deck) => {
+    const scenes = Array.from(deck.querySelectorAll<HTMLElement>('[data-scene]'));
+    const dots = Array.from(deck.querySelectorAll<HTMLButtonElement>('[data-go]'));
+    const previous = deck.querySelector<HTMLButtonElement>('[data-prev]');
+    const next = deck.querySelector<HTMLButtonElement>('[data-next]');
+    const progress = deck.querySelector<HTMLElement>('[data-progress]');
+    const title = deck.querySelector<HTMLElement>('[data-scene-title]');
+    let active = 0;
+
+    const show = (index: number) => {
+      active = Math.max(0, Math.min(scenes.length - 1, index));
+      scenes.forEach((scene, sceneIndex) => { scene.hidden = sceneIndex !== active; });
+      dots.forEach((dot, dotIndex) => dot.setAttribute('aria-selected', String(dotIndex === active)));
+      if (progress) progress.textContent = `${String(active + 1).padStart(2, '0')} / ${String(scenes.length).padStart(2, '0')}`;
+      if (title) title.textContent = scenes[active]?.dataset.title ?? '';
+      if (previous) previous.disabled = active === 0;
+      if (next) next.disabled = active === scenes.length - 1;
+    };
+
+    previous?.addEventListener('click', () => show(active - 1));
+    next?.addEventListener('click', () => show(active + 1));
+    dots.forEach((dot) => dot.addEventListener('click', () => show(Number(dot.dataset.go))));
+
+    deck.querySelector<HTMLElement>('.deck-shell')?.addEventListener('keydown', (event) => {
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+      event.preventDefault();
+      show(active + (event.key === 'ArrowRight' ? 1 : -1));
+    });
+
+    deck.querySelectorAll<HTMLButtonElement>('[data-answer]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const correct = button.dataset.answer === 'alias';
+        deck.querySelectorAll<HTMLButtonElement>('[data-answer]').forEach((answer) => {
+          answer.classList.toggle('is-correct', answer.dataset.answer === 'alias');
+          answer.classList.toggle('is-wrong', answer === button && !correct);
+        });
+        const feedback = deck.querySelector<HTMLElement>('[data-answer-feedback]');
+        const output = deck.querySelector<HTMLElement>('[data-terminal-output]');
+        if (feedback) feedback.textContent = correct
+          ? 'Correct. second is another name for the same list; append mutates that shared object.'
+          : 'Not quite. Assignment did not copy the list, and append does not rebind either name.';
+        if (output) output.textContent = '["java", "python"]';
+      });
+    });
+
+    deck.querySelectorAll<HTMLButtonElement>('[data-operation]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const operation = button.dataset.operation === 'rebind' ? 'rebind' : 'mutate';
+        deck.querySelectorAll<HTMLButtonElement>('[data-operation]').forEach((tab) =>
+          tab.setAttribute('aria-selected', String(tab === button)),
+        );
+        const graph = deck.querySelector<HTMLElement>('[data-operation-graph]');
+        const copy = deck.querySelector<HTMLElement>('[data-operation-copy]');
+        if (graph) graph.dataset.operationGraph = operation;
+        if (copy) copy.textContent = operation === 'mutate'
+          ? 'Both names still reach object A, so both observe the appended value.'
+          : 'Only second moves to object B. first remains bound to object A.';
+      });
+    });
+
+    let edgeStep = 0;
+    deck.querySelector<HTMLButtonElement>('[data-run-edge]')?.addEventListener('click', (event) => {
+      edgeStep = edgeStep === 3 ? 0 : edgeStep + 1;
+      deck.querySelectorAll<HTMLElement>('[data-edge-step]').forEach((step) => {
+        step.classList.toggle('is-active', Number(step.dataset.edgeStep) <= edgeStep);
+      });
+      const copy = deck.querySelector<HTMLElement>('[data-edge-copy]');
+      const button = event.currentTarget as HTMLButtonElement;
+      const messages = [
+        '<strong>Before:</strong> the tuple contains one mutable list.',
+        '<strong>After step 1:</strong> the nested list is now ["java", "python"].',
+        '<strong>After step 2:</strong> Python attempts to store that list back into box[0].',
+        '<strong>After step 3:</strong> TypeError is raised; the earlier list mutation remains.',
+      ];
+      if (copy) copy.innerHTML = messages[edgeStep];
+      button.textContent = edgeStep === 3 ? 'Reset trace' : 'Run next step';
+    });
+
+    deck.querySelector<HTMLButtonElement>('[data-reveal]')?.addEventListener('click', (event) => {
+      const button = event.currentTarget as HTMLButtonElement;
+      const answer = deck.querySelector<HTMLElement>('[data-model-answer]');
+      const expanded = button.getAttribute('aria-expanded') === 'true';
+      button.setAttribute('aria-expanded', String(!expanded));
+      button.textContent = expanded ? 'Reveal model answer' : 'Hide model answer';
+      if (answer) answer.hidden = expanded;
+    });
+
+    show(0);
+  });
+</script>
+
+<style>
+  .names-deck { margin: 2rem 0; border: 1px solid var(--color-border); background: var(--color-surface); }
+  .names-deck > summary { display: grid; gap: 0.25rem; padding: 1rem 1.1rem; cursor: pointer; list-style: none; background: var(--color-bg); }
+  .names-deck > summary::-webkit-details-marker { display: none; }
+  .summary-kicker, .deck-header p, .scene-label { color: var(--color-accent); font: 700 0.7rem/1.4 var(--font-mono); letter-spacing: 0.05em; text-transform: uppercase; }
+  .names-deck > summary strong { color: var(--color-text); font: 700 1rem/1.4 var(--font-mono); }
+  .summary-action { color: var(--color-text-muted); font: 0.75rem/1.4 var(--font-mono); }
+  .names-deck[open] .summary-action { display: none; }
+  .deck-shell { outline: none; border-top: 1px solid var(--color-border); }
+  .deck-header, .deck-controls { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.85rem 1rem; background: var(--color-bg); }
+  .deck-header { border-bottom: 1px solid var(--color-border); }
+  .deck-header p { margin: 0 0 0.15rem; }
+  .deck-header h2 { margin: 0; color: var(--color-text); font: 700 clamp(0.95rem, 3vw, 1.2rem)/1.35 var(--font-mono); }
+  .deck-progress { color: var(--color-text-muted); font: 0.75rem/1 var(--font-mono); white-space: nowrap; }
+  .scene { min-height: 430px; padding: clamp(1rem, 4vw, 2rem); display: grid; grid-template-columns: minmax(0, 1fr) minmax(16rem, 0.85fr); gap: clamp(1rem, 4vw, 2rem); align-items: center; }
+  .scene[hidden], [data-model-answer][hidden] { display: none; }
+  .scene-copy h3 { margin: 0.35rem 0 0.75rem; color: var(--color-text); font: 700 clamp(1.1rem, 4vw, 1.6rem)/1.25 var(--font-mono); }
+  .scene-copy p { color: var(--color-text-dim); line-height: 1.65; }
+  pre { overflow-x: auto; margin: 0.75rem 0; padding: 0.8rem; border: 1px solid var(--color-border); background: var(--color-bg); color: var(--color-text); font: 0.78rem/1.65 var(--font-mono); }
+  code { font-family: var(--font-mono); }
+  button { font-family: var(--font-mono); }
+  .answer-grid, .operation-tabs { display: grid; gap: 0.45rem; }
+  .answer-grid button, .operation-tabs button, .run-edge, .reveal-model, .deck-controls > button { border: 1px solid var(--color-border); background: var(--color-bg); color: var(--color-text-dim); padding: 0.55rem 0.7rem; cursor: pointer; text-align: left; }
+  button:hover:not(:disabled), button:focus-visible { border-color: var(--color-accent); color: var(--color-text); outline: none; }
+  button:disabled { cursor: default; opacity: 0.45; }
+  .answer-grid button.is-correct { border-color: var(--color-green); color: var(--color-green); }
+  .answer-grid button.is-wrong { border-color: var(--color-rose); color: var(--color-rose); }
+  .answer-feedback { min-height: 2.8rem; font: 0.75rem/1.5 var(--font-mono); }
+  .terminal-card, .invariant-card { min-height: 170px; display: grid; place-content: center; gap: 1rem; padding: 1rem; border: 1px solid var(--color-border); background: var(--color-bg); text-align: center; }
+  .terminal-card span, .invariant-card span { color: var(--color-text-muted); font: 0.72rem/1.4 var(--font-mono); }
+  .terminal-card strong { color: var(--color-green); font: 700 1.1rem/1.4 var(--font-mono); }
+  .invariant-card strong { color: var(--color-text); font: 700 1rem/1.6 var(--font-mono); }
+  .object-graph { min-height: 230px; display: grid; grid-template-columns: auto 2.5rem minmax(10rem, 1fr); align-items: center; gap: 0.5rem; padding: 1rem; border: 1px solid var(--color-border); background: var(--color-bg); }
+  .name-stack, .object-pair { display: grid; gap: 1rem; }
+  .name-node, .object-node { border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text); padding: 0.65rem; font-family: var(--font-mono); }
+  .name-node { border-color: var(--color-accent); text-align: center; }
+  .object-node small { display: block; margin-bottom: 0.35rem; color: var(--color-text-muted); }
+  .object-node strong { font-size: 0.78rem; }
+  .arrows { display: grid; gap: 0.65rem; color: var(--color-accent); font: 1.4rem/1 var(--font-mono); }
+  .graph-operation[data-operation-graph='mutate'] .object-b { display: none; }
+  .graph-operation[data-operation-graph='rebind'] .object-a strong { font-size: 0; }
+  .graph-operation[data-operation-graph='rebind'] .object-a strong::after { content: '["java"]'; font-size: 0.78rem; }
+  .operation-tabs { grid-template-columns: 1fr 1fr; }
+  .operation-tabs button[aria-selected='true'] { border-color: var(--color-accent); color: var(--color-text); box-shadow: inset 0 -2px var(--color-accent); }
+  .edge-trace { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.65rem; }
+  .edge-trace li { display: grid; grid-template-columns: 1.8rem 1fr; gap: 0.65rem; align-items: start; opacity: 0.38; }
+  .edge-trace li.is-active { opacity: 1; }
+  .edge-trace span { display: grid; place-items: center; width: 1.8rem; height: 1.8rem; border: 1px solid var(--color-border); color: var(--color-text-muted); font: 0.72rem/1 var(--font-mono); }
+  .edge-trace li.is-active span { border-color: var(--color-accent); color: var(--color-accent); }
+  .edge-trace p { margin: 0; color: var(--color-text-dim); font-size: 0.85rem; line-height: 1.55; }
+  .language-lanes { display: grid; grid-template-columns: 1fr 1fr; gap: 0.65rem; }
+  .language-lanes > div { border: 1px solid var(--color-border); background: var(--color-bg); padding: 0.75rem; min-width: 0; }
+  .language-lanes strong { color: var(--color-accent); font-family: var(--font-mono); }
+  .language-lanes p { margin-bottom: 0; color: var(--color-text-dim); font-size: 0.78rem; line-height: 1.5; }
+  blockquote { margin: 0.75rem 0 0; padding: 0.8rem; border-left: 3px solid var(--color-accent); background: var(--color-bg); color: var(--color-text-dim); line-height: 1.6; }
+  .deck-controls { border-top: 1px solid var(--color-border); }
+  .deck-controls > button { padding: 0.45rem 0.65rem; }
+  .scene-dots { display: flex; gap: 0.4rem; }
+  .scene-dots button { width: 0.65rem; height: 0.65rem; padding: 0; border: 1px solid var(--color-border-bright); border-radius: 50%; background: transparent; cursor: pointer; }
+  .scene-dots button[aria-selected='true'] { border-color: var(--color-accent); background: var(--color-accent); }
+  .deck-hint { margin: 0; padding: 0 1rem 0.85rem; background: var(--color-bg); color: var(--color-text-muted); font: 0.68rem/1.4 var(--font-mono); text-align: center; }
+  @media (max-width: 720px) {
+    .scene { min-height: 0; grid-template-columns: 1fr; }
+    .operation-tabs, .language-lanes { grid-template-columns: 1fr; }
+    .object-graph { min-height: 190px; }
+    .deck-header p { display: none; }
+    .deck-controls { position: sticky; bottom: 0; z-index: 3; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; } }
+</style>

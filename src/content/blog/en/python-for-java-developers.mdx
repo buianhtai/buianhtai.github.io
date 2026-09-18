@@ -15,10 +15,13 @@ import Callout from '../../../components/mdx/Callout.astro';
 import Flowchart from '../../../components/mdx/Flowchart.astro';
 import CompareTable from '../../../components/mdx/CompareTable.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
+import PythonNamesDeck from '../../../components/mdx/PythonNamesDeck.astro';
 
 This is Chapter 1 of a series translating the Java mental model into Python. We will cover names and objects first, then functions and protocols, iterators and generators, exceptions, packaging, concurrency, and the parts of Python that become dangerous when Java assumptions stay hidden underneath.
 
 The first lesson is deceptively small: **a Python variable is a name attached to an object**. Assignment attaches another name. It does not copy the object, call a constructor, or change the object's type.
+
+<PythonNamesDeck />
 
 ## Explain it simply
 
@@ -223,13 +226,137 @@ def with_tag(tags, tag):
 
 Neither style is universally correct. Mutation is useful for a local builder with one clear owner. Returning a new value is safer at an API boundary, especially when callers may share the object.
 
+## Edge cases that punish a shallow mental model
+
+The rules above compose. The difficult bugs appear when mutation, operator dispatch, nested objects, and runtime optimizations overlap.
+
+### `+=` asks the current object how to behave
+
+For a list, augmented assignment normally calls `list.__iadd__`, mutates the existing list, and returns that same object:
+
+```python
+left = ["java"]
+right = left
+
+left += ["python"]
+
+print(left)          # ['java', 'python']
+print(right)         # ['java', 'python']
+print(left is right) # True
+```
+
+For a tuple, there is no in-place mutation. Addition creates a new tuple and rebinds only `left`:
+
+```python
+left = ("java",)
+right = left
+
+left += ("python",)
+
+print(left)          # ('java', 'python')
+print(right)         # ('java',)
+print(left is right) # False
+```
+
+The syntax is identical, but the object protocol is not. Read `x += y` as “ask `x` for in-place addition; otherwise compute addition and rebind `x`,” not as a universal mutation operator.
+
+### A shallow copy creates a container, not a new object graph
+
+```python
+original = [["java"], ["rust"]]
+copied = original.copy()
+
+copied.append(["python"])
+copied[0].append("kotlin")
+
+print(original)  # [['java', 'kotlin'], ['rust']]
+print(copied)    # [['java', 'kotlin'], ['rust'], ['python']]
+```
+
+The outer lists are different objects. Their nested lists are still shared. Use a deep copy only when duplicating the entire reachable graph is truly the contract; deep copying arbitrary domain objects can duplicate identities, locks, file handles, caches, or ORM state that should never be cloned.
+
+### Identity can look stable until an optimization changes
+
+CPython may intern some integers and strings. That can make incorrect identity comparisons appear reliable:
+
+```python
+a = 257
+b = int("257")
+
+print(a == b)  # True
+print(a is b)  # False on normal CPython runs
+```
+
+The language promises value equality here, not shared identity. Literal folding, interactive shells, Python versions, and implementations may produce a different identity result. Use `is` for deliberate singleton checks such as `value is None`; use `==` for values.
+
+### Mutation can survive a failed augmented assignment
+
+```python
+box = (["java"],)
+
+try:
+    box[0] += ["python"]
+except TypeError:
+    pass
+
+print(box)  # (['java', 'python'],)
+```
+
+This expression has two stages:
+
+1. `list.__iadd__` mutates the nested list.
+2. Python tries to assign the result back into `box[0]`.
+
+The tuple rejects stage 2, but Python does not undo stage 1. An exception means the overall expression failed; it does not guarantee that every earlier side effect was rolled back.
+
+## Production risks
+
+These rules become operational problems at API boundaries:
+
+- **Leaking internal state:** returning an internal list lets callers mutate an object's private state without using its methods.
+- **Cross-request contamination:** module-level containers and mutable defaults can retain data between requests, tests, tasks, or tenants.
+- **Broken dictionary and set membership:** an object used as a key must keep a stable equality/hash relationship. Mutating fields that participate in hashing makes lookups unreliable.
+- **Shallow configuration copies:** modifying a nested dictionary in one request can change the supposedly independent configuration used by another.
+- **Misleading annotations:** `items: list[str]` helps tools and readers, but does not make the binding final or the list immutable at runtime.
+- **Concurrent aliases:** the GIL does not turn a multi-step mutation into a business-level transaction. Threads and async tasks can still observe partially updated shared state across suspension points or compound operations.
+
+At public boundaries, make ownership visible. Return immutable views or fresh values when callers should not mutate your state. If mutation is intentional, name and document it as part of the API contract.
+
+## Advanced internals: what Python actually dispatches
+
+The data model turns syntax into protocol calls:
+
+<DataTable
+  headers={["Expression", "Primary protocol", "Typical effect"]}
+  rows={[
+    { "Expression": "a == b", "Primary protocol": "a.__eq__(b)", "Typical effect": "Compare values; may return NotImplemented for reflected dispatch" },
+    { "Expression": "a + b", "Primary protocol": "a.__add__(b)", "Typical effect": "Create and return a result object" },
+    { "Expression": "a += b", "Primary protocol": "a.__iadd__(b), then fallback", "Typical effect": "Mutate a or compute a new value and rebind" },
+    { "Expression": "hash(a)", "Primary protocol": "a.__hash__()", "Typical effect": "Produce a stable hash compatible with equality" },
+  ]}
+  caption="Operator spelling is a protocol request; the current object's implementation determines the effect."
+/>
+
+`id(obj)` identifies an object only for that object's lifetime. After the object is destroyed, a later object may reuse the same identity value. Never store `id()` as a durable identifier.
+
+CPython primarily frees unreachable objects through reference counting and supplements it with a cyclic garbage collector. Other Python implementations may manage memory differently. Code should rely on language-level lifetime rules and context managers—not CPython's usual timing for finalization.
+
+Equality and hashing form another invariant: objects that compare equal must have the same hash. Mutable value objects are therefore usually unhashable. A tuple is hashable only when every contained value is hashable; being a tuple does not automatically make an object graph safe as a dictionary key.
+
+<Callout color="amber">
+Advanced Python becomes easier when you stop asking whether syntax “mutates” in the abstract. Ask which protocol method runs, which object it returns, which names are rebound, and which aliases still reach the original object.
+</Callout>
+
 ## Teach it back
 
 You should now be able to answer these without looking back:
 
 1. Why do `alias.append("x")` and `items = ["x"]` have different effects on aliases?
-2. When should you use `is None` instead of `== None`?
-3. Why does rebinding a function parameter not rebind the caller's variable?
-4. When would returning a new list be safer than mutating the one you received?
+2. Why can the same `+=` syntax mutate a list but rebind a tuple name?
+3. Why does a shallow copy still share nested objects?
+4. When should you use `is None` instead of `== None`, and why are integer/string identity experiments misleading?
+5. How can `box[0] += value` mutate a nested list and still raise `TypeError`?
+6. Why does rebinding a function parameter not rebind the caller's variable?
+7. When should an API return a fresh or immutable value instead of exposing mutable state?
 
 Chapter 2 turns this object model into Python's function model: duck typing, protocols, default arguments, and the difference between accepting a capability and requiring a class.
