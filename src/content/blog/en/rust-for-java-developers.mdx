@@ -45,7 +45,7 @@ This is exactly where the library-book analogy pays for itself: Rust does not ha
 
 ## Formalize it precisely
 
-<Label color="teal">1</Label> Assignment moves the card, not a phone number
+## <Label color="teal">1</Label> Assignment moves the card, not a phone number
 
 ```rust
 let first = vec![String::from("java")];
@@ -57,7 +57,7 @@ println!("{second:?}");   // fine — second is now the owner
 
 The compiler will not let you use `first` after this. Not because the data was deleted — it's still there — but because letting two names stay valid on the same card is exactly the bug Rust is designed to prevent: two owners disagreeing about who's responsible for cleanup, or worse, both trying to clean it up (a double free, one of C++'s classic memory bugs).
 
-<Label color="green">2</Label> Some values are cheap enough to just duplicate
+## <Label color="green">2</Label> Some values are cheap enough to just duplicate
 
 Not every type moves. Small, fixed-size values — integers, `bool`, `char`, and a few others — implement the `Copy` trait, meaning assignment just duplicates the bits instead of moving the card:
 
@@ -69,7 +69,7 @@ println!("{a} {b}"); // both valid — i32 is Copy, no card to move
 
 Java has a rough parallel here: primitives (`int`, `boolean`) are copied by value, while objects are handled by reference. Rust's rule is really the same instinct, just applied to every type based on whether copying is cheap and safe, not just to primitives.
 
-<Label color="amber">3</Label> Cloning is the photocopier, and it's always explicit
+## <Label color="amber">3</Label> Cloning is the photocopier, and it's always explicit
 
 ```rust
 let first = vec![String::from("java")];
@@ -81,7 +81,7 @@ println!("{second:?}");
 
 `.clone()` is Rust saying "yes, I really do want a second, fully independent copy, and I'm willing to pay for it." There's no accidental deep-copying happening behind your back, and no accidental aliasing either — every value's ownership status is visible in the code, not something you have to trace through the whole call graph to figure out.
 
-<Label color="rose">4</Label> Cleanup is deterministic, not garbage-collected
+## <Label color="rose">4</Label> Cleanup is deterministic, not garbage-collected
 
 ```rust
 struct LoudDrop(&'static str);
@@ -107,7 +107,7 @@ Whoever owns a value when it goes out of scope runs its `Drop` implementation *i
 <DiagramEmbed
   src="/diagrams/rust-for-java-developers.html"
   title="A value's life: Owned, Moved, Cloned, Dropped"
-  height={520}
+  height={1200}
 />
 
 <Callout color="teal">

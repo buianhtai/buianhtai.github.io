@@ -12,7 +12,7 @@
     { "id": "created", "type": "start", "label": "Created", "sublabel": "Rc::new(x) — count = 1", "lane": "main", "col": 0 },
     { "id": "cloned", "type": "active", "label": "Cloned", "sublabel": "Rc::clone(&x) — count = 2", "lane": "main", "col": 1 },
     { "id": "dropped_one", "type": "waiting", "label": "One Dropped", "sublabel": "clone dropped — count = 1", "lane": "main", "col": 2 },
-    { "id": "deallocated", "type": "failure", "label": "Deallocated", "sublabel": "count hits 0 — value freed", "lane": "main", "col": 3 }
+    { "id": "deallocated", "type": "success", "label": "Deallocated", "sublabel": "count hits 0 — value freed", "lane": "main", "col": 3 }
   ],
   "transitions": [
     { "id": "t1", "from": "created", "to": "cloned" },

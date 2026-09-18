@@ -31,7 +31,7 @@ Rust never lets that problem start, because there's no inheritance to reach for 
 
 ## Formalize it precisely
 
-<Label color="teal">1</Label> Struct = data, impl = behavior, kept apart on purpose
+## <Label color="teal">1</Label> Struct = data, impl = behavior, kept apart on purpose
 
 ```rust
 pub struct Account {
@@ -69,7 +69,7 @@ public final class Account {
 
 Functionally similar — but notice the method receivers in Rust: `&mut self` for `deposit` (needs to change the struct, so it needs an exclusive borrow — Chapter 2's rule, still in force) and `&self` for `balance` (just reads). Java has no equivalent annotation; you'd have to read the method body to know which one mutates.
 
-<Label color="green">2</Label> Traits are Rust's interfaces — with a dispatch decision Java doesn't force on you
+## <Label color="green">2</Label> Traits are Rust's interfaces — with a dispatch decision Java doesn't force on you
 
 ```rust
 trait PaymentGateway {
@@ -103,7 +103,7 @@ fn checkout_dyn(gateway: &dyn PaymentGateway, amount: i32) -> Result<String, Str
 
 Java's `interface PaymentGateway` with a single implementing class doesn't force this choice — the JVM always does something closer to the dynamic-dispatch path underneath. Rust hands you both options because sometimes the performance and flexibility tradeoff genuinely matters, and it wants you to decide on purpose rather than by default.
 
-<Label color="amber">3</Label> Composition replaces `extends` — has-a instead of is-a
+## <Label color="amber">3</Label> Composition replaces `extends` — has-a instead of is-a
 
 ```rust
 struct AuditLog {
@@ -129,7 +129,7 @@ impl<G: PaymentGateway> OrderService<G> {
 <DiagramEmbed
   src="/diagrams/rust-for-java-structs-and-traits.html"
   title="Composition, not inheritance: OrderService has-a, not is-a"
-  height={480}
+  height={920}
 />
 
 <Callout color="teal">

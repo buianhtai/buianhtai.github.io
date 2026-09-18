@@ -7,15 +7,15 @@
   },
   "layout": {
     "mode": "grid",
-    "cols": 2,
+    "cols": 3,
     "gapX": 90,
-    "gapY": 80,
+    "gapY": 70,
     "cellW": 220,
     "cellH": 64
   },
   "components": [
     { "id": "bin", "type": "frontend", "label": "billing-api", "sublabel": "binary crate — main.rs", "row": 0, "col": 0 },
-    { "id": "lib", "type": "backend", "label": "billing-domain", "sublabel": "library crate", "row": 1, "col": 0 }
+    { "id": "lib", "type": "backend", "label": "billing-domain", "sublabel": "library crate", "row": 0, "col": 2 }
   ],
   "connections": [
     { "id": "c1", "from": "bin", "to": "lib" }

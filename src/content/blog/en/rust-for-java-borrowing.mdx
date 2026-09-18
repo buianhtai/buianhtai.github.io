@@ -47,7 +47,7 @@ This is precisely the class of bug the "many readers or one writer" rule exists 
 
 ## Formalize it precisely
 
-<Label color="teal">1</Label> `&T` is a shared, read-only borrow
+## <Label color="teal">1</Label> `&T` is a shared, read-only borrow
 
 ```rust
 fn print_length(text: &String) -> usize {
@@ -66,7 +66,7 @@ fn main() {
 
 Any number of `&T` references can exist at the same time. None of them can mutate. This is the equivalent of ten people reading photocopies — completely safe, because nobody's changing anything underneath anyone else.
 
-<Label color="amber">2</Label> `&mut T` is exclusive — and the compiler proves it
+## <Label color="amber">2</Label> `&mut T` is exclusive — and the compiler proves it
 
 ```rust
 fn append_suffix(text: &mut String) {
@@ -94,7 +94,7 @@ fn main() {
 
 This is the Rust equivalent of the Java `ConcurrentModificationException` above — except it's a compile error, not a runtime exception that only fires if that exact code path executes. You cannot ship this bug.
 
-<Label color="green">3</Label> A borrow ends at its last use, not at the end of the block
+## <Label color="green">3</Label> A borrow ends at its last use, not at the end of the block
 
 ```rust
 fn main() {
@@ -111,7 +111,7 @@ This trips people up coming from languages with block-scoped everything: the sha
 <DiagramEmbed
   src="/diagrams/rust-for-java-borrowing.html"
   title="A borrow's life: shared or exclusive, never both"
-  height={480}
+  height={1180}
 />
 
 <Callout color="amber">

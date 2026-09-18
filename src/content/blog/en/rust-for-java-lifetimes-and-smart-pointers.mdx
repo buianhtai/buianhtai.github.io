@@ -30,7 +30,7 @@ Rust's compiler doesn't trace anything at runtime. It has to *prove*, while comp
 
 ## Formalize it precisely
 
-<Label color="teal">1</Label> A lifetime annotation, read correctly
+## <Label color="teal">1</Label> A lifetime annotation, read correctly
 
 ```rust
 fn longest<'a>(x: &'a str, y: &'a str) -> &'a str {
@@ -48,7 +48,7 @@ fn main() {
 
 Most functions never need this written out explicitly — the compiler infers it automatically (a feature called lifetime elision) for the overwhelmingly common single-reference-in-single-reference-out shape. You reach for `'a` only when a function's signature has more than one plausible relationship and the compiler needs disambiguation.
 
-<Label color="green">2</Label> `Box<T>` — Rust's explicit opt-in to heap allocation
+## <Label color="green">2</Label> `Box<T>` — Rust's explicit opt-in to heap allocation
 
 ```rust
 enum TreeNode {
@@ -66,7 +66,7 @@ fn sum(tree: &TreeNode) -> i32 {
 
 A recursive type like `TreeNode` can't exist without `Box`: without it, the compiler would need to know `TreeNode`'s size at compile time, and a `TreeNode` that contains a `TreeNode` that contains a `TreeNode`... has no fixed size. `Box<TreeNode>` is a pointer to a heap allocation with a known, fixed size, breaking the recursion. In Java, this problem doesn't exist because *every* non-primitive value is already a heap pointer by default — Rust makes you ask for that explicitly, only where you actually need it.
 
-<Label color="amber">3</Label> `Rc<T>` — shared ownership, for when one owner truly isn't enough
+## <Label color="amber">3</Label> `Rc<T>` — shared ownership, for when one owner truly isn't enough
 
 ```rust
 use std::rc::Rc;
@@ -83,7 +83,7 @@ println!("count: {}", Rc::strong_count(&shared)); // back to 1
 
 Every `Rc::clone` increments a count; every drop decrements it; the value is deallocated the instant the count hits zero. Java doesn't need this because the GC already permits arbitrary numbers of references to any object — `Rc` is Rust manually recreating just enough of that flexibility, in the one place a program actually needs several owners of the same data, without paying for a GC everywhere else.
 
-<Label color="rose">4</Label> `RefCell<T>` — mutation through a shared reference, checked at runtime
+## <Label color="rose">4</Label> `RefCell<T>` — mutation through a shared reference, checked at runtime
 
 `Rc<T>` alone only gives you shared *read* access — Chapter 2's "many readers" rule still applies. To mutate through a shared `Rc`, wrap the inner value in `RefCell<T>`, which moves the borrow-checking rule from compile time to runtime:
 
@@ -111,7 +111,7 @@ fn main() {
 <DiagramEmbed
   src="/diagrams/rust-for-java-lifetimes-and-smart-pointers.html"
   title="Rc<T>: a lease that ends when the last tenant leaves"
-  height={420}
+  height={1180}
 />
 
 <Callout color="teal">

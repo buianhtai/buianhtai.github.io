@@ -30,7 +30,7 @@ And here's the crack in the scalpel analogy that matters most: people coming fro
 
 ## Formalize it precisely
 
-<Label color="teal">1</Label> Derive macros — compiler-generated boilerplate
+## <Label color="teal">1</Label> Derive macros — compiler-generated boilerplate
 
 ```rust
 #[derive(Debug, Clone, PartialEq)]
@@ -59,7 +59,7 @@ class Order {
 
 Same motivation — stop hand-writing boilerplate — different mechanism. `macro_rules!` (Rust's other macro flavor, for writing your own) is worth recognizing by sight, but you'll spend far more time reading `#[derive(...)]` on other people's structs than writing custom macros yourself.
 
-<Label color="amber">2</Label> `unsafe` — narrow, scoped, and rare to write
+## <Label color="amber">2</Label> `unsafe` — narrow, scoped, and rare to write
 
 ```rust
 fn first_byte(data: &[u8]) -> u8 {
@@ -72,7 +72,7 @@ fn first_byte(data: &[u8]) -> u8 {
 
 `unsafe` permits exactly four things: dereferencing a raw pointer, calling an unsafe function (including FFI calls into C), mutating a `static` variable, and implementing an unsafe trait. It does **not** disable the borrow checker for the rest of the function, the file, or the crate. You will almost never need to write it yourself — but you'll see it constantly inside dependencies that talk to C libraries or implement very low-level data structures, always contained to a small, deliberate module rather than spread across a codebase.
 
-<Label color="green">3</Label> `thiserror` and `anyhow` — Result grows up
+## <Label color="green">3</Label> `thiserror` and `anyhow` — Result grows up
 
 Chapter 4 introduced `Result<T, E>`. In a real project, `E` quickly needs to be more than a bare `String`. Two crates cover almost every case:
 
@@ -103,7 +103,7 @@ fn load_config() -> Result<String> {
 <DiagramEmbed
   src="/diagrams/rust-for-java-macros-unsafe-and-error-crates.html"
   title="unsafe lives at a narrow, deliberate boundary"
-  height={520}
+  height={920}
 />
 
 ## Your capstone: build these four things before your next real project

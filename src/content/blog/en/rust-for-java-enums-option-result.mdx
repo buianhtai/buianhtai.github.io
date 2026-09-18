@@ -38,7 +38,7 @@ This is the actual crack in the analogy: Java's "empty slot" is invisible until 
 
 ## Formalize it precisely
 
-<Label color="teal">1</Label> `Option<T>` makes "might not exist" part of the type
+## <Label color="teal">1</Label> `Option<T>` makes "might not exist" part of the type
 
 ```rust
 fn find_user(id: &str) -> Option<String> {
@@ -63,7 +63,7 @@ fn main() {
 
 There is no way to accidentally treat `Option<String>` as a plain `String` — the compiler simply won't let you call `.len()` on it without unwrapping first. The `None` case isn't a possibility you might forget to handle; it's a value shape you're forced to acknowledge.
 
-<Label color="amber">2</Label> `Result<T, E>` makes failure a value, not a surprise exception
+## <Label color="amber">2</Label> `Result<T, E>` makes failure a value, not a surprise exception
 
 ```rust
 fn parse_port(input: &str) -> Result<u16, String> {
@@ -88,7 +88,7 @@ int parsePort(String input) {
 
 `Integer.parseInt` can throw, but Java's unchecked exceptions don't force the caller to acknowledge that. `Result<T, E>` puts the failure right in the return type — you cannot get the `u16` out without confronting the possibility of an `Err` first.
 
-<Label color="green">3</Label> The `?` operator propagates failure without hiding it
+## <Label color="green">3</Label> The `?` operator propagates failure without hiding it
 
 ```rust
 fn load_port_from_env() -> Result<u16, String> {
@@ -99,7 +99,7 @@ fn load_port_from_env() -> Result<u16, String> {
 
 `?` means: "if this is `Err`, return that error from the current function immediately; otherwise, keep going with the `Ok` value." It keeps the success path readable while still making every failure path an explicit, visible return — nothing propagates silently the way an unchecked Java exception can travel up ten stack frames before anyone handles it.
 
-<Label color="rose">4</Label> Enums make invalid combinations impossible to construct
+## <Label color="rose">4</Label> Enums make invalid combinations impossible to construct
 
 ```rust
 enum PaymentState {
@@ -132,7 +132,7 @@ Nothing stops you from constructing a `Payment` with `status = "AUTHORIZED"` and
 <DiagramEmbed
   src="/diagrams/rust-for-java-enums-option-result.html"
   title="PaymentState: every variant carries its own facts"
-  height={460}
+  height={1200}
 />
 
 <Callout color="teal">

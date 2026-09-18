@@ -7,17 +7,17 @@
   },
   "layout": {
     "mode": "grid",
-    "cols": 1,
-    "gapX": 0,
-    "gapY": 80,
-    "cellW": 260,
+    "cols": 4,
+    "gapX": 70,
+    "gapY": 70,
+    "cellW": 200,
     "cellH": 64
   },
   "components": [
     { "id": "app", "type": "frontend", "label": "Your application", "sublabel": "100% safe Rust", "row": 0, "col": 0 },
-    { "id": "wrapper", "type": "backend", "label": "safe-wrapper crate", "sublabel": "safe API, no unsafe here", "row": 1, "col": 0 },
-    { "id": "unsafe_mod", "type": "security", "label": "ffi module", "sublabel": "one small unsafe block", "row": 2, "col": 0 },
-    { "id": "clib", "type": "external", "label": "C library", "sublabel": "outside Rust's safety net", "row": 3, "col": 0 }
+    { "id": "wrapper", "type": "backend", "label": "safe-wrapper crate", "sublabel": "safe API, no unsafe here", "row": 0, "col": 1 },
+    { "id": "unsafe_mod", "type": "security", "label": "ffi module", "sublabel": "one small unsafe block", "row": 0, "col": 2 },
+    { "id": "clib", "type": "external", "label": "C library", "sublabel": "outside Rust's safety net", "row": 0, "col": 3 }
   ],
   "connections": [
     { "id": "c1", "from": "app", "to": "wrapper" },

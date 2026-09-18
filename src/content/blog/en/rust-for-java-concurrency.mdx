@@ -38,7 +38,7 @@ Nothing about this class's *type* tells you it's unsafe to share across threads.
 
 ## Formalize it precisely
 
-<Label color="teal">1</Label> `Send` and `Sync` — compiler-checked, not documentation-checked
+## <Label color="teal">1</Label> `Send` and `Sync` — compiler-checked, not documentation-checked
 
 - **`Send`**: a type can be safely *moved* to another thread.
 - **`Sync`**: a type can be safely *shared* (via `&T`) across threads.
@@ -60,7 +60,7 @@ fn main() {
 
 `Rc<T>` (Chapter 6) is deliberately *not* `Send` — its reference count isn't safe to update from multiple threads at once without extra coordination. The fix isn't a runtime patch; it's using the thread-safe equivalent, `Arc<T>` (atomic reference counting), instead.
 
-<Label color="green">2</Label> `Arc<Mutex<T>>` — shared, safe, mutable state across threads
+## <Label color="green">2</Label> `Arc<Mutex<T>>` — shared, safe, mutable state across threads
 
 ```rust
 use std::sync::{Arc, Mutex};
@@ -88,7 +88,7 @@ fn main() {
 
 `Arc` is `Rc`'s thread-safe sibling. `Mutex<T>` wraps the value itself — you can't even get at the `i32` inside without going through `.lock()` first, and `.lock()` returns a guard that releases automatically when it goes out of scope. There's no way to accidentally read or write the value without holding the lock, because the type itself doesn't expose the data any other way. Compare that to Java's `Counter` above, where `count` is a plain `int` field anyone can touch with or without `synchronized`.
 
-<Label color="amber">3</Label> Channels — sharing by passing, not by holding a lock
+## <Label color="amber">3</Label> Channels — sharing by passing, not by holding a lock
 
 ```rust
 use std::sync::mpsc;
@@ -114,7 +114,7 @@ Instead of multiple threads reaching into the same shared memory, ownership of e
 <DiagramEmbed
   src="/diagrams/rust-concurrency-model.html"
   title="Java JVM threading compared with Rust ownership-based concurrency"
-  height={680}
+  height={920}
 />
 
 <Callout color="rose">

@@ -46,7 +46,7 @@ That second snippet doesn't even compile as written — `.await` needs an async 
 
 ## Formalize it precisely
 
-<Label color="teal">1</Label> `#[tokio::main]` supplies the chef
+## <Label color="teal">1</Label> `#[tokio::main]` supplies the chef
 
 ```rust
 #[tokio::main]
@@ -63,7 +63,7 @@ async fn fetch_user() -> String {
 
 `#[tokio::main]` is a macro that wraps your `async fn main()` in a Tokio runtime setup — it's the thing that finally puts a chef in the kitchen. Without it (or an equivalent manual runtime setup), `.await` has nothing driving it and won't compile at the top level at all.
 
-<Label color="amber">2</Label> Spawning concurrent tasks
+## <Label color="amber">2</Label> Spawning concurrent tasks
 
 ```rust
 #[tokio::main]
@@ -82,7 +82,7 @@ async fn main() {
 
 `tokio::spawn` hands a `Future` to the runtime and says "run this concurrently with everything else." This is conceptually close to Java's `supplyAsync` submitting work to an executor — the difference is entirely in *when* the work actually starts: Java's starts on submission, Tokio's starts on the next time the runtime chooses to poll it.
 
-<Label color="rose">3</Label> The gotcha: blocking code inside async code starves the runtime
+## <Label color="rose">3</Label> The gotcha: blocking code inside async code starves the runtime
 
 ```rust
 async fn do_work() {
@@ -96,7 +96,7 @@ Tokio typically runs many `Future`s cooperatively on a small pool of threads. A 
 <DiagramEmbed
   src="/diagrams/rust-for-java-async-and-tokio.html"
   title="Async execution: eager Future vs poll-driven Future"
-  height={480}
+  height={920}
 />
 
 <Callout color="teal">

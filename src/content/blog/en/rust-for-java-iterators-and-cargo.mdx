@@ -35,7 +35,7 @@ Java's Stream API doesn't ask "do you want to read these, mutate them, or take t
 
 ## Formalize it precisely
 
-<Label color="teal">1</Label> Three ways to iterate, three different ownership stories
+## <Label color="teal">1</Label> Three ways to iterate, three different ownership stories
 
 ```rust
 let names = vec![String::from("Ada"), String::from("Grace")];
@@ -53,7 +53,7 @@ for name in names.into_iter() {     // String — takes ownership, consumes the 
 
 `.iter()` yields `&T` (shared borrows — Chapter 2's rule). `.iter_mut()` yields `&mut T` (exclusive borrows). `.into_iter()` yields owned `T` values and consumes the collection in the process — it *moves* every element out, exactly like Chapter 1's move semantics. Java's `Stream` has no equivalent three-way split; it's always "just references."
 
-<Label color="green">2</Label> Adapters are lazy; only a terminal op does work
+## <Label color="green">2</Label> Adapters are lazy; only a terminal op does work
 
 ```rust
 let orders = vec![("paid", 1200), ("pending", 500), ("paid", 800)];
@@ -78,7 +78,7 @@ int total = orders.stream()
 
 Both are lazy pipelines. The practical difference shows up in what the compiler can do with the Rust version: because ownership and types are fully known at compile time, the compiler frequently turns the whole chain into the same machine code as a hand-written loop — no generic `Stream` object materializes at runtime the way Java's does.
 
-<Label color="amber">3</Label> Cargo: one toolchain instead of five
+## <Label color="amber">3</Label> Cargo: one toolchain instead of five
 
 A typical Java project reaches for Maven or Gradle for builds, JUnit for tests, Checkstyle or Spotless for style, and a separate CI step to glue them together. Cargo folds all of that into one command surface:
 
@@ -103,7 +103,7 @@ edition = "2024"
 serde = { version = "1", features = ["derive"] }
 ```
 
-<Label color="rose">4</Label> Start with a library crate, not one big main.rs
+## <Label color="rose">4</Label> Start with a library crate, not one big main.rs
 
 The Rust-specific mistake mirrors a very Java-specific one: cramming everything into one class (or here, one `main.rs`). Structure a project as a thin binary that depends on a real library crate instead:
 
@@ -129,7 +129,7 @@ Now `billing-domain`'s tests run without ever starting an HTTP server, and `carg
 <DiagramEmbed
   src="/diagrams/rust-for-java-iterators-and-cargo.html"
   title="One workspace, one Cargo.lock, one build"
-  height={420}
+  height={920}
 />
 
 <Callout color="teal">
