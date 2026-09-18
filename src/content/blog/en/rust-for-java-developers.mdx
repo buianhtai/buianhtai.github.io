@@ -48,8 +48,8 @@ This is exactly where the library-book analogy pays for itself: Rust does not ha
   headers={["Concept", "Java", "Rust"]}
   rows={[
     { "Concept": "Assignment (x = y)", "Java": "Copies a reference; both variables alias the same object forever", "Rust": "Moves ownership for non-Copy types; the old binding becomes invalid" },
-    { "Concept": "Independent copy", "Java": "Automatic — every reference already points at shared state unless you deep-copy manually", "Rust": "Explicit .clone() — you ask for the copy, so the cost is visible" },
-    { "Concept": "Cleanup", "Java": "Garbage collector traces reachability on its own schedule", "Rust": "Drop runs deterministically the instant the owner's scope ends" },
+    { "Concept": "Independent copy", "Java": "Automatic — every reference already points at shared state unless you deep-copy manually", "Rust": "Explicit <code class=\"dt-code\">.clone()</code> — you ask for the copy, so the cost is visible" },
+    { "Concept": "Cleanup", "Java": "Garbage collector traces reachability on its own schedule", "Rust": "<code class=\"dt-code\">Drop</code> runs deterministically the instant the owner's scope ends" },
   ]}
   caption="Same surface syntax (x = y), different contract underneath."
 />

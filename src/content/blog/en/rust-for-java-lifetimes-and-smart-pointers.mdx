@@ -33,9 +33,9 @@ Rust's compiler doesn't trace anything at runtime. It has to *prove*, while comp
   headers={["Concept", "Java", "Rust"]}
   rows={[
     { "Concept": "Reference validity", "Java": "GC traces reachability at runtime; a reference is always valid as long as it's reachable", "Rust": "Compiler proves at compile time that no reference outlives its data; lifetime params make that relationship explicit when needed" },
-    { "Concept": "Heap allocation", "Java": "Implicit — every non-primitive object already lives on the heap", "Rust": "Explicit opt-in via Box&lt;T&gt;, used mainly for recursive types or large stack values" },
-    { "Concept": "Multiple owners of one value", "Java": "Free — the GC permits unlimited references to any object", "Rust": "Rc&lt;T&gt; — reference-counted, freed the instant the count reaches zero" },
-    { "Concept": "Mutating through a shared reference", "Java": "Always allowed — no aliasing rule to satisfy", "Rust": "RefCell&lt;T&gt; — allowed, but checked at runtime via borrow_mut(), panics on violation" },
+    { "Concept": "Heap allocation", "Java": "Implicit — every non-primitive object already lives on the heap", "Rust": "Explicit opt-in via <code class=\"dt-code\">Box&lt;T&gt;</code>, used mainly for recursive types or large stack values" },
+    { "Concept": "Multiple owners of one value", "Java": "Free — the GC permits unlimited references to any object", "Rust": "<code class=\"dt-code\">Rc&lt;T&gt;</code> — reference-counted, freed the instant the count reaches zero" },
+    { "Concept": "Mutating through a shared reference", "Java": "Always allowed — no aliasing rule to satisfy", "Rust": "<code class=\"dt-code\">RefCell&lt;T&gt;</code> — allowed, but checked at runtime via <code class=\"dt-code\">borrow_mut()</code>, panics on violation" },
   ]}
   caption="Java gets this flexibility from the GC tracing every reference at runtime. Rust recreates just enough of it, opt-in, exactly where a single owner isn't enough."
 />

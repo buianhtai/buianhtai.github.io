@@ -49,9 +49,9 @@ This is precisely the class of bug the "many readers or one writer" rule exists 
 <DataTable
   headers={["Concept", "Java", "Rust"]}
   rows={[
-    { "Concept": "Reading while mutating", "Java": "Compiles fine; fails at runtime as ConcurrentModificationException, only if that path executes", "Rust": "Compile error — the borrow checker rejects it before the program runs" },
-    { "Concept": "Multiple readers", "Java": "No distinction — any reference can read or write at any time", "Rust": "Any number of shared &T borrows can coexist safely" },
-    { "Concept": "Exclusive write access", "Java": "Not modeled by the type system — enforced only by convention or synchronized", "Rust": "Exactly one &mut T at a time, and never alongside a shared borrow" },
+    { "Concept": "Reading while mutating", "Java": "Compiles fine; fails at runtime as <code class=\"dt-code\">ConcurrentModificationException</code>, only if that path executes", "Rust": "Compile error — the borrow checker rejects it before the program runs" },
+    { "Concept": "Multiple readers", "Java": "No distinction — any reference can read or write at any time", "Rust": "Any number of shared <code class=\"dt-code\">&amp;T</code> borrows can coexist safely" },
+    { "Concept": "Exclusive write access", "Java": "Not modeled by the type system — enforced only by convention or <code class=\"dt-code\">synchronized</code>", "Rust": "Exactly one <code class=\"dt-code\">&amp;mut T</code> at a time, and never alongside a shared borrow" },
   ]}
   caption="Java's aliasing rules are convention. Rust's are compiler-checked."
 />

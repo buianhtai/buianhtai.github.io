@@ -40,9 +40,9 @@ This is the actual crack in the analogy: Java's "empty slot" is invisible until 
 <DataTable
   headers={["Concept", "Java", "Rust"]}
   rows={[
-    { "Concept": "Absent value", "Java": "null — any reference type, no compiler check required", "Rust": "Option&lt;T&gt; — must match Some/None before using the value" },
-    { "Concept": "Operation that can fail", "Java": "Checked or unchecked exception, easy to forget to catch", "Rust": "Result&lt;T, E&gt; — failure is part of the return type" },
-    { "Concept": "Status with multiple shapes", "Java": "A string field or int constant, plus nullable side fields per state", "Rust": "An enum where each variant carries exactly its own required data" },
+    { "Concept": "Absent value", "Java": "<code class=\"dt-code\">null</code> — any reference type, no compiler check required", "Rust": "<code class=\"dt-code\">Option&lt;T&gt;</code> — must match Some/None before using the value" },
+    { "Concept": "Operation that can fail", "Java": "Checked or unchecked exception, easy to forget to catch", "Rust": "<code class=\"dt-code\">Result&lt;T, E&gt;</code> — failure is part of the return type" },
+    { "Concept": "Status with multiple shapes", "Java": "A string field or int constant, plus nullable side fields per state", "Rust": "An <code class=\"dt-code\">enum</code> where each variant carries exactly its own required data" },
   ]}
   caption="Java patches this gap with Optional and exceptions; Rust makes it part of every function signature by default."
 />
