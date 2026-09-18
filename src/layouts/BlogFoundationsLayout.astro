@@ -431,7 +431,8 @@ const hubLabel = category === 'foundations' ? 'foundations' : 'blog';
       align-items: start;
     }
     .f-layout--no-left {
-      grid-template-columns: 1fr 200px;
+      grid-template-columns: minmax(0, 980px) 200px;
+      justify-content: center;
     }
     .f-layout--no-left .f-col-center { grid-column: 1; }
     .f-layout--no-left .f-col-right { grid-column: 2; }
@@ -442,7 +443,7 @@ const hubLabel = category === 'foundations' ? 'foundations' : 'blog';
       grid-template-columns: 240px 1fr 220px;
     }
     .f-layout--no-left {
-      grid-template-columns: 1fr 220px;
+      grid-template-columns: minmax(0, 980px) 220px;
     }
   }
 
