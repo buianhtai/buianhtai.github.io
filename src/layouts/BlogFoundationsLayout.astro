@@ -17,6 +17,7 @@ interface Props {
 }
 
 const { post, headings, rawContent, seriesPosts = [], category = 'foundations' } = Astro.props;
+const hasLeftNav = Boolean(post.data.series) && seriesPosts.length > 0;
 const {
   title, description, pubDate, updatedDate,
   tags, lang, heroImage, series, seriesOrder,
@@ -67,7 +68,7 @@ const hubLabel = category === 'foundations' ? 'foundations' : 'blog';
     </div>
 
     <!-- ── 3-column layout ── -->
-    <div class="f-layout">
+    <div class:list={['f-layout', !hasLeftNav && 'f-layout--no-left']}>
 
       <!-- LEFT: Chapter navigator -->
       {series && seriesPosts.length > 0 && (
@@ -429,11 +430,19 @@ const hubLabel = category === 'foundations' ? 'foundations' : 'blog';
       padding: 0;
       align-items: start;
     }
+    .f-layout--no-left {
+      grid-template-columns: 1fr 200px;
+    }
+    .f-layout--no-left .f-col-center { grid-column: 1; }
+    .f-layout--no-left .f-col-right { grid-column: 2; }
   }
 
   @media (min-width: 1280px) {
     .f-layout {
       grid-template-columns: 240px 1fr 220px;
+    }
+    .f-layout--no-left {
+      grid-template-columns: 1fr 220px;
     }
   }
 
