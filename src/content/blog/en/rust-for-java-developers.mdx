@@ -13,7 +13,7 @@ postLayout: "foundations"
 import Label from '../../../components/mdx/Label.astro';
 import Callout from '../../../components/mdx/Callout.astro';
 import Concept from '../../../components/mdx/Concept.astro';
-import DiagramEmbed from '../../../components/mdx/DiagramEmbed.astro';
+import StateMachine from '../../../components/mdx/StateMachine.astro';
 
 This is Chapter 1 of a 9-chapter series translating the Java mental model into Rust, one concept at a time: ownership, borrowing, traits, enums, lifetimes, smart pointers, concurrency, async, and the parts Java has no equivalent for at all. We're using the Feynman method for each chapter — explain it simply, find where the simple explanation breaks, then formalize it precisely.
 
@@ -104,10 +104,23 @@ fn main() {
 
 Whoever owns a value when it goes out of scope runs its `Drop` implementation *immediately* — not at some future garbage-collection pause. This is why Rust programs don't need a GC: the compiler already knows, at compile time, the exact single moment a value's owner disappears.
 
-<DiagramEmbed
-  src="/diagrams/rust-for-java-developers.html"
-  title="From one owned value: move, clone, or borrow"
-  height={620}
+<StateMachine
+  title="A value's life"
+  states={[
+    { id: "owned", label: "Owned", sub: "let s = String::new()", initial: true, color: "teal" },
+    { id: "moved", label: "Moved", sub: "let t = s; — s is dead", color: "blue" },
+    { id: "cloned", label: "Cloned", sub: "let u = t.clone()", color: "green" },
+    { id: "borrowed", label: "Borrowed", sub: "&s, temporary access", color: "amber" },
+    { id: "dropped", label: "Dropped", sub: "Drop::drop() runs once", final: true, color: "violet" },
+  ]}
+  transitions={[
+    { from: "owned", to: "moved", label: "let t = s;" },
+    { from: "moved", to: "cloned", label: ".clone()" },
+    { from: "owned", to: "borrowed", label: "&s, without moving" },
+    { from: "borrowed", to: "dropped", label: "scope ends" },
+    { from: "cloned", to: "dropped", label: "scope ends" },
+  ]}
+  caption="Borrowing branches directly off Owned — it never requires moving or cloning first."
 />
 
 <Callout color="teal">

@@ -12,7 +12,7 @@ postLayout: "foundations"
 ---
 import Label from '../../../components/mdx/Label.astro';
 import Callout from '../../../components/mdx/Callout.astro';
-import DiagramEmbed from '../../../components/mdx/DiagramEmbed.astro';
+import StateMachine from '../../../components/mdx/StateMachine.astro';
 
 Chapters 1 and 2 built the core rule: one owner, borrows are shared-or-exclusive. This chapter covers two things people usually lump together with "hard Rust stuff" but which solve different problems: lifetime annotations (proving a borrow is safe) and smart pointers (getting shared-ownership flexibility back, on purpose, when a single owner genuinely isn't enough).
 
@@ -108,10 +108,20 @@ fn main() {
 
 `borrow_mut()` panics at runtime if a borrow is already active — the same "many readers or one writer" rule from Chapter 2, just enforced by a check inside `RefCell` instead of by the compiler. `Rc<RefCell<T>>` is the standard pattern for shared, mutable, single-threaded state — think a simple tree with parent/child links, or a small graph where nodes need to reference each other.
 
-<DiagramEmbed
-  src="/diagrams/rust-for-java-lifetimes-and-smart-pointers.html"
-  title="Rc<T>: a lease that ends when the last tenant leaves"
-  height={620}
+<StateMachine
+  title="Rc<T> reference count"
+  states={[
+    { id: "created", label: "Created", sub: "Rc::new(x) — count = 1", initial: true, color: "teal" },
+    { id: "cloned", label: "Cloned", sub: "Rc::clone(&x) — count = 2", color: "amber" },
+    { id: "dropped_one", label: "One Dropped", sub: "clone dropped — count = 1", color: "blue" },
+    { id: "deallocated", label: "Deallocated", sub: "count hits 0 — value freed", final: true, color: "green" },
+  ]}
+  transitions={[
+    { from: "created", to: "cloned" },
+    { from: "cloned", to: "dropped_one" },
+    { from: "dropped_one", to: "deallocated" },
+  ]}
+  caption="Rc counts, it doesn't garbage-collect: the value is freed the instant the count reaches zero, not on some future tracing pass."
 />
 
 <Callout color="teal">

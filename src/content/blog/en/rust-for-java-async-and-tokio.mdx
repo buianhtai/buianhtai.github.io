@@ -12,7 +12,7 @@ postLayout: "foundations"
 ---
 import Label from '../../../components/mdx/Label.astro';
 import Callout from '../../../components/mdx/Callout.astro';
-import DiagramEmbed from '../../../components/mdx/DiagramEmbed.astro';
+import Swimlane from '../../../components/mdx/Swimlane.astro';
 
 Fair warning before we start: everything in Chapters 1-7 was one connected idea — ownership, applied consistently, all the way down to threads. Async is not that. It's a genuinely separate concept bolted on top, and understanding ownership perfectly will not make async click on its own. Budget real time for this one.
 
@@ -93,10 +93,27 @@ async fn do_work() {
 
 Tokio typically runs many `Future`s cooperatively on a small pool of threads. A genuinely blocking call (a synchronous sleep, a blocking file read, a CPU-heavy loop) inside an `async fn` doesn't just block itself — it can freeze *every other task* sharing that thread, because nothing ever yields control back to the runtime. This is loosely analogous to blocking a Java NIO event-loop thread, but Rust's compiler won't warn you about it the way some frameworks try to — it's on you to know which calls are async-aware and which aren't.
 
-<DiagramEmbed
-  src="/diagrams/rust-for-java-async-and-tokio.html"
-  title="Async execution: eager Future vs poll-driven Future"
-  height={620}
+<Swimlane
+  title="Eager execution vs poll-driven execution"
+  lanes={[
+    { id: "java", label: "Java: CompletableFuture", color: "rose" },
+    { id: "rust", label: "Rust: async fn + Tokio", color: "teal" },
+  ]}
+  steps={[
+    { id: "j1", lane: "java", label: "supplyAsync(...)", sub: "starts immediately" },
+    { id: "j2", lane: "java", label: "Runs on Executor", sub: "eager — work begins now" },
+    { id: "j3", lane: "java", label: "Completes", sub: "callback fires" },
+    { id: "r1", lane: "rust", label: "async fn call()", sub: "returns a Future — does nothing yet" },
+    { id: "r2", lane: "rust", label: "Tokio polls it", sub: "runtime decides when to run" },
+    { id: "r3", lane: "rust", label: "Resolves", sub: ".await unwraps the value" },
+  ]}
+  arrows={[
+    { from: "j1", to: "j2" },
+    { from: "j2", to: "j3" },
+    { from: "r1", to: "r2" },
+    { from: "r2", to: "r3" },
+  ]}
+  caption="Java's CompletableFuture starts working the instant you create it. Rust's async fn produces an inert value — nothing runs until a runtime like Tokio decides to poll it."
 />
 
 <Callout color="teal">

@@ -12,7 +12,7 @@ postLayout: "foundations"
 ---
 import Label from '../../../components/mdx/Label.astro';
 import Callout from '../../../components/mdx/Callout.astro';
-import DiagramEmbed from '../../../components/mdx/DiagramEmbed.astro';
+import Swimlane from '../../../components/mdx/Swimlane.astro';
 
 Every previous chapter has been building toward one payoff: because Rust already tracks ownership and borrowing precisely, it can extend the exact same rules across thread boundaries — and catch a whole category of concurrency bugs at compile time that Java can only catch by getting lucky in testing or unlucky in production.
 
@@ -111,10 +111,31 @@ fn main() {
 
 Instead of multiple threads reaching into the same shared memory, ownership of each message *moves* through the channel — Chapter 1's move semantics, applied to cross-thread communication. Java's `BlockingQueue` offers a similar pattern, but again as a convention you opt into, not something the type system requires when data crosses a thread boundary.
 
-<DiagramEmbed
-  src="/diagrams/rust-concurrency-model.html"
-  title="Java JVM threading compared with Rust ownership-based concurrency"
-  height={620}
+<Swimlane
+  title="Thread safety: convention vs compiler proof"
+  lanes={[
+    { id: "java", label: "Java (JVM)", color: "rose" },
+    { id: "rust", label: "Rust", color: "teal" },
+  ]}
+  steps={[
+    { id: "j1", lane: "java", label: "new Thread(...)" },
+    { id: "j2", lane: "java", label: "Shared mutable field", sub: "no ownership rule" },
+    { id: "j3", lane: "java", label: "synchronized(lock)", sub: "convention, not enforced" },
+    { id: "j4", lane: "java", label: "Data race", sub: "surfaces at runtime" },
+    { id: "r1", lane: "rust", label: "thread::spawn(...)" },
+    { id: "r2", lane: "rust", label: "Arc<Mutex<T>>", sub: "shared ownership" },
+    { id: "r3", lane: "rust", label: "Send + Sync check", sub: "the compiler proves it" },
+    { id: "r4", lane: "rust", label: "No data race", sub: "or it doesn't compile" },
+  ]}
+  arrows={[
+    { from: "j1", to: "j2" },
+    { from: "j2", to: "j3" },
+    { from: "j3", to: "j4", type: "dashed" },
+    { from: "r1", to: "r2" },
+    { from: "r2", to: "r3" },
+    { from: "r3", to: "r4" },
+  ]}
+  caption="Java's synchronized is correct only if every access site remembers to use it. Rust's Send/Sync are checked by the compiler at every thread boundary."
 />
 
 <Callout color="rose">

@@ -13,7 +13,7 @@ postLayout: "foundations"
 import Label from '../../../components/mdx/Label.astro';
 import Callout from '../../../components/mdx/Callout.astro';
 import Concept from '../../../components/mdx/Concept.astro';
-import DiagramEmbed from '../../../components/mdx/DiagramEmbed.astro';
+import StateMachine from '../../../components/mdx/StateMachine.astro';
 
 Chapter 1 covered ownership: one value, one owner, cleanup happens exactly once. But if ownership were the whole story, every function call would need to take (and give back) full ownership of everything it touches — unworkable. Most of the time you just want to *look at* a value, or *temporarily change* it, without taking it over. That's borrowing.
 
@@ -108,10 +108,21 @@ fn main() {
 
 This trips people up coming from languages with block-scoped everything: the shared borrow of `first` doesn't live until the closing `}` — it lives only until its last actual use. The compiler tracks this precisely (a feature called *non-lexical lifetimes*), so code that "looks like" it should conflict often compiles cleanly, as long as the borrows genuinely don't overlap in time.
 
-<DiagramEmbed
-  src="/diagrams/rust-for-java-borrowing.html"
-  title="One value, two kinds of borrow — never both at once"
-  height={620}
+<StateMachine
+  title="One value, two kinds of borrow"
+  states={[
+    { id: "owned", label: "Owned", sub: "let mut s = String::new()", initial: true, color: "teal" },
+    { id: "shared", label: "Shared Borrow", sub: "&s — any number allowed", color: "green" },
+    { id: "exclusive", label: "Exclusive Borrow", sub: "&mut s — exactly one", color: "amber" },
+    { id: "ended", label: "Scope Ends", sub: "owner usable directly again", final: true, color: "violet" },
+  ]}
+  transitions={[
+    { from: "owned", to: "shared", label: "&s" },
+    { from: "owned", to: "exclusive", label: "&mut s" },
+    { from: "shared", to: "ended" },
+    { from: "exclusive", to: "ended" },
+  ]}
+  caption="Never both at once: while an exclusive borrow is alive, a shared borrow of the same value is a compile error."
 />
 
 <Callout color="amber">
