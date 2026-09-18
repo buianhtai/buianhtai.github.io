@@ -18,13 +18,14 @@ interface Props {
   height?: number;
 }
 const { src, title, height = 500 } = Astro.props;
+const embedSrc = src + (src.includes('?') ? '&' : '?') + 'embed=1';
 ---
 
 <div class="de-wrap">
   <!-- Desktop: interactive iframe -->
   <div class="de-iframe-wrap">
     <iframe
-      src={src}
+      src={embedSrc}
       style={`width:100%;height:${height}px;border:none;display:block;`}
       title={title}
       loading="lazy"
