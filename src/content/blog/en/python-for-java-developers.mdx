@@ -12,6 +12,7 @@ postLayout: "foundations"
 ---
 import Label from '../../../components/mdx/Label.astro';
 import Callout from '../../../components/mdx/Callout.astro';
+import Flowchart from '../../../components/mdx/Flowchart.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
 
 This is Chapter 1 of a series translating the Java mental model into Python. We will cover names and objects first, then functions and protocols, iterators and generators, exceptions, packaging, concurrency, and the parts of Python that become dangerous when Java assumptions stay hidden underneath.
@@ -63,6 +64,23 @@ The second line does not mutate the old list. It moves the `items` name to a new
     { "Operation": "items.copy()", "What changes": "A new, shallow list is created", "What does not change": "Nested objects inside the list" },
   ]}
   caption="Separate rebinding a name from mutating an object."
+/>
+<Flowchart
+  title="What does this Python statement do?"
+  nodes={[
+    { id: "q", label: "Does it change the existing object?", shape: "diamond", icon: "lucide:help-circle" },
+    { id: "mutate", label: "Mutate in place", shape: "rect", color: "amber", icon: "lucide:pen-line", sub: "append, update, add — aliases see the change" },
+    { id: "rebind", label: "Rebind the name", shape: "rect", color: "blue", icon: "lucide:move-right", sub: "name points to a different object" },
+    { id: "copy", label: "Make a shallow copy", shape: "rect", color: "green", icon: "lucide:copy", sub: "new container, nested objects shared" },
+    { id: "inspect", label: "Inspect only", shape: "oval", icon: "lucide:eye", sub: "value or identity is observed" },
+  ]}
+  edges={[
+    { from: "q", to: "mutate", label: "yes" },
+    { from: "q", to: "rebind", label: "no — assignment" },
+    { from: "rebind", to: "copy", label: "explicit .copy()" },
+    { from: "q", to: "inspect", label: "read / compare" },
+  ]}
+  caption="Mutating an object affects aliases; rebinding a name does not."
 />
 
 ## Formalize it precisely
@@ -151,6 +169,21 @@ print(languages)  # ['java']
 ```
 
 The function's local `languages` name moved. The caller's name did not.
+<Flowchart
+  title="What happens when a function receives a mutable object?"
+  nodes={[
+    { id: "start", label: "Pass object to function", shape: "rect", color: "blue", icon: "lucide:arrow-right", sub: "parameter becomes another name" },
+    { id: "q", label: "Does the function mutate it?", shape: "diamond", icon: "lucide:help-circle" },
+    { id: "shared", label: "Caller observes the change", shape: "rect", color: "amber", icon: "lucide:eye", sub: "same list, same object" },
+    { id: "local", label: "Caller remains unchanged", shape: "rect", color: "green", icon: "lucide:check-circle", sub: "rebinding is local to the function" },
+  ]}
+  edges={[
+    { from: "start", to: "q" },
+    { from: "q", to: "shared", label: "yes — mutate in place" },
+    { from: "q", to: "local", label: "no — rebind parameter" },
+  ]}
+  caption="Python passes object references; mutation crosses the function boundary, rebinding does not."
+/>
 
 <Callout color="teal">
 Before reading a Python function, ask two separate questions: can it mutate an object I passed in, and can it rebind my name? The first can affect the caller; the second cannot.
