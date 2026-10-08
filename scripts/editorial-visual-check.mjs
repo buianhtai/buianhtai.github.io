@@ -30,7 +30,8 @@ try {
   assert((await home.locator('h1').innerText()).includes('Building systems.'),'Hero text diverged from concept');
   assert.equal(await home.locator('.ed-topic-card').count(),4,'Hero should have four topic tiles');
   assert.equal(await home.locator('.ed-feature-card').count(),3,'Home should show three curated featured articles');
-  await home.screenshot({path:out+'/desktop-home.png',fullPage:true});
+  await home.screenshot({path:out+'/desktop-home.png',fullPage:false});
+  await home.locator('.ed-featured-grid').screenshot({path:out+'/desktop-featured.png'});
   const concept=await home.locator('.ed-topic-panel').boundingBox();
   assert(concept && concept.width>300, 'Desktop topic panel must be visible');
 
@@ -41,7 +42,7 @@ try {
     'Known standard-layout article is missing from archive');
   const total=Number(await archive.locator('#ed-result-count').innerText());
   assert(total>0,'Archive contains no articles');
-  await archive.screenshot({path:out+'/desktop-archive.png',fullPage:true});
+  await archive.screenshot({path:out+'/desktop-archive.png',fullPage:false});
   await archive.locator('button[data-category="ai"]').click();
   assert(new URL(archive.url()).searchParams.get('category')==='ai','Category filter must update URL');
   const filtered=Number(await archive.locator('#ed-result-count').innerText());
@@ -69,7 +70,10 @@ try {
   for(const [label,path] of [['home','/en/'],['archive','/en/blog/'],['article',articleURL]]){
     const page=await mobile.newPage();
     await page.goto(host+path,{waitUntil:'networkidle'});
-    await page.screenshot({path:out+'/mobile-'+label+'.png',fullPage:label!=='article'});
+    await page.screenshot({path:out+'/mobile-'+label+'.png',fullPage:false});
+    if(label==='home') {
+      await page.locator('.ed-topic-panel').screenshot({path:out+'/mobile-topics.png'});
+    }
     const sizes=await page.evaluate(()=>({
       viewport:document.documentElement.clientWidth,
       content:document.documentElement.scrollWidth
@@ -89,7 +93,7 @@ try {
     await page.goto(host+path,{waitUntil:'networkidle'});
     const sizes=await page.evaluate(()=>({width:document.documentElement.clientWidth,content:document.documentElement.scrollWidth}));
     assert(sizes.content<=sizes.width+2,'Horizontal overflow on 320px '+label+': '+JSON.stringify(sizes));
-    await page.screenshot({path:out+'/small-phone-'+label+'.png',fullPage:true});
+    await page.screenshot({path:out+'/small-phone-'+label+'.png',fullPage:false});
     await page.close();
   }
   await narrow.close();
@@ -97,7 +101,7 @@ try {
   await home.locator('#theme-toggle').click();
   const changedTheme=await home.locator('html').evaluate(el=>el.classList.contains('theme-light'));
   assert.notEqual(changedTheme,previousTheme,'Theme toggle not working');
-  await home.screenshot({path:out+'/desktop-home-light.png',fullPage:true});
+  await home.screenshot({path:out+'/desktop-home-light.png',fullPage:false});
   console.log('PASS: desktop/mobile screenshots, topic cards, article route, filters, light mode, overflow');
   console.log('Preview screenshots saved to '+out);
 } finally {
