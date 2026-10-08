@@ -72,6 +72,10 @@ const jsonLd = {
 
     <div class="ed-article-layout">
       <div class="ed-article-content prose prose-lg max-w-none" id="ed-article-body">
+        {toc.length>0 && <details class="ed-mobile-toc">
+          <summary>{lang === 'vi' ? 'Mục lục bài viết' : 'On this page'}</summary>
+          <ul>{toc.map(h=><li><a href={`#${h.slug}`}>{h.text}</a></li>)}</ul>
+        </details>}
         <slot />
       </div>
       {toc.length>0 && <aside class="ed-article-aside" aria-label="On this page">
