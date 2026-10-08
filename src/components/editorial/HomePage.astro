@@ -9,8 +9,19 @@ const { lang = 'en' } = Astro.props;
 const vi = lang === 'vi';
 const articles = (await getCollection('blog', p => p.data.lang === lang && !p.data.draft))
   .sort((a,b) => b.data.pubDate.getTime() - a.data.pubDate.getTime());
-const picked = articles.filter(p=>p.data.featured).slice(0,3);
-const featured = [...picked, ...articles.filter(p=>!picked.some(f=>f.id===p.id))].slice(0,3);
+const curatedSlugs = lang === 'en' ? [
+  'deepagents-kb-mcp-troubleshooting',
+  'neo4j-deep-dive-storage-indexes-query-optimization',
+  'how-enterprises-handle-large-scale-data-imports',
+] : [];
+const curated = curatedSlugs.flatMap(slug=>{
+  const post = articles.find(p=>p.id.includes(slug));
+  return post ? [post] : [];
+});
+const editorFavorites = articles.filter(p=>p.data.featured && !curated.some(c=>c.id===p.id));
+const featured = [...curated, ...editorFavorites,
+  ...articles.filter(p=>!curated.some(c=>c.id===p.id) && !editorFavorites.some(f=>f.id===p.id))
+].slice(0,3);
 const recent = articles.filter(p=>!featured.some(f=>f.id===p.id)).slice(0,4);
 const series = seriesData.map(s=>({
   ...s, count:articles.filter(p=>p.data.series===s.id).length
