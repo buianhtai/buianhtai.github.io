@@ -461,3 +461,8 @@ html body::before { display: none; }
   .ed-topic-grid {grid-template-columns:1fr;}
   .ed-topic-card {min-height:118px;}
 }
+
+/* Progressive discovery: first twelve matching articles, then on demand. */
+.ed-archive-more-wrap {display:flex;align-items:center;justify-content:center;margin:26px 0 0;}
+.ed-archive-more-wrap[hidden] {display:none;}
+.ed-archive-more-wrap .ed-btn {min-width:205px;}
