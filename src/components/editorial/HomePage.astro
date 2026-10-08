@@ -1,115 +1,131 @@
 ---
 import { getCollection } from 'astro:content';
+import { Icon } from 'astro-icon/components';
 import { getPostUrl } from '../../lib/posts';
 import seriesData from '../../content/series.json';
 
-interface Props { lang?: 'en' | 'vi'; }
+interface Props { lang?: 'en' | 'vi' }
 const { lang = 'en' } = Astro.props;
-const isVi = lang === 'vi';
+const vi = lang === 'vi';
 const articles = (await getCollection('blog', p => p.data.lang === lang && !p.data.draft))
   .sort((a,b) => b.data.pubDate.getTime() - a.data.pubDate.getTime());
-const picked = articles.filter(p => p.data.featured).slice(0,3);
-const featured = [...picked,...articles.filter(p => !picked.some(x => x.id === p.id))].slice(0,3);
-const recent = articles.filter(p => !featured.some(x => x.id === p.id)).slice(0,4);
-const series = seriesData.map((s, idx) => ({
-  ...s, index: String(idx+1).padStart(2,'0'),
-  count: articles.filter(p => p.data.series === s.id).length,
-})).filter(s => s.count > 0);
-const count = (n: number) => String(n).padStart(2,'0');
-const shortDate = (d: Date) => d.toLocaleDateString(lang === 'vi' ? 'vi-VN' : 'en-US', {year:'numeric',month:'short',day:'numeric'});
+const picked = articles.filter(p=>p.data.featured).slice(0,3);
+const featured = [...picked, ...articles.filter(p=>!picked.some(f=>f.id===p.id))].slice(0,3);
+const recent = articles.filter(p=>!featured.some(f=>f.id===p.id)).slice(0,4);
+const series = seriesData.map(s=>({
+  ...s, count:articles.filter(p=>p.data.series===s.id).length
+})).filter(s=>s.count>0);
+const topics = [
+  {label:'AI & Agents', icon:'lucide:brain-circuit', small:'Agents, RAG & tools', href:`/${lang}/blog?category=ai`},
+  {label:'System Design', icon:'lucide:network', small:'Scaling & reliability',href:`/${lang}/blog?category=architecture`},
+  {label:'Database Internals',icon:'lucide:database',small:'Storage & consistency',href:`/${lang}/foundations`},
+  {label:'Programming',icon:'lucide:code-2',small:'Languages & patterns',href:`/${lang}/blog?category=tutorial`},
+];
+const dateLabel = (date:Date)=>date.toLocaleDateString(vi?'vi-VN':'en-US',{month:'short',day:'numeric',year:'numeric'});
 ---
 
-<div class="ed-home">
-  <section class="ed-hero">
+<div class="ed-home ed-home-v2">
+  <section class="ed-hero" aria-labelledby="hero-heading">
     <div class="ed-container ed-hero-grid">
-      <div>
-        <div class="ed-eyebrow ed-kicker"><span class="ed-dot"></span>{isVi ? 'Kỹ thuật phần mềm • Chia sẻ kiến thức' : 'Engineering notes · Learning in public'}</div>
-        <h1>
-          {isVi ? <>Xây dựng hệ thống.<br /><em>Chia sẻ kiến thức.</em></>
-          : <>Building systems.<br /><em>Sharing the thinking.</em></>}
-        </h1>
-        <p class="ed-hero-intro">
-          {isVi
-            ? 'Tôi là Tai Bui — kỹ sư backend quan tâm đến AI agents, hệ thống phân tán, cơ sở dữ liệu và những đánh đổi khi thiết kế phần mềm thực tế.'
-            : 'I’m Tai Bui, a backend engineer exploring AI agents, distributed systems, database internals and the architecture decisions behind reliable software.'}
+      <div class="ed-hero-copy">
+        <div class="ed-eyebrow ed-kicker"><span class="ed-dot" aria-hidden="true"></span>
+          {vi ? 'KỸ THUẬT PHẦN MỀM · TÌM HIỂU CHUYÊN SÂU' : 'ENGINEERING NOTES · LEARNING IN PUBLIC'}
+        </div>
+        <h1 id="hero-heading">{vi ?
+          <>Xây dựng hệ thống.<br/><em>Chia sẻ kiến thức.</em></> :
+          <>Building systems.<br/><em>Sharing what I learn.</em></>
+        }</h1>
+        <p class="ed-hero-intro">{vi
+          ? 'Tôi là Tai Bui. Tôi tìm hiểu kiến trúc AI, hệ thống phân tán và những quyết định thiết kế tạo nên phần mềm đáng tin cậy.'
+          : 'I’m Tai Bui, a backend engineer exploring AI agents, distributed systems, database internals, and the decisions behind reliable software.'}
         </p>
         <div class="ed-hero-actions">
-          <a class="ed-btn ed-btn-primary" href={`/${lang}/blog`}>{isVi ? 'Khám phá bài viết' : 'Explore writing'} <span aria-hidden="true">↗</span></a>
-          <a class="ed-btn ed-btn-quiet" href="https://github.com/buianhtai" rel="noopener noreferrer" target="_blank">GitHub <span aria-hidden="true">↗</span></a>
+          <a class="ed-btn ed-btn-primary" href={`/${lang}/blog`}>{vi?'Khám phá bài viết':'Explore articles'} <span aria-hidden="true">→</span></a>
+          <a class="ed-btn ed-btn-quiet" href={`/${lang}/#projects`}>{vi?'Giới thiệu':'About me'} <span aria-hidden="true">↗</span></a>
         </div>
-        <div class="ed-hero-stats">
-          <div class="ed-hero-stat"><strong>{articles.length}</strong><span>{isVi ? 'Bài viết' : 'Articles'}</span></div>
-          <div class="ed-hero-stat"><strong>{series.length}</strong><span>{isVi ? 'Chuyên đề' : 'Deep-dive series'}</span></div>
-          <div class="ed-hero-stat"><strong>01</strong><span>{isVi ? 'Tư duy kỹ thuật' : 'Engineering mindset'}</span></div>
+        <div class="ed-hero-stats" aria-label={vi?'Thống kê bài viết':'Publishing overview'}>
+          <div class="ed-hero-stat"><strong>{articles.length}</strong><span>{vi?'Bài viết':'Articles'}</span></div>
+          <div class="ed-hero-stat"><strong>{series.length}</strong><span>{vi?'Chuyên đề':'Series'}</span></div>
+          <div class="ed-hero-stat"><strong>{new Set(articles.flatMap(p=>p.data.tags)).size}</strong><span>{vi?'Từ khóa':'Topics & tags'}</span></div>
         </div>
       </div>
-      <div class="ed-hero-panel" aria-label="Topics covered in this blog">
-        <div class="ed-panel-head"><span>~/engineering/notes</span><span aria-hidden="true">● ● ●</span></div>
-        <div class="ed-panel-body">
-          <div class="ed-kicker" style="margin-bottom:10px">{isVi ? 'Những điều tôi nghiên cứu' : 'Areas of curiosity'}</div>
-          {[
-            ['01','AI agents & orchestration','Tools, memory, retrieval'],
-            ['02','Distributed systems','Scale, resilience, trade-offs'],
-            ['03','Database internals','Storage, queries, consistency'],
-            ['04','Engineering craft','From principles to production'],
-          ].map(([number,title,subtitle]) => (
-            <div class="ed-panel-line">
-              <span class="ed-panel-index">{number}</span>
-              <div><div class="ed-panel-label">{title}</div><div class="ed-panel-caption">{subtitle}</div></div>
-            </div>
+      <div class="ed-topic-panel" aria-label={vi?'Khám phá theo chủ đề':'Explore by topic'}>
+        <div class="ed-topic-panel-header">
+          <span>{vi?'Khám phá theo chủ đề':'Explore by topic'}</span>
+          <span class="ed-panel-visual" aria-hidden="true">✳</span>
+        </div>
+        <div class="ed-topic-grid">
+          {topics.map(topic=>(
+            <a class="ed-topic-card" href={topic.href}>
+              <span class="ed-topic-icon"><Icon name={topic.icon} width="25" height="25" /></span>
+              <span class="ed-topic-name">{topic.label}</span>
+              <span class="ed-topic-note">{topic.small} <span aria-hidden="true">↗</span></span>
+            </a>
           ))}
         </div>
+        <p class="ed-topic-panel-caption">{vi
+          ? 'Kiến thức nền tảng, những phân tích sâu, và bài học từ việc xây dựng hệ thống.'
+          : 'First principles, deep dives, and lessons from building real systems.'}</p>
       </div>
     </div>
   </section>
 
   <section class="ed-container ed-home-section" aria-labelledby="featured-title">
     <div class="ed-section-top">
-      <div><div class="ed-kicker">{isVi ? 'Lựa chọn của tác giả' : 'Editor’s picks'}</div><h2 id="featured-title">{isVi ? 'Bài viết nổi bật' : 'Start with these ideas'}</h2></div>
-      <a href={`/${lang}/blog`}>{isVi ? 'Xem tất cả' : 'All articles'} ↗</a>
+      <div><div class="ed-kicker">{vi?'BÀI VIẾT ĐƯỢC CHỌN LỌC':'FEATURED WRITING'}</div>
+        <h2 id="featured-title">{vi?'Đọc những bài nổi bật':'Start with these ideas'}</h2>
+        <p class="ed-section-lead">{vi?'Các phân tích và ghi chép kỹ thuật đáng khám phá.':'Selected deep dives into architecture and engineering.'}</p>
+      </div>
+      <a href={`/${lang}/blog`}>{vi?'Tất cả bài viết':'Browse all articles'} <span aria-hidden="true">→</span></a>
     </div>
-    <div class="ed-grid">
-      {featured.map(post => (
-        <article class="ed-card">
+    <div class="ed-grid ed-featured-grid">
+      {featured.map((post,i)=>(
+        <article class="ed-card ed-feature-card">
           <a class="ed-card-link" href={getPostUrl(post)}>
+            <div class="ed-feature-graphic" data-art={post.data.category} aria-hidden="true">
+              <div class="ed-feature-glyph">{String(i+1).padStart(2,'0')}</div>
+              <span class="ed-feature-graphic-caption">{post.data.series ? 'ENGINEERING DEEP DIVE' : 'FIELD NOTES'}</span>
+            </div>
             <div class="ed-card-body">
-              <div class="ed-card-top"><span class="ed-card-topic">{post.data.category}</span><span>·</span><time datetime={post.data.pubDate.toISOString()}>{shortDate(post.data.pubDate)}</time></div>
+              <div class="ed-card-top"><span class="ed-card-topic">{post.data.category}</span><span>·</span>
+                <time datetime={post.data.pubDate.toISOString()}>{dateLabel(post.data.pubDate)}</time></div>
               <h3>{post.data.title}</h3><p>{post.data.description}</p>
             </div>
-            <div class="ed-card-foot"><span>{post.data.series ? 'Deep dive / Series' : 'Engineering notes'}</span><span class="arrow" aria-hidden="true">↗</span></div>
+            <div class="ed-card-foot"><span>{post.data.series?'Read the series':'Read article'}</span><span class="arrow" aria-hidden="true">↗</span></div>
           </a>
         </article>
       ))}
     </div>
   </section>
 
-  <section class="ed-container ed-home-section" aria-labelledby="series-title">
+  {series.length>0 && <section class="ed-container ed-home-section" aria-labelledby="series-title">
     <div class="ed-section-top">
-      <div><div class="ed-kicker">{isVi ? 'Học theo lộ trình' : 'Structured learning'}</div><h2 id="series-title">{isVi ? 'Các chuyên đề' : 'Explore the series'}</h2></div>
-      <a href={`/${lang}/blog`}>{isVi ? 'Thư viện bài viết' : 'Browse library'} ↗</a>
-    </div>
-    {series.length > 0 ? (
-      <div class="ed-series-grid">
-        {series.map(s => (
-          <a class="ed-series-card" href={`/${lang}/blog?series=${encodeURIComponent(s.id)}`}>
-            <span class="ed-series-icon" aria-hidden="true">{s.index}</span>
-            <h3>{s.title}</h3><p>{s.description}</p>
-            <small>{s.count} {isVi ? 'bài viết' : 'articles'} <span aria-hidden="true">↗</span></small>
-          </a>
-        ))}
+      <div><div class="ed-kicker">{vi?'ĐỌC THEO LỘ TRÌNH':'CURATED LEARNING PATHS'}</div>
+        <h2 id="series-title">{vi?'Khám phá các chuyên đề':'Go deeper, one topic at a time'}</h2>
+        <p class="ed-section-lead">{vi?'Các bài viết kết nối với nhau theo một lộ trình.':'Connected articles that build understanding chapter by chapter.'}</p>
       </div>
-    ): <p class="ed-muted">{isVi ? 'Đang cập nhật các chuyên đề.' : 'More curated series coming soon.'}</p>}
-  </section>
+    </div>
+    <div class="ed-series-grid">
+      {series.map((s,i)=>(
+        <a class="ed-series-card" href={`/${lang}/blog?series=${encodeURIComponent(s.id)}`}>
+          <span class="ed-series-icon" aria-hidden="true">{String(i+1).padStart(2,'0')}</span>
+          <h3>{s.title}</h3><p>{s.description}</p>
+          <small>{s.count} {vi?'bài viết':'articles'} <span aria-hidden="true">→</span></small>
+        </a>
+      ))}
+    </div>
+  </section>}
 
   <section class="ed-container ed-home-section" aria-labelledby="latest-title">
     <div class="ed-section-top">
-      <div><div class="ed-kicker">{isVi ? 'Mới xuất bản' : 'Fresh from the desk'}</div><h2 id="latest-title">{isVi ? 'Bài viết gần đây' : 'Recent writing'}</h2></div>
-      <a href={`/${lang}/blog`}>{isVi ? 'Xem thêm' : 'View all'} ↗</a>
+      <div><div class="ed-kicker">{vi?'MỚI XUẤT BẢN':'RECENT WRITING'}</div>
+        <h2 id="latest-title">{vi?'Bài viết gần đây':'Latest notes from the desk'}</h2></div>
+      <a href={`/${lang}/blog`}>{vi?'Xem tất cả':'All writing'} <span aria-hidden="true">→</span></a>
     </div>
     <div class="ed-archive-list">
-      {recent.map(post => (
+      {recent.map(post=>(
         <a href={getPostUrl(post)} class="ed-archive-post">
-          <time class="ed-archive-date" datetime={post.data.pubDate.toISOString()}>{shortDate(post.data.pubDate)}</time>
+          <time class="ed-archive-date" datetime={post.data.pubDate.toISOString()}>{dateLabel(post.data.pubDate)}</time>
           <div><div class="ed-kicker" style="font-size:.63rem">{post.data.category}</div><h2>{post.data.title}</h2><p>{post.data.description}</p></div>
           <span class="ed-archive-arrow" aria-hidden="true">↗</span>
         </a>
@@ -117,16 +133,16 @@ const shortDate = (d: Date) => d.toLocaleDateString(lang === 'vi' ? 'vi-VN' : 'e
     </div>
   </section>
 
-  <section class="ed-container ed-home-section" id="projects">
+  <section class="ed-container ed-home-section" id="projects" aria-labelledby="about-title">
     <div class="ed-about">
       <div>
-        <div class="ed-kicker">{isVi ? 'Về tác giả' : 'Behind the articles'}</div>
-        <h2>{isVi ? 'Viết để hiểu sâu hơn.' : 'Curiosity meets production engineering.'}</h2>
-        <p>{isVi
-          ? 'Tôi ghi lại những kiến thức, thử nghiệm và bài học trong quá trình thiết kế hệ thống backend và nghiên cứu kiến trúc AI. Mục tiêu là giải thích rõ ràng những điều phức tạp.'
-          : 'I write about the internals, experiments, and architectural trade-offs I encounter while building backend systems and studying AI infrastructure. The goal: make hard engineering ideas understandable.'}</p>
+        <div class="ed-kicker">{vi?'VỀ TÁC GIẢ':'ABOUT THE AUTHOR'}</div>
+        <h2 id="about-title">{vi?'Viết để hiểu sâu hơn.':'Curiosity, clarity, and engineering craft.'}</h2>
+        <p>{vi
+          ? 'Tôi ghi lại những kiến thức, thử nghiệm và đánh đổi kiến trúc trong quá trình xây dựng phần mềm và tìm hiểu hạ tầng AI. Viết giúp tôi hiểu sâu hơn và chia sẻ những gì hữu ích.'
+          : 'I document the systems, experiments, and architectural trade-offs I encounter while building software and exploring AI infrastructure. Writing is how I learn, and how I share what I find.'}</p>
       </div>
-      <a href="https://github.com/buianhtai" class="ed-btn ed-btn-quiet" target="_blank" rel="noopener noreferrer">{isVi ? 'Xem GitHub' : 'Explore GitHub'} ↗</a>
+      <a href="https://github.com/buianhtai" class="ed-btn ed-btn-quiet" target="_blank" rel="noopener noreferrer">{vi?'Xem GitHub':'View GitHub'} ↗</a>
     </div>
   </section>
 </div>
