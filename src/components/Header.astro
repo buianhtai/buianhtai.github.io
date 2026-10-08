@@ -2,85 +2,32 @@
 import ThemeToggle from './ThemeToggle.astro';
 const { lang = 'en' } = Astro.props;
 const otherLang = lang === 'en' ? 'vi' : 'en';
-const langLabel = lang === 'en' ? 'VI' : 'EN';
-const currentPath = Astro.url.pathname;
-const switchedPath = currentPath.replace(`/${lang}/`, `/${otherLang}/`);
+const path = Astro.url.pathname;
+const isHome = path === '/' || path === `/${lang}/`;
+const isBlog = path.startsWith(`/${lang}/blog`);
+const isFoundations = path.startsWith(`/${lang}/foundations`);
+const isTags = path.startsWith(`/${lang}/tags`);
+// Only top-level pages have guaranteed localized equivalents.
+const switchedPath = isHome ? `/${otherLang}/` :
+  isFoundations ? `/${otherLang}/foundations` :
+  isTags ? `/${otherLang}/tags` : `/${otherLang}/blog`;
+const vi = lang === 'vi';
 ---
-
-<header class="sticky top-0 z-50" style="background: var(--color-bg); border-bottom: 1px solid var(--color-border);">
-  <!-- Top status bar -->
-  <div class="hidden sm:flex items-center justify-between px-4 py-1" style="background: var(--color-surface); border-bottom: 1px solid var(--color-border); font-family: var(--font-mono); font-size: 0.65rem; color: var(--color-text-muted);">
-    <span><span style="color: var(--color-green);">●</span> tai.bui · dev blog</span>
-    <span id="header-clock" aria-hidden="true"></span>
-  </div>
-
-  <!-- Main nav -->
-  <nav class="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between">
-    <!-- Logo: terminal prompt style -->
-    <a href={`/${lang}/`}
-       class="flex items-center gap-1.5 group shrink-0"
-       style="font-family: var(--font-mono); text-decoration: none;">
-      <span style="color: var(--color-accent); opacity: 0.6;" class="hidden xs:inline">~/</span>
-      <span style="color: var(--color-accent); font-weight: 700; font-size: 1.05rem;">tai.bui</span>
-      <span class="blink-cursor" style="color: var(--color-accent);">_</span>
-    </a>
-
-    <!-- Links -->
-    <div class="flex items-center gap-0.5 sm:gap-1 overflow-x-auto no-scrollbar py-2">
-      {[
-        { href: `/${lang}/blog`, label: 'blog' },
-        { href: '/#projects', label: 'projects' },
-        { href: `/${lang}/tags`, label: 'tags' },
-      ].map(({ href, label }) => (
-        <a
-          href={href}
-          style="font-family: var(--font-mono); font-size: 0.72rem; color: var(--color-text-dim); text-decoration: none; padding: 0.3rem 0.45rem; transition: color 0.15s, background 0.15s;"
-          class="nav-link whitespace-nowrap"
-        >
-          <span class="hidden sm:inline">./</span>{label}
-        </a>
-      ))}
-
-      <!-- Lang switch -->
-      <a
-        href={switchedPath}
-        style="font-family: var(--font-mono); font-size: 0.72rem; color: var(--color-text-muted); text-decoration: none; padding: 0.3rem 0.55rem; border: 1px solid var(--color-border); margin-left: 0.25rem;"
-      >
-        [{langLabel}]
+<a href="#main-content" class="ed-skip-link">{vi ? 'Chuyển đến nội dung' : 'Skip to content'}</a>
+<header class="ed-header">
+  <div class="ed-container ed-header-in">
+    <a class="ed-wordmark" href={`/${lang}/`} aria-label="Tai Bui — home">tai<span>.</span>bui<span>_</span></a>
+    <nav class="ed-nav" aria-label={vi ? 'Điều hướng chính' : 'Main navigation'}>
+      <a href={`/${lang}/blog`} aria-current={isBlog ? 'page' : undefined}>{vi ? 'Bài viết' : 'Writing'}</a>
+      <a href={`/${lang}/foundations`} aria-current={isFoundations ? 'page' : undefined}>{vi ? 'Kiến thức nền' : 'Foundations'}</a>
+      <a class="ed-nav-projects" href={`/${lang}/#projects`}>{vi ? 'Giới thiệu' : 'About'}</a>
+    </nav>
+    <div class="ed-header-controls">
+      <a href={`/${lang}/blog`} class="ed-icon-button" title={vi ? 'Tìm bài viết' : 'Find articles'} aria-label={vi ? 'Tìm bài viết' : 'Find articles'}>
+        <svg aria-hidden="true" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="10.8" cy="10.8" r="6.5"/><path d="m16 16 5 5"/></svg>
       </a>
-
+      <a href={switchedPath} class="ed-icon-button ed-header-lang" title={vi ? 'English' : 'Tiếng Việt'} aria-label={vi ? 'Switch to English' : 'Chuyển sang tiếng Việt'}>{vi ? 'EN' : 'VI'}</a>
       <ThemeToggle />
     </div>
-  </nav>
+  </div>
 </header>
-
-<style>
-  .no-scrollbar::-webkit-scrollbar { display: none; }
-  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-
-  .blink-cursor {
-    animation: blink 1.1s step-end infinite;
-  }
-  @keyframes blink {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0; }
-  }
-
-  .nav-link:hover {
-    color: var(--color-accent) !important;
-    background: var(--color-accent-glow);
-  }
-</style>
-
-<script is:inline>
-  // Live clock in status bar
-  function updateClock() {
-    const el = document.getElementById('header-clock');
-    if (!el) return;
-    const now = new Date();
-    const p = (n) => String(n).padStart(2, '0');
-    el.textContent = `${p(now.getHours())}:${p(now.getMinutes())}:${p(now.getSeconds())}`;
-  }
-  updateClock();
-  setInterval(updateClock, 1000);
-</script>
