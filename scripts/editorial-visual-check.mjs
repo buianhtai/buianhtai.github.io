@@ -82,6 +82,18 @@ try {
   }
 
   const previousTheme=await home.locator('html').evaluate(el=>el.classList.contains('theme-light'));
+  const narrow=await browser.newContext({viewport:{width:320,height:740},deviceScaleFactor:1,isMobile:true,hasTouch:true});
+  await narrow.addInitScript(() => localStorage.setItem('theme','terminal'));
+  for(const [label,path] of [['home','/en/'],['archive','/en/blog/']]){
+    const page=await narrow.newPage();
+    await page.goto(host+path,{waitUntil:'networkidle'});
+    const sizes=await page.evaluate(()=>({width:document.documentElement.clientWidth,content:document.documentElement.scrollWidth}));
+    assert(sizes.content<=sizes.width+2,'Horizontal overflow on 320px '+label+': '+JSON.stringify(sizes));
+    await page.screenshot({path:out+'/small-phone-'+label+'.png',fullPage:true});
+    await page.close();
+  }
+  await narrow.close();
+
   await home.locator('#theme-toggle').click();
   const changedTheme=await home.locator('html').evaluate(el=>el.classList.contains('theme-light'));
   assert.notEqual(changedTheme,previousTheme,'Theme toggle not working');
