@@ -17,12 +17,12 @@ Implementation: `src/styles/editorial.css`. Theme switching: `src/components/The
 
 | Token | Dark | Light |
 | --- | --- | --- |
-| Background | `#0b111b` | `#f7f9fc` |
-| Surface | `#121c2a` | `#ffffff` |
-| Text | `#edf3f8` | `#152538` |
-| Muted text | `#a5b5c7` | `#52667e` |
-| Accent | `#71e0d0` | `#087e79` |
-| Border | `#263548` | `#dfe6ef` |
+| Background | `#101722` | `#f8fafc` |
+| Surface | `#151f2e` | `#ffffff` |
+| Text | `#e9f0f8` | `#162737` |
+| Muted text | `#a7b7ca` | `#4b657a` |
+| Accent | `#5dd9e7` | `#087888` |
+| Border | `#2c3c50` | `#dfe7ee` |
 
 Typography: Inter for UI/editorial reading, JetBrains Mono for metadata, existing IBM Plex fonts for specialized Foundations. Spacing uses generous section rhythm, max-width 1180px for pages and 750px for readable article text. Layout adapts below 1024px / 760px / 520px. Motion honours `prefers-reduced-motion`.
 
@@ -49,3 +49,20 @@ Typography: Inter for UI/editorial reading, JetBrains Mono for metadata, existin
 - Visual design is implemented with Astro + Tailwind and a dedicated plain CSS token layer; no SPA conversion or new runtime framework.
 - Metadata preserves canonical and Open Graph information, and regular blog posts emit `BlogPosting` JSON-LD.
 - The redesign branch is intended for review/QA before merging into `main`.
+
+## Visual alignment V2 (PR #3)
+
+The homepage now matches the approved visual direction more directly:
+
+- Dark editorial canvas by default. Light mode is a persisted user choice rather than silently following OS preference.
+- Concise hero copy on the left, **2×2 topic cards** on the right, clear CTAs and compact article/series statistics.
+- Editor-curated Featured Writing prioritizes substantive architecture case studies, not just the latest chronologically published tutorials. Vietnamese archive still uses local available posts.
+- Archive: editorial card grid, usable URLs for category and series deep links, and progressive browsing in groups of twelve.
+- Standard MDX post: editorial headings without legacy terminal adornment, existing hero diagrams, desktop sticky TOC, mobile collapsible TOC.
+- Foundations articles keep their specialized chapter reading experience and visual palette because those extensive components were deliberately designed as a distinct learning mode.
+
+### Browser visual QA
+
+`scripts/editorial-visual-check.mjs` runs against the built Astro preview using Chromium. On PRs, GitHub Actions uploads `editorial-v2-screenshots` with desktop, mobile (390px), small phone (320px), featured cards, dark/light previews, and checks that there is no horizontal overflow.
+
+**Review standard:** inspect those actual rendered screenshots against the approved concept before marking the PR ready to merge; passing compilation alone is insufficient.
