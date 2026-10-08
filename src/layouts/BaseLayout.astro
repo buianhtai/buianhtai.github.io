@@ -47,8 +47,9 @@ const pageTitle = title === 'tai.bui' ? 'Tai Bui — Engineering Notes' : title 
     <script is:inline>
       (() => {
         const saved = localStorage.getItem('theme');
-        const prefersLight = window.matchMedia('(prefers-color-scheme: light)').matches;
-        const light = saved === 'light' || saved === 'material-light' || (!saved && prefersLight);
+        // The editorial reference is intentionally dark by default.
+        // Honor explicit light mode selections saved by returning readers.
+        const light = saved === 'light' || saved === 'material-light';
         document.documentElement.classList.remove(
           'theme-dracula','theme-nord','theme-gruvbox','theme-solarized','theme-material',
           'theme-material-light','theme-tokyo-night','theme-tokyo-storm'
