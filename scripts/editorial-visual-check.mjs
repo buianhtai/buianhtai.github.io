@@ -36,9 +36,9 @@ try {
 
   const archive=await desktop.newPage();
   await archive.goto(host+'/en/blog/',{waitUntil:'networkidle'});
-  const first=archive.locator('.ed-archive-post[data-category="ai"]').first();
-  const articleURL=await first.getAttribute('href');
-  assert(articleURL?.startsWith('/en/blog/'),'Archive article route missing');
+  const articleURL='/en/blog/building-support-agents-for-your-platform';
+  assert(await archive.locator('a.ed-archive-post[href="'+articleURL+'"]').count()===1,
+    'Known standard-layout article is missing from archive');
   const total=Number(await archive.locator('#ed-result-count').innerText());
   assert(total>0,'Archive contains no articles');
   await archive.screenshot({path:out+'/desktop-archive.png',fullPage:true});
