@@ -466,3 +466,19 @@ html body::before { display: none; }
 .ed-archive-more-wrap {display:flex;align-items:center;justify-content:center;margin:26px 0 0;}
 .ed-archive-more-wrap[hidden] {display:none;}
 .ed-archive-more-wrap .ed-btn {min-width:205px;}
+
+
+/* Mobile archive: the v2 desktop grid override must not defeat the old breakpoint. */
+@media(max-width:900px) {
+  .ed-archive-shell {grid-template-columns:minmax(0,1fr);gap:30px;}
+  .ed-filters {position:static;max-height:none;overflow:visible;
+    display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;}
+  .ed-filters .ed-filter-group {min-width:0;margin-bottom:0;}
+}
+@media(max-width:570px) {
+  .ed-archive-shell {grid-template-columns:minmax(0,1fr);}
+  .ed-filters {grid-template-columns:minmax(0,1fr);gap:18px;}
+  .ed-archive .ed-archive-list {grid-template-columns:minmax(0,1fr);}
+  .ed-archive .ed-archive-post {width:100%;min-width:0;}
+  .ed-archive .ed-archive-post h2,.ed-archive .ed-archive-post p {overflow-wrap:anywhere;}
+}
