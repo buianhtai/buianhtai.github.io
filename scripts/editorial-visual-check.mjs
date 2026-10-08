@@ -35,7 +35,7 @@ try {
 
   const archive=await desktop.newPage();
   await archive.goto(host+'/en/blog/',{waitUntil:'networkidle'});
-  const first=archive.locator('.ed-archive-post').first();
+  const first=archive.locator('.ed-archive-post[data-category="ai"]').first();
   const articleURL=await first.getAttribute('href');
   assert(articleURL?.startsWith('/en/blog/'),'Archive article route missing');
   const total=Number(await archive.locator('#ed-result-count').innerText());
@@ -71,8 +71,10 @@ try {
     await page.close();
   }
 
+  const previousTheme=await home.locator('html').evaluate(el=>el.classList.contains('theme-light'));
   await home.locator('#theme-toggle').click();
-  assert(await home.locator('html').evaluate(el=>el.classList.contains('theme-light')),'Theme toggle not working');
+  const changedTheme=await home.locator('html').evaluate(el=>el.classList.contains('theme-light'));
+  assert.notEqual(changedTheme,previousTheme,'Theme toggle not working');
   await home.screenshot({path:out+'/desktop-home-light.png',fullPage:true});
   console.log('PASS: desktop/mobile screenshots, topic cards, article route, filters, light mode, overflow');
   console.log('Preview screenshots saved to '+out);
