@@ -56,6 +56,7 @@ async function noOverflow(page, where) {
   assert(box.width <= box.viewport + 2, 'Horizontal overflow on ' + where + ': ' + JSON.stringify(box));
 }
 
+let passed = false;
 try {
   await ready();
   step = 'launching Chromium';
@@ -117,8 +118,19 @@ try {
   }
 
   console.log('PASS: Astro routes, full-text results, article indexing and responsive layout');
+  passed = true;
+} catch (error) {
+  console.error('FAIL: visual smoke checks', error);
 } finally {
+  // Chromium can complete all checks but hang on close with active workers.
+  // Bound cleanup independently, then exit explicitly so CI does not run forever.
+  if (browser) {
+    await Promise.race([
+      browser.close().catch(() => {}),
+      new Promise(resolve => setTimeout(resolve, 1800))
+    ]);
+  }
+  server.kill('SIGKILL');
   clearTimeout(timeout);
-  if (browser) await browser.close().catch(() => {});
-  server.kill('SIGTERM');
+  process.exit(passed ? 0 : 1);
 }
