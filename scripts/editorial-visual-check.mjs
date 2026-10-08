@@ -83,7 +83,7 @@ try {
   await archive.waitForFunction(() =>
     document.getElementById('ed-fulltext-status')?.textContent?.includes('Results from full article text'), null, {timeout: 12_000});
   assert(Number(await archive.locator('#ed-result-count').innerText()) > 0, 'Pagefind returned zero architecture results');
-  assert(await archive.locator('.ed-search-hit').count() > 0, 'Pagefind results are not visible');
+  await archive.locator('.ed-search-hit').first().waitFor({state:'visible',timeout:12_000});
   await archive.screenshot({path: output + '/search-desktop.png', timeout: 8_000});
   await archive.locator('#ed-article-search').fill('');
   await archive.locator('button[data-category="all"]').click();
