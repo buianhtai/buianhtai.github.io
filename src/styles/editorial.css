@@ -213,7 +213,7 @@ body {background:var(--color-bg);background-image:none;letter-spacing:-.008em;}
 .ed-article-bottom #comments {max-width:var(--ed-reading);margin-inline:auto;}
 
 /* Foundations deep-reading retains its advanced chapter components but inherits editorial palette */
-.f-root:not(.f-palette-light):not(.f-palette-infographic):not(.f-palette-material-light) {
+.f-root:not([class*="f-palette-"]) {
   --f-bg:#0b111b;--f-surface:#121c2a;--f-surface-2:#182536;--f-border:#263548;
   --f-border-bright:#354a62;--f-text:#edf3f8;--f-text-dim:#a5b5c7;
   --f-text-muted:#7f93aa;--f-accent:#71e0d0;--f-accent-dim:#48b9ae;
@@ -278,7 +278,7 @@ body {background:var(--color-bg);background-image:none;letter-spacing:-.008em;}
 }
 .f-topbar {top:72px;}
 @media(max-width:760px) {.f-topbar {top:64px;}}
-html.theme-light body .f-root:not(.f-palette-infographic):not(.f-palette-material-light) {
+html.theme-light body .f-root:not([class*="f-palette-"]) {
   --f-bg:#f7f9fc; --f-surface:#fff; --f-surface-2:#f0f4f8; --f-border:#dfe6ef;
   --f-border-bright:#c2cfdd; --f-text:#152538; --f-text-dim:#52667e;
   --f-text-muted:#657992; --f-accent:#087e79; --f-accent-dim:#08645f;
