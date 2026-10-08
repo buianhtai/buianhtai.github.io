@@ -24,6 +24,7 @@ try {
   browser=await chromium.launch({headless:true});
 
   const desktop=await browser.newContext({ viewport:{width:1440,height:900}, deviceScaleFactor:1 });
+  await desktop.addInitScript(() => localStorage.setItem('theme','terminal'));
   const home=await desktop.newPage();
   await home.goto(host+'/en/',{waitUntil:'networkidle'});
   assert((await home.locator('h1').innerText()).includes('Building systems.'),'Hero text diverged from concept');
@@ -54,8 +55,17 @@ try {
   await article.goto(host+articleURL,{waitUntil:'networkidle'});
   assert(await article.locator('#ed-article-body').count()===1,'Article reading area missing');
   await article.screenshot({path:out+'/desktop-article.png',fullPage:true});
+  const foundationsLink = await archive.locator('.ed-archive-post[data-category="foundations"]').first().getAttribute('href');
+  if(foundationsLink) {
+    const foundation=await desktop.newPage();
+    await foundation.goto(host+foundationsLink,{waitUntil:'domcontentloaded'});
+    assert(await foundation.locator('.f-root').count()===1,'Foundations article layout is missing');
+    await foundation.screenshot({path:out+'/desktop-foundations.png',fullPage:true});
+    await foundation.close();
+  }
 
   const mobile=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:1,isMobile:true,hasTouch:true});
+  await mobile.addInitScript(() => localStorage.setItem('theme','terminal'));
   for(const [label,path] of [['home','/en/'],['archive','/en/blog/'],['article',articleURL]]){
     const page=await mobile.newPage();
     await page.goto(host+path,{waitUntil:'networkidle'});
