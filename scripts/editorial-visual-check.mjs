@@ -54,13 +54,13 @@ try {
   const article=await desktop.newPage();
   await article.goto(host+articleURL,{waitUntil:'networkidle'});
   assert(await article.locator('#ed-article-body').count()===1,'Article reading area missing');
-  await article.screenshot({path:out+'/desktop-article.png',fullPage:true});
+  await article.screenshot({path:out+'/desktop-article.png',fullPage:false});
   const foundationsLink = await archive.locator('.ed-archive-post[data-category="foundations"]').first().getAttribute('href');
   if(foundationsLink) {
     const foundation=await desktop.newPage();
     await foundation.goto(host+foundationsLink,{waitUntil:'domcontentloaded'});
     assert(await foundation.locator('.f-root').count()===1,'Foundations article layout is missing');
-    await foundation.screenshot({path:out+'/desktop-foundations.png',fullPage:true});
+    await foundation.screenshot({path:out+'/desktop-foundations.png',fullPage:false});
     await foundation.close();
   }
 
@@ -69,7 +69,7 @@ try {
   for(const [label,path] of [['home','/en/'],['archive','/en/blog/'],['article',articleURL]]){
     const page=await mobile.newPage();
     await page.goto(host+path,{waitUntil:'networkidle'});
-    await page.screenshot({path:out+'/mobile-'+label+'.png',fullPage:true});
+    await page.screenshot({path:out+'/mobile-'+label+'.png',fullPage:label!=='article'});
     const sizes=await page.evaluate(()=>({
       viewport:document.documentElement.clientWidth,
       content:document.documentElement.scrollWidth
