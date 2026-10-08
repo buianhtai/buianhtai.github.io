@@ -44,13 +44,13 @@ const jsonLd = {
 <BaseLayout title={title} description={description} lang={lang} ogImage={heroImage} article>
   <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
   <div class="ed-reading-line" id="ed-reading-progress" aria-hidden="true"></div>
-  <article class="ed-container ed-article" id="ed-post">
+  <article class="ed-container ed-article" id="ed-post" data-pagefind-body data-pagefind-filter={`category:${post.data.category}`}>
     <nav class="ed-breadcrumb" aria-label="Breadcrumb">
       <a href={`/${lang}/`}>Home</a><span aria-hidden="true">/</span>
       <a href={`/${lang}/blog`}>Writing</a>
       {series && <><span aria-hidden="true">/</span><span>{seriesMeta[series]?.title ?? series}</span></>}
     </nav>
-    <header class="ed-article-head">
+    <header class="ed-article-head" data-pagefind-filter={series ? `series:${series}` : undefined}>
       <div class="ed-kicker">{series ? seriesMeta[series]?.title ?? series : post.data.category}</div>
       {renderTitle && <><h1>{title}</h1><p class="ed-article-dek">{description}</p></>}
       <div class="ed-article-meta">
