@@ -80,6 +80,11 @@ const wordCount = (value:string) => value.trim().split(/\s+/).length;
             </a>
           ))}
         </div>
+        <div class="ed-archive-more-wrap" id="ed-archive-more-wrap" hidden>
+          <button type="button" class="ed-btn ed-btn-quiet" id="ed-show-more">
+            ${vi ? 'Xem thêm bài viết' : 'Load more articles'} <span aria-hidden="true">↓</span>
+          </button>
+        </div>
         <div id="ed-no-results" class="ed-archive-empty" hidden>
           <h2>{vi ? 'Không tìm thấy bài viết' : 'Nothing matched this search'}</h2>
           <p>{vi?'Thử từ khóa hoặc bộ lọc khác.':'Try another search term or reset the filters.'}</p>
@@ -101,6 +106,9 @@ const wordCount = (value:string) => value.trim().split(/\s+/).length;
     const cards = [...root.querySelectorAll('.ed-archive-post')];
     const count = document.getElementById('ed-result-count');
     const empty = document.getElementById('ed-no-results');
+    const moreWrap = document.getElementById('ed-archive-more-wrap');
+    const moreButton = document.getElementById('ed-show-more');
+    let pageLimit = 12;
     const categoryBtns = [...root.querySelectorAll('[data-category]')].filter(el=>el.tagName === 'BUTTON');
     const seriesBtns = [...root.querySelectorAll('[data-series]')].filter(el=>el.tagName === 'BUTTON');
     const params = new URLSearchParams(window.location.search);
@@ -108,21 +116,23 @@ const wordCount = (value:string) => value.trim().split(/\s+/).length;
     let currentSeries = seriesBtns.some(b=>b.dataset.series===params.get('series')) ? params.get('series') : 'all';
     const update = () => {
       const q = (query.value || '').trim().toLocaleLowerCase();
-      let shown = 0;
+      let matching = 0;
       cards.forEach(card => {
-        const visible = (!q || (card.dataset.search || '').includes(q)) &&
+        const matches = (!q || (card.dataset.search || '').includes(q)) &&
           (currentCategory === 'all' || card.dataset.category === currentCategory) &&
           (currentSeries === 'all' || card.dataset.series === currentSeries);
-        card.hidden = !visible;
-        if (visible) shown++;
+        if (matches) matching++;
+        card.hidden = !matches || matching > pageLimit;
       });
-      count.textContent = String(shown);
-      empty.hidden = shown > 0;
+      count.textContent = String(matching);
+      empty.hidden = matching > 0;
+      moreWrap.hidden = matching <= pageLimit;
       categoryBtns.forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.category===currentCategory)));
       seriesBtns.forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.series===currentSeries)));
     };
     categoryBtns.forEach(b=>b.addEventListener('click',()=>{
       currentCategory=b.dataset.category;
+      pageLimit=12;
       const url=new URL(window.location.href);
       if(currentCategory==='all') url.searchParams.delete('category');
       else url.searchParams.set('category',currentCategory);
@@ -131,15 +141,17 @@ const wordCount = (value:string) => value.trim().split(/\s+/).length;
     }));
     seriesBtns.forEach(b=>b.addEventListener('click',()=>{
       currentSeries=b.dataset.series;
+      pageLimit=12;
       const url=new URL(window.location.href);
       if(currentSeries==='all') url.searchParams.delete('series');
       else url.searchParams.set('series',currentSeries);
       history.replaceState(null,'',url);
       update();
     }));
-    query.addEventListener('input',update);
+    query.addEventListener('input',()=>{pageLimit=12;update();});
+    moreButton.addEventListener('click',()=>{pageLimit+=12;update();});
     document.getElementById('ed-reset')?.addEventListener('click',()=>{
-      query.value='';currentCategory='all';currentSeries='all';
+      query.value='';currentCategory='all';currentSeries='all';pageLimit=12;
       const url=new URL(window.location.href);url.searchParams.delete('series');url.searchParams.delete('category');
       history.replaceState(null,'',url);update();query.focus();
     });
