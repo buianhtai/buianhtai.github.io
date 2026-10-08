@@ -44,7 +44,7 @@ const jsonLd = {
 <BaseLayout title={title} description={description} lang={lang} ogImage={heroImage} article>
   <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
   <div class="ed-reading-line" id="ed-reading-progress" aria-hidden="true"></div>
-  <article class="ed-container ed-article" id="ed-post" data-pagefind-body data-pagefind-filter={`category:${post.data.category}`}>
+  <article class="ed-container ed-article" id="ed-post" data-pagefind-filter={`category:${post.data.category}`}>
     <nav class="ed-breadcrumb" aria-label="Breadcrumb">
       <a href={`/${lang}/`}>Home</a><span aria-hidden="true">/</span>
       <a href={`/${lang}/blog`}>Writing</a>
@@ -71,7 +71,7 @@ const jsonLd = {
     </div>}
 
     <div class="ed-article-layout">
-      <div class="ed-article-content prose prose-lg max-w-none" id="ed-article-body">
+      <div class="ed-article-content prose prose-lg max-w-none" id="ed-article-body" data-pagefind-body>
         {toc.length>0 && <details class="ed-mobile-toc">
           <summary>{lang === 'vi' ? 'Mục lục bài viết' : 'On this page'}</summary>
           <ul>{toc.map(h=><li><a href={`#${h.slug}`}>{h.text}</a></li>)}</ul>
