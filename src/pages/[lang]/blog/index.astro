@@ -104,7 +104,7 @@ const wordCount = (value:string) => value.trim().split(/\s+/).length;
     const categoryBtns = [...root.querySelectorAll('[data-category]')].filter(el=>el.tagName === 'BUTTON');
     const seriesBtns = [...root.querySelectorAll('[data-series]')].filter(el=>el.tagName === 'BUTTON');
     const params = new URLSearchParams(window.location.search);
-    let currentCategory = 'all';
+    let currentCategory = categoryBtns.some(b=>b.dataset.category===params.get('category')) ? params.get('category') : 'all';
     let currentSeries = seriesBtns.some(b=>b.dataset.series===params.get('series')) ? params.get('series') : 'all';
     const update = () => {
       const q = (query.value || '').trim().toLocaleLowerCase();
@@ -121,7 +121,14 @@ const wordCount = (value:string) => value.trim().split(/\s+/).length;
       categoryBtns.forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.category===currentCategory)));
       seriesBtns.forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.series===currentSeries)));
     };
-    categoryBtns.forEach(b=>b.addEventListener('click',()=>{currentCategory=b.dataset.category;update();}));
+    categoryBtns.forEach(b=>b.addEventListener('click',()=>{
+      currentCategory=b.dataset.category;
+      const url=new URL(window.location.href);
+      if(currentCategory==='all') url.searchParams.delete('category');
+      else url.searchParams.set('category',currentCategory);
+      history.replaceState(null,'',url);
+      update();
+    }));
     seriesBtns.forEach(b=>b.addEventListener('click',()=>{
       currentSeries=b.dataset.series;
       const url=new URL(window.location.href);
@@ -133,7 +140,7 @@ const wordCount = (value:string) => value.trim().split(/\s+/).length;
     query.addEventListener('input',update);
     document.getElementById('ed-reset')?.addEventListener('click',()=>{
       query.value='';currentCategory='all';currentSeries='all';
-      const url=new URL(window.location.href);url.searchParams.delete('series');
+      const url=new URL(window.location.href);url.searchParams.delete('series');url.searchParams.delete('category');
       history.replaceState(null,'',url);update();query.focus();
     });
     update();
