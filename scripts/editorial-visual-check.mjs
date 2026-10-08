@@ -81,7 +81,7 @@ try {
   assert.equal(new URL(archive.url()).searchParams.get('category'), 'architecture');
   await archive.locator('#ed-article-search').fill('Neo4j');
   await archive.waitForFunction(() =>
-    document.getElementById('ed-fulltext-status')?.textContent?.includes('Results from full article text'), {timeout: 12_000});
+    document.getElementById('ed-fulltext-status')?.textContent?.includes('Results from full article text'), null, {timeout: 12_000});
   assert(Number(await archive.locator('#ed-result-count').innerText()) > 0, 'Pagefind returned zero architecture results');
   assert(await archive.locator('.ed-search-hit').count() > 0, 'Pagefind results are not visible');
   await archive.screenshot({path: output + '/search-desktop.png', timeout: 8_000});
