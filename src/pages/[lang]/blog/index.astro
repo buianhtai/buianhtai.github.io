@@ -42,8 +42,10 @@ const wordCount = (value:string) => value.trim().split(/\s+/).length;
       <aside class="ed-filters" aria-label={vi ? 'Bộ lọc' : 'Article filters'}>
         <div class="ed-filter-group">
           <h2>{vi ? 'Tìm kiếm' : 'Search articles'}</h2>
-          <label class="ed-sr" for="ed-article-search">{vi?'Tìm theo tiêu đề hoặc từ khóa':'Search titles, descriptions and tags'}</label>
-          <input id="ed-article-search" type="search" class="ed-search" placeholder={vi?'Tìm bài viết…':'Title, keyword, or tag…'} autocomplete="off" />
+          <label class="ed-sr" for="ed-article-search">{vi?'Tìm trong toàn bộ nội dung bài viết':'Search full article text, headings and tags'}</label>
+          <input id="ed-article-search" type="search" class="ed-search" placeholder={vi?'Tìm trong bài viết…':'Search every article…'} autocomplete="off" />
+          <p class="ed-search-assist">{vi ? 'Tìm kiếm toàn văn · chạy trực tiếp trên website' : 'Full-text search · private and serverless'}</p>
+          <p class="ed-search-fallback" id="ed-search-fallback" role="status" hidden>{vi ? 'Không tải được chỉ mục tìm kiếm. Đang tìm trong tiêu đề và từ khóa.' : 'Search index unavailable. Showing title and tag matches instead.'}</p>
         </div>
         <div class="ed-filter-group">
           <h2>{vi ? 'Chủ đề' : 'Topics'}</h2>
@@ -65,6 +67,13 @@ const wordCount = (value:string) => value.trim().split(/\s+/).length;
           <span role="status" aria-live="polite"><strong id="ed-result-count">{posts.length}</strong> {vi ? 'bài viết' : 'articles found'}</span>
           <span>{vi ? 'Mới nhất trước' : 'Newest first'} ↓</span>
         </div>
+        <section class="ed-fulltext-pane" id="ed-fulltext-pane" aria-label={vi ? 'Kết quả tìm kiếm toàn văn' : 'Full-text search results'} hidden>
+          <p class="ed-fulltext-status" id="ed-fulltext-status" role="status" aria-live="polite"></p>
+          <div class="ed-search-result-list" id="ed-fulltext-results"></div>
+          <button type="button" class="ed-btn ed-btn-quiet ed-fulltext-more" id="ed-fulltext-more" hidden>
+            {vi ? 'Xem thêm kết quả' : 'More search results'} ↓
+          </button>
+        </section>
         <div class="ed-archive-list" id="ed-article-list">
           {posts.map(post => (
             <a class="ed-archive-post" href={`/${lang}/blog/${getPostSlug(post)}`}
@@ -96,65 +105,6 @@ const wordCount = (value:string) => value.trim().split(/\s+/).length;
 </BaseLayout>
 
 <style>
-  .ed-archive-post[hidden], #ed-no-results[hidden] { display:none !important; }
+  .ed-archive-post[hidden], #ed-no-results[hidden], #ed-article-list[hidden], #ed-fulltext-pane[hidden], #ed-search-fallback[hidden] { display:none !important; }
 </style>
-<script is:inline>
-  (() => {
-    const root = document.getElementById('article-browser');
-    if (!root) return;
-    const query = document.getElementById('ed-article-search');
-    const cards = [...root.querySelectorAll('.ed-archive-post')];
-    const count = document.getElementById('ed-result-count');
-    const empty = document.getElementById('ed-no-results');
-    const moreWrap = document.getElementById('ed-archive-more-wrap');
-    const moreButton = document.getElementById('ed-show-more');
-    let pageLimit = 12;
-    const categoryBtns = [...root.querySelectorAll('[data-category]')].filter(el=>el.tagName === 'BUTTON');
-    const seriesBtns = [...root.querySelectorAll('[data-series]')].filter(el=>el.tagName === 'BUTTON');
-    const params = new URLSearchParams(window.location.search);
-    let currentCategory = categoryBtns.some(b=>b.dataset.category===params.get('category')) ? params.get('category') : 'all';
-    let currentSeries = seriesBtns.some(b=>b.dataset.series===params.get('series')) ? params.get('series') : 'all';
-    const update = () => {
-      const q = (query.value || '').trim().toLocaleLowerCase();
-      let matching = 0;
-      cards.forEach(card => {
-        const matches = (!q || (card.dataset.search || '').includes(q)) &&
-          (currentCategory === 'all' || card.dataset.category === currentCategory) &&
-          (currentSeries === 'all' || card.dataset.series === currentSeries);
-        if (matches) matching++;
-        card.hidden = !matches || matching > pageLimit;
-      });
-      count.textContent = String(matching);
-      empty.hidden = matching > 0;
-      moreWrap.hidden = matching <= pageLimit;
-      categoryBtns.forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.category===currentCategory)));
-      seriesBtns.forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.series===currentSeries)));
-    };
-    categoryBtns.forEach(b=>b.addEventListener('click',()=>{
-      currentCategory=b.dataset.category;
-      pageLimit=12;
-      const url=new URL(window.location.href);
-      if(currentCategory==='all') url.searchParams.delete('category');
-      else url.searchParams.set('category',currentCategory);
-      history.replaceState(null,'',url);
-      update();
-    }));
-    seriesBtns.forEach(b=>b.addEventListener('click',()=>{
-      currentSeries=b.dataset.series;
-      pageLimit=12;
-      const url=new URL(window.location.href);
-      if(currentSeries==='all') url.searchParams.delete('series');
-      else url.searchParams.set('series',currentSeries);
-      history.replaceState(null,'',url);
-      update();
-    }));
-    query.addEventListener('input',()=>{pageLimit=12;update();});
-    moreButton.addEventListener('click',()=>{pageLimit+=12;update();});
-    document.getElementById('ed-reset')?.addEventListener('click',()=>{
-      query.value='';currentCategory='all';currentSeries='all';pageLimit=12;
-      const url=new URL(window.location.href);url.searchParams.delete('series');url.searchParams.delete('category');
-      history.replaceState(null,'',url);update();query.focus();
-    });
-    update();
-  })();
-</script>
+<script is:inline src="/scripts/archive-search.js" defer></script>

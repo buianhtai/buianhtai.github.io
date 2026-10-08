@@ -488,3 +488,24 @@ html body::before { display: none; }
   .ed-home .ed-hero-grid {grid-template-columns:minmax(0,1.3fr) minmax(0,.9fr);gap:clamp(38px,4vw,60px);}
   .ed-home .ed-hero h1 {font-size:clamp(3.45rem,4.65vw,4.7rem);}
 }
+
+
+/* V3: Search within the content of every published MDX article. */
+.ed-search-assist{margin:8px 0 0;font-size:.71rem;line-height:1.55;color:var(--color-text-muted);}
+.ed-search-fallback{font-size:.72rem;line-height:1.5;color:var(--color-amber);margin-top:8px;}
+.ed-fulltext-pane{min-width:0;}
+.ed-fulltext-status{font-size:.8rem;color:var(--color-text-dim);margin:4px 0 15px;line-height:1.6;}
+.ed-search-result-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;}
+.ed-search-hit{position:relative;min-height:205px;display:flex;flex-direction:column;align-items:start;gap:11px;
+  padding:25px 25px 28px;border:1px solid var(--color-border);border-radius:15px;
+  color:var(--color-text);text-decoration:none;background:var(--color-surface);
+  min-width:0;transition:transform .18s,border-color .18s;}
+.ed-search-hit:hover{transform:translateY(-3px);border-color:var(--color-accent);}
+.ed-search-hit:focus-visible{outline:2px solid var(--color-accent);}
+.ed-search-hit strong{font-weight:730;font-size:1.14rem;line-height:1.4;letter-spacing:-.025em;overflow-wrap:anywhere;}
+.ed-search-excerpt{font-size:.82rem;color:var(--color-text-dim);line-height:1.75;overflow-wrap:anywhere;}
+.ed-search-excerpt mark{padding:0 2px;border-radius:3px;color:var(--color-bg);background:var(--color-accent);}
+.ed-search-arrow{align-self:end;margin-top:auto;color:var(--color-accent);}
+.ed-fulltext-more{display:block;margin:24px auto 8px;min-width:230px;}
+.ed-fulltext-more[hidden]{display:none;}
+@media(max-width:760px){.ed-search-result-list{grid-template-columns:minmax(0,1fr);}}

@@ -90,7 +90,7 @@ const hubLabel = category === 'foundations' ? 'foundations' : 'blog';
           {series && chapterNum && (
             <div class="f-post-chapter-badge">Chapter {chapterNum}</div>
           )}
-          <h1 class="f-post-title">{title}</h1>
+          <h1 class="f-post-title" data-pagefind-filter={series ? `series:${series}` : undefined}>{title}</h1>
           <p class="f-post-desc">{description}</p>
 
           <div class="f-post-meta">
@@ -120,7 +120,7 @@ const hubLabel = category === 'foundations' ? 'foundations' : 'blog';
         )}
 
         <!-- Content -->
-        <article class="f-prose prose prose-lg max-w-none">
+        <article class="f-prose prose prose-lg max-w-none" data-pagefind-body data-pagefind-filter={`category:${post.data.category}`}>
           <slot />
         </article>
 

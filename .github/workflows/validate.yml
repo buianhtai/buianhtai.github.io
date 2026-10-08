@@ -8,9 +8,15 @@ on:
 permissions:
   contents: read
 
+# Only the newest commit on a PR needs expensive browser checks.
+concurrency:
+  group: validate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -37,16 +43,20 @@ jobs:
       - name: Build Astro site
         run: npm run build
 
+      - name: Assert full-text search index exists
+        run: test -s dist/pagefind/pagefind.js
+
       - name: Install Playwright Chromium
         run: |
           npm install --no-save --no-package-lock playwright@1.56.1
           npx playwright install chromium
       - name: Run visual checks and capture screenshots
+        timeout-minutes: 2
         run: node scripts/editorial-visual-check.mjs
       - name: Upload editorial screenshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: editorial-v2-screenshots
+          name: editorial-v3-screenshots
           path: artifacts/editorial/
           if-no-files-found: warn

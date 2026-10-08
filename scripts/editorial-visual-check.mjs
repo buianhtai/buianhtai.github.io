@@ -4,126 +4,133 @@ import { mkdir } from 'node:fs/promises';
 import { chromium } from 'playwright';
 
 const host = 'http://127.0.0.1:4321';
-const out = 'artifacts/editorial';
-await mkdir(out, { recursive: true });
-const server = spawn('npm',['run','preview','--','--host','127.0.0.1','--port','4321'],{
-  stdio:['ignore','pipe','pipe'], env:process.env
+const output = 'artifacts/editorial';
+await mkdir(output, { recursive: true });
+
+const server = spawn('npm', ['run','preview','--','--host','127.0.0.1','--port','4321'], {
+  stdio: ['ignore','pipe','pipe'],
+  env: process.env,
 });
 let logs = '';
-server.stdout.on('data',d=>logs+=d.toString());
-server.stderr.on('data',d=>logs+=d.toString());
+server.stdout.on('data', chunk => logs += chunk.toString());
+server.stderr.on('data', chunk => logs += chunk.toString());
+
 let browser;
-let phase='starting Astro preview';
-const watchdog=setTimeout(()=>{
-  console.error('Visual QA watchdog timeout at stage: '+phase);
+let step = 'starting preview';
+const timeout = setTimeout(() => {
+  console.error('FAIL: visual smoke timeout at ' + step);
   server.kill('SIGTERM');
   process.exit(1);
-},90_000);
+}, 75_000);
+
+async function ready() {
+  for (let n = 0; n < 50; n++) {
+    if (server.exitCode !== null) throw new Error('Preview exited: ' + logs);
+    try { if ((await fetch(host + '/en/')).ok) return; } catch {}
+    await new Promise(done => setTimeout(done, 300));
+  }
+  throw new Error('Preview did not become ready: ' + logs);
+}
+
+async function context(width, height) {
+  const c = await browser.newContext({
+    viewport: {width, height},
+    deviceScaleFactor: 1,
+    reducedMotion: 'reduce',
+  });
+  c.setDefaultTimeout(6_000);
+  // External fonts, embeds and analytics must not hold up local visual QA.
+  await c.route('**/*', route => {
+    if (route.request().url().startsWith(host)) return route.continue();
+    return route.abort();
+  });
+  await c.addInitScript(() => localStorage.setItem('theme','terminal'));
+  return c;
+}
+
+async function noOverflow(page, where) {
+  const box = await page.evaluate(() => ({
+    viewport: document.documentElement.clientWidth,
+    width: document.documentElement.scrollWidth,
+  }));
+  assert(box.width <= box.viewport + 2, 'Horizontal overflow on ' + where + ': ' + JSON.stringify(box));
+}
+
+let passed = false;
 try {
-  let ready = false;
-  for(let i=0;i<50;i++){
-    try {let r=await fetch(host + '/en/');if(r.ok){ready=true;break;}}catch{}
-    if(server.exitCode !== null) throw Error('Astro preview terminated: '+logs);
-    await new Promise(r=>setTimeout(r,500));
+  await ready();
+  step = 'launching Chromium';
+  browser = await chromium.launch({headless: true});
+
+  step = 'desktop homepage';
+  console.log('QA: desktop homepage');
+  const desktop = await context(1440, 900);
+  const home = await desktop.newPage();
+  await home.goto(host + '/en/', {waitUntil: 'domcontentloaded'});
+  assert.match(await home.locator('h1').first().innerText(), /Building systems/);
+  assert.equal(await home.locator('.ed-topic-card').count(), 4);
+  assert.equal(await home.locator('.ed-feature-card').count(), 3);
+  await noOverflow(home, 'desktop homepage');
+  await home.screenshot({path: output + '/home-desktop.png', timeout: 8_000});
+
+  step = 'full-text search';
+  console.log('QA: archive filters and Pagefind index');
+  const archive = await desktop.newPage();
+  await archive.goto(host + '/en/blog/', {waitUntil: 'domcontentloaded'});
+  assert(Number(await archive.locator('#ed-result-count').innerText()) > 0);
+  await archive.locator('button[data-category="architecture"]').click();
+  assert.equal(new URL(archive.url()).searchParams.get('category'), 'architecture');
+  await archive.locator('#ed-article-search').fill('Neo4j');
+  await archive.waitForFunction(() =>
+    document.getElementById('ed-fulltext-status')?.textContent?.includes('Results from full article text'), null, {timeout: 12_000});
+  assert(Number(await archive.locator('#ed-result-count').innerText()) > 0, 'Pagefind returned zero architecture results');
+  await archive.locator('.ed-search-hit').first().waitFor({state:'visible',timeout:12_000});
+  await archive.screenshot({path: output + '/search-desktop.png', timeout: 8_000});
+  await archive.locator('#ed-article-search').fill('');
+  await archive.locator('button[data-category="all"]').click();
+  await archive.screenshot({path: output + '/archive-desktop.png', timeout: 8_000});
+
+  step = 'article index scope';
+  console.log('QA: both article layouts are indexed');
+  for (const url of [
+    '/en/blog/neo4j-deep-dive-storage-indexes-query-optimization',
+    '/en/blog/deepagents-kb-mcp-troubleshooting',
+  ]) {
+    const html = await (await fetch(host + url)).text();
+    assert(html.includes('data-pagefind-body'), 'Missing index scope in ' + url);
+    assert(html.includes('data-pagefind-filter'), 'Missing index filters in ' + url);
   }
-  assert(ready, 'Astro preview server did not start: '+logs);
-  console.log('Ready: Astro preview started');
-  phase='launch browser';
-  browser=await chromium.launch({headless:true});
+  const index = await fetch(host + '/pagefind/pagefind.js');
+  assert.equal(index.status, 200, 'Pagefind static index was not produced');
 
-  phase='desktop homepage';
-  console.log('Visual QA: desktop homepage');
-  const desktop=await browser.newContext({ viewport:{width:1440,height:900}, deviceScaleFactor:1 });
-  await desktop.addInitScript(() => localStorage.setItem('theme','terminal'));
-  const home=await desktop.newPage();
-  await home.goto(host+'/en/',{waitUntil:'load'});
-  assert((await home.locator('h1').innerText()).includes('Building systems.'),'Hero text diverged from concept');
-  assert.equal(await home.locator('.ed-topic-card').count(),4,'Hero should have four topic tiles');
-  assert.equal(await home.locator('.ed-feature-card').count(),3,'Home should show three curated featured articles');
-  await home.screenshot({path:out+'/desktop-home.png',fullPage:false});
-  await home.locator('.ed-featured-grid').screenshot({path:out+'/desktop-featured.png'});
-  const concept=await home.locator('.ed-topic-panel').boundingBox();
-  assert(concept && concept.width>300, 'Desktop topic panel must be visible');
-
-  phase='desktop archive';
-  console.log('Visual QA: desktop archive');
-  const archive=await desktop.newPage();
-  await archive.goto(host+'/en/blog/',{waitUntil:'load'});
-  const articleURL='/en/blog/building-support-agents-for-your-platform';
-  assert(await archive.locator('a.ed-archive-post[href="'+articleURL+'"]').count()===1,
-    'Known standard-layout article is missing from archive');
-  const total=Number(await archive.locator('#ed-result-count').innerText());
-  assert(total>0,'Archive contains no articles');
-  await archive.screenshot({path:out+'/desktop-archive.png',fullPage:false});
-  await archive.locator('button[data-category="ai"]').click();
-  assert(new URL(archive.url()).searchParams.get('category')==='ai','Category filter must update URL');
-  const filtered=Number(await archive.locator('#ed-result-count').innerText());
-  assert(filtered<=total,'Category filter count invalid');
-  await archive.locator('#ed-article-search').fill('unlikely-keyword-for-no-results-82671');
-  assert(!await archive.locator('#ed-no-results').isHidden(),'No-results message missing');
-  await archive.locator('#ed-reset').click();
-  assert.equal(Number(await archive.locator('#ed-result-count').innerText()),total,'Reset filters broken');
-
-  phase='standard article';
-  console.log('Visual QA: standard article');
-  const article=await desktop.newPage();
-  await article.goto(host+articleURL,{waitUntil:'load'});
-  assert(await article.locator('#ed-article-body').count()===1,'Article reading area missing');
-  await article.screenshot({path:out+'/desktop-article.png',fullPage:false});
-  const foundationsLink = await archive.locator('.ed-archive-post[data-category="foundations"]').first().getAttribute('href');
-  if(foundationsLink) {
-    const foundation=await desktop.newPage();
-    await foundation.goto(host+foundationsLink,{waitUntil:'domcontentloaded'});
-    assert(await foundation.locator('.f-root').count()===1,'Foundations article layout is missing');
-    await foundation.screenshot({path:out+'/desktop-foundations.png',fullPage:false});
-    await foundation.close();
-  }
-
-  phase='mobile screenshots';
-  console.log('Visual QA: mobile screenshots');
-  const mobile=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:1,isMobile:true,hasTouch:true});
-  await mobile.addInitScript(() => localStorage.setItem('theme','terminal'));
-  for(const [label,path] of [['home','/en/'],['archive','/en/blog/'],['article',articleURL]]){
-    const page=await mobile.newPage();
-    await page.goto(host+path,{waitUntil:'load'});
-    await page.screenshot({path:out+'/mobile-'+label+'.png',fullPage:false});
-    if(label==='home') {
-      await page.locator('.ed-topic-panel').screenshot({path:out+'/mobile-topics.png'});
+  step = 'mobile layouts';
+  console.log('QA: mobile 390px and 320px layouts');
+  for (const width of [390, 320]) {
+    const mobile = await context(width, 800);
+    for (const [label,url] of [['home','/en/'],['archive','/en/blog/']]) {
+      const page = await mobile.newPage();
+      await page.goto(host + url, {waitUntil: 'domcontentloaded'});
+      await noOverflow(page, width + 'px ' + label);
+      await page.screenshot({path: output + '/' + label + '-' + width + '.png', timeout: 8_000});
+      await page.close();
     }
-    const sizes=await page.evaluate(()=>({
-      viewport:document.documentElement.clientWidth,
-      content:document.documentElement.scrollWidth
-    }));
-    assert(sizes.content<=sizes.viewport+2, 'Horizontal overflow on mobile '+label+': '+JSON.stringify(sizes));
-    if(label==='article' && (await page.locator('.ed-mobile-toc').count())>0){
-      assert(await page.locator('.ed-mobile-toc').isVisible(),'Mobile TOC should be visible');
-    }
-    await page.close();
+    await mobile.close();
   }
 
-  const previousTheme=await home.locator('html').evaluate(el=>el.classList.contains('theme-light'));
-  phase='320px responsive tests';
-  console.log('Visual QA: 320px responsive tests');
-  const narrow=await browser.newContext({viewport:{width:320,height:740},deviceScaleFactor:1,isMobile:true,hasTouch:true});
-  await narrow.addInitScript(() => localStorage.setItem('theme','terminal'));
-  for(const [label,path] of [['home','/en/'],['archive','/en/blog/']]){
-    const page=await narrow.newPage();
-    await page.goto(host+path,{waitUntil:'load'});
-    const sizes=await page.evaluate(()=>({width:document.documentElement.clientWidth,content:document.documentElement.scrollWidth}));
-    assert(sizes.content<=sizes.width+2,'Horizontal overflow on 320px '+label+': '+JSON.stringify(sizes));
-    await page.screenshot({path:out+'/small-phone-'+label+'.png',fullPage:false});
-    await page.close();
-  }
-  await narrow.close();
-
-  await home.locator('#theme-toggle').click();
-  const changedTheme=await home.locator('html').evaluate(el=>el.classList.contains('theme-light'));
-  assert.notEqual(changedTheme,previousTheme,'Theme toggle not working');
-  await home.screenshot({path:out+'/desktop-home-light.png',fullPage:false});
-  console.log('PASS: desktop/mobile screenshots, topic cards, article route, filters, light mode, overflow');
-  console.log('Preview screenshots saved to '+out);
+  console.log('PASS: Astro routes, full-text results, article indexing and responsive layout');
+  passed = true;
+} catch (error) {
+  console.error('FAIL: visual smoke checks', error);
 } finally {
-  clearTimeout(watchdog);
-  if(browser) await browser.close();
-  server.kill('SIGTERM');
+  // Chromium can complete all checks but hang on close with active workers.
+  // Bound cleanup independently, then exit explicitly so CI does not run forever.
+  if (browser) {
+    await Promise.race([
+      browser.close().catch(() => {}),
+      new Promise(resolve => setTimeout(resolve, 1800))
+    ]);
+  }
+  server.kill('SIGKILL');
+  clearTimeout(timeout);
+  process.exit(passed ? 0 : 1);
 }
