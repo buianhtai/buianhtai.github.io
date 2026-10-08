@@ -482,3 +482,9 @@ html body::before { display: none; }
   .ed-archive .ed-archive-post {width:100%;min-width:0;}
   .ed-archive .ed-archive-post h2,.ed-archive .ed-archive-post p {overflow-wrap:anywhere;}
 }
+
+/* Desktop editorial masthead: keep "Building systems." together above the fold. */
+@media(min-width:881px) {
+  .ed-home .ed-hero-grid {grid-template-columns:minmax(0,1.3fr) minmax(0,.9fr);gap:clamp(38px,4vw,60px);}
+  .ed-home .ed-hero h1 {font-size:clamp(3.45rem,4.65vw,4.7rem);}
+}
