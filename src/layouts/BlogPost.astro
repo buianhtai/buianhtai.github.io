@@ -1,308 +1,130 @@
 ---
 import type { CollectionEntry } from 'astro:content';
+import { getCollection } from 'astro:content';
 import BaseLayout from './BaseLayout.astro';
 import ReadingTime from '../components/ReadingTime.astro';
-import TableOfContents from '../components/TableOfContents.astro';
-import SeriesNav from '../components/SeriesNav.astro';
 import Giscus from '../components/Giscus.astro';
-import { getPostSlug } from '../lib/posts';
+import { getPostSlug, getPostUrl, seriesMeta } from '../lib/posts';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 
 interface Props {
   post: CollectionEntry<'blog'>;
-  headings: { depth: number; slug: string; text: string }[];
-  rawContent: string;
-  seriesPosts?: CollectionEntry<'blog'>[];
-  renderTitle?: boolean; // New prop to control title rendering
+  headings: {depth:number;slug:string;text:string}[];
+  rawContent:string;
+  seriesPosts?:CollectionEntry<'blog'>[];
+  renderTitle?:boolean;
 }
-
-const { post, headings, rawContent, seriesPosts = [], renderTitle = true } = Astro.props; // Extract from Astro.props
-const { title, description, pubDate, updatedDate, tags, lang, heroImage, series } = post.data; // Keep post.data for other fields
-
-const dateFmt = (d: Date) =>
-  d.toISOString().slice(0, 10);
+const {post,headings,rawContent,seriesPosts = []} = Astro.props;
+const {title,description,pubDate,updatedDate,tags,lang,heroImage,series} = post.data;
+const renderTitle = Astro.props.renderTitle ?? post.data.renderTitle;
+const dateFmt = (d:Date) => d.toLocaleDateString(lang==='vi'?'vi-VN':'en-US',{month:'short',day:'numeric',year:'numeric'});
+const chaptersIndex = seriesPosts.findIndex(p=>getPostSlug(p)===getPostSlug(post));
+const previous = chaptersIndex > 0 ? seriesPosts[chaptersIndex-1] : null;
+const next = chaptersIndex >= 0 && chaptersIndex < seriesPosts.length - 1 ? seriesPosts[chaptersIndex+1] : null;
+const toc = headings.filter(h=>h.depth===2||h.depth===3);
+const darkSrc = heroImage?.replace(/\.png$/, '-dark.png');
+const hasDarkVariant = Boolean(heroImage && darkSrc && darkSrc!==heroImage && existsSync(join(process.cwd(),'public',darkSrc)));
+const related = (await getCollection('blog',p=>!p.data.draft && p.data.lang===lang && p.id!==post.id))
+  .map(p=>({post:p,score:(series && p.data.series===series?10:0)+p.data.tags.filter(t=>tags.includes(t)).length}))
+  .filter(x=>x.score>0)
+  .sort((a,b)=>b.score-a.score || b.post.data.pubDate.getTime()-a.post.data.pubDate.getTime())
+  .slice(0,3).map(x=>x.post);
+const jsonLd = {
+  '@context':'https://schema.org','@type':'BlogPosting',
+  headline:title,description,datePublished:pubDate.toISOString(),
+  ...(updatedDate?{dateModified:updatedDate.toISOString()}:{}),
+  author:{'@type':'Person',name:'Tai Bui',url:'https://github.com/buianhtai'},
+  mainEntityOfPage:'https://buianhtai.github.io'+getPostUrl(post),
+  ...(heroImage?{image:new URL(heroImage,'https://buianhtai.github.io').toString()}:{}),
+  inLanguage:lang,
+};
 ---
 
-<BaseLayout title={title} description={description} lang={lang} ogImage={heroImage}>
-  <article class="max-w-3xl mx-auto px-4 py-10">
-
-    <!-- Terminal window chrome header -->
-    <div class="post-chrome">
-      <div class="post-chrome-dots">
-        <span></span><span></span><span></span>
-      </div>
-      <span class="post-chrome-path">~/blog/{getPostSlug(post)}.mdx</span>
-    </div>
-
-    <!-- Post header -->
-    <header class="post-header">
-      <!-- Metadata line -->
-      <div class="post-meta">
-        <span class="post-meta-prompt">$</span>
-        <time datetime={pubDate.toISOString()}>{dateFmt(pubDate)}</time>
-        {updatedDate && <span class="post-meta-sep">·</span>}
-        {updatedDate && <span>upd {dateFmt(updatedDate)}</span>}
-        <span class="post-meta-sep">·</span>
+<BaseLayout title={title} description={description} lang={lang} ogImage={heroImage} article>
+  <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+  <div class="ed-reading-line" id="ed-reading-progress" aria-hidden="true"></div>
+  <article class="ed-container ed-article" id="ed-post">
+    <nav class="ed-breadcrumb" aria-label="Breadcrumb">
+      <a href={`/${lang}/`}>Home</a><span aria-hidden="true">/</span>
+      <a href={`/${lang}/blog`}>Writing</a>
+      {series && <><span aria-hidden="true">/</span><span>{seriesMeta[series]?.title ?? series}</span></>}
+    </nav>
+    <header class="ed-article-head">
+      <div class="ed-kicker">{series ? seriesMeta[series]?.title ?? series : post.data.category}</div>
+      {renderTitle && <><h1>{title}</h1><p class="ed-article-dek">{description}</p></>}
+      <div class="ed-article-meta">
+        <span>Tai Bui</span><i aria-hidden="true"></i>
+        <time datetime={pubDate.toISOString()}>{dateFmt(pubDate)}</time><i aria-hidden="true"></i>
         <ReadingTime content={rawContent} lang={lang} />
+        {updatedDate && <><i aria-hidden="true"></i><span>Updated {dateFmt(updatedDate)}</span></>}
       </div>
-
-      {renderTitle && (
-        <>
-          <h1 class="post-title">{title}</h1>
-          <p class="post-desc">{description}</p>
-        </>
-      )}
-
-      {tags.length > 0 && (
-        <div class="post-tags">
-          {tags.map((tag: string) => (
-            <a href={`/${lang}/tags/${tag}`} class="post-tag">#{tag}</a>
-          ))}
-        </div>
-      )}
+      {tags.length>0 && <div class="ed-article-tags">
+        {tags.slice(0,6).map(t=><a href={`/${lang}/tags/${t}`} class="ed-article-tag">#{t}</a>)}
+      </div>}
     </header>
 
-    {series && seriesPosts.length > 0 && (
-      <SeriesNav
-        currentSlug={getPostSlug(post)}
-        series={series}
-        lang={lang}
-        seriesPosts={seriesPosts}
-      />
-    )}
+    {heroImage && <div class="ed-article-hero">
+      <img src={heroImage} alt={title} loading="eager"
+        class:list={['ed-hero-img-light',{'ed-has-dark':hasDarkVariant}]} />
+      {hasDarkVariant && <img src={darkSrc} alt={title} loading="eager" class="ed-hero-img-dark" />}
+    </div>}
 
-    {heroImage && (() => {
-      const darkSrc = heroImage.replace(/\.png$/, "-dark.png");
-      const hasDarkVariant = darkSrc !== heroImage && existsSync(join(process.cwd(), "public", darkSrc));
-      return (
-        <div class="hero-media w-full mb-10">
-          <img src={heroImage} alt={title} class:list={["hero-img", "hero-img-light", { "hero-img-pair": hasDarkVariant }]} loading="eager" />
-          {hasDarkVariant && (
-            <img src={darkSrc} alt={title} class="hero-img hero-img-dark" loading="eager" />
-          )}
-        </div>
-      );
-    })()}
-
-    <style is:global>
-      /* Theme-aware hero: default terminal theme and every non-light theme use the dark card;
-         light / material-light themes use the light card. Single-card posts always show light. */
-      .hero-media .hero-img { width: 100%; border: 1px solid var(--color-border); }
-      .hero-media .hero-img-dark { display: none; }
-      :root:not(.theme-light):not(.theme-material-light) .hero-media .hero-img-pair.hero-img-light { display: none; }
-      :root:not(.theme-light):not(.theme-material-light) .hero-media .hero-img-pair.hero-img-dark { display: block; }
-    </style>
-
-    <TableOfContents headings={headings} />
-
-    <div class="prose prose-lg max-w-none">
-      <slot />
+    <div class="ed-article-layout">
+      <div class="ed-article-content prose prose-lg max-w-none" id="ed-article-body">
+        <slot />
+      </div>
+      {toc.length>0 && <aside class="ed-article-aside" aria-label="On this page">
+        <strong>On this page</strong>
+        {toc.map(h=><a href={`#${h.slug}`} data-depth={h.depth}>{h.text}</a>)}
+      </aside>}
     </div>
 
-    <!-- Post footer -->
-    <footer class="post-footer">
-      <div class="post-footer-tags">
-        {tags.map((tag: string) => (
-          <a href={`/${lang}/tags/${tag}`} class="post-tag">#{tag}</a>
-        ))}
+    <div class="ed-article-bottom">
+      <div class="ed-section-top">
+        <div><div class="ed-kicker">Continue exploring</div><h2>Keep reading</h2></div>
+        <a href={`/${lang}/blog`}>All articles ↗</a>
       </div>
-      <a href={`/${lang}/blog`} class="post-back">
-        <span style="color: var(--color-accent);">←</span> {lang === 'vi' ? 'về blog' : 'back'}
-      </a>
-    </footer>
-
-    <Giscus />
+      {(previous || next) && <nav class="ed-chapter-links" aria-label="Series navigation">
+        {previous ? <a class="ed-chapter-link" href={getPostUrl(previous)}><small>← Previous chapter</small><strong>{previous.data.title}</strong></a>:<div />}
+        {next && <a class="ed-chapter-link" href={getPostUrl(next)}><small>Next chapter →</small><strong>{next.data.title}</strong></a>}
+      </nav>}
+      {related.length>0 && <div class="ed-grid" style="margin-top:30px">
+        {related.map(p=><article class="ed-card"><a class="ed-card-link" href={getPostUrl(p)}>
+          <div class="ed-card-body">
+            <div class="ed-card-top"><span class="ed-card-topic">{p.data.category}</span></div>
+            <h3>{p.data.title}</h3><p>{p.data.description}</p>
+          </div><div class="ed-card-foot"><span>{dateFmt(p.data.pubDate)}</span><span class="arrow">↗</span></div>
+        </a></article>)}
+      </div>}
+      <Giscus />
+    </div>
   </article>
 </BaseLayout>
 
 <style>
-  /* Terminal chrome bar */
-  .post-chrome {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.5rem 0.875rem;
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-bottom: none;
-    font-family: var(--font-mono);
-    font-size: 0.7rem;
-    color: var(--color-text-muted);
-  }
-  .post-chrome-dots {
-    display: flex;
-    gap: 0.35rem;
-  }
-  .post-chrome-dots span {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--color-border-bright);
-    display: block;
-  }
-  .post-chrome-dots span:nth-child(1) { background: var(--color-rose); opacity: 0.6; }
-  .post-chrome-dots span:nth-child(2) { background: var(--color-amber); opacity: 0.6; }
-  .post-chrome-dots span:nth-child(3) { background: var(--color-green); opacity: 0.6; }
-  .post-chrome-path {
-    color: var(--color-text-muted);
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  /* Post header area */
-  .post-header {
-    border: 1px solid var(--color-border);
-    border-top: none;
-    padding: 1.5rem 1.25rem 1.25rem;
-    background: var(--color-surface);
-    margin-bottom: 2rem;
-  }
-
-  @media (max-width: 480px) {
-    .post-header { padding: 1.5rem 0.75rem 1.25rem; } /* Reduce padding on mobile */
-  }
-
-  /* Metadata line */
-  .post-meta {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    font-family: var(--font-mono);
-    font-size: 0.72rem;
-    color: var(--color-text-muted);
-    margin-bottom: 0.875rem;
-    flex-wrap: wrap;
-  }
-  .post-meta-prompt {
-    color: var(--color-accent);
-    font-weight: 700;
-    margin-right: 0.1rem;
-  }
-  .post-meta-sep { color: var(--color-border-bright); }
-
-  /* Title */
-  .post-title {
-    font-size: clamp(1.4rem, 4vw, 2.1rem);
-    font-weight: 700;
-    line-height: 1.25;
-    color: var(--color-text);
-    margin: 0 0 0.75rem;
-    font-family: var(--font-mono);
-    letter-spacing: -0.01em;
-    word-break: break-word; /* Ensure long titles break */
-  }
-
-  /* Description */
-  .post-desc {
-    color: var(--color-text-dim);
-    font-size: 0.95rem;
-    line-height: 1.65;
-    margin: 0;
-    word-break: break-word; /* Ensure long descriptions break */
-  }
-
-  /* Tags */
-  .post-tags { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.875rem; }
-  .post-tag {
-    font-family: var(--font-mono);
-    font-size: 0.72rem;
-    color: var(--color-text-muted);
-    background: var(--color-bg);
-    border: 1px solid var(--color-border);
-    padding: 0.15rem 0.5rem;
-    text-decoration: none;
-    transition: color 0.15s, border-color 0.15s;
-  }
-  .post-tag:hover {
-    color: var(--color-accent);
-    border-color: var(--color-accent-dim);
-  }
-
-  /* Footer */
-  .post-footer {
-    margin-top: 2.5rem;
-    padding-top: 1rem;
-    border-top: 1px solid var(--color-border);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 0.75rem;
-  }
-  .post-footer-tags { display: flex; flex-wrap: wrap; gap: 0.4rem; }
-  .post-back {
-    font-family: var(--font-mono);
-    font-size: 0.78rem;
-    color: var(--color-text-dim);
-    text-decoration: none;
-    transition: color 0.15s;
-  }
-  .post-back:hover { color: var(--color-accent); }
+  .ed-article-hero .ed-hero-img-dark {display:none;}
+  :global(html:not(.theme-light)) .ed-article-hero .ed-has-dark {display:none;}
+  :global(html:not(.theme-light)) .ed-article-hero .ed-hero-img-dark {display:block;}
+  @media(max-width:760px) { .ed-article-bottom .ed-grid {grid-template-columns:1fr;} }
 </style>
-
-<script type="module">
-  if (document.querySelector('.mermaid')) {
-    const { default: mermaid } = await import('https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs');
-
-    const isDark = !document.documentElement.classList.contains('theme-light');
-
-    mermaid.initialize({
-      startOnLoad: false,
-      theme: 'base',
-      themeVariables: isDark ? {
-        primaryColor: '#111720',
-        primaryTextColor: '#cdd9e5',
-        primaryBorderColor: '#1e2d40',
-        lineColor: '#00d9ff',
-        secondaryColor: '#0a0e14',
-        tertiaryColor: '#111720',
-        noteBkgColor: '#111720',
-        noteTextColor: '#5c7a96',
-        noteBorderColor: '#1e2d40',
-        actorBkg: '#111720',
-        actorTextColor: '#cdd9e5',
-        actorBorder: '#1e2d40',
-        actorLineColor: '#00d9ff',
-        signalColor: '#cdd9e5',
-        signalTextColor: '#cdd9e5',
-        fontFamily: 'JetBrains Mono, IBM Plex Mono, monospace',
-        fontSize: '13px',
-      } : {
-        primaryColor: '#e8f0f8',
-        primaryTextColor: '#1a2a3a',
-        primaryBorderColor: '#c8d8e8',
-        lineColor: '#0070a8',
-        secondaryColor: '#f0f4f8',
-        tertiaryColor: '#ffffff',
-        noteBkgColor: '#f0f4f8',
-        noteTextColor: '#4a6a8a',
-        noteBorderColor: '#c8d8e8',
-        actorBkg: '#ffffff',
-        actorTextColor: '#1a2a3a',
-        actorBorder: '#c8d8e8',
-        actorLineColor: '#0070a8',
-        signalColor: '#1a2a3a',
-        signalTextColor: '#1a2a3a',
-        fontFamily: 'JetBrains Mono, IBM Plex Mono, monospace',
-        fontSize: '13px',
-      },
-      flowchart: { curve: 'basis', padding: 20, nodeSpacing: 30, rankSpacing: 50 },
-      sequence: { actorMargin: 50, messageMargin: 40, width: 160, fontSize: 13, useMaxWidth: true },
-    });
-
-    await mermaid.run();
-
-    document.querySelectorAll('.mermaid svg').forEach(svg => {
-      const vb = svg.getAttribute('viewBox');
-      if (vb) {
-        svg.removeAttribute('width');
-        svg.removeAttribute('height');
-        svg.style.width = '100%';
-        svg.style.height = 'auto';
-      }
-    });
-  }
+<script is:inline>
+  (() => {
+    const bar = document.getElementById('ed-reading-progress');
+    const body = document.getElementById('ed-article-body');
+    if (!bar || !body) return;
+    let queued = false;
+    const update = () => {
+      queued = false;
+      const start = body.getBoundingClientRect().top + window.scrollY;
+      const end = body.getBoundingClientRect().bottom + window.scrollY;
+      const max = Math.max(end - window.innerHeight, start + 1);
+      const progress = Math.max(0,Math.min(1,(window.scrollY-start)/(max-start)));
+      bar.style.width = Math.round(progress*100)+'%';
+    };
+    const schedule = () => { if(!queued) {queued=true;requestAnimationFrame(update);} };
+    window.addEventListener('scroll',schedule,{passive:true});
+    window.addEventListener('resize',schedule);
+    schedule();
+  })();
 </script>

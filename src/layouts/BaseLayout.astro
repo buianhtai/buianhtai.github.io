@@ -2,22 +2,22 @@
 import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
 import '../styles/global.css';
+import '../styles/editorial.css';
 
 interface Props {
   title: string;
   description?: string;
   lang?: string;
   ogImage?: string;
+  article?: boolean;
 }
-
 const {
-  title,
-  description = 'Learn in public — a full-stack developer blog by Tai Bui',
-  lang = 'en',
-  ogImage,
+  title, description = 'Engineering notes on AI, distributed systems and software architecture by Tai Bui.',
+  lang = 'en', ogImage, article = false,
 } = Astro.props;
-
 const canonicalURL = new URL(Astro.url.pathname, Astro.site);
+const imageURL = ogImage ? new URL(ogImage, Astro.site).toString() : undefined;
+const pageTitle = title === 'tai.bui' ? 'Tai Bui — Engineering Notes' : title + ' | Tai Bui';
 ---
 
 <!doctype html>
@@ -26,51 +26,43 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site);
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="generator" content={Astro.generator} />
-
-    <title>{title} | tai.bui</title>
+    <meta name="theme-color" content="#0b111b" />
+    <title>{pageTitle}</title>
     <meta name="description" content={description} />
     <link rel="canonical" href={canonicalURL} />
-
-    <meta property="og:title" content={title} />
+    <meta property="og:site_name" content="Tai Bui — Engineering Notes" />
+    <meta property="og:title" content={pageTitle} />
     <meta property="og:description" content={description} />
-    <meta property="og:type" content="article" />
+    <meta property="og:type" content={article ? 'article' : 'website'} />
     <meta property="og:url" content={canonicalURL} />
-    {ogImage && <meta property="og:image" content={ogImage} />}
-
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content={title} />
+    {imageURL && <meta property="og:image" content={imageURL} />}
+    <meta name="twitter:card" content={imageURL ? 'summary_large_image' : 'summary'} />
+    <meta name="twitter:title" content={pageTitle} />
     <meta name="twitter:description" content={description} />
-    <meta name="twitter:site" content="@buianhtai90" />
-
-    <link rel="alternate" type="application/rss+xml" title="tai.bui blog" href="/rss.xml" />
-    <!-- Terminal/Hacker theme fonts + IBM Plex for foundations category -->
+    {imageURL && <meta name="twitter:image" content={imageURL} />}
+    <link rel="alternate" type="application/rss+xml" title="Tai Bui engineering notes" href="/rss.xml" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Serif:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
-    <!-- Theme init: prevent FOUC -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Serif:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
     <script is:inline>
-      (function() {
-        var ALL_THEMES = ['terminal', 'light', 'dracula', 'nord', 'gruvbox', 'solarized', 'material', 'material-light', 'tokyo-night', 'tokyo-storm'];
-        var saved = localStorage.getItem('theme');
-        var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        var theme = saved || (prefersDark ? 'terminal' : 'light');
-        if (ALL_THEMES.indexOf(theme) === -1) theme = 'terminal';
-        if (theme !== 'terminal') {
-          document.documentElement.classList.add('theme-' + theme);
-        }
-        // Apply f-light-palette class if a light foundations palette is saved
-        // (prevents FOUC on foundations pages with light palettes)
-        var LIGHT_PALETTES = ['light', 'infographic', 'material-light'];
-        var savedPalette = localStorage.getItem('f-palette');
-        if (savedPalette && LIGHT_PALETTES.indexOf(savedPalette) !== -1) {
-          document.documentElement.classList.add('f-light-palette');
-        }
+      (() => {
+        const saved = localStorage.getItem('theme');
+        const prefersLight = window.matchMedia('(prefers-color-scheme: light)').matches;
+        const light = saved === 'light' || saved === 'material-light' || (!saved && prefersLight);
+        document.documentElement.classList.remove(
+          'theme-dracula','theme-nord','theme-gruvbox','theme-solarized','theme-material',
+          'theme-material-light','theme-tokyo-night','theme-tokyo-storm'
+        );
+        document.documentElement.classList.toggle('theme-light', light);
+        const savedPalette = localStorage.getItem('f-palette');
+        document.documentElement.classList.toggle('f-light-palette',
+          light || ['light','infographic','material-light'].includes(savedPalette));
       })();
     </script>
   </head>
   <body class="min-h-screen flex flex-col">
     <Header lang={lang} />
-    <main class="flex-1">
+    <main id="main-content" class="flex-1">
       <slot />
     </main>
     <Footer />

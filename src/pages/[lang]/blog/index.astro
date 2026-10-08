@@ -1,804 +1,141 @@
 ---
 import { getCollection } from 'astro:content';
 import BaseLayout from '../../../layouts/BaseLayout.astro';
-import { t } from '../../../i18n/strings';
-import { getPostSlug, groupPostsBySeries, seriesMeta } from '../../../lib/posts';
+import { getPostSlug, seriesMeta } from '../../../lib/posts';
 
 export function getStaticPaths() {
   return [{ params: { lang: 'en' } }, { params: { lang: 'vi' } }];
 }
+const lang = Astro.params.lang === 'vi' ? 'vi' : 'en';
+const vi = lang === 'vi';
+const posts = (await getCollection('blog', post => post.data.lang === lang && !post.data.draft))
+  .sort((a,b) => b.data.pubDate.getTime() - a.data.pubDate.getTime());
 
-const { lang } = Astro.params;
-const posts = (await getCollection('blog', (p) => {
-  if (p.data.lang !== lang) return false;
-  if (p.data.draft && !import.meta.env.DEV) return false;
-  return true;
-}))
-  .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
-
-const groups = groupPostsBySeries(posts);
-
-const allTags = [...new Set(posts.flatMap(p => p.data.tags ?? []))].sort();
-
-const postData = posts.map(p => ({
-  id: p.id,
-  title: p.data.title,
-  description: p.data.description ?? '',
-  tags: p.data.tags ?? [],
-  series: p.data.series ?? null,
-  url: `/${lang}/blog/${getPostSlug(p)}`,
-  date: p.data.pubDate.toISOString().slice(0, 10),
-  order: p.data.seriesOrder ?? null,
-  draft: p.data.draft ?? false,
-}));
-
-const groupData = groups.map(g => ({
-  series: g.series,
-  label: g.series ? (seriesMeta[g.series]?.title ?? g.series) : 'standalone',
-  count: g.posts.length,
-}));
+const categories = [
+  {id:'ai', name:'AI & Agents'}, {id:'architecture',name:'Architecture'},
+  {id:'foundations',name:'Foundations'}, {id:'devops',name:'DevOps & Cloud'},
+  {id:'golang',name:'Go'}, {id:'tutorial',name:'Tutorials'}
+].map(c => ({...c,count:posts.filter(p=>p.data.category===c.id).length})).filter(c=>c.count>0);
+const series = Object.entries(seriesMeta).map(([id,meta]) =>
+  ({id,title:meta.title,count:posts.filter(p=>p.data.series===id).length})).filter(s=>s.count>0);
+const shortDate = (d:Date) => d.toLocaleDateString(vi?'vi-VN':'en-US',{year:'numeric',month:'short',day:'numeric'});
+const wordCount = (value:string) => value.trim().split(/\s+/).length;
 ---
-
-<BaseLayout title={t(lang, 'allPosts')} lang={lang}>
-  <div class="blog-index" id="blog-root">
-
-    <!-- Hero -->
-    <div class="hero">
-      <div class="hero-inner">
-        <div class="hero-eyebrow">
-          <span class="eyebrow-dot"></span>
-          <span class="eyebrow-text">writing</span>
-        </div>
-        <h1 class="hero-title">All Posts</h1>
-        <p class="hero-sub">
-          <span id="post-count">{posts.length}</span> articles across {groups.length} series
-        </p>
+<BaseLayout title={vi ? 'Tất cả bài viết' : 'Writing Archive'}
+  description={vi ? 'Khám phá các bài viết chuyên sâu về AI, kiến trúc và kỹ thuật phần mềm.' : 'Deep dives, field notes and engineering ideas about AI, distributed systems and databases.'}
+  lang={lang}>
+  <header class="ed-archive-hero">
+    <div class="ed-container">
+      <div class="ed-kicker"><span class="ed-dot"></span> {vi ? 'Kho kiến thức' : 'The knowledge archive'}</div>
+      <h1>{vi ? 'Khám phá bài viết.' : 'Ideas worth exploring.'}</h1>
+      <p>{vi ? 'Bộ sưu tập các ghi chép kỹ thuật, phân tích kiến trúc và nghiên cứu chuyên sâu. Tìm kiếm hoặc lọc theo chủ đề để bắt đầu.' :
+        'A growing collection of architecture studies, engineering field notes, and fundamentals. Find a topic, follow a series, or explore something new.'}</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:26px">
+        <span class="ed-pill"><span class="ed-dot"></span>{posts.length} {vi?'bài viết':'articles'}</span>
+        <span class="ed-pill">{series.length} {vi?'chuyên đề':'reading series'}</span>
+        <span class="ed-pill">MDX · Engineering</span>
       </div>
     </div>
-
-    <div class="content-shell">
-
-      <!-- Sidebar -->
-      <aside class="sidebar">
-
-        <!-- Search -->
-        <div class="sidebar-block">
-          <div class="search-field">
-            <svg class="search-svg" viewBox="0 0 16 16" fill="none">
-              <circle cx="6.5" cy="6.5" r="4" stroke="currentColor" stroke-width="1.5"/>
-              <path d="M10 10l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-            </svg>
-            <input
-              id="search-input"
-              type="search"
-              class="search-input"
-              placeholder="Search posts…"
-              autocomplete="off"
-              spellcheck="false"
-            />
+  </header>
+  <div class="ed-container ed-archive">
+    <div class="ed-archive-shell" id="article-browser">
+      <aside class="ed-filters" aria-label={vi ? 'Bộ lọc' : 'Article filters'}>
+        <div class="ed-filter-group">
+          <h2>{vi ? 'Tìm kiếm' : 'Search articles'}</h2>
+          <label class="ed-sr" for="ed-article-search">{vi?'Tìm theo tiêu đề hoặc từ khóa':'Search titles, descriptions and tags'}</label>
+          <input id="ed-article-search" type="search" class="ed-search" placeholder={vi?'Tìm bài viết…':'Title, keyword, or tag…'} autocomplete="off" />
+        </div>
+        <div class="ed-filter-group">
+          <h2>{vi ? 'Chủ đề' : 'Topics'}</h2>
+          <div class="ed-filter-buttons" id="ed-category-buttons">
+            <button class="ed-filter-btn" type="button" data-category="all" aria-pressed="true"><span>{vi?'Tất cả chủ đề':'All topics'}</span><span>{posts.length}</span></button>
+            {categories.map(c=><button class="ed-filter-btn" type="button" data-category={c.id} aria-pressed="false"><span>{c.name}</span><span>{c.count}</span></button>)}
           </div>
         </div>
-
-        <!-- Series filter -->
-        <div class="sidebar-block">
-          <div class="sidebar-label">Series</div>
-          <div class="series-list" id="series-pills">
-            <button class="series-btn series-btn-active" data-filter="all">
-              <span class="series-btn-name">All posts</span>
-              <span class="series-btn-count">{posts.length}</span>
-            </button>
-            {groupData.map(g => (
-              <button class="series-btn" data-filter={`series:${g.series ?? 'standalone'}`}>
-                <span class="series-btn-name">{g.label}</span>
-                <span class="series-btn-count">{g.count}</span>
-              </button>
-            ))}
+        {series.length>0 && <div class="ed-filter-group">
+          <h2>{vi ? 'Chuyên đề' : 'Reading series'}</h2>
+          <div class="ed-filter-buttons" id="ed-series-buttons">
+            <button class="ed-filter-btn" type="button" data-series="all" aria-pressed="true"><span>{vi?'Tất cả':'All series'}</span></button>
+            {series.map(s=><button class="ed-filter-btn" type="button" data-series={s.id} aria-pressed="false"><span>{s.title}</span><span>{s.count}</span></button>)}
           </div>
-        </div>
-
-        <!-- Tags -->
-        {allTags.length > 0 && (
-          <div class="sidebar-block">
-            <div class="sidebar-label">Tags</div>
-            <div class="tag-cloud" id="tag-pills">
-              {allTags.map(tag => (
-                <button class="tag-chip" data-tag={tag}>{tag}</button>
-              ))}
-            </div>
-          </div>
-        )}
-
+        </div>}
       </aside>
-
-      <!-- Main -->
-      <main class="main-content">
-
-        <!-- No results -->
-        <div class="no-results" id="no-results" hidden>
-          <div class="no-results-icon">⌀</div>
-          <div class="no-results-text">No posts match your search</div>
-          <button class="no-results-reset" id="reset-btn">Clear filters</button>
+      <section aria-label={vi ? 'Danh sách bài viết' : 'Article results'}>
+        <div class="ed-archive-toolbar">
+          <span role="status" aria-live="polite"><strong id="ed-result-count">{posts.length}</strong> {vi ? 'bài viết' : 'articles found'}</span>
+          <span>{vi ? 'Mới nhất trước' : 'Newest first'} ↓</span>
         </div>
-
-        <!-- Groups -->
-        <div id="groups-container">
-          {groups.map((group) => {
-            const meta = group.series ? seriesMeta[group.series] : null;
-            const heading = meta?.title ?? 'Standalone';
-            const desc = meta?.description;
-            const count = group.posts.length;
-            const seriesKey = group.series ?? 'standalone';
-
-            return (
-              <section class="series-section" data-series={seriesKey} id={`section-${seriesKey}`}>
-
-                <!-- Section header -->
-                <button class="section-header" data-collapse-toggle={seriesKey} aria-expanded="true">
-                  <div class="section-header-left">
-                    <span class="section-type">{group.series ? 'series' : 'misc'}</span>
-                    <span class="section-title">{heading}</span>
-                  </div>
-                  <div class="section-header-right">
-                    <span class="section-count" data-count-label={seriesKey}>{count} posts</span>
-                    <svg class="chevron" viewBox="0 0 16 16" fill="none">
-                      <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
-                  </div>
-                </button>
-
-                {desc && <p class="section-desc">{desc}</p>}
-
-                <!-- Post cards -->
-                <ul class="post-list" id={`list-${seriesKey}`}>
-                  {group.posts.map((post) => (
-                    <li class="post-item" data-post-id={post.id}>
-                      <a href={`/${lang}/blog/${getPostSlug(post)}`} class="post-card">
-                        <div class="post-card-accent"></div>
-                        <div class="post-card-body">
-                          <div class="post-meta">
-                            {post.data.seriesOrder != null && (
-                              <span class="post-index">#{String(post.data.seriesOrder).padStart(2, '0')}</span>
-                            )}
-                            <time class="post-date">{post.data.pubDate.toISOString().slice(0, 10)}</time>
-                            {post.data.draft && <span class="draft-chip">draft</span>}
-                          </div>
-                          <h3 class="post-title">{post.data.title}</h3>
-                          {post.data.description && (
-                            <p class="post-desc">{post.data.description}</p>
-                          )}
-                          {post.data.tags?.length > 0 && (
-                            <div class="post-tags">
-                              {post.data.tags.map((tag: string) => (
-                                <span class="post-tag">{tag}</span>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                        <svg class="post-arrow" viewBox="0 0 16 16" fill="none">
-                          <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                        </svg>
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-
-              </section>
-            );
-          })}
+        <div class="ed-archive-list" id="ed-article-list">
+          {posts.map(post => (
+            <a class="ed-archive-post" href={`/${lang}/blog/${getPostSlug(post)}`}
+              data-search={`${post.data.title} ${post.data.description} ${post.data.tags.join(' ')}`.toLowerCase()}
+              data-category={post.data.category} data-series={post.data.series ?? 'standalone'}>
+              <time class="ed-archive-date" datetime={post.data.pubDate.toISOString()}>{shortDate(post.data.pubDate)}</time>
+              <div>
+                <div class="ed-kicker" style="font-size:.62rem">{post.data.series ? seriesMeta[post.data.series]?.title ?? post.data.category : post.data.category}</div>
+                <h2>{post.data.title}</h2>
+                <p>{post.data.description}</p>
+              </div>
+              <span class="ed-archive-arrow" aria-hidden="true">↗</span>
+            </a>
+          ))}
         </div>
-
-      </main>
+        <div id="ed-no-results" class="ed-archive-empty" hidden>
+          <h2>{vi ? 'Không tìm thấy bài viết' : 'Nothing matched this search'}</h2>
+          <p>{vi?'Thử từ khóa hoặc bộ lọc khác.':'Try another search term or reset the filters.'}</p>
+          <button type="button" class="ed-btn ed-btn-quiet ed-archive-more" id="ed-reset">{vi?'Đặt lại bộ lọc':'Reset filters'}</button>
+        </div>
+      </section>
     </div>
   </div>
 </BaseLayout>
 
-<script define:vars={{ postData, groupData }}>
-  let activeFilter = 'all';
-  let activeTag    = null;
-  let searchQuery  = '';
-
-  const searchInput  = document.getElementById('search-input');
-  const postCountEl  = document.getElementById('post-count');
-  const noResults    = document.getElementById('no-results');
-  const resetBtn     = document.getElementById('reset-btn');
-  const seriesBtns   = document.querySelectorAll('#series-pills .series-btn');
-  const tagChips     = document.querySelectorAll('#tag-pills .tag-chip');
-
-  const collapseState = {};
-  groupData.forEach(g => { collapseState[g.series ?? 'standalone'] = true; });
-
-  function normalize(s) {
-    return s.toLowerCase().replace(/[^a-z0-9 ]/g, '');
-  }
-
-  function matches(post, q) {
-    if (!q) return true;
-    const n = normalize(q);
-    return normalize(post.title).includes(n)
-      || normalize(post.description).includes(n)
-      || post.tags.some(t => normalize(t).includes(n));
-  }
-
-  function applyFilters() {
-    let visible = 0;
-
-    groupData.forEach(g => {
-      const key     = g.series ?? 'standalone';
-      const section = document.getElementById(`section-${key}`);
-      const list    = document.getElementById(`list-${key}`);
-      if (!section || !list) return;
-
-      const seriesMatch = activeFilter === 'all' || activeFilter === `series:${key}`;
-      let sectionVisible = 0;
-
-      list.querySelectorAll('.post-item').forEach(li => {
-        const post = postData.find(p => p.id === li.dataset.postId);
-        if (!post) return;
-        const show = seriesMatch && (!activeTag || post.tags.includes(activeTag)) && matches(post, searchQuery);
-        li.hidden = !show;
-        if (show) sectionVisible++;
-      });
-
-      visible += sectionVisible;
-      section.hidden = sectionVisible === 0;
-
-      const label = section.querySelector('[data-count-label]');
-      if (label) label.textContent = `${sectionVisible} post${sectionVisible === 1 ? '' : 's'}`;
-
-      if (!section.hidden) syncCollapse(key, list, section);
-    });
-
-    if (postCountEl) postCountEl.textContent = String(visible);
-    if (noResults) noResults.hidden = visible > 0;
-  }
-
-  function syncCollapse(key, list, section) {
-    const open = collapseState[key] ?? true;
-    const btn  = section.querySelector('[data-collapse-toggle]');
-    const chevron = btn?.querySelector('.chevron');
-    list.classList.toggle('collapsed', !open);
-    btn?.setAttribute('aria-expanded', String(open));
-    if (chevron) chevron.style.transform = open ? '' : 'rotate(-90deg)';
-  }
-
-  function resetAll() {
-    activeFilter = 'all';
-    activeTag    = null;
-    searchQuery  = '';
-    if (searchInput) searchInput.value = '';
-    seriesBtns.forEach(b => b.classList.toggle('series-btn-active', b.dataset.filter === 'all'));
-    tagChips.forEach(b => b.classList.remove('tag-chip-active'));
-    groupData.forEach(g => { collapseState[g.series ?? 'standalone'] = true; });
-    applyFilters();
-  }
-
-  // Search
-  let timer;
-  searchInput?.addEventListener('input', () => {
-    clearTimeout(timer);
-    timer = setTimeout(() => {
-      searchQuery = searchInput.value.trim();
-      if (searchQuery) groupData.forEach(g => { collapseState[g.series ?? 'standalone'] = true; });
-      applyFilters();
-    }, 120);
-  });
-  searchInput?.addEventListener('keydown', e => { if (e.key === 'Escape') resetAll(); });
-
-  // Series
-  seriesBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
-      activeFilter = btn.dataset.filter;
-      seriesBtns.forEach(b => b.classList.toggle('series-btn-active', b === btn));
-      if (activeFilter !== 'all') {
-        const key = activeFilter.replace('series:', '');
-        collapseState[key] = true;
-      }
-      applyFilters();
-    });
-  });
-
-  // Tags
-  tagChips.forEach(btn => {
-    btn.addEventListener('click', () => {
-      const tag = btn.dataset.tag;
-      if (activeTag === tag) {
-        activeTag = null;
-        btn.classList.remove('tag-chip-active');
-      } else {
-        activeTag = tag;
-        tagChips.forEach(b => b.classList.toggle('tag-chip-active', b === btn));
-        groupData.forEach(g => { collapseState[g.series ?? 'standalone'] = true; });
-      }
-      applyFilters();
-    });
-  });
-
-  // Collapse
-  document.querySelectorAll('[data-collapse-toggle]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const key = btn.dataset.collapseToggle;
-      collapseState[key] = !collapseState[key];
-      applyFilters();
-    });
-  });
-
-  resetBtn?.addEventListener('click', resetAll);
-
-  applyFilters();
-</script>
-
 <style>
-  /* ── Layout shell ─────────────────────────────────────────────────────── */
-  .blog-index {
-    min-height: 100vh;
-  }
-
-  /* ── Hero ─────────────────────────────────────────────────────────────── */
-  .hero {
-    border-bottom: 1px solid var(--color-border);
-    background: linear-gradient(180deg, var(--color-surface-2) 0%, var(--color-bg) 100%);
-    padding: 2.5rem 1.5rem 2rem;
-  }
-  @media (min-width: 768px) {
-    .hero {
-      padding: 3.5rem 2rem 2.5rem;
-    }
-  }
-  .hero-inner {
-    max-width: 64rem;
-    margin: 0 auto;
-  }
-  .hero-eyebrow {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin-bottom: 0.75rem;
-  }
-  .eyebrow-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--color-accent);
-    flex-shrink: 0;
-  }
-  .eyebrow-text {
-    font-family: var(--font-mono);
-    font-size: 0.72rem;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: var(--color-accent);
-    font-weight: 600;
-  }
-  .hero-title {
-    font-family: var(--font-sans);
-    font-size: clamp(2rem, 4vw, 2.75rem);
-    font-weight: 700;
-    color: var(--color-text);
-    margin: 0 0 0.5rem;
-    letter-spacing: -0.02em;
-    line-height: 1.15;
-  }
-  .hero-sub {
-    font-size: 0.95rem;
-    color: var(--color-text-dim);
-    margin: 0;
-  }
-
-  /* ── Content shell (sidebar + main) ──────────────────────────────────── */
-  .content-shell {
-    max-width: 64rem;
-    margin: 0 auto;
-    padding: 2.5rem 1.5rem;
-    display: grid;
-    grid-template-columns: 220px 1fr;
-    gap: 2.5rem;
-    align-items: start;
-  }
-  @media (max-width: 768px) {
-    .content-shell {
-      grid-template-columns: 1fr;
-      padding: 1.5rem 1rem;
-    }
-  }
-
-  /* ── Sidebar ──────────────────────────────────────────────────────────── */
-  .sidebar {
-    position: sticky;
-    top: 5rem;
-    display: flex;
-    flex-direction: column;
-    gap: 1.75rem;
-  }
-  @media (max-width: 768px) {
-    .sidebar {
-      position: static;
-      gap: 1.25rem;
-    }
-    .series-list {
-      flex-direction: row;
-      overflow-x: auto;
-      padding-bottom: 0.5rem;
-      scrollbar-width: none;
-    }
-    .series-list::-webkit-scrollbar { display: none; }
-    .series-btn {
-      white-space: nowrap;
-      width: auto;
-    }
-  }
-  .sidebar-block {
-    display: flex;
-    flex-direction: column;
-    gap: 0.6rem;
-  }
-  .sidebar-label {
-    font-family: var(--font-mono);
-    font-size: 0.65rem;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--color-text-muted);
-    font-weight: 600;
-  }
-
-  /* Search */
-  .search-field {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: 6px;
-    padding: 0.5rem 0.75rem;
-    transition: border-color 0.15s;
-  }
-  .search-field:focus-within {
-    border-color: var(--color-accent);
-    box-shadow: 0 0 0 3px var(--color-accent-glow);
-  }
-  .search-svg {
-    width: 14px;
-    height: 14px;
-    color: var(--color-text-muted);
-    flex-shrink: 0;
-  }
-  .search-input {
-    flex: 1;
-    background: transparent;
-    border: none;
-    outline: none;
-    font-family: var(--font-sans);
-    font-size: 0.82rem;
-    color: var(--color-text);
-    min-width: 0;
-  }
-  .search-input::placeholder { color: var(--color-text-muted); }
-  .search-input::-webkit-search-cancel-button { display: none; }
-
-  /* Series list */
-  .series-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.15rem;
-  }
-  .series-btn {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    width: 100%;
-    padding: 0.45rem 0.6rem;
-    border-radius: 5px;
-    border: none;
-    background: transparent;
-    color: var(--color-text-dim);
-    font-family: var(--font-sans);
-    font-size: 0.82rem;
-    cursor: pointer;
-    text-align: left;
-    transition: background 0.12s, color 0.12s;
-  }
-  .series-btn:hover {
-    background: var(--color-surface-2);
-    color: var(--color-text);
-  }
-  .series-btn-active {
-    background: var(--color-accent-glow);
-    color: var(--color-accent);
-    font-weight: 600;
-  }
-  .series-btn-active:hover {
-    background: var(--color-accent-glow);
-    color: var(--color-accent);
-  }
-  .series-btn-name {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .series-btn-count {
-    font-family: var(--font-mono);
-    font-size: 0.68rem;
-    color: var(--color-text-muted);
-    flex-shrink: 0;
-    margin-left: 0.4rem;
-  }
-  .series-btn-active .series-btn-count { color: var(--color-accent); opacity: 0.7; }
-
-  /* Tag cloud */
-  .tag-cloud {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.35rem;
-  }
-  .tag-chip {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.2rem 0.55rem;
-    border-radius: 999px;
-    border: 1px solid var(--color-border);
-    background: transparent;
-    font-family: var(--font-mono);
-    font-size: 0.68rem;
-    color: var(--color-text-dim);
-    cursor: pointer;
-    transition: border-color 0.12s, color 0.12s, background 0.12s;
-    line-height: 1.5;
-  }
-  .tag-chip:hover {
-    border-color: var(--color-accent);
-    color: var(--color-accent);
-  }
-  .tag-chip-active {
-    border-color: var(--color-accent);
-    background: var(--color-accent-glow);
-    color: var(--color-accent);
-  }
-
-  /* ── No results ───────────────────────────────────────────────────────── */
-  .no-results {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.6rem;
-    padding: 3rem 2rem;
-    text-align: center;
-    border: 1px dashed var(--color-border);
-    border-radius: 8px;
-  }
-  .no-results-icon { font-size: 2rem; opacity: 0.4; }
-  .no-results-text { font-size: 0.9rem; color: var(--color-text-dim); }
-  .no-results-reset {
-    margin-top: 0.25rem;
-    padding: 0.35rem 0.9rem;
-    border-radius: 5px;
-    border: 1px solid var(--color-border);
-    background: transparent;
-    color: var(--color-text-dim);
-    font-size: 0.8rem;
-    cursor: pointer;
-    transition: border-color 0.12s, color 0.12s;
-  }
-  .no-results-reset:hover { border-color: var(--color-accent); color: var(--color-accent); }
-
-  /* ── Series section ───────────────────────────────────────────────────── */
-  .series-section {
-    margin-bottom: 2.5rem;
-  }
-
-  .section-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    width: 100%;
-    padding: 0.8rem 1rem;
-    margin-bottom: 0.75rem;
-    border: none;
-    border-bottom: 2px solid var(--color-border);
-    background: transparent;
-    cursor: pointer;
-    text-align: left;
-    color: inherit;
-    gap: 1rem;
-  }
-  .section-header:hover .section-title { color: var(--color-accent); }
-  .section-header-left {
-    display: flex;
-    align-items: baseline;
-    gap: 0.6rem;
-    min-width: 0;
-  }
-  .section-type {
-    font-family: var(--font-mono);
-    font-size: 0.65rem;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--color-accent);
-    font-weight: 700;
-    flex-shrink: 0;
-    padding: 0.1rem 0.4rem;
-    border: 1px solid var(--color-accent);
-    border-radius: 3px;
-    opacity: 0.8;
-  }
-  .section-title {
-    font-family: var(--font-sans);
-    font-size: 1.05rem;
-    font-weight: 700;
-    color: var(--color-text);
-    transition: color 0.12s;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    min-width: 0;
-  }
-  @media (max-width: 640px) {
-    .section-title {
-      white-space: normal;
-      word-break: break-word;
-    }
-  }
-  .section-header-right {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    flex-shrink: 0;
-  }
-  .section-count {
-    font-family: var(--font-mono);
-    font-size: 0.7rem;
-    color: var(--color-text-muted);
-  }
-  .chevron {
-    width: 16px;
-    height: 16px;
-    color: var(--color-text-muted);
-    transition: transform 0.2s ease;
-    flex-shrink: 0;
-  }
-
-  .section-desc {
-    font-size: 0.85rem;
-    color: var(--color-text-dim);
-    margin: -0.25rem 0 1rem;
-    padding: 0 1rem;
-    line-height: 1.6;
-  }
-
-  /* ── Post list ────────────────────────────────────────────────────────── */
-  .post-list {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-  .post-list.collapsed { display: none; }
-
-  /* ── Post card ────────────────────────────────────────────────────────── */
-  .post-item { display: block; min-width: 0; overflow: hidden; }
-  .post-card {
-    display: flex;
-    align-items: stretch;
-    gap: 0;
-    text-decoration: none;
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: 8px;
-    overflow: hidden;
-    transition: border-color 0.15s, box-shadow 0.15s, transform 0.1s;
-    width: 100%;
-    max-width: 100%;
-    box-sizing: border-box;
-  }
-  .post-card:hover {
-    border-color: var(--color-accent);
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
-    transform: translateY(-1px);
-  }
-
-  /* Accent left stripe */
-  .post-card-accent {
-    width: 3px;
-    background: var(--color-border);
-    flex-shrink: 0;
-    transition: background 0.15s;
-  }
-  .post-card:hover .post-card-accent {
-    background: var(--color-accent);
-  }
-
-  .post-card-body {
-    flex: 1;
-    min-width: 0;
-    padding: 0.9rem 1rem;
-  }
-
-  .post-meta {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    margin-bottom: 0.4rem;
-  }
-  .post-index {
-    font-family: var(--font-mono);
-    font-size: 0.68rem;
-    color: var(--color-accent);
-    font-weight: 600;
-  }
-  .post-date {
-    font-family: var(--font-mono);
-    font-size: 0.68rem;
-    color: var(--color-text-muted);
-  }
-  .draft-chip {
-    font-family: var(--font-mono);
-    font-size: 0.62rem;
-    font-weight: 700;
-    letter-spacing: 0.05em;
-    color: var(--color-amber);
-    border: 1px solid var(--color-amber);
-    border-radius: 3px;
-    padding: 0.05rem 0.3rem;
-    opacity: 0.8;
-  }
-
-  .post-title {
-    font-family: var(--font-sans);
-    font-size: 0.95rem;
-    font-weight: 600;
-    color: var(--color-text);
-    margin: 0 0 0.3rem;
-    line-height: 1.4;
-    transition: color 0.12s;
-    word-break: break-word;
-    overflow-wrap: break-word;
-  }
-  .post-card:hover .post-title { color: var(--color-accent); }
-
-  .post-desc {
-    font-size: 0.82rem;
-    color: var(--color-text-dim);
-    margin: 0 0 0.5rem;
-    line-height: 1.55;
-  }
-
-  .post-tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.3rem;
-    max-width: 100%;
-    overflow: hidden;
-  }
-  .post-tag {
-    font-family: var(--font-mono);
-    font-size: 0.63rem;
-    color: var(--color-text-muted);
-    background: var(--color-surface-2);
-    border-radius: 3px;
-    padding: 0.1rem 0.4rem;
-    transition: color 0.12s;
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .post-card:hover .post-tag { color: var(--color-text-dim); }
-
-  /* Arrow icon */
-  .post-arrow {
-    width: 16px;
-    height: 16px;
-    color: var(--color-text-muted);
-    flex-shrink: 0;
-    margin: auto 0.9rem;
-    opacity: 0;
-    transition: opacity 0.15s, transform 0.15s, color 0.15s;
-  }
-  .post-card:hover .post-arrow {
-    opacity: 1;
-    color: var(--color-accent);
-    transform: translateX(2px);
-  }
+  .ed-archive-post[hidden], #ed-no-results[hidden] { display:none !important; }
 </style>
+<script is:inline>
+  (() => {
+    const root = document.getElementById('article-browser');
+    if (!root) return;
+    const query = document.getElementById('ed-article-search');
+    const cards = [...root.querySelectorAll('.ed-archive-post')];
+    const count = document.getElementById('ed-result-count');
+    const empty = document.getElementById('ed-no-results');
+    const categoryBtns = [...root.querySelectorAll('[data-category]')].filter(el=>el.tagName === 'BUTTON');
+    const seriesBtns = [...root.querySelectorAll('[data-series]')].filter(el=>el.tagName === 'BUTTON');
+    const params = new URLSearchParams(window.location.search);
+    let currentCategory = 'all';
+    let currentSeries = seriesBtns.some(b=>b.dataset.series===params.get('series')) ? params.get('series') : 'all';
+    const update = () => {
+      const q = (query.value || '').trim().toLocaleLowerCase();
+      let shown = 0;
+      cards.forEach(card => {
+        const visible = (!q || (card.dataset.search || '').includes(q)) &&
+          (currentCategory === 'all' || card.dataset.category === currentCategory) &&
+          (currentSeries === 'all' || card.dataset.series === currentSeries);
+        card.hidden = !visible;
+        if (visible) shown++;
+      });
+      count.textContent = String(shown);
+      empty.hidden = shown > 0;
+      categoryBtns.forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.category===currentCategory)));
+      seriesBtns.forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.series===currentSeries)));
+    };
+    categoryBtns.forEach(b=>b.addEventListener('click',()=>{currentCategory=b.dataset.category;update();}));
+    seriesBtns.forEach(b=>b.addEventListener('click',()=>{
+      currentSeries=b.dataset.series;
+      const url=new URL(window.location.href);
+      if(currentSeries==='all') url.searchParams.delete('series');
+      else url.searchParams.set('series',currentSeries);
+      history.replaceState(null,'',url);
+      update();
+    }));
+    query.addEventListener('input',update);
+    document.getElementById('ed-reset')?.addEventListener('click',()=>{
+      query.value='';currentCategory='all';currentSeries='all';
+      const url=new URL(window.location.href);url.searchParams.delete('series');
+      history.replaceState(null,'',url);update();query.focus();
+    });
+    update();
+  })();
+</script>
