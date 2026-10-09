@@ -50,6 +50,7 @@ Maintain **one authoritative copy** of each concept:
 | System | Agent Platform | Logical overall system |
 | Domain | Control, Execution, Integration, Operations | Bounded areas of ownership |
 | Service | Logical software component (not necessarily separate deployment) | Platform API, Run Service, Agent Worker, Tool Gateway, Workflow Engine |
+| Agent | Documented AI agent with model/tool metadata | Documentation Agent; published runtime configuration remains in our registry |
 | Event | Durable published notification/state | RunAccepted, RunCompleted |
 | Command | Request/intention | StartAgentRun, InvokeTool, RequestApproval |
 | Query | Read contract | GetRunStatus, ListEligibleAgents |
