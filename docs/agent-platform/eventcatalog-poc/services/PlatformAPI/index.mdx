@@ -1,0 +1,13 @@
+---
+id: PlatformAPI
+name: Platform API
+version: "0.1.0"
+summary: Authenticated ingress, admission API and session/run access.
+---
+# Platform API
+
+Receives requests from chat, API clients and verified trigger adapters. Performs authentication, authorization and request admission. User-facing API identifiers and response contracts are **platform-owned** rather than exposing workflow-engine internals.
+
+In production, this logical component can be horizontally replicated.
+
+<NodeGraph />
