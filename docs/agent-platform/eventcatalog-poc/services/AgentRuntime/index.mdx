@@ -1,0 +1,11 @@
+---
+id: AgentRuntime
+name: Agent Runtime
+version: "0.1.0"
+summary: Runs the bounded agent reasoning loop with a pinned configuration and policy.
+---
+# Agent Runtime
+
+**Proposed logical component.** Loaded by an Agent Worker, the runtime manages model turns, accepted tool responses, step limits, and final-answer composition. It is not a separate router. It never executes external actions directly: all tool requests cross the [Tool Gateway](../../ToolGateway/0.1.0/).
+
+<NodeGraph />
