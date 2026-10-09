@@ -2,7 +2,7 @@
 
 **Status:** Concept-only source fixtures. Not a deployed catalog and not verified against a pinned EventCatalog runtime.
 
-This folder intentionally mirrors EventCatalog's `domains/`, `services/`, `events/`, and `flows/` resource layout.
+This folder intentionally mirrors EventCatalog's `domains/`, `agents/`, `services/`, `events/`, and `flows/` resource layout. The first-class agent sample documents its tool capability rather than executing the agent.
 
 ## How to evaluate
 
