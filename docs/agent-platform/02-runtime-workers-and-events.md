@@ -7,10 +7,10 @@
 
 **Agent selection ends before the worker begins.** The platform determines which authorized published agent version will run. The worker then:
 
-1. Leases a queued \`runId\`.
+1. Leases a queued `runId`.
 2. Loads the **pinned published manifest**: instructions, model profile, approved tool/skill versions, limits, and optional subagent references.
 3. Revalidates runtime policy and resolves **scoped tool handles**; model credentials stay server-side.
-4. Chooses a runtime adapter (\`simple\`, \`deep\` or reviewed \`workflow\`) from the manifest.
+4. Chooses a runtime adapter (`simple`, `deep` or reviewed `workflow`) from the manifest.
 5. Builds an executable agent, invokes the approved model through the model gateway, and handles proposed tool calls through a secure Tool Gateway.
 6. Appends normalized, ordered events; persists checkpoints and tool intents as needed.
 7. Marks the run completed/failed/cancelled and records trace and token/cost usage.
@@ -96,7 +96,7 @@ A **simple MVP** can run a worker loop in the API process during local developme
 1. Worker claims a queued run under an exclusive **lease with fencing token**.
 2. It heartbeats while running; a newer valid lease fences out a stale worker.
 3. On crash or lease expiry, scheduler determines whether a checkpoint permits safe recovery.
-4. Tool invocation outcomes are checked against stored invocation IDs before replay. If outcome is unknown and side effects may have occurred, mark \`RECONCILIATION_REQUIRED\` and stop automatic retry.
+4. Tool invocation outcomes are checked against stored invocation IDs before replay. If outcome is unknown and side effects may have occurred, mark `RECONCILIATION_REQUIRED` and stop automatic retry.
 5. Cancellation is cooperative: set cancellation intent, propagate it through model/tool loops, and record a terminal status only after execution stops or a timeout policy intervenes.
 6. The event stream remains available while runs change workers.
 
@@ -125,9 +125,9 @@ class RuntimeAdapter(Protocol):
 
 Implement this with one adapter initially:
 
-- \`simple\`: a basic LangChain (or equivalent) agent with a bounded model/tool loop.
-- \`deep\`: Deep Agents harness for planning, task decomposition and controlled delegation; later milestone.
-- \`workflow\`: reviewed LangGraph workflow or deterministic task orchestration; distinct from unconstrained agent reasoning.
+- `simple`: a basic LangChain (or equivalent) agent with a bounded model/tool loop.
+- `deep`: Deep Agents harness for planning, task decomposition and controlled delegation; later milestone.
+- `workflow`: reviewed LangGraph workflow or deterministic task orchestration; distinct from unconstrained agent reasoning.
 
 Some frameworks do not supply equivalent pause/resume/cancel semantics. The **Run Service** owns public status and guarantees, while adapters provide whatever safe execution primitive is available. Adapter compatibility and restart behavior must be proven against pinned package versions.
 
@@ -154,11 +154,11 @@ The agent can only call tools exposed for its current run. Even exposed tools ar
 
 ## 6. A concrete tool call is not the same as agent selection
 
-**Agent Router**: chooses \`troubleshooting-agent\` among authorized agent deployments. It does not decide to execute \`logs.search\` directly.
+**Agent Router**: chooses `troubleshooting-agent` among authorized agent deployments. It does not decide to execute `logs.search` directly.
 
-**Selected runtime**: sends the user's request and approved tool descriptions to a model. The model may propose \`logs.search\` if that call helps accomplish the task.
+**Selected runtime**: sends the user's request and approved tool descriptions to a model. The model may propose `logs.search` if that call helps accomplish the task.
 
-**Tool Gateway**: validates and performs \`logs.search\` only after checking actual data scope and principal permissions, and emits a traceable \`tool.completed\` or \`tool.denied\`.
+**Tool Gateway**: validates and performs `logs.search` only after checking actual data scope and principal permissions, and emits a traceable `tool.completed` or `tool.denied`.
 
 **Tool implementation**: existing MCP server or REST integration performs the API query. A tool is not an autonomous process that knows when to run unless some invocation/orchestration calls it.
 
@@ -189,7 +189,7 @@ stateDiagram-v2
     RECONCILIATION_REQUIRED --> [*]
 ~~~
 
-\`ROUTING\` is used only when target selection is asynchronous. For synchronous resolution the initial run starts \`QUEUED\`.
+`ROUTING` is used only when target selection is asynchronous. For synchronous resolution the initial run starts `QUEUED`.
 
 Run status is transactional application state; framework-native status/checkpoint IDs are implementation details.
 
@@ -249,15 +249,15 @@ Suggested event types:
 
 | Type | UI meaning |
 | --- | --- |
-| \`run.accepted\` / \`route.selected\` | Accepted / which agent will run |
-| \`run.started\` | Runtime begins |
-| \`message.delta\` | Partial answer text |
-| \`tool.requested\` | Display safe label, not secrets or raw arguments |
-| \`tool.completed\` / \`tool.denied\` | Progress / policy rejection |
-| \`approval.required\` / \`approval.resolved\` | Show review UI and decision |
-| \`usage.updated\` | Token/spend estimate |
-| \`run.completed\` / \`run.failed\` / \`run.cancelled\` | Terminal outcome |
-| \`run.unroutable\` | Ask for manual agent selection |
+| `run.accepted` / `route.selected` | Accepted / which agent will run |
+| `run.started` | Runtime begins |
+| `message.delta` | Partial answer text |
+| `tool.requested` | Display safe label, not secrets or raw arguments |
+| `tool.completed` / `tool.denied` | Progress / policy rejection |
+| `approval.required` / `approval.resolved` | Show review UI and decision |
+| `usage.updated` | Token/spend estimate |
+| `run.completed` / `run.failed` / `run.cancelled` | Terminal outcome |
+| `run.unroutable` | Ask for manual agent selection |
 
 Do not send raw provider prompts, full tool credentials, unredacted request payloads or cross-tenant data in generic SSE events.
 
@@ -292,11 +292,11 @@ This is **illustrative wire formatting**. Production events must also conform to
 
 **SSE resume requirements:**
 
-- Store ordered events before broadcasting them; event sequences unique per \`runId\`.
-- Authenticate each \`GET /events\`, not just run creation; enforce tenant/workspace and session ownership.
-- Support \`Last-Event-ID\` (or an explicit cursor) to replay events after a dropped connection, within retention.
+- Store ordered events before broadcasting them; event sequences unique per `runId`.
+- Authenticate each `GET /events`, not just run creation; enforce tenant/workspace and session ownership.
+- Support `Last-Event-ID` (or an explicit cursor) to replay events after a dropped connection, within retention.
 - Reconnection must not start a second run.
-- Client should render \`message.delta\` incrementally, update status on \`run.*\` events and reconcile with \`GET /runs/{id}\` after terminal status.
+- Client should render `message.delta` incrementally, update status on `run.*` events and reconcile with `GET /runs/{id}` after terminal status.
 - Slow consumers must not block the worker; fanout is decoupled from computation through durable storage.
 - Persist final answer separately from deltas if event retention and message-history retention differ.
 
@@ -304,18 +304,18 @@ This is **illustrative wire formatting**. Production events must also conform to
 
 The worker may be restarted, moved, suspended for approval, or invoked by a scheduler when no browser exists. The API remains the stable read interface; the worker merely produces ordered run events and persists final state.
 
-For email/webhooks, the outbound integration may listen for \`run.completed\` and choose a configured action (e.g. prepare a human-review draft). **Do not assume \`run.completed\` automatically sends email or calls a webhook.** That requires a separately authorized post-run action.
+For email/webhooks, the outbound integration may listen for `run.completed` and choose a configured action (e.g. prepare a human-review draft). **Do not assume `run.completed` automatically sends email or calls a webhook.** That requires a separately authorized post-run action.
 
 ## 9. Conversation and checkpoint state
 
 Store at least:
 
-- \`AgentSession\`: user/workspace, bound deployment, selected version and revision, chat conversation references.
-- \`AgentRun\`: triggering actor, pinned version/adapter, budget, trace ID, status.
-- \`RunEvent\`: append-only event log with seq/cursor.
-- \`RuntimeCheckpointRef\`: framework thread ID + checkpoint version (private to worker), storage namespace and retention policy.
-- \`ToolInvocation\`: idempotency key, tool ID/version, input hash, authorization/approval decision and result.
-- \`ApprovalRequest\`: intent hash, reviewer, expiry, revision and decision.
+- `AgentSession`: user/workspace, bound deployment, selected version and revision, chat conversation references.
+- `AgentRun`: triggering actor, pinned version/adapter, budget, trace ID, status.
+- `RunEvent`: append-only event log with seq/cursor.
+- `RuntimeCheckpointRef`: framework thread ID + checkpoint version (private to worker), storage namespace and retention policy.
+- `ToolInvocation`: idempotency key, tool ID/version, input hash, authorization/approval decision and result.
+- `ApprovalRequest`: intent hash, reviewer, expiry, revision and decision.
 
 **Separate long-term memory from execution checkpoints.** A checkpoint enables crash recovery; it does not imply permission to remember sensitive user data indefinitely. Tenant-scoped memory must be explicitly configured, governed and erasable.
 
@@ -328,7 +328,7 @@ Store at least:
 5. Support trace propagation across API -> queue -> worker -> model/tool; redact secrets and sensitive tool output.
 6. If a write's outcome is unknown, do not blindly re-issue it. Mark a reconciliation-required state.
 7. The runtime must not leak hidden agent definitions, cross-tenant sessions, or previous run contents.
-8. Error messages distinguish \`UNROUTABLE\`, unauthorized, invalid deployment, tool denied, quota exceeded, model failure, tool timeout, and external-write uncertainty.
+8. Error messages distinguish `UNROUTABLE`, unauthorized, invalid deployment, tool denied, quota exceeded, model failure, tool timeout, and external-write uncertainty.
 
 ## 11. Implementation contracts to test
 
