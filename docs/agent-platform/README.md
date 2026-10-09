@@ -11,6 +11,10 @@ This documentation lives in \`docs/\` and is **not a blog article or a productio
 1. **[01 — Invocation and agent routing](./01-invocation-and-routing.md)**: entry points, \`TriggerBinding\`, eligibility filtering, direct selection vs automatic routing, sessions, router fallbacks, and request/response contract.
 2. **[02 — Runtime, workers, tools, and events](./02-runtime-workers-and-events.md)**: how a selected agent runs, where tools are called, run state machine, checkpoint/approval design, worker-to-API-to-UI streaming, and failure recovery.
 3. **[03 — Trigger adapters, examples, and MVP plan](./03-triggers-and-mvp.md)**: chat, webhook, scheduled work, email and delegation, plus implementation backlog and executable acceptance scenarios.
+4. **[04 — Extensible Tool Registry and external execution](./04-tool-registry-and-external-execution.md)**: connectors, versioned tool definitions/bindings, third-party HTTP actions, approved remote jobs and isolated script runners.
+5. **[05 — Agent-to-agent orchestration](./05-agent-to-agent-orchestration.md)**: parent/child runs, delegation policies, budget/permission inheritance, internal collaboration and external A2A protocol.
+6. **[06 — Decision layer, Jev and deterministic rules](./06-decision-layer-jev-and-rules.md)**: typed choice/score results, replaceable decision providers, eligibility checks, DMN/FEEL rules and evaluation.
+7. **[07 — Complete orchestration scenario](./07-end-to-end-orchestration-scenario.md)**: one fictional SaaS workflow connecting routing, agent tools, child agents, approval-gated remote jobs and SSE.
 
 See also [RFC-001: Configuration-Driven Agent Platform](https://github.com/buianhtai/buianhtai.github.io/pull/6), a separate, **currently proposed** RFC about the control-plane registry, policy model, declarative configuration schema, tool/skill catalog, and framework adapters. These documents intentionally complement that RFC but are reviewable independently.
 
@@ -23,10 +27,19 @@ See also [RFC-001: Configuration-Driven Agent Platform](https://github.com/buian
 | Agent registry | Stores versioned definitions, descriptions, tool and skill bindings | No |
 | Run service | Creates and owns a run, status, quotas, idempotency, and events | No |
 | Worker + runtime | Loads a pinned agent and executes the reasoning/tool loop | Usually, but not for deterministic workflows |
-| Tool Gateway | Validates and executes permitted MCP/REST/KB capabilities | No |
+| Tool Gateway | Validates and invokes permitted MCP/REST/KB capabilities and approved async job operations | No |
+| Connector / External Job Service | Executes reviewed third-party integrations, fixed workflows and isolated job templates | No |
+| Delegation Gateway | Creates scoped child runs or sends approved A2A tasks | Optional model choice upstream, no for permission checks |
+| Decision Service | Deterministic rules/DMN and optional Jev-like typed classifiers for routing or workflow branching | Optional dedicated decision inference |
 | Skill | Task procedure/instructions and resources attached to an agent | No, not itself |
 | Model gateway | Executes approved model requests and meters usage | Yes, when called |
 | API/event service | Serves run state and event stream to UI/integrations | No |
+
+**Tool extensions:** a published tool definition points to a reviewed connector (internal, MCP, HTTP, workflow, or remote job). Agents bind only permitted versions. **Shell execution is never a generic built-in tool**; scripts require an approved template and isolated external runner.
+
+**Agent collaboration:** internal agent-to-agent requests create scoped parent/child runs; external interoperable agents can use A2A after connection registration and authorization. The primary router and delegation gateway are different concerns.
+
+**Decisions:** deterministic rules take precedence; optional Jev-style classifiers supply typed decisions, never authorization. See [04](./04-tool-registry-and-external-execution.md), [05](./05-agent-to-agent-orchestration.md), [06](./06-decision-layer-jev-and-rules.md) and the full example [07](./07-end-to-end-orchestration-scenario.md).
 
 **Tools alone are not a platform:** if all we have are tools, we still must add the entry point, registry, admission/run service, routing policy, worker runtime and event response path. Existing tool implementations can be reused. Their presence alone does not imply the other boxes already exist.
 
@@ -37,7 +50,8 @@ flowchart TB
     CHAT["Chat UI"] --> API["Platform API: auth + runs"]
     HOOK["Webhook / Email / Scheduler"] --> API
     API --> ADMISSION["Admission: tenant + policy + quota"]
-    ADMISSION --> ROUTER{"Explicit, bound or routed?"}
+    ADMISSION --> DEC["Rules / optional DecisionProvider"]
+    DEC --> ROUTER{"Explicit, bound or routed?"}
     ROUTER --> REG["Published Agent Registry"]
     REG --> RUNS["Run Service: version + runId + status"]
     RUNS --> QUEUE["Queue / worker lease"]
@@ -45,7 +59,11 @@ flowchart TB
     WORKER --> ENGINE["Runtime Adapter: simple / deep / workflow"]
     ENGINE --> MODEL["Model Gateway"]
     ENGINE --> GW["Tool Gateway (enforced scopes)"]
-    GW --> TOOLS["MCP / REST / KB tools"]
+    ENGINE --> DELEGATE["Delegation Gateway"]
+    DELEGATE --> CHILD["Internal child agent / External A2A"]
+    GW --> TOOLS["MCP / Reviewed REST / KB"]
+    GW --> JOB["External Job Service"]
+    JOB --> RUNNER["Approved Kestra flow / Isolated runner"]
     WORKER --> EVENTS["Durable run events + checkpoints"]
     EVENTS --> API
     API --> CHAT
@@ -63,7 +81,7 @@ This diagram is **logical**, not a demand to build eleven microservices. The MVP
 5. **One run, one primary agent (initially).** The agent can invoke tools; optional subagent delegation is a separate, authorized feature.
 6. **Models propose; code enforces.** Business rules, quotas, tool access and approvals do not depend on trusting model instructions.
 7. **Worker never owns the client connection.** The API serves durable event streams, allowing retries/reconnections and scheduled invocations.
-8. **Use AI selectively.** Deterministic tasks should not invoke an LLM. A router may use embeddings or a small model only when needed.
+8. **Use AI selectively.** Deterministic tasks should not invoke an LLM. A router may use embeddings or an optional Jev-style decision provider only when needed.
 9. **No proprietary domain- or customer-specific examples.** All names, identifiers, tenants and APIs below are illustrative.
 
 ## Glossary / contract owners
