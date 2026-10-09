@@ -135,6 +135,116 @@ If a new workflow requires a capability the platform doesn't expose, developers 
 
 **This is the distinction I would show in Agent Studio:** a visual or declarative **workflow** with optional AI steps, versus an **agent** whose allowed tools are selected by the model at runtime.
 
+### A minimal implementation shape
+
+I would start with a deterministic router and a small set of prebuilt capabilities. This is **architectural pseudocode**—the injected integrations, persistence, validation and model calls are not implemented here:
+
+~~~python
+async def handle_support_email(email, principal, services):
+    # Trusted application code; not an LLM call.
+    if await services.inbox.already_processed(email.id):
+        return {"status": "duplicate"}
+
+    if match = services.rules.match(email):
+        return await services.approvals.queue_draft(
+            principal, email, render_template(match)
+        )
+
+    # Only free-text ambiguity needs this small model call.
+    intent = await services.ai.classify(
+        model_profile="economical",
+        email=email,
+        output_schema=SupportIntent,
+    )
+    if intent.category == "documentation":
+        # Retrieval itself is not an LLM operation.
+        passages = await services.kb.search(
+            tenant=principal.tenant, query=email.body, top_k=5
+        )
+        draft = await services.ai.grounded_draft(
+            model_profile="economical",
+            email=email, passages=passages,
+        )
+        return await services.approvals.queue_draft(
+            principal, email, draft
+        )
+
+    if intent.category == "incident" and intent.trace_id:
+        return await services.runs.start_agent(
+            agent_version="incident-investigator@3",
+            input={"trace_id": intent.trace_id},
+            principal=principal,
+            tool_allowlist=["trace.search", "logs.search", "kb.search"],
+            max_model_calls=6,
+            budget_usd=0.10,
+        )
+
+    return await services.human_queue.enqueue(email)
+~~~
+
+A production implementation must **atomically claim email IDs before processing**, enforce authorization in each service, propagate trace IDs, persist run state, handle provider failures and ensure no message is sent without the configured approval. The point of this example is *where AI goes*, not whether this listing can run by itself.
+
+Notice that I did **not** ask a model to decide if it can read another tenant's trace. The tool implementation takes a trusted principal and performs that check itself.
+
+### What about token cost?
+
+Token cost is especially dangerous for a free-running agent: each reasoning step can resend previous history, tool outputs and instructions, so cost often grows faster than a naïve count of tool calls.
+
+A small example using **published Claude API list prices**: [Haiku 4.5](https://platform.claude.com/docs/en/models/haiku-4-5/overview) at **$1 input / $5 output per million tokens**, and [Sonnet 4.6](https://platform.claude.com/docs/en/models/sonnet-4-6/overview) at **$3 input / $15 output per million tokens**. Prices are as checked on October 9, 2026, not a quote for a specific cloud/region.
+
+Assume *one* model call consumes **2,000 uncached input tokens** and produces **500 output tokens**:
+
+~~~text
+Haiku:  (2,000 × $1 + 500 × $5) / 1,000,000 = $0.0045
+Sonnet: (2,000 × $3 + 500 × $15) / 1,000,000 = $0.0135
+
+Five Sonnet calls at identical per-call usage: 5 × $0.0135 = $0.0675
+~~~
+
+The five-call example assumes every call is the same size; real agent calls may become substantially larger as context accumulates.
+
+Now imagine **10,000 emails per month**, with a hypothetical workload distribution:
+
+<DataTable
+  caption="Illustrative direct model inference only—not an observed workload or quote"
+  accent="amber"
+  headers={["Route", "Share", "Calls & model", "Monthly token cost"]}
+  rows={[
+    { "Route": "Known rule or template", "Share": "70% = 7,000", "Calls & model": "0", "Monthly token cost": "$0" },
+    { "Route": "One bounded reply draft", "Share": "20% = 2,000", "Calls & model": "1 × Haiku", "Monthly token cost": "$9.00" },
+    { "Route": "Complex investigation", "Share": "10% = 1,000", "Calls & model": "5 × Sonnet", "Monthly token cost": "$67.50" },
+    { "Route": "Total", "Share": "10,000", "Calls & model": "Selective model usage", "Monthly token cost": "$76.50" },
+  ]}
+/>
+
+If every email instead triggered five Sonnet calls at those same fixed token counts, inference alone would cost **$675 per month**—before tools, retrieval, storage, infrastructure or human review.
+
+This is not an argument for a particular provider. It illustrates that **routing and limiting the number of AI steps can matter more than switching frameworks**.
+
+The real monthly bill should include:
+
+\`model tokens + embeddings + tool/API fees + storage + worker compute + retries + observability + human review\`.
+
+And the real *economic* measure should compare the automation's total cost with a task's verified value: saved handling time, faster diagnosis, fewer errors or higher response quality.
+
+### Guardrails must be executable, not hopeful
+
+I would implement at least five reliability controls before enabling expensive autonomous loops:
+
+1. **Typed input and output:** classify into a validated schema; unknown intent means escalation rather than guessing.
+2. **Bounded execution:** max model calls, time, tool calls, context tokens and spend are enforced outside the prompt.
+3. **Grounding:** require retrieved source IDs for factual answers; if evidence is missing, explicitly say so.
+4. **External policy:** the Tool Gateway rechecks resource permissions and payloads, even if the model asks confidently.
+5. **Recovery and review:** a durable human-approval step for risky actions; idempotency and outcome reconciliation for writes.
+
+A language model's self-reported confidence score is not a safety guarantee. I would calibrate routing thresholds against labeled examples, monitor false negatives and keep human review for uncertain or high-impact cases.
+
+For long-running work, [LangGraph documents mixing deterministic nodes with LLM steps](https://langchain-ai.github.io/langgraph/tutorials/introduction/) and [checkpoint-based recovery](https://langchain-ai.github.io/langgraph/concepts/durable_execution/). Those mechanisms help orchestrate a reliable application; they do not make probabilistic model judgments deterministic or make external writes exactly-once.
+
+<Callout color="green">
+  **My MVP choice:** one read-only support agent + one deterministic workflow. Get costs, false-positive rates, resolution quality and permission-denial tests measured before adding multi-agent orchestration.
+</Callout>
+
 ---
 
 ## <Label color="teal">01</Label> Start with the product, not the framework
