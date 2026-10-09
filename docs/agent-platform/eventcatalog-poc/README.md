@@ -56,3 +56,14 @@ CI additionally checks critical generated routes. The architecture portal is bui
 - Check that Flow nodes reference existing service/message IDs, and that all catalog pages build before merging.
 
 For rationale beyond individual resources see [agent-platform chapters](../README.md), especially chapters 04 (Tool Registry), 05 (Delegation), 08 (Adapters), 09 (Reliability) and 11 (Architecture Diagrams).
+
+## Governance, ADRs and versioned contracts
+
+- [Governance and Contract Authoring Guide](./GOVERNANCE.md) documents provisional ownership, architecture state, review gate, change compatibility and drift checks.
+- Four native **proposed ADRs** live under `adrs/` and reference affected services, flows and the system.
+- `teams/architecture-stewards.mdx` is a **placeholder role**, not a real team roster or approval.
+- `services/PlatformAPI/openapi.json` and `services/RunService/asyncapi.json` are **illustrative** source specifications rendered by EventCatalog.
+- To validate locally (after installing catalog dependencies): `node scripts/validate-architecture-catalog.mjs`. CI rejects unknown references, missing owner records, orphan graph steps, malformed message schemas and broken internal API spec references.
+
+**Note:** The public REST request schema differs from the internal `StartAgentRun` command. Resolve target, verify caller and pin agent before constructing the internal intent. Do not conflate service specification links with a deployed API.
+
