@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:example:agent-platform:RequestApproval:0.1.0",
+  "title": "RequestApproval",
+  "description": "Request a human decision for one immutable side-effect intent.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "runId",
+    "invocationId",
+    "intentHash",
+    "toolVersionRef"
+  ],
+  "properties": {
+    "runId": {
+      "type": "string"
+    },
+    "invocationId": {
+      "type": "string"
+    },
+    "intentHash": {
+      "type": "string"
+    },
+    "toolVersionRef": {
+      "type": "string"
+    },
+    "reviewerPolicyRef": {
+      "type": "string"
+    },
+    "expiresAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}
