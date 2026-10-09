@@ -1,0 +1,154 @@
+---
+id: DelegatedAgentRun
+name: Bounded Agent-to-Agent Delegation
+version: "0.1.0"
+summary: A coordinator delegates a limited evidence task to an approved child agent and joins results durably.
+steps:
+  - id: parent
+    title: "Coordinator identifies a specialist task"
+    service:
+      id: AgentWorker
+      version: "0.1.0"
+    next_step:
+      id: request
+      label: "Bound alias and narrow task"
+  - id: request
+    title: "Create child-agent delegation request"
+    message:
+      id: DelegateAgentRun
+      version: "0.1.0"
+    next_step:
+      id: gateway
+      label: "Authorize delegation"
+  - id: gateway
+    title: "Validate parent binding, grants, depth, budget"
+    service:
+      id: DelegationGateway
+      version: "0.1.0"
+    next_step:
+      id: decision
+      label: "Decide eligibility"
+  - id: decision
+    title: "Is delegation permitted within hard limits?"
+    custom:
+      title: "Delegation guard"
+      type: Decision
+      summary: "Is delegation permitted within hard limits?"
+    next_steps:
+      - id: admit
+        label: "Yes"
+      - id: deny
+        label: "Denied"
+  - id: deny
+    title: "Return typed denial to parent without child creation"
+    custom:
+      title: "Delegation rejected"
+      type: Decision
+      summary: "Return typed denial to parent without child creation"
+    next_step:
+      id: synth
+      label: "Parent handles safe failure"
+  - id: admit
+    title: "Reserve child budget and persist child run"
+    service:
+      id: RunService
+      version: "0.1.0"
+    next_step:
+      id: child
+      label: "Queue specialist version"
+  - id: child
+    title: "Specialist executes bounded task with scoped tools"
+    service:
+      id: AgentWorker
+      version: "0.1.0"
+    next_step:
+      id: tool
+      label: "Tool authorization"
+  - id: tool
+    title: "Perform allowed evidence retrieval"
+    service:
+      id: ToolGateway
+      version: "0.1.0"
+    next_step:
+      id: outcome
+      label: "Return source references"
+  - id: outcome
+    title: "Child run finished before deadline?"
+    custom:
+      title: "Completion decision"
+      type: Decision
+      summary: "Child run finished before deadline?"
+    next_steps:
+      - id: completed
+        label: "Yes"
+      - id: timedout
+        label: "Timeout or cancel"
+  - id: completed
+    title: "Correlate child result to parent run"
+    message:
+      id: ChildRunCompleted
+      version: "0.1.0"
+    next_step:
+      id: synth
+      label: "Return scoped artifact"
+  - id: timedout
+    title: "Record typed child failure and release reservation"
+    service:
+      id: DelegationGateway
+      version: "0.1.0"
+    next_step:
+      id: synth
+      label: "Do not retry without policy"
+  - id: synth
+    title: "Coordinator composes answer from verified child evidence"
+    service:
+      id: AgentWorker
+      version: "0.1.0"
+    next_step:
+      id: finished
+      label: "Finish parent run"
+  - id: finished
+    title: "Publish parent's completed run"
+    message:
+      id: RunCompleted
+      version: "0.1.0"
+---
+# Bounded Agent-to-Agent Delegation
+
+**Status: proposed design, not deployed workflow code.** Native EventCatalog Flow nodes below link directly to referenced services, commands and events.
+
+<NodeGraph />
+
+## When to use delegation
+
+Delegation is not the same as routing or invoking a tool. Routing chooses the **initial agent**. Tool invocation operates through the Tool Gateway. Delegation starts a **new child AgentRun** for one approved specialist with its own pinned agent version, resource grants, budget and audit trail.
+
+## Fictional example
+
+A research coordinator receives: "Compare two public integration guides and summarize the breaking differences." The parent publishes a narrow evidence-gathering task to a read-only documentation specialist, waits on durable child completion, validates citation references and returns the summary. The child has no ability to read the parent's private notes or invoke its other tools.
+
+## Lineage and safeguards
+
+~~~mermaid
+sequenceDiagram
+    participant P as Parent Worker
+    participant D as Delegation Gateway
+    participant R as Run Service
+    participant C as Child Worker
+    P->>D: DelegateAgentRun(alias, taskRef, budget)
+    D->>D: Check binding, depth and intersection of grants
+    D->>R: Admit child with parentRunId + reservation
+    R->>C: Start pinned specialist version
+    C-->>R: Persist bounded result + usage
+    R-->>D: ChildRunCompleted
+    D-->>P: Typed resultRef
+    P->>P: Join evidence and compose final answer
+~~~
+
+The parent sees only the allowed alias. Budget reservations prevent fan-out from exceeding the parent's hard cost limit; maximum depth and child count are enforced by platform code. Cancellation propagates best effort. Repeated delegationId requests reuse the same child; late results are recorded but cannot mutate a finalized parent without a new authorized run.
+
+## Failure modes
+
+If a specialist is undeployed, deny before spending. If the child times out, return a typed timeout and release unused reserved budget. If the parent is cancelled, cancel children and remote tasks where supported. External A2A agents require a separate trusted adapter with origin verification and data-egress policy; they are not enabled by a simple MCP tool binding.
+
+**Explore:** [Delegation Gateway](/architecture/docs/services/DelegationGateway/0.1.0/) · [Research Coordinator Agent](/architecture/docs/agents/ResearchCoordinatorAgent/0.1.0/).
