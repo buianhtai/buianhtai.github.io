@@ -1,0 +1,67 @@
+---
+id: RoutedAgentRun
+name: Automatically Routed Agent Run
+version: "0.1.0"
+summary: Proposed selection of one eligible agent before the regular run lifecycle.
+steps:
+  - id: incoming
+    title: Receive request with automatic selection
+    service:
+      id: PlatformAPI
+      version: "0.1.0"
+    next_step:
+      id: eligible
+      label: Authenticate and resolve scope
+  - id: eligible
+    title: Filter authorized eligible agent versions
+    custom:
+      title: Registry and policy
+      type: Eligibility
+      summary: Apply hard access and capability filters before any model-based routing.
+    next_steps:
+      - id: selected
+        label: Safe unambiguous match
+      - id: clarify
+        label: No match or ambiguous
+  - id: selected
+    title: Create pinned authorized run
+    service:
+      id: RunService
+      version: "0.1.0"
+    next_step:
+      id: run_accepted
+      label: Durable admission
+  - id: run_accepted
+    title: Run accepted
+    message:
+      id: RunAccepted
+      version: "0.1.0"
+    next_step:
+      id: execute
+      label: Dispatch
+  - id: execute
+    title: Execute chosen version
+    service:
+      id: AgentWorker
+      version: "0.1.0"
+    next_step:
+      id: done
+      label: Successful completion
+  - id: done
+    title: Run completed
+    message:
+      id: RunCompleted
+      version: "0.1.0"
+  - id: clarify
+    title: Ask user to select an authorized agent
+    service:
+      id: PlatformAPI
+      version: "0.1.0"
+---
+# Automatically Routed Agent Run
+
+**Status: proposed.** Routing is permitted only across already eligible published agents. Low confidence, disagreement, no matches or policy ambiguity must fail closed or ask for explicit selection.
+
+<NodeGraph />
+
+Unlike [ExplicitAgentRun](../ExplicitAgentRun/0.1.0/), this flow includes a selection step. Both flows converge at durable run admission.
