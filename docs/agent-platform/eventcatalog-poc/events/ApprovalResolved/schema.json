@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:example:agent-platform:ApprovalResolved:0.1.0",
+  "title": "ApprovalResolved",
+  "description": "Records a human decision and whether execution can be resumed under fresh policy checks.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "approvalId",
+    "runId",
+    "decision"
+  ],
+  "properties": {
+    "approvalId": {
+      "type": "string"
+    },
+    "runId": {
+      "type": "string"
+    },
+    "decision": {
+      "type": "string",
+      "enum": [
+        "APPROVED",
+        "REJECTED",
+        "EXPIRED"
+      ]
+    },
+    "resolvedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "intentHash": {
+      "type": "string"
+    }
+  }
+}
