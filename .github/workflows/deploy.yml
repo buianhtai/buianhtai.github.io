@@ -70,7 +70,11 @@ jobs:
           test -s architecture-catalog/systems/AgentExecutionPlatform/index.mdx
           test -s architecture-catalog/domains/AgentPlatform/entities/AgentVersion/index.mdx
           test -s architecture-catalog/pages/homepage.astro
-          find architecture-catalog/dist -type f -path "*/docs/systems/AgentExecutionPlatform/0.1.0/index.html" | grep -q . || {
+          grep -q 'Configurable agents, explained' architecture-catalog/dist/index.html || {
+            echo "::error::Custom EventCatalog homepage did not render"
+            exit 1
+          }
+          find architecture-catalog/dist -type f -path "*/systems/AgentExecutionPlatform/0.1.0/index.html" | grep -q . || {
             echo "::error::Missing EventCatalog system page: AgentExecutionPlatform"
             exit 1
           }
