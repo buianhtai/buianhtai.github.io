@@ -41,14 +41,14 @@ This post is a design evaluation, **not a claim that I have benchmarked these fr
 
 I can give an agent a model, ten tools, and five skills. That does **not** mean those tools should be coordinated by an LLM for every request.
 
-I would classify work into four execution modes:
+I would classify work into four execution modes. **All scenarios below are illustrative and use generic application behavior, not the details of any specific product or customer system:**
 
 <DataTable
   caption="Choose the simplest execution mode that can reliably do the job"
   accent="teal"
   headers={["Workload", "Example", "Execution mode", "LLM required?"]}
   rows={[
-    { "Workload": "Known business procedure", "Example": "Import 5,000 BOM rows; validate lifecycle states", "Execution mode": "Code / Kestra workflow", "LLM required?": "No" },
+    { "Workload": "Known business procedure", "Example": "Validate and import CSV records", "Execution mode": "Code / scheduler", "LLM required?": "No" },
     { "Workload": "Interpret ambiguous text", "Example": "Classify a support email or draft a response", "Execution mode": "One bounded model call", "LLM required?": "Sometimes" },
     { "Workload": "Unknown investigation path", "Example": "Find the cause of an API 500 using logs and docs", "Execution mode": "Restricted tool-using agent", "LLM required?": "Usually" },
     { "Workload": "Long-horizon exploration", "Example": "Compare architectures across many sources", "Execution mode": "Deep agent + evaluation + budget", "LLM required?": "Often, with limits" },
@@ -57,15 +57,15 @@ I would classify work into four execution modes:
 
 **Rule of thumb:** if I can specify the sequence of checks and the expected result ahead of time, I would write an ordinary workflow. AI earns its place only where fixed rules do not cover the variability of the input.
 
-### Example 1 — Large data import: code first
+### Example 1 — Bulk CSV import: code first
 
-Suppose a user uploads a 5,000-row engineering BOM. The job must validate references, relationships, cardinality and lifecycle states, apply batch upserts, and retry transient failures.
+Suppose a SaaS product accepts a bulk CSV upload. Its backend needs to validate the file format and required fields, reject duplicate identifiers, check the requester's access, write valid records transactionally, and safely retry transient failures.
 
-I would not spend tokens asking a model whether each row is valid. The business rules already exist and must produce repeatable results. A deterministic service does the import. **An optional LLM can summarize the validation report for a human**, but it cannot override constraints or write arbitrary database changes.
+I would not spend tokens asking a model whether each row is valid. These are explicit rules that need repeatable outcomes. A deterministic import service should own validation and database writes. **An optional LLM can summarize the error report for a human**, but it cannot override validation or modify records on its own.
 
-- Trigger: upload or a scheduled Kestra flow.
-- Executor: existing Java/Python services and database transactions.
-- Result: count of succeeded/failed records, structured failure codes, audit trail.
+- Trigger: file upload or scheduled job.
+- Executor: ordinary backend services and database transactions.
+- Result: accepted/rejected counts, stable error codes, and an audit trail.
 - Optional AI: one call to turn those failure codes into a readable explanation.
 
 ### Example 2 — Support mailbox: introduce AI only for exceptions
@@ -99,13 +99,13 @@ Imagine three messages:
 
 For the last email, the agent chooses between *approved* tools based on evidence. That is where the LLM is useful. But even there, the **framework does not decide who can read logs**. A policy-enforcing Tool Gateway does.
 
-### Example 3 — A change-order review: split the judgment from the action
+### Example 3 — Software release review: split judgment from action
 
-A user asks: "Review this change order and tell me whether it is ready to approve."
+A user asks: "Is this application release ready for production?"
 
-A deterministic backend should check required attributes, BOM rules, revision state, relevant permissions and missing dependencies. If those checks fail, the change order is blocked regardless of the model's prose.
+The CI/CD pipeline should check automated tests, security-scan thresholds, required code reviews, deployment permissions and release policies. If a required gate fails, deployment is blocked regardless of the model's recommendation.
 
-The model can synthesize what the checks and documents imply, flag ambiguities and draft a recommendation. It does not set the authoritative approval state. An authorized human—or an explicitly approved deterministic business rule—makes that transition.
+An LLM can summarize failed checks, explain the likely impact and draft a release-readiness report. It cannot override CI rules or grant deployment access. The existing approval process and authorized deployment pipeline decide whether release is permitted.
 
 ### Example 4 — Research and code analysis: this is a real deep-agent case
 
