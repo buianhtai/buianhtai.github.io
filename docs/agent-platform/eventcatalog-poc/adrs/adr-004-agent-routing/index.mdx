@@ -1,0 +1,63 @@
+---
+id: adr-004-agent-routing
+name: "ADR-004: Explicit Invocation and Bounded Automatic Routing"
+version: "0.1.0"
+status: proposed
+date: 2026-10-10
+summary: Use explicit selection as a direct path and constrain automated routing to authorized deployed agents.
+owners:
+  - architecture-stewards
+decisionMakers:
+  - architecture-stewards
+appliesTo:
+  - type: system
+    id: AgentExecutionPlatform
+  - type: service
+    id: PlatformAPI
+  - type: service
+    id: AgentRegistry
+  - type: service
+    id: RunService
+  - type: flow
+    id: RoutedAgentRun
+  - type: flow
+    id: ExplicitAgentRun
+x-implementation-status: not-started
+x-review-status: awaiting-human-architecture-review
+x-source-repository: https://github.com/buianhtai/buianhtai.github.io
+---
+# ADR-004: Explicit Invocation and Bounded Automatic Routing
+
+**Proposal only. No architecture board or implementation owner has accepted this decision.** Decision makers and owners are provisional roles, not real individuals.
+
+## Context
+
+A generic UI may receive a question without an agent selection, but delegating global agent discovery and permission decisions to a model is expensive, unreliable and unsafe.
+
+## Alternatives evaluated
+
+| Approach | Trade-off |
+| --- | --- |
+| Explicit user-selected agent | Predictable, low-cost and auditable; requires a selection UI |
+| Rules and embeddings | Lower inference cost for candidate matching but requires good descriptions/evaluation |
+| Small model ranker | Handles ambiguity better, costs inference and needs calibrated thresholds |
+| Broadcast to all agents | Costly, risky, duplicates side effects and is not acceptable as a default |
+
+## Proposed direction (not an accepted decision)
+
+For initial delivery use explicit selection. Optional routing first filters authorized published agents and applies deterministic rules before a cheap ranking model. Low confidence or ties return a clarification or UNROUTABLE result; do not fan out requests. **Thresholds and ranking technology remain experimental pending evaluation**.
+
+## Consequences and open questions
+
+Provides one-agent-per-request control, predictable spend and access checks. Requires router evaluation data, candidate/decision provenance, calibrated confidence and a user-visible fallback.
+
+## Validation needed before acceptance
+
+- Agree on an accountable implementation owner and record a decision review date
+- Prototype the smallest generic SaaS scenario using non-sensitive synthetic fixtures
+- Measure correctness, reliability, latency, operational complexity, budget and access-control effectiveness
+- Record any production constraints and change the status only after review
+
+## Affected resources
+
+This ADR is linked through native EventCatalog `appliesTo` references; use the affected service or flow page to navigate the implementation boundary.
