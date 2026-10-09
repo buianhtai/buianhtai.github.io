@@ -12,7 +12,7 @@ export default {
   outDir: 'dist',
   search: { type: 'resource' },
   navigation: { pages: ['list:top-level-domains', 'list:all'] },
-  llmsTxt: { enabled: true },
+  llmsTxt: { enabled: false },
   cId: '25f91af5-7b8c-43b2-9a06-51a2d1e6bdb9',
   tsd: 1791585600000
 };
