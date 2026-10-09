@@ -28,7 +28,7 @@ const vi = lang === 'vi';
       <a href={`/${lang}/blog`} class="ed-icon-button" title={vi ? 'Tìm bài viết' : 'Find articles'} aria-label={vi ? 'Tìm bài viết' : 'Find articles'}>
         <svg aria-hidden="true" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="10.8" cy="10.8" r="6.5"/><path d="m16 16 5 5"/></svg>
       </a>
-      <a href={switchedPath} class="ed-icon-button ed-header-lang" title={vi ? 'English' : 'Tiếng Việt'} aria-label={vi ? 'Switch to English' : 'Chuyển sang tiếng Việt'}>{vi ? 'EN' : 'VI'}</a>
+      <a href={switchedPath} class="ed-icon-button ed-header-lang" title={vi ? 'English' : 'Tiếng Việt'} aria-label={vi ? 'EN — Switch to English' : 'VI — Chuyển sang tiếng Việt'}>{vi ? 'EN' : 'VI'}</a>
       <ThemeToggle />
     </div>
   </div>
