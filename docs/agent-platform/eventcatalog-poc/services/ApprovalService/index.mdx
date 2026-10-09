@@ -1,0 +1,41 @@
+---
+id: ApprovalService
+name: Approval and Decision Service
+version: "0.1.0"
+summary: Persists human approvals bound to exact side-effect intents and resumes safe execution.
+receives:
+  - id: RequestApproval
+    version: "0.1.0"
+sends:
+  - id: ApprovalRequested
+    version: "0.1.0"
+  - id: ApprovalResolved
+    version: "0.1.0"
+---
+# Approval and Decision Service
+
+**Status: proposed logical service.** The responsibility may live in a module rather than its own process.
+
+<NodeGraph />
+
+## Ownership
+
+Risky mutating actions use **two separate gates**: runtime policy decides whether human review is required, then an authorized reviewer approves a cryptographically bound immutable intent. The model cannot approve its own operation.
+
+## Approval record
+
+Capture runId, invocationId, tool version, connector/target identifier, canonical argument hash, proposed effect summary, requesting principal, eligible reviewers, expiry, status, and audit timestamps. Do not expose raw credentials or private data in notification events.
+
+## Decision protocol
+
+1. Persist the exact action intent and transition the run to WAITING_APPROVAL, freeing the worker slot.
+2. Notify an authorized reviewer through the platform's own UI/service. The reviewer sees a safe preview and the exact intended target.
+3. Verify reviewer authority and compare-and-swap the pending decision; reject duplicate or expired votes.
+4. On approval, **revalidate** current ACL, tool binding, quota, intent digest and expiry immediately before dispatching the action.
+5. On denial/expiry, cancel the side effect and emit an auditable outcome; the worker may resume only to report a safe failure or create a draft.
+
+## Example: customer reply
+
+The support agent generates a reply draft. Changing recipient, attachment or body invalidates the approval and requires a new review. Sending occurs only through an explicitly bound outbound tool.
+
+**Related:** [Approval-gated external job](/architecture/docs/flows/ApprovalGatedExternalJob/0.1.0/) · [Approval Request entity](/architecture/docs/entities/ApprovalRequest/0.1.0/).
