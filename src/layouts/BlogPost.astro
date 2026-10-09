@@ -41,7 +41,9 @@ const jsonLd = {
 };
 ---
 
-<BaseLayout title={title} description={description} lang={lang} ogImage={heroImage} article>
+<BaseLayout title={title} description={description} lang={lang}
+  ogImage={heroImage || ('/og/' + lang + '/' + getPostSlug(post) + '.png')}
+  article publishedDate={pubDate} modifiedDate={updatedDate} articleTags={tags}>
   <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
   <div class="ed-reading-line" id="ed-reading-progress" aria-hidden="true"></div>
   <article class="ed-container ed-article" id="ed-post" data-pagefind-filter={`category:${post.data.category}`}>

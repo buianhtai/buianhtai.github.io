@@ -50,14 +50,14 @@ const wordCount = (value:string) => value.trim().split(/\s+/).length;
         <div class="ed-filter-group">
           <h2>{vi ? 'Chủ đề' : 'Topics'}</h2>
           <div class="ed-filter-buttons" id="ed-category-buttons">
-            <button class="ed-filter-btn" type="button" data-category="all" aria-pressed="true"><span>{vi?'Tất cả chủ đề':'All topics'}</span><span>{posts.length}</span></button>
+            <button class="ed-filter-btn" type="button" data-category="all" aria-label={vi?'Tất cả chủ đề':'All topics'} aria-pressed="true"><span>{vi?'Tất cả chủ đề':'All topics'}</span><span>{posts.length}</span></button>
             {categories.map(c=><button class="ed-filter-btn" type="button" data-category={c.id} aria-pressed="false"><span>{c.name}</span><span>{c.count}</span></button>)}
           </div>
         </div>
         {series.length>0 && <div class="ed-filter-group">
           <h2>{vi ? 'Chuyên đề' : 'Reading series'}</h2>
           <div class="ed-filter-buttons" id="ed-series-buttons">
-            <button class="ed-filter-btn" type="button" data-series="all" aria-pressed="true"><span>{vi?'Tất cả':'All series'}</span></button>
+            <button class="ed-filter-btn" type="button" data-series="all" aria-label={vi?'Tất cả chuyên đề':'All series'} aria-pressed="true"><span>{vi?'Tất cả':'All series'}</span></button>
             {series.map(s=><button class="ed-filter-btn" type="button" data-series={s.id} aria-pressed="false"><span>{s.title}</span><span>{s.count}</span></button>)}
           </div>
         </div>}
