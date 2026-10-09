@@ -1,0 +1,57 @@
+---
+id: C4ControlPlane
+name: C4 Level 3 — Control Plane Components
+version: "0.1.0"
+summary: Agent configuration, eligibility routing, policy, run admission, approvals, and event delivery.
+owners:
+  - architecture-stewards
+x-implementation-status: proposed
+x-diagram-class: C4
+---
+# C4 Level 3 — Control Plane Components
+
+**Status: proposed design.** Fictional, domain-neutral, and technology-agnostic. This is an architectural view, not a live infrastructure map.
+
+## Diagram
+
+~~~mermaid
+C4Component
+  title Proposed Control Plane — Components
+  Container_Boundary(control, "Platform API and Control Plane") {
+    Component(auth, "Authentication / Tenant Scope", "Policy boundary", "Verified caller, workspace and principal")
+    Component(studio, "Configuration API", "Control API", "Draft edits, validation and publication")
+    Component(registry, "Agent Registry / Compiler", "Versioned definitions", "Validates and pins immutable manifests")
+    Component(router, "Eligibility Router", "Rules / optional ranker", "Filters authorized agents then resolves one")
+    Component(admission, "Run Admission", "Transactional application", "Idempotency, policy, budget, durable outbox")
+    Component(approval, "Approval Service", "Human-in-the-loop", "Consent for exact immutable side effect")
+    Component(events, "Event Stream API", "REST / SSE", "Scoped status and replay")
+  }
+  ContainerDb(db, "Run + Config Store", "Durable database", "Immutable agent versions, run and approvals")
+  Container_Ext(web, "Agent Studio / Chat UI", "Browser", "User requests and reviews")
+  Container_Ext(worker, "Execution Plane", "Workers", "Produces durable events and effects")
+  Rel(web, auth, "Authenticates requests")
+  Rel(auth, studio, "Scoped configuration access")
+  Rel(studio, registry, "Validate/publish versions")
+  Rel(auth, router, "Eligible candidates only")
+  Rel(router, admission, "Selected published version")
+  Rel(admission, db, "Atomic run + outbox + policy")
+  Rel(registry, db, "Writes immutable manifests")
+  Rel(worker, approval, "Requests review before risky effects")
+  Rel(approval, db, "Records intent hash and decision")
+  Rel(events, db, "Reads authorized run state")
+  Rel(events, web, "Streams updates", "SSE")
+~~~
+
+## How to read it
+
+The routing component chooses the *initial agent*, not tools. Explicit selection skips optional ranking. Run admission owns one durable run and pinned version. Approval is a separate human decision bound to an immutable effect. The browser receives status only through the API/event service.
+
+## Continue exploring
+
+- [Configuration and publication sequence](/architecture/diagrams/AgentLifecycle/0.1.0/)
+- [Detailed request sequence](/architecture/diagrams/RunLifecycleSequence/0.1.0/)
+- [Authorization boundaries](/architecture/diagrams/TrustBoundaries/0.1.0/)
+
+## Architecture resources
+
+[Agent Platform domain](/architecture/domains/AgentPlatform/0.1.0/) · [Agent Execution Platform system](/architecture/systems/AgentExecutionPlatform/0.1.0/) · [Execution flows](/architecture/discover/flows/)
