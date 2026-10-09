@@ -1,0 +1,13 @@
+---
+id: AgentWorker
+name: Agent Worker
+version: "0.1.0"
+summary: Executes one pinned agent configuration using a runtime adapter and approved model/tool calls.
+---
+# Agent Worker
+
+Loads an immutable agent manifest and executes it through an approved `RuntimeAdapter`. It emits progress and result events to the Run Service/Event Store, and it cannot bypass tool authorization.
+
+Worker-to-worker delegation uses a scoped child run, not unrestricted sharing of execution credentials.
+
+<NodeGraph />

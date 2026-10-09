@@ -53,6 +53,7 @@ const dateLabel = (date:Date)=>date.toLocaleDateString(vi?'vi-VN':'en-US',{month
         <div class="ed-hero-actions">
           <a class="ed-btn ed-btn-primary" href={`/${lang}/blog`}>{vi?'Khám phá bài viết':'Explore articles'} <span aria-hidden="true">→</span></a>
           <a class="ed-btn ed-btn-quiet" href={'/'+lang+'/about/'}>{vi?'Giới thiệu':'About me'} <span aria-hidden="true">↗</span></a>
+          <a class="ed-btn ed-btn-quiet" href="/architecture/">{vi ? 'Sơ đồ kiến trúc' : 'Architecture catalog'} <span aria-hidden="true">↗</span></a>
         </div>
         <div class="ed-hero-stats" aria-label={vi?'Thống kê bài viết':'Publishing overview'}>
           <div class="ed-hero-stat"><strong>{articles.length}</strong><span>{vi?'Bài viết':'Articles'}</span></div>

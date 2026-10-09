@@ -230,6 +230,7 @@ body {background:var(--color-bg);background-image:none;letter-spacing:-.008em;}
   .ed-article-content {max-width:750px;}
 }
 @media (max-width:760px) {
+  .ed-nav .ed-nav-projects {display:none;}
   .ed-nav {gap:14px;}
   .ed-nav a {font-size:.76rem;}
   .ed-header-in {height:64px;}
@@ -271,7 +272,7 @@ body {background:var(--color-bg);background-image:none;letter-spacing:-.008em;}
 
 /* Small-screen navigation and legacy deep-reading alignment */
 @media (max-width:560px) {
-  .ed-nav a[href$="/foundations"] {display:none;}
+  .ed-nav a[href$="/foundations"], .ed-nav-architecture {display:none;}
   .ed-header-in {gap:8px;}
   .ed-wordmark {font-size:1.13rem;}
   .ed-header-controls .ed-icon-button {width:33px;height:33px;}

@@ -1,0 +1,15 @@
+---
+id: RunAccepted
+name: Run Accepted
+version: "0.1.0"
+summary: Illustrative durable admission notification carrying public runId and pinned version references.
+---
+# RunAccepted
+
+**Proposed event/notification contract, not implemented.** Represents a transactionally accepted run, after authorization, idempotency and publication version resolution.
+
+Suggested safe fields: `runId`, `sessionId`, `agentVersionDigest`, `acceptedAt`, `traceId`, `sourceType`.
+
+Never include raw credentials or cross-tenant data in event payloads.
+
+<NodeGraph />

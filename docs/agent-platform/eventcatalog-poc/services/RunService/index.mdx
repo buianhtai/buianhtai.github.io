@@ -1,0 +1,18 @@
+---
+id: RunService
+name: Run Service
+version: "0.1.0"
+summary: Owns run identity, accepted status, version pinning, policy and the durable user-facing projection.
+sends:
+  - id: RunAccepted
+    version: "0.1.0"
+  - id: RunCompleted
+    version: "0.1.0"
+---
+# Run Service
+
+Creates one durable `runId` per logical request, pins an approved published agent version, records admission and orchestrator correlation IDs, and exposes terminal state through the Platform API.
+
+**RunAccepted** and **RunCompleted** are illustrative architecture messages. If the execution engine owns internal step state, the Run Service only projects normalized transitions rather than implementing a competing durable step scheduler.
+
+<NodeGraph />

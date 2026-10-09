@@ -1,0 +1,72 @@
+---
+id: ExplicitAgentRun
+name: Explicitly Selected Agent Run
+version: "0.1.0"
+summary: A fictional SaaS user selects a documentation agent and receives an authorized response.
+steps:
+  - id: user_sends_request
+    title: Submit an API documentation question
+    actor:
+      name: User
+    next_step:
+      id: platform_api
+      label: Authenticated request
+  - id: platform_api
+    title: Verify principal and selected agent
+    service:
+      id: PlatformAPI
+      version: "0.1.0"
+    next_step:
+      id: run_service
+      label: Admit request
+  - id: run_service
+    title: Create durable run and pin configuration
+    service:
+      id: RunService
+      version: "0.1.0"
+    next_step:
+      id: run_accepted
+      label: Run accepted
+  - id: run_accepted
+    title: Run accepted notification
+    message:
+      id: RunAccepted
+      version: "0.1.0"
+    next_step:
+      id: worker
+      label: Dispatch to worker
+  - id: worker
+    title: Execute selected agent
+    service:
+      id: AgentWorker
+      version: "0.1.0"
+    next_step:
+      id: gateway
+      label: Ask for knowledge search
+  - id: gateway
+    title: Validate and execute allowed search
+    service:
+      id: ToolGateway
+      version: "0.1.0"
+    next_step:
+      id: completed
+      label: Return evidence and synthesize response
+  - id: completed
+    title: Persist completed run result
+    message:
+      id: RunCompleted
+      version: "0.1.0"
+    next_step:
+      id: event_api
+      label: Stream user-visible result
+  - id: event_api
+    title: Stream final answer over SSE
+    service:
+      id: EventStreamAPI
+      version: "0.1.0"
+---
+# Explicit Agent Run
+
+Shows a low-cost, read-only agent call. No auto-router or subagent is required. The runtime and workflow engine are not rendered here as separate steps; refer to the detailed sequence and component diagrams in the architecture documentation.
+
+<NodeGraph />

@@ -1,0 +1,18 @@
+---
+id: EventStreamAPI
+name: Event Streaming API
+version: "0.1.0"
+summary: Presents authorized durable run progress/results to users via REST and SSE.
+receives:
+  - id: RunAccepted
+    version: "0.1.0"
+  - id: RunCompleted
+    version: "0.1.0"
+---
+# Event Streaming API
+
+A **logical API projection**, potentially implemented in the same process as Platform API. Reads normalized ordered durable events and presents status/deltas through authorized SSE subscriptions, with replay cursors.
+
+SSE disconnection cannot restart or duplicate an agent run.
+
+<NodeGraph />

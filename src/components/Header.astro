@@ -22,6 +22,7 @@ const vi = lang === 'vi';
     <nav class="ed-nav" aria-label={vi ? 'Điều hướng chính' : 'Main navigation'}>
       <a href={`/${lang}/blog`} aria-current={isBlog ? 'page' : undefined}>{vi ? 'Bài viết' : 'Writing'}</a>
       <a href={`/${lang}/foundations`} aria-current={isFoundations ? 'page' : undefined}>{vi ? 'Kiến thức nền' : 'Foundations'}</a>
+      <a href="/architecture/" class="ed-nav-architecture">{vi ? 'Kiến trúc' : 'Architecture'}</a>
       <a class="ed-nav-projects" href={'/'+lang+'/about/'} aria-current={isAbout ? 'page' : undefined}>{vi ? 'Giới thiệu' : 'About'}</a>
     </nav>
     <div class="ed-header-controls">

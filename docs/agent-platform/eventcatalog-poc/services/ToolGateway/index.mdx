@@ -1,0 +1,13 @@
+---
+id: ToolGateway
+name: Tool Gateway
+version: "0.1.0"
+summary: Validates and authorizes every tool request before any MCP, REST or external job adapter invocation.
+---
+# Tool Gateway
+
+Checks effective principal, agent/tool binding, argument schema, tenant/resource access, budgets, and approval policy. It invokes only registered and reviewed operations.
+
+Shell execution is restricted to approved job templates on isolated external runners; no general free-form shell command capability is implied.
+
+<NodeGraph />

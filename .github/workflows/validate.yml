@@ -16,7 +16,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -45,6 +45,17 @@ jobs:
 
       - name: Assert full-text search index exists
         run: test -s dist/pagefind/pagefind.js
+
+      - name: Validate EventCatalog Community build and GitHub Pages subpath
+        run: |
+          node scripts/sync-architecture-catalog.mjs
+          npm install --prefix architecture-catalog --no-audit --no-fund
+          npm run build --prefix architecture-catalog
+          test -s architecture-catalog/dist/index.html
+          mkdir -p dist/architecture
+          cp -R architecture-catalog/dist/. dist/architecture/
+          test -s dist/architecture/index.html
+          test -s dist/pagefind/pagefind.js
 
       - name: Install Playwright Chromium
         run: |
