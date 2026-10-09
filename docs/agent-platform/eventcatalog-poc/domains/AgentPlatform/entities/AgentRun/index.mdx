@@ -1,0 +1,54 @@
+---
+id: AgentRun
+name: Agent Run
+version: "0.1.0"
+summary: Platform-owned durable execution identity and user-facing status projection.
+properties:
+  - name: runId
+    type: UUID
+    required: true
+    description: Tenant-scoped logical run identifier
+  - name: tenantId
+    type: String
+    required: true
+    description: Security partition
+  - name: principalId
+    type: String
+    required: true
+    description: Effective execution identity
+  - name: agentVersionDigest
+    type: String
+    required: true
+    description: Pinned approved agent version
+  - name: status
+    type: String
+    required: true
+    description: Public lifecycle state
+  - name: budgetRef
+    type: String
+    required: true
+    description: Hard spending and step limits
+  - name: traceId
+    type: String
+    required: true
+    description: Trace correlation identifier
+---
+# Agent Run
+
+**Status:** Proposed domain model, not an implemented persistence schema. **Logical owner:** RunService.
+
+## Properties
+
+<EntityPropertiesTable />
+
+## Lifecycle and invariants
+
+A logical run is created atomically with an outbox dispatch intent before HTTP 202. At-least-once queue delivery may create multiple attempts but not multiple logical run records. Workflow engines own internal steps; the Run Service owns the public projection, audit, terminal result and policy envelope.
+
+## Fictional example
+
+A worker crashes after a read-only search. The resumed attempt reuses the runId and pinned configuration, and a fencing token prevents the stale worker from committing.
+
+## Related models
+
+[Agent Platform domain](/architecture/docs/domains/AgentPlatform/0.1.0/) · [Agent execution overview](/architecture/docs/flows/ExplicitAgentRun/0.1.0/). This is a logical entity: physical persistence may use relational rows, JSON snapshots or projections instead of a one-to-one table.
