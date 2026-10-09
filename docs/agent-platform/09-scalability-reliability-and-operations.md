@@ -120,6 +120,8 @@ sequenceDiagram
 
 ### Queue selection
 
+**Alternative to a custom queue/lease orchestrator:** adopt a dedicated open-source durable execution engine such as **Hatchet** or an embedded engine such as **DBOS**. They should be integrated through a typed [WorkflowEngineAdapter](./10-open-source-durable-worker-engines.md), not conflated with a model RuntimeAdapter or external script JobExecutorAdapter. If such an engine owns step state and recovery, do **not** also build a competing internal step scheduler. Keep Platform AgentRun as the tenant-owned user-facing projection, audit and authorization boundary.
+
 - **Small deployment:** PostgreSQL queue-like table plus transactional outbox. PostgreSQL `FOR UPDATE SKIP LOCKED` can reduce row-lock contention for queue consumers, but its inconsistent-view semantics make it unsuitable for general read queries.
 - **Growing deployment:** move dispatch onto an established queue system appropriate to throughput and operational skills. Do not change public `AgentRun` contracts.
 - **High durability requirement:** evaluate a dedicated durable workflow engine such as Temporal **rather than** building a sophisticated distributed scheduler/retry/approval engine from scratch. This is a separate platform decision; Temporal activities may still execute more than once, so external effects remain idempotency-sensitive.
