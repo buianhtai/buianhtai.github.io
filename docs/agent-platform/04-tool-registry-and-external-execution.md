@@ -257,6 +257,8 @@ Proposed authoring flow:
 
 MCP tool discovery is an **input to review**, not automatic authorization to run an unknown remote tool. An approved connector can expose multiple tools, some read-only and some mutating, with distinct grants.
 
+**Operational contract:** connector-specific concurrency limits, bulkheads, circuit breakers and external-write reconciliation belong to the [Scalability and Reliability architecture](./09-scalability-reliability-and-operations.md), not the model prompt. Async tasks must release agent-worker capacity while waiting.
+
 ## 6. Tool error handling and idempotency
 
 | Error | Action |
