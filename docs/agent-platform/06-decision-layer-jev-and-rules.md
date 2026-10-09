@@ -1,6 +1,7 @@
 # 06 — Decision Layer: Deterministic Rules, Jev-Like Models, and LLM Fallback
 
 **Status:** Proposed — no decision-model integration is implemented by these docs.
+**Extension contract:** Rules, DMN, Jev-like models and structured-output classifiers implement a replaceable `DecisionProviderAdapter`; provider installation/validation and tenant-scoped bindings follow [08 — Plug-and-play Adapter Architecture](./08-plugin-and-adapter-architecture.md).
 **Related:** [Invocation routing](./01-invocation-and-routing.md) · [Tool execution](./04-tool-registry-and-external-execution.md) · [Agent-to-agent](./05-agent-to-agent-orchestration.md)
 
 ## 1. Why a separate Decision Service?
