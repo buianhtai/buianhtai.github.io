@@ -17,6 +17,8 @@
 
 The worker executes **one primary agent** per run. Multi-agent delegation is an optional capability of that agent, not a requirement of the outer Agent Router.
 
+For scaling and recovery semantics across API replicas, queue/worker pools, event storage and failing external providers, see **[09 — Scalability and Reliability](./09-scalability-reliability-and-operations.md)**. The worker descriptions below are logical; production admission requires a durable outbox/queue, scoped leases, and verified idempotency.
+
 ## 2. Responsibility boundaries
 
 | Component | Owns | Explicitly does **not** own |
