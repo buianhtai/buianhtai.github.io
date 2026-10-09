@@ -1,0 +1,397 @@
+---
+title: "Choosing an Agent Framework for a Configurable Platform in 2026"
+description: "Deep Agents, Agno, Pydantic AI, Microsoft Agent Framework, Google ADK and Mastra compared from the perspective of building a product where users configure models, tools, skills and permissions."
+pubDate: 2026-10-09
+tags: ["ai", "ai-agents", "architecture", "deepagents", "agno", "pydantic-ai", "langgraph", "agent-platform"]
+lang: "en"
+category: "ai"
+series: "ai-agent-tools"
+seriesOrder: 20
+featured: true
+draft: false
+postLayout: "foundations"
+---
+
+import Card from '../../../components/mdx/Card.astro';
+import Label from '../../../components/mdx/Label.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import ArchLayer from '../../../components/mdx/ArchLayer.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+
+I started by asking a seemingly straightforward question: **Should I build my agent platform with LangChain, LangGraph, and Deep Agents?**
+
+Then I wrote down what the product actually needs to do.
+
+A user should be able to open a UI, choose a model, write instructions, attach MCP tools and reusable skills, configure approval rules, and publish an agent. Another user should be able to invoke that agent without knowing which Python framework is behind it. When the agent calls a dangerous tool, the platform—not the model's prompt—must decide whether that call is allowed.
+
+This is a different problem from building a single capable agent.
+
+It changes how I evaluate frameworks. A sophisticated multi-agent demo is useful, but **dynamic configuration, permission isolation, versioning, and recoverable execution** are what determine whether I can build a reliable *agent platform* on top of it.
+
+This post is a design evaluation, **not a claim that I have benchmarked these frameworks in production**. I reviewed their public documentation on **October 9, 2026**, and the shortlist below is the one I would test before choosing a runtime.
+
+<Callout color="teal">
+  **The central distinction:** an agent framework runs an agent. An agent platform owns its configuration, identity, permissions, deployment, and lifecycle. A framework can help with those responsibilities, but should not be assumed to provide all of them.
+</Callout>
+
+---
+
+## <Label color="teal">01</Label> Start with the product, not the framework
+
+My target user is a developer—or eventually an operations engineer—who needs to configure an agent rather than build its execution loop in code.
+
+That means the initial product has six requirements:
+
+<FlowStep
+  steps={[
+    { title: "Configure", body: "Select model profile, instructions, tools, SKILL.md bundles, memory and execution limits.", color: "teal" },
+    { title: "Validate", body: "Reject incompatible models, missing tool permissions, cyclic subagents and unsafe settings before publishing.", color: "green" },
+    { title: "Publish", body: "Create an immutable version that can be deployed and rolled back without changing source code.", color: "amber" },
+    { title: "Execute", body: "Start, stream, interrupt, resume and cancel runs from a stable API.", color: "teal" },
+    { title: "Govern", body: "Recheck each tool call against user, agent, tenant, resource and environment permissions.", color: "rose" },
+    { title: "Measure", body: "Record traces, token usage, latency, failures and the exact config version used by each run.", color: "green" },
+  ]}
+/>
+
+That is the evaluation standard. A framework scores well if it makes those requirements easier to build **without forcing the public configuration format to become a copy of its internal Python objects**.
+
+### Two choices that should not be conflated
+
+*Framework choice* decides how models, tools and agent loops are executed.
+
+*Platform architecture* decides who can configure those things, which versions are active, what credentials a tool can use, and what happens after an interrupted run.
+
+I want these to evolve separately.
+
+---
+
+## <Label color="green">02</Label> The shortlist: six serious candidates
+
+<DataTable
+  accent="teal"
+  caption="My qualitative comparison—not measured performance scores"
+  headers={["Framework", "What it brings", "What I still need to own"]}
+  rows={[
+    { "Framework": "Deep Agents + LangGraph", "What it brings": "Planning, subagents, progressive skills, file/context management; LangGraph persistence", "What I still need to own": "End-user configuration, identity, tool gateway, deployment registry" },
+    { "Framework": "Agno / AgentOS", "What it brings": "Agents, teams, workflows, runtime API and Control Plane", "What I still need to own": "Product-specific configuration semantics, policy integration, tenancy requirements" },
+    { "Framework": "Pydantic AI", "What it brings": "Typed agents, Agent Specs, dynamic toolsets, MCP, durable-engine integrations, optional Skills harness", "What I still need to own": "Application control plane, identity, lifecycle and safe skill distribution" },
+    { "Framework": "Microsoft Agent Framework", "What it brings": "Agent/workflow SDK, YAML workflows, approval and checkpoint patterns, Python/.NET", "What I still need to own": "Platform authoring UX, policy model, deployment registry" },
+    { "Framework": "Google ADK", "What it brings": "Multi-agent abstractions, tooling, experimental YAML Agent Config", "What I still need to own": "Portable configuration contract and compatibility beyond current Agent Config limits" },
+    { "Framework": "Mastra", "What it brings": "TypeScript agents, workflows, tools, Studio, auth/identity integrations", "What I still need to own": "Framework-independent API contract, data policy, lifecycle semantics" },
+  ]}
+/>
+
+These rows deliberately compare **different layers**. Agno's AgentOS is much closer to a runtime-and-management product. Deep Agents is an opinionated harness for executing longer tasks. Pydantic AI supplies typed primitives and composable extensions. Microsoft Agent Framework and Google ADK include workflow/declarative facilities. Mastra is particularly compelling for a TypeScript-first team.
+
+The documentation behind those distinctions: [Deep Agents](https://docs.langchain.com/oss/python/deepagents/overview), [Agno AgentOS](https://docs.agno.com/agent-os/introduction), [Pydantic AI Agent Specs](https://pydantic.dev/docs/ai/core-concepts/agent-spec/), [Microsoft Agent Framework](https://learn.microsoft.com/en-us/agent-framework/), [Google ADK Agent Config](https://adk.dev/agents/config/) and [Mastra Studio](https://mastra.ai/docs/studio/overview).
+
+### Deep Agents: the ambitious execution harness
+
+[Deep Agents](https://docs.langchain.com/oss/python/deepagents/overview) is the natural place to begin if an agent needs to work through many steps, manage context, delegate to subagents, use skills and stop for human approval.
+
+It is built on LangChain and LangGraph, rather than competing with them. My earlier [Deep Agents architecture deep dive](/en/blog/deepagents-architecture-the-batteries-included-harness-for-long-horizon-agents/) explores those execution primitives.
+
+What I like is the *harness*. Instead of recreating the mechanics for plans, task delegation and large tool outputs, I can focus on the configuration compiler that assembles them.
+
+What I would not do: require product users to edit a Python \`create_deep_agent(...)\` call. Their config should be separate, validated data.
+
+**Best fit:** long-running research, code assistance, technical investigation, multi-step work. **Potential overkill:** a simple KB lookup agent with one read-only tool.
+
+### Agno: the platform reference I would study first
+
+[Agno](https://docs.agno.com/) describes a three-part stack: an SDK, an **AgentOS** serving runtime, and a **Control Plane**. AgentOS can expose agents through a FastAPI runtime, while the Control Plane provides operational surfaces for sessions, traces, approvals and connected runtimes.
+
+That is much closer to my goal than a bare agent loop.
+
+The catch is strategic: if I already intend to build my own Agent Studio, model/skill registry, and tenant policy system, I need to understand which parts of Agno I would adopt, wrap or duplicate. Its architecture could accelerate delivery; it could also shape the product more than I want.
+
+An additional detail worth reviewing: [AgentOS supports runtime adapters for other frameworks](https://docs.agno.com/agent-os/introduction), including LangGraph. That suggests **framework choice and management-plane choice may not have to be a single decision**.
+
+**Best fit:** a fast route to a managed agent runtime with operational UX.
+
+### Pydantic AI: more platform-friendly than it first appears
+
+[Pydantic AI](https://pydantic.dev/docs/ai/) initially looks like a lean, strongly typed Python SDK. But its documented surface is broader.
+
+It now has [YAML/JSON Agent Specs](https://pydantic.dev/docs/ai/core-concepts/agent-spec/), [composable and dynamically filtered toolsets](https://pydantic.dev/docs/ai/tools-toolsets/toolsets/), [durable-execution integrations](https://pydantic.dev/docs/ai/capabilities/durable_execution/overview/) and an optional [Pydantic AI Harness Skills capability](https://pydantic.dev/docs/ai/harness/skills/) that can load \`SKILL.md\` instructions progressively.
+
+This changes my earlier assumption that I would need to build every declarative layer myself.
+
+There is still an important boundary: **Agent Specs are the framework's schema, not necessarily my platform's final schema**. I would map my public contract into them instead of making my database depend on whichever syntax the current Pydantic AI release accepts.
+
+Also, the Skills harness documentation marks its 0.x APIs as subject to minor-version changes, and its \`SKILL.md\` loading does not automatically execute bundled scripts.
+
+**Best fit:** a small, typed, extensible engine beneath a control plane that I own.
+
+### Microsoft Agent Framework: workflows and approvals deserve attention
+
+[Microsoft Agent Framework](https://learn.microsoft.com/en-us/agent-framework/) offers Python and .NET development paths, workflow orchestration, an agent harness, and skills. Its [declarative YAML workflows](https://learn.microsoft.com/en-us/agent-framework/workflows/declarative) are particularly relevant when a business process needs predictable transitions rather than unconstrained autonomous planning.
+
+The [human-in-the-loop workflow model](https://learn.microsoft.com/en-us/agent-framework/workflows/human-in-the-loop) also supports checkpointed requests that can be emitted again after restoring a workflow.
+
+That is the kind of detail I care about for a production platform: an approval should not disappear because a worker restarts.
+
+**Best fit:** enterprise workflows, multi-language backend teams and integration-heavy systems.
+
+### Google ADK: a declarative design worth borrowing—with a caveat
+
+[Google ADK Agent Config](https://adk.dev/agents/config/) allows YAML-defined agents with models, instructions, tools and subagents. It is a strong reference for what an agent-definition format should feel like.
+
+But its Agent Config feature is **experimental**; the documented limitations include support only for Gemini models within that specific declarative feature. ADK as a whole should not be conflated with that YAML subset.
+
+I would study the experience and keep my own model profile abstraction provider-independent.
+
+**Best fit:** teams comfortable with ADK and its current configuration constraints.
+
+### Mastra: worth testing if the platform is TypeScript-first
+
+[Mastra Studio](https://mastra.ai/docs/studio/overview) provides an interactive UI for testing and managing agents, workflows and tools, backed by a TypeScript framework. Its documented guides cover identity, authentication, workflows, MCP and streaming.
+
+For a product already centered on React/TypeScript, that can simplify the development loop.
+
+**Best fit:** a TypeScript-first stack that wants an integrated development UI. For a Python-centric backend, I would compare the total operational complexity before adding another runtime language.
+
+### And the other options?
+
+[CrewAI](https://docs.crewai.com/) is useful when the main abstraction is coordinated teams and event-driven Flows. The [OpenAI Agents SDK](https://openai.github.io/openai-agents-python/) is attractive when I want a relatively small set of primitives—agents, tools, handoffs, approvals, guardrails and tracing—without adopting a larger platform.
+
+[Dify](https://github.com/langgenius/dify), [Flowise](https://github.com/FlowiseAI/Flowise) and [Langflow](https://github.com/langflow-ai/langflow) are useful **product and authoring-UI references**, but I would not treat them as direct substitutes for a low-level execution SDK. Reusing code from any platform also requires a separate license and operational review.
+
+---
+
+## <Label color="amber">03</Label> The architecture I would keep no matter which framework wins
+
+The framework should sit *below* the configuration registry, not define the registry.
+
+<ArchLayer
+  badge="UI"
+  badgeColor="teal"
+  label="Agent Studio"
+  items={["model picker", "tool bindings", "skills", "test / publish", "run history"]}
+/>
+<ArchLayer
+  badge="CONTROL"
+  badgeColor="green"
+  label="Agent Control Plane"
+  items={["AgentDefinition", "immutable AgentVersion", "RBAC", "policies", "deployment pointers"]}
+/>
+<ArchLayer
+  badge="EXEC"
+  badgeColor="amber"
+  label="Runtime compiler + adapters"
+  items={["Deep Agents", "Agno", "Pydantic AI", "LangGraph workflows"]}
+/>
+<ArchLayer
+  badge="GUARD"
+  badgeColor="rose"
+  label="Tool and model gateways"
+  items={["MCP", "REST", "approval", "scoped credentials", "rate limits", "audit"]}
+/>
+<ArchLayer
+  badge="STATE"
+  badgeColor="violet"
+  label="Operational state"
+  items={["PostgreSQL", "checkpoints", "traces", "artifact store", "usage and cost"]}
+/>
+
+The diagram is a logical decomposition, **not a recommendation to deploy five microservices on day one**. I would begin with one modular backend, separate worker capacity as needed, and an Agent Studio UI.
+
+An agent definition should describe the *desired* configuration. A published version pins dependencies. A deployment points to an active version. A run records exactly which configuration and permissions were resolved.
+
+For example, consider this **illustrative platform manifest** (not the native YAML of any framework):
+
+<Card accent="teal" flush={true}>
+
+~~~yaml
+apiVersion: agent-platform/v1alpha1
+kind: Agent
+metadata:
+  id: support-investigator
+  workspace: engineering
+spec:
+  runtime: deep
+  model:
+    profile: balanced@2
+  instructions: |
+    Investigate reported technical problems.
+    Cite evidence and avoid unsupported conclusions.
+  tools:
+    - ref: knowledge.search@3
+      access: read
+    - ref: logs.query@2
+      access: read
+    - ref: incidents.create@1
+      access: write
+      approval: required
+  skills:
+    - ref: root-cause-analysis@1.0.0
+    - ref: incident-summary@1.1.0
+  limits:
+    maxSteps: 16
+    maxCostUsd: 0.40
+    timeoutSeconds: 180
+~~~
+
+</Card>
+
+The control plane validates and publishes that configuration; then an adapter turns the frozen version into a concrete Deep Agents, Agno or Pydantic AI instance.
+
+I would not begin by supporting all three in production. The abstraction is an **escape hatch**, not an excuse to maintain three runtimes immediately.
+
+### The adapter boundary
+
+A small, conceptual Python interface could be:
+
+~~~python
+from typing import AsyncIterator, Protocol
+
+class AgentRuntime(Protocol):
+    async def compile(self, manifest, resolved_capabilities): ...
+    async def stream(self, executable, input, context) -> AsyncIterator[dict]: ...
+    async def resume(self, run_id, decision, context): ...
+    async def cancel(self, run_id, context): ...
+~~~
+
+This is *design pseudocode*, not a copy/paste implementation. In particular, \`resume\` and \`cancel\` may need an application-owned coordinator even when an underlying framework supports checkpoints. Do not pretend that every SDK has identical recovery semantics.
+
+The public API should return platform event types—\`run.started\`, \`tool.requested\`, \`approval.required\`, \`message.delta\`, \`run.completed\`—rather than leaking framework-native messages to the browser.
+
+That makes the UI independent of a particular execution library.
+
+---
+
+## <Label color="rose">04</Label> The non-negotiable part: who is allowed to do what?
+
+A model can suggest a tool call. It cannot authorize one.
+
+When a user enables \`incidents.create\` for their agent, that is not a blanket grant to create incidents across every tenant.
+
+My policy decision needs to combine:
+
+~~~text
+effective permissions =
+    initiating principal
+  ∩ agent's published grants
+  ∩ bound tool scopes
+  ∩ environment policy
+  ∩ target resource ACL
+~~~
+
+Scheduled executions need an explicit service principal rather than silently inheriting the privileges of a person who configured the schedule months ago.
+
+Every tool invocation should pass through a Tool Gateway that checks arguments, destination allowlists, object-level permissions, budgets, and human approval requirements. These decisions must be enforced server-side, not by adding another sentence to a system prompt.
+
+Consider the approval path:
+
+<FlowStep
+  steps={[
+    { title: "Propose", body: "The agent requests incidents.create with a specific, validated payload.", color: "teal" },
+    { title: "Record", body: "The gateway stores the exact intent and an idempotency key before external mutation.", color: "amber" },
+    { title: "Pause", body: "Execution suspends at a recoverable checkpoint; an authorized human reviews the request.", color: "rose" },
+    { title: "Revalidate", body: "The gateway confirms approver authority, unchanged payload and current resource permissions.", color: "green" },
+    { title: "Execute once safely", body: "Use downstream idempotency or outcome reconciliation; don't blindly replay ambiguous writes.", color: "teal" },
+  ]}
+/>
+
+A checkpoint is not a guarantee of exactly-once external side effects. If a remote API succeeded but the worker crashed before recording the response, blindly retrying a write can create duplicates. That is a platform-level responsibility regardless of which agent framework I choose.
+
+For the first MVP, I would keep tools **read-only** and explicitly disable skill scripts, arbitrary shell commands and unrestricted HTTP requests.
+
+---
+
+## <Label color="violet">05</Label> How I would choose with evidence
+
+A framework comparison is easy to bias. A fairer test is to build the **same agent** on three candidates, with identical permissions, tool contracts and user inputs.
+
+My first proof of concept would use:
+
+- A technical-support agent that can search a KB and query simulated logs.
+- Two \`SKILL.md\` bundles: investigation and evidence-based reporting.
+- A model profile that can be changed from configuration.
+- A disabled-by-default write tool that requires human approval.
+- The same fixed dataset of questions, expected tool calls and permission-denial cases.
+
+I'd test **Deep Agents, Agno and Pydantic AI** first. If the product shifts toward declarative business processes, Microsoft Agent Framework joins the comparison.
+
+<DataTable
+  accent="amber"
+  caption="Proposed evaluation rubric; weights are design priorities, not benchmark results"
+  headers={["Dimension", "Weight", "What I would test"]}
+  rows={[
+    { "Dimension": "Config from database", "Weight": "20%", "What I would test": "Change model, tools and skills without redeploying code" },
+    { "Dimension": "Permission enforcement", "Weight": "20%", "What I would test": "Unauthorized tool/record denied even after prompt injection" },
+    { "Dimension": "Recovery and approvals", "Weight": "15%", "What I would test": "Pause, restart worker, resume; no duplicate writes" },
+    { "Dimension": "Tool and skill support", "Weight": "15%", "What I would test": "MCP, schema validation, SKILL.md behavior, isolation" },
+    { "Dimension": "Streaming", "Weight": "10%", "What I would test": "Time to first event, event ordering, cancellation" },
+    { "Dimension": "Operations", "Weight": "10%", "What I would test": "Trace IDs, token and cost accounting, error taxonomy" },
+    { "Dimension": "Implementation effort", "Weight": "10%", "What I would test": "Adapter LOC, dependencies, upgrade friction, debugging" },
+  ]}
+/>
+
+The rubric weights reflect **my** goal: a configurable and governable platform. A code-writing autonomous assistant would probably assign more weight to skill/tool harness quality.
+
+I would publish test inputs and outcomes—not guessed performance numbers. Even if one runtime uses fewer tokens, it does not automatically win if it requires a custom permission layer that's impossible to audit.
+
+### One benchmark, several failure cases
+
+The interesting tests are not just "Did it answer the question?"
+
+They are:
+
+1. An unauthorized tenant asks the agent to search another tenant's incident.
+2. Retrieved documentation contains instructions to ignore the system prompt.
+3. An agent's tool binding is revoked during a long-running session.
+4. A pending approval survives an application restart.
+5. The model tries to invoke a tool omitted from the published allowlist.
+6. The runtime runs out of cost budget halfway through a delegated task.
+7. A mutating tool's response times out after the remote side may have succeeded.
+
+The framework may help with some of these. **The platform still owns the security outcome.**
+
+---
+
+## <Label color="green">06</Label> My initial choice, and what could change it
+
+I do not want to pick a winner by GitHub stars, screenshots or the number of features listed on a landing page.
+
+My working recommendation is:
+
+<Callout color="green">
+  **Prototype with Pydantic AI and Deep Agents; study Agno as the most relevant end-to-end product reference.** Choose one primary runtime after the same configuration-driven support agent passes authorization, recovery and observability tests.
+</Callout>
+
+Why that order?
+
+**Pydantic AI** has a strong fit for configuration compilation and typed boundaries. Its Agent Specs, dynamic toolsets, skills harness and durable-execution integrations reduce how much infrastructure I must invent.
+
+**Deep Agents** remains attractive when the agent needs long-horizon planning, context management and delegation. If those are core to the first product use case, it may be the better runtime despite the heavier harness.
+
+**Agno** answers a different question: how quickly can I stand up an actual agent-serving product with operational surfaces? Before rebuilding those capabilities, I want to evaluate its AgentOS and Control Plane carefully.
+
+If I later need strict orchestration of business steps, I would test **Microsoft Agent Framework** and **LangGraph workflows**, rather than asking an autonomous agent to improvise a deterministic approval process.
+
+There is no need to commit to all of these today. The most useful first step is a small **framework-neutral agent definition** and one read-only agent that can be published, invoked, traced and revoked.
+
+The next engineering question is therefore not "Which framework is best?"
+
+It is:
+
+**Can my platform enforce the same contract regardless of what runtime executes the agent?**
+
+If the answer is yes, framework choice becomes an implementation decision rather than a product constraint.
+
+---
+
+## Sources and further reading
+
+I primarily used official documentation, accessed October 9, 2026. Feature availability and experimental APIs may change, especially without pinned versions.
+
+- [Deep Agents — overview](https://docs.langchain.com/oss/python/deepagents/overview), [LangGraph persistence](https://docs.langchain.com/oss/python/langgraph/persistence)
+- [Agno — introduction](https://docs.agno.com/), [AgentOS](https://docs.agno.com/agent-os/introduction), [Control Plane](https://docs.agno.com/agent-os/control-plane)
+- [Pydantic AI — Agent Specs](https://pydantic.dev/docs/ai/core-concepts/agent-spec/), [Toolsets](https://pydantic.dev/docs/ai/tools-toolsets/toolsets/), [Durable execution](https://pydantic.dev/docs/ai/capabilities/durable_execution/overview/), [Skills](https://pydantic.dev/docs/ai/harness/skills/)
+- [Microsoft Agent Framework](https://learn.microsoft.com/en-us/agent-framework/), [Declarative workflows](https://learn.microsoft.com/en-us/agent-framework/workflows/declarative), [Human in the loop](https://learn.microsoft.com/en-us/agent-framework/workflows/human-in-the-loop)
+- [Google ADK Agent Config](https://adk.dev/agents/config/), [Mastra Studio](https://mastra.ai/docs/studio/overview)
+- [CrewAI documentation](https://docs.crewai.com/), [OpenAI Agents SDK](https://openai.github.io/openai-agents-python/)
+
+**Related on this blog:** [Deep Agents architecture](/en/blog/deepagents-architecture-the-batteries-included-harness-for-long-horizon-agents/) and [building support agents for a platform](/en/blog/building-support-agents-for-your-platform/).
