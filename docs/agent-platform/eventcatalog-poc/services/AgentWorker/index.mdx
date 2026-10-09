@@ -2,17 +2,45 @@
 id: AgentWorker
 name: Agent Worker
 version: "0.1.0"
-summary: Executes one pinned agent configuration using a runtime adapter and approved model/tool calls.
+summary: Leased execution workers that run pinned configurations and commit durable, bounded results.
+receives:
+  - id: ToolInvocationCompleted
+    version: "0.1.0"
+  - id: ChildRunCompleted
+    version: "0.1.0"
 sends:
   - id: InvokeTool
     version: "0.1.0"
   - id: ToolInvocationRequested
     version: "0.1.0"
+  - id: DelegateAgentRun
+    version: "0.1.0"
 ---
 # Agent Worker
 
-Loads an immutable agent manifest and executes it through an approved `RuntimeAdapter`. It emits progress and result events to the Run Service/Event Store, and it cannot bypass tool authorization.
-
-Worker-to-worker delegation uses a scoped child run, not unrestricted sharing of execution credentials.
+**Status: proposed logical component; not evidence of a deployed service.**
 
 <NodeGraph />
+
+## Attempt lifecycle
+
+1. Claim a run using an atomic fenced lease; load the immutable manifest digest, limits, tenant and effective principal.
+2. Resume from a safe checkpoint and invoke the appropriate RuntimeAdapter.
+3. Pass every requested external operation through Tool Gateway, preserving the invocationId for retries and audit.
+4. Persist checkpoints, normalized progress and usage; commit terminal status only while holding the latest fencing token.
+5. Release reservations and acknowledge dispatch after persistence succeeds.
+
+## Recovery matrix
+
+| Incident | Worker behavior |
+| --- | --- |
+| Model timeout | Bounded retry or typed failure |
+| Tool denied | Audit denial; answer safely or fail |
+| Worker crash | Lease expiry, safe checkpoint resume |
+| Unknown external write | Reconciliation, not blind retry |
+| Agent revised mid-run | Continue pinned revision |
+| Parent run cancelled | Best-effort child/job cancellation |
+
+Workers are not browser servers. SSE comes from the EventStreamAPI and committed event store. Separate simple, deep and external-job pools only when load demands it. Track per-run tokens, cost, tool latency, retry count and trace correlation.
+
+**Flow:** [DelegatedAgentRun](/architecture/docs/flows/DelegatedAgentRun/0.1.0/).
