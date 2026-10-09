@@ -1,0 +1,46 @@
+---
+id: ToolBinding
+name: Tool Binding
+version: "0.1.0"
+summary: Agent-version-specific grant restricting use of one published tool capability.
+properties:
+  - name: agentVersionDigest
+    type: String
+    required: true
+    description: Pinned consumer revision
+  - name: toolVersionRef
+    type: String
+    required: true
+    description: Reviewed tool revision
+  - name: scopePolicyRef
+    type: String
+    required: true
+    description: Narrow resource and argument restrictions
+  - name: maxCalls
+    type: Integer
+    required: true
+    description: Hard per-run invocation limit
+  - name: approvalMode
+    type: String
+    required: true
+    description: Review requirements
+---
+# Tool Binding
+
+**Status:** Proposed domain model, not an implemented persistence schema. **Logical owner:** AgentRegistry.
+
+## Properties
+
+<EntityPropertiesTable />
+
+## Lifecycle and invariants
+
+A binding may reduce but never expand the capability granted by a ToolDefinition. The Tool Gateway intersects bound restrictions with the caller/service principal, tenant and resource ACLs on each invocation. Binding publication and runtime authorization are separate checks.
+
+## Fictional example
+
+The support agent may search only approved documentation collections, up to five calls per run, without write access.
+
+## Related models
+
+[Agent Platform domain](/architecture/docs/domains/AgentPlatform/0.1.0/) · [Agent execution overview](/architecture/docs/flows/ExplicitAgentRun/0.1.0/). This is a logical entity: physical persistence may use relational rows, JSON snapshots or projections instead of a one-to-one table.
