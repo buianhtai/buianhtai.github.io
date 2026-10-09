@@ -17,6 +17,7 @@ This documentation lives in `docs/` and is **not a blog article or a production 
 7. **[07 — Complete orchestration scenario](./07-end-to-end-orchestration-scenario.md)**: one fictional SaaS workflow connecting routing, agent tools, child agents, approval-gated remote jobs and SSE.
 8. **[08 — Plug-and-play adapters and plugins](./08-plugin-and-adapter-architecture.md)**: stable typed extension interfaces, package/instance/capability/binding separation, manifests, version pinning, installation approval, isolation, upgrades and compatibility.
 9. **[09 — Scalability and reliability](./09-scalability-reliability-and-operations.md)**: horizontal pools, transactional admission/outbox, at-least-once delivery, worker leases, budgets, tenant QoS, circuit breakers, SSE durability, disaster recovery, SLOs and failure testing.
+10. **[10 — Open-source Temporal alternatives](./10-open-source-durable-worker-engines.md)**: Hatchet, DBOS, Kestra, Restate and other engines; licensing, worker orchestration semantics, a pluggable WorkflowEngineAdapter and a focused comparison POC.
 
 See also [RFC-001: Configuration-Driven Agent Platform](https://github.com/buianhtai/buianhtai.github.io/pull/6), a separate, **currently proposed** RFC about the control-plane registry, policy model, declarative configuration schema, tool/skill catalog, and framework adapters. These documents intentionally complement that RFC but are reviewable independently.
 
