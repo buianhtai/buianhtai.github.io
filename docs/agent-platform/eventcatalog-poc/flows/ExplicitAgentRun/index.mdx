@@ -9,8 +9,16 @@ steps:
     actor:
       name: User
     next_step:
+      id: start_command
+      label: Submit command
+  - id: start_command
+    title: Start explicitly selected agent run
+    message:
+      id: StartAgentRun
+      version: "0.1.0"
+    next_step:
       id: platform_api
-      label: Authenticated request
+      label: Validate selected agent
   - id: platform_api
     title: Verify principal and selected agent
     service:
