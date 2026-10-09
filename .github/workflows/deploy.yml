@@ -46,6 +46,7 @@ jobs:
         run: |
           node scripts/sync-architecture-catalog.mjs
           npm install --prefix architecture-catalog --no-audit --no-fund
+          node scripts/validate-architecture-catalog.mjs
           npm run build --prefix architecture-catalog
           test -s architecture-catalog/dist/index.html
           mkdir -p dist/architecture
@@ -67,6 +68,15 @@ jobs:
             echo "::error::Missing EventCatalog query: GetRunStatus"
             exit 1
           }
+          test -s architecture-catalog/teams/architecture-stewards.mdx
+          test -s architecture-catalog/services/PlatformAPI/openapi.json
+          test -s architecture-catalog/services/RunService/asyncapi.json
+          for adr in adr-001-workflow-engine adr-002-runtime-adapter adr-003-tool-security adr-004-agent-routing; do
+            find architecture-catalog/dist -type f -path "*/docs/adrs/$adr/0.1.0/index.html" | grep -q . || {
+              echo "::error::Missing native EventCatalog ADR: $adr"
+              exit 1
+            }
+          done
           test -s architecture-catalog/systems/AgentExecutionPlatform/index.mdx
           test -s architecture-catalog/domains/AgentPlatform/entities/AgentVersion/index.mdx
           test -s architecture-catalog/pages/homepage.astro
