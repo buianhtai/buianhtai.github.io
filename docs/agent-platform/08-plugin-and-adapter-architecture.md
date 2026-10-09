@@ -54,7 +54,8 @@ The **Platform API, Run Service, authentication, authorization, policy, cost enf
 
 | Port | Purpose | Examples | Invocation semantics |
 | --- | --- | --- | --- |
-| `RuntimeAdapter` | Build and execute a published agent definition | LangChain, Deep Agents, Pydantic AI, deterministic graph | Streams normalized run events, can pause/resume if supported |
+| `RuntimeAdapter` | Build and execute a published agent definition | LangChain, Deep Agents, Pydantic AI, deterministic graph | Streams normalized agent reasoning events; can pause/resume if supported |
+| `WorkflowEngineAdapter` | Durably schedule and coordinate whole runs / multi-step workflows | Hatchet, DBOS, Kestra, Temporal (optional) | Submit, signals, status, cancel, durable wait/recovery; see [10](./10-open-source-durable-worker-engines.md) |
 | `ModelProviderAdapter` | Make an approved model available behind a common gateway | LiteLLM, approved hosted/local inference | Token stream / response + usage + capability metadata |
 | `ToolConnectorAdapter` | Discover and invoke registered tool operations | MCP, schema-bound REST, application functions | Sync result or async operation handle |
 | `TriggerAdapter` | Verify and normalize external events into a run request | Webhook, inbox poller, scheduler | At-least-once events; source deduplication |
