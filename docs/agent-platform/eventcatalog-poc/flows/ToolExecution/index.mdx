@@ -1,0 +1,51 @@
+---
+id: ToolExecution
+name: Authorized Tool Execution
+version: "0.1.0"
+summary: Proposed gateway-enforced invocation of a reviewed tool adapter.
+steps:
+  - id: worker
+    title: Runtime proposes bound tool invocation
+    service:
+      id: AgentWorker
+      version: "0.1.0"
+    next_step:
+      id: gateway
+      label: Tool invocation request
+  - id: gateway
+    title: Validate binding, schema, scope, resource ACL and budget
+    service:
+      id: ToolGateway
+      version: "0.1.0"
+    next_steps:
+      - id: allowed
+        label: Authorized
+      - id: denied
+        label: Denied
+  - id: allowed
+    title: Invoke reviewed MCP or HTTP adapter
+    service:
+      id: ToolGateway
+      version: "0.1.0"
+    next_step:
+      id: worker_result
+      label: Scoped result
+  - id: worker_result
+    title: Continue with bounded result
+    service:
+      id: AgentWorker
+      version: "0.1.0"
+  - id: denied
+    title: Reject and audit unsafe invocation
+    custom:
+      title: Denied invocation
+      type: Policy decision
+      summary: No tool execution occurs; policy decides whether to continue or fail.
+---
+# Authorized Tool Execution
+
+**Status: proposed.** The model cannot self-authorize a tool call. The gateway enforces tool bindings and caller/resource permissions before any adapter call.
+
+<NodeGraph />
+
+Only read-only tool execution is illustrated here. External scripts, writes and approval-gated jobs require stronger isolated runner and reconciliation contracts; see the [tool registry architecture](https://github.com/buianhtai/buianhtai.github.io/blob/docs/agent-platform-invocation-architecture/docs/agent-platform/04-tool-registry-and-external-execution.md).
