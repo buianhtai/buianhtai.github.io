@@ -6,7 +6,7 @@
 
 ## 1. Core reliability decision
 
-> The **platform owns durability, scheduling, quotas, security, event delivery, and error semantics**. Adapters own provider-specific execution protocols. No single adapter is allowed to define the reliability guarantee of the public \`AgentRun\` API.
+> The **platform owns durability, scheduling, quotas, security, event delivery, and error semantics**. Adapters own provider-specific execution protocols. No single adapter is allowed to define the reliability guarantee of the public `AgentRun` API.
 
 A plug-and-play adapter can fail, time out, rate-limit requests, restart, or be upgraded without invalidating the durable run record. **A failed provider is not automatically a failed platform**, provided the platform can report a typed failure or use an explicitly approved fallback. **A retry is not proof that the external effect happened only once.**
 
@@ -110,7 +110,7 @@ sequenceDiagram
 
 **Guarantees to build and test:**
 
-1. Use a DB transaction for \`AgentRun\`, immutable manifest/version reference, idempotency claim and outbox record. This prevents acknowledging a run without a dispatch intent.
+1. Use a DB transaction for `AgentRun`, immutable manifest/version reference, idempotency claim and outbox record. This prevents acknowledging a run without a dispatch intent.
 2. Dispatch is **at least once**. Duplicate deliveries are normal and must not create multiple *logical* runs.
 3. Worker claims the run using an atomic state transition, lease and **fencing token**. A stale worker must not be allowed to commit state after a new lease holder takes over.
 4. A crashed worker can be requeued after lease expiry **only** with a safe checkpoint/outcome policy. It must not blindly reissue an external write.
@@ -120,8 +120,8 @@ sequenceDiagram
 
 ### Queue selection
 
-- **Small deployment:** PostgreSQL queue-like table plus transactional outbox. PostgreSQL \`FOR UPDATE SKIP LOCKED\` can reduce row-lock contention for queue consumers, but its inconsistent-view semantics make it unsuitable for general read queries.
-- **Growing deployment:** move dispatch onto an established queue system appropriate to throughput and operational skills. Do not change public \`AgentRun\` contracts.
+- **Small deployment:** PostgreSQL queue-like table plus transactional outbox. PostgreSQL `FOR UPDATE SKIP LOCKED` can reduce row-lock contention for queue consumers, but its inconsistent-view semantics make it unsuitable for general read queries.
+- **Growing deployment:** move dispatch onto an established queue system appropriate to throughput and operational skills. Do not change public `AgentRun` contracts.
 - **High durability requirement:** evaluate a dedicated durable workflow engine such as Temporal **rather than** building a sophisticated distributed scheduler/retry/approval engine from scratch. This is a separate platform decision; Temporal activities may still execute more than once, so external effects remain idempotency-sensitive.
 
 **No hard dependency on Kafka, Redis, Kestra, Temporal, or Kubernetes should be embedded in the domain model.** Queue/WorkflowEngine adapters supply the relevant infrastructure contract. Kestra remains a useful orchestrator for external workflows/scripts, not an automatic replacement for agent session and run coordination.
@@ -131,10 +131,10 @@ sequenceDiagram
 ### Workload dimensions
 
 Track separately:
-- \`arrival_rate\` (requests/s) by tenant, agent, trigger and priority.
-- \`queue_wait\`, \`queue_depth\`, oldest queued age, and processing duration.
-- \`model_calls_per_run\`, tokens in/out, tool calls, checkpoint frequency and fanout.
-- \`worker_cpu\`, memory per active run, open streams, external job concurrency.
+- `arrival_rate` (requests/s) by tenant, agent, trigger and priority.
+- `queue_wait`, `queue_depth`, oldest queued age, and processing duration.
+- `model_calls_per_run`, tokens in/out, tool calls, checkpoint frequency and fanout.
+- `worker_cpu`, memory per active run, open streams, external job concurrency.
 - Provider-side requests-per-minute, tokens-per-minute and maximum simultaneous requests.
 - Connector-specific rate limits, error rate, p95/p99 latency, and remote job quotas.
 
@@ -168,7 +168,7 @@ For Kubernetes-based deployments, [KEDA ScaledObject](https://keda.sh/docs/2.20/
 **Admission/backpressure:**
 - Implement bounded queues by workload and tenant.
 - Apply tenant/agent quotas and provider-aware token-bucket limits **before** expensive execution; reserve approximate budgets, reconcile actual token use.
-- Return explicit \`429\` for caller quota exhaustion and \`503\` (with retry guidance) for capacity unavailable; existing accepted runs stay trackable.
+- Return explicit `429` for caller quota exhaustion and `503` (with retry guidance) for capacity unavailable; existing accepted runs stay trackable.
 - Separate interactive vs scheduled/batch queues or priority bands; avoid indefinite starvation with aging and fair-share scheduling.
 - Protect cheap read-only work from high-memory deep-agent workloads using distinct pools/bulkheads.
 
@@ -208,7 +208,7 @@ Reliability controls:
 | Model timeout after generating partial output | Usually stop or resume from known checkpoint | Do not duplicate already-committed tool effects; partial UI output marked incomplete |
 | KB/doc read timeout | Yes if idempotent | Retry briefly; surface incomplete evidence if unavailable |
 | MCP connection failure | Yes for proven read-only operations | Health/circuit state; do not assume tool effect absent for writes |
-| External HTTP mutation timeout | **Not blindly** | Idempotency key or downstream outcome lookup; otherwise \`RECONCILIATION_REQUIRED\` |
+| External HTTP mutation timeout | **Not blindly** | Idempotency key or downstream outcome lookup; otherwise `RECONCILIATION_REQUIRED` |
 | Remote script/job submission timed out | **Not blindly** | Query job by idempotency/correlation key and reconcile remote ID |
 | Adapter crash or incompatible upgrade | On compatible healthy instance only | Pinned implementation; fail typed status, isolate process if possible |
 | Worker crash | Recover from durable run/checkpoint | Lease expiry + fencing + safe replay; child budget preserved |
@@ -217,7 +217,7 @@ Reliability controls:
 | Approval wait expires | No execution until new authorization | Persist expiration/rejection and release reserved capacity |
 | External A2A agent unavailable | Only if policy allows | Correlate existing remote task; don't duplicate without idempotency |
 
-**At-least-once scheduling is a delivery guarantee, not exactly-once side effects.** Temporal and LangGraph explicitly document replay/idempotency considerations. Document each tool as \`read\`, \`idempotent_write\`, \`non_idempotent_write\`, or \`external_job\` and enforce a retry strategy appropriate to its class.
+**At-least-once scheduling is a delivery guarantee, not exactly-once side effects.** Temporal and LangGraph explicitly document replay/idempotency considerations. Document each tool as `read`, `idempotent_write`, `non_idempotent_write`, or `external_job` and enforce a retry strategy appropriate to its class.
 
 ## 7. Durable checkpoints, resumable approvals and child agents
 
@@ -239,7 +239,7 @@ Use a **run coordinator** to transition states; runtime adapters store framework
 - Waiting for human approval or remote job completion should release worker compute and active concurrency slots.
 - Resuming requires a compare-and-swap state transition; don't wake two workers for the same child/parent.
 - Child-run fanout and nesting depth are strictly bounded. A parent cancel propagates cancellation requests to children, with reconciliation for independent A2A tasks.
-- Event order is per run; parent/child global event order is not implied. Preserve causal links (\`parentRunId\`, \`delegationId\`, \`traceId\`).
+- Event order is per run; parent/child global event order is not implied. Preserve causal links (`parentRunId`, `delegationId`, `traceId`).
 - Framework checkpoints and **conversation memory** are separate retention/authorization concerns.
 
 ## 8. Reliable event streaming without coupling UI and worker
@@ -247,11 +247,11 @@ Use a **run coordinator** to transition states; runtime adapters store framework
 Client SSE connections terminate on stateless API replicas. **Do not depend on ephemeral Redis pub/sub for delivery correctness.** A pub/sub notification can wake an API replica, but durable event storage is the replay source.
 
 Recommended design:
-1. Worker writes \`RunEvent\` with a monotonically increasing **per-run** sequence (enforce unique \`runId + seq\` with row-level serialization or another safe allocator).
+1. Worker writes `RunEvent` with a monotonically increasing **per-run** sequence (enforce unique `runId + seq` with row-level serialization or another safe allocator).
 2. Event notifier informs subscribed API replicas; if notifier fails, API polls/rechecks durable events using a cursor.
-3. API authenticates every SSE subscription and fetches \`seq > cursor\`.
-4. Client reconnects with \`Last-Event-ID\`, receives missing events up to configured retention; out-of-retention cursors get an explicit resync response and REST status/history endpoint.
-5. \`message.delta\` is optional transient detail; **final response and authoritative run status are stored independently**.
+3. API authenticates every SSE subscription and fetches `seq > cursor`.
+4. Client reconnects with `Last-Event-ID`, receives missing events up to configured retention; out-of-retention cursors get an explicit resync response and REST status/history endpoint.
+5. `message.delta` is optional transient detail; **final response and authoritative run status are stored independently**.
 6. Apply connection limits, heartbeat and slow-client backpressure; streaming to the UI must not stall model execution.
 
 At larger event volume, consider partitioning event tables by time/tenant/run hash, compacting deltas to message snapshots, moving large artifacts to object storage and using dedicated fanout infrastructure. Keep the same SSE API.
@@ -284,7 +284,7 @@ Multi-region active/active should **not** be an MVP default. It introduces ambig
 | User-facing objective | Suggested measurement |
 | --- | --- |
 | API availability | Fraction of authorized, valid non-provider requests served successfully |
-| Durable admission | Accepted \`202\` requests with persisted run + dispatch intent |
+| Durable admission | Accepted `202` requests with persisted run + dispatch intent |
 | Queue wait | p50/p95/p99 queued-to-start latency by workload/tenant |
 | Event delivery | Time from committed event to visible SSE update; replay success rate |
 | Run terminal integrity | Runs not stuck in nonterminal states beyond policy threshold |
@@ -303,7 +303,7 @@ Start dashboards with:
 - **Approval and job:** pending age, retries, orphan job handles, ambiguous write outcomes.
 - **Data plane:** DB pool usage, slow queries, table size, checkpoint/event write failures, backup/restore checks.
 
-Use OpenTelemetry trace propagation across \`API -> queue -> worker -> decision -> model -> tool/remote job -> SSE\`. Adopt stable conventional attributes where available, plus platform-specific \`runId\`, \`agentVersionDigest\`, \`toolVersion\`, \`adapterVersion\`, \`delegationId\`. Avoid high-cardinality tenant IDs as metrics labels unless carefully bounded; use trace attributes with strict privacy and tenant access controls.
+Use OpenTelemetry trace propagation across `API -> queue -> worker -> decision -> model -> tool/remote job -> SSE`. Adopt stable conventional attributes where available, plus platform-specific `runId`, `agentVersionDigest`, `toolVersion`, `adapterVersion`, `delegationId`. Avoid high-cardinality tenant IDs as metrics labels unless carefully bounded; use trace attributes with strict privacy and tenant access controls.
 
 **Alert on user impact**, not only exceptions: growing oldest queued age, sustained 429, repeated adapter circuit opens, stalled accepted runs, checkpoint failures, orphan approvals, exhausted spend, or event-replay failures.
 
@@ -311,7 +311,7 @@ Use OpenTelemetry trace propagation across \`API -> queue -> worker -> decision 
 
 A release is **not** reliable simply because a workflow demo completes. At minimum test:
 
-1. Kill an API replica after \`202\`; client reconnects to another and finds the same run.
+1. Kill an API replica after `202`; client reconnects to another and finds the same run.
 2. Kill worker during a model call; lease expires, safe recovery happens, no second logical run.
 3. Kill worker immediately after a **remote write succeeded** but before local success commit; no blind duplicate write; reconcile by operation ID.
 4. Disconnect the browser mid-SSE; reconnect with event cursor; no restarted agent.
