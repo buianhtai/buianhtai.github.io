@@ -142,7 +142,7 @@ Illustrative pseudocode:
 
 ~~~python
 async def resolve_target(request, context):
-    explicit = request.target.deployment_id
+    explicit = request.target.id if request.target.type == "deployment" else None
     if explicit:
         return await registry.resolve_authorized(explicit, context)
 
