@@ -121,7 +121,7 @@ EventCatalog supports MDX/diagrams and its own `<NodeGraph />` and `<Flow />` co
 
 ### Stage A — no license cost
 
-Manually curate 5 logical services, 2 run events, 2 flows and one domain using Community. Validate whether users can navigate the component map and understand who owns agent selection, tool execution, durable state and UI events. Host the catalog separately if the test succeeds.
+Manually curate 5 logical services, 1 documentation agent, 2 run events, 2 flows and one domain using Community. Validate whether users can navigate the component map and understand who owns agent selection, tool execution, durable state and UI events. Host the catalog separately if the test succeeds.
 
 ### Stage B — architecture governance
 
