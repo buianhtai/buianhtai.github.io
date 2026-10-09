@@ -3,6 +3,11 @@ id: DelegatedAgentRun
 name: Bounded Agent-to-Agent Delegation
 version: "0.1.0"
 summary: A coordinator delegates a limited evidence task to an approved child agent and joins results durably.
+owners:
+  - architecture-stewards
+x-implementation-status: proposed
+x-source-repository: https://github.com/buianhtai/buianhtai.github.io
+x-tracking-status: unassigned
 steps:
   - id: parent
     title: "Coordinator identifies a specialist task"
@@ -118,6 +123,8 @@ steps:
 **Status: proposed design, not deployed workflow code.** Native EventCatalog Flow nodes below link directly to referenced services, commands and events.
 
 <NodeGraph />
+
+<CustomProperties title="Architecture governance" />
 
 ## When to use delegation
 

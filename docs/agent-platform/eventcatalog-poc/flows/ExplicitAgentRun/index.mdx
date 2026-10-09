@@ -3,6 +3,11 @@ id: ExplicitAgentRun
 name: Explicitly Selected Agent Run
 version: "0.1.0"
 summary: A fictional SaaS user selects a documentation agent and receives an authorized response.
+owners:
+  - architecture-stewards
+x-implementation-status: proposed
+x-source-repository: https://github.com/buianhtai/buianhtai.github.io
+x-tracking-status: unassigned
 steps:
   - id: user_sends_request
     title: Submit an API documentation question
@@ -106,6 +111,8 @@ steps:
 **Status: proposed logical design, not implemented behavior.** This example uses a fictional, read-only Documentation Agent. The user explicitly selects an eligible deployed agent; **no automatic routing, multi-agent delegation, or expensive general-purpose workflow is required**.
 
 <NodeGraph />
+
+<CustomProperties title="Architecture governance" />
 
 ## Purpose and boundaries
 

@@ -3,6 +3,11 @@ id: ApprovalGatedExternalJob
 name: Approval-Gated External Job
 version: "0.1.0"
 summary: A bounded agent invokes an approved external operation, pauses for review and handles uncertain outcomes.
+owners:
+  - architecture-stewards
+x-implementation-status: proposed
+x-source-repository: https://github.com/buianhtai/buianhtai.github.io
+x-tracking-status: unassigned
 steps:
   - id: worker
     title: "Model proposes an approved named external operation"
@@ -143,6 +148,8 @@ steps:
 **Status: proposed design, not deployed workflow code.** Native EventCatalog Flow nodes below link directly to referenced services, commands and events.
 
 <NodeGraph />
+
+<CustomProperties title="Architecture governance" />
 
 ## The scenario
 

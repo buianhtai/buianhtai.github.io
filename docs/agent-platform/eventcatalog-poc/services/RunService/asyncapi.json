@@ -1,0 +1,195 @@
+{
+  "asyncapi": "3.0.0",
+  "info": {
+    "title": "Agent Run Lifecycle Events (Proposed)",
+    "version": "0.1.0",
+    "description": "Illustrative contract only. Event consumers are at-least-once and must deduplicate by transport event identity and per-run ordering. Not a live broker specification."
+  },
+  "defaultContentType": "application/json",
+  "channels": {
+    "RunAccepted": {
+      "address": "runs.accepted",
+      "messages": {
+        "RunAccepted": {
+          "name": "RunAccepted",
+          "contentType": "application/json",
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "runId",
+              "agentVersionDigest",
+              "acceptedAt"
+            ],
+            "properties": {
+              "runId": {
+                "type": "string"
+              },
+              "agentVersionDigest": {
+                "type": "string"
+              },
+              "acceptedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "traceId": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "RunStarted": {
+      "address": "runs.started",
+      "messages": {
+        "RunStarted": {
+          "name": "RunStarted",
+          "contentType": "application/json",
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "runId",
+              "attemptId",
+              "startedAt"
+            ],
+            "properties": {
+              "runId": {
+                "type": "string"
+              },
+              "attemptId": {
+                "type": "string"
+              },
+              "fencingToken": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "startedAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        }
+      }
+    },
+    "RunCompleted": {
+      "address": "runs.completed",
+      "messages": {
+        "RunCompleted": {
+          "name": "RunCompleted",
+          "contentType": "application/json",
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "runId",
+              "status",
+              "resultRef",
+              "completedAt"
+            ],
+            "properties": {
+              "runId": {
+                "type": "string"
+              },
+              "status": {
+                "const": "SUCCEEDED"
+              },
+              "resultRef": {
+                "type": "string"
+              },
+              "completedAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        }
+      }
+    },
+    "RunFailed": {
+      "address": "runs.failed",
+      "messages": {
+        "RunFailed": {
+          "name": "RunFailed",
+          "contentType": "application/json",
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "runId",
+              "safeErrorCode",
+              "failedAt"
+            ],
+            "properties": {
+              "runId": {
+                "type": "string"
+              },
+              "safeErrorCode": {
+                "type": "string"
+              },
+              "failedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "retryExhausted": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "operations": {
+    "publishRunAccepted": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/RunAccepted"
+      },
+      "summary": "Illustrative normalized event published from committed run state",
+      "messages": [
+        {
+          "$ref": "#/channels/RunAccepted/messages/RunAccepted"
+        }
+      ]
+    },
+    "publishRunStarted": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/RunStarted"
+      },
+      "summary": "Illustrative normalized event published from committed run state",
+      "messages": [
+        {
+          "$ref": "#/channels/RunStarted/messages/RunStarted"
+        }
+      ]
+    },
+    "publishRunCompleted": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/RunCompleted"
+      },
+      "summary": "Illustrative normalized event published from committed run state",
+      "messages": [
+        {
+          "$ref": "#/channels/RunCompleted/messages/RunCompleted"
+        }
+      ]
+    },
+    "publishRunFailed": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/RunFailed"
+      },
+      "summary": "Illustrative normalized event published from committed run state",
+      "messages": [
+        {
+          "$ref": "#/channels/RunFailed/messages/RunFailed"
+        }
+      ]
+    }
+  }
+}

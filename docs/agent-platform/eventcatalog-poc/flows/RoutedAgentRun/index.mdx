@@ -3,6 +3,11 @@ id: RoutedAgentRun
 name: Automatically Routed Agent Run
 version: "0.1.0"
 summary: Proposed selection of one eligible agent before the regular run lifecycle.
+owners:
+  - architecture-stewards
+x-implementation-status: proposed
+x-source-repository: https://github.com/buianhtai/buianhtai.github.io
+x-tracking-status: unassigned
 steps:
   - id: incoming
     title: Receive request with automatic selection
@@ -63,6 +68,8 @@ steps:
 **Status: proposed.** Routing is permitted only across already eligible published agents. Low confidence, disagreement, no matches or policy ambiguity must fail closed or ask for explicit selection.
 
 <NodeGraph />
+
+<CustomProperties title="Architecture governance" />
 
 Unlike [ExplicitAgentRun](../ExplicitAgentRun/0.1.0/), this flow includes a selection step. Both flows converge at durable run admission.
 

@@ -3,6 +3,11 @@ id: ToolExecution
 name: Authorized Tool Execution
 version: "0.1.0"
 summary: Proposed gateway-enforced invocation of a reviewed tool adapter.
+owners:
+  - architecture-stewards
+x-implementation-status: proposed
+x-source-repository: https://github.com/buianhtai/buianhtai.github.io
+x-tracking-status: unassigned
 steps:
   - id: worker
     title: Runtime proposes bound tool invocation
@@ -55,6 +60,8 @@ steps:
 **Status: proposed.** The model cannot self-authorize a tool call. The gateway enforces tool bindings and caller/resource permissions before any adapter call.
 
 <NodeGraph />
+
+<CustomProperties title="Architecture governance" />
 
 Only read-only tool execution is illustrated here. External scripts, writes and approval-gated jobs require stronger isolated runner and reconciliation contracts; see the [tool registry architecture](https://github.com/buianhtai/buianhtai.github.io/blob/main/docs/agent-platform/04-tool-registry-and-external-execution.md).
 

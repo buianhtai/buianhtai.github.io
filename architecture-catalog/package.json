@@ -9,6 +9,7 @@
     "preview": "eventcatalog preview"
   },
   "dependencies": {
-    "@eventcatalog/core": "4.12.3"
+    "@eventcatalog/core": "4.12.3",
+    "yaml": "2.8.1"
   }
 }

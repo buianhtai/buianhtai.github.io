@@ -3,6 +3,15 @@ id: PlatformAPI
 name: Platform API
 version: "0.1.0"
 summary: Authenticated ingress, agent administration and stable public run/session APIs.
+owners:
+  - architecture-stewards
+x-implementation-status: proposed
+x-source-repository: https://github.com/buianhtai/buianhtai.github.io
+x-tracking-status: unassigned
+specifications:
+  - type: openapi
+    path: openapi.json
+    name: Proposed Agent Run and Registry API
 sends:
   - id: StartAgentRun
     version: "0.1.0"
@@ -16,6 +25,8 @@ sends:
 **Status: proposed logical component; not evidence of a deployed service.**
 
 <NodeGraph />
+
+<CustomProperties title="Architecture governance" />
 
 ## Boundary
 
@@ -43,3 +54,10 @@ Content-Type: application/json
 Duplicate idempotency keys return the same logical run for the same payload, conflicting inputs get HTTP 409. Use typed 401/403/404/429 without leaking cross-tenant resource existence. Track p95 admission latency, rejection rate and API concurrency. Workers, tool execution, model calls and SSE state remain behind their owning components.
 
 **Journey:** [ExplicitAgentRun](/architecture/docs/flows/ExplicitAgentRun/0.1.0/).
+
+## Public API versus internal commands
+
+The local **OpenAPI 3.1** specification on this service page is a proposed **external** REST boundary. The `StartAgentRun` command is a *normalized internal intent* with its own separate JSON Schema. The Platform API authenticates and verifies `target`, derives the effective principal and published manifest, then passes a policy-safe form to the Run Service. Their payloads intentionally differ; version both independently.
+
+For implementation use the OpenAPI contract as a discussion baseline only; align path, errors, ID types, schema validation and auth with the actual service implementation before marking anything delivered. There is no live server at the illustrative `example.invalid` host.
+

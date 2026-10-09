@@ -1,0 +1,693 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Agent Platform Run API (Proposed)",
+    "version": "0.1.0",
+    "description": "Illustrative, not deployed. Stable public-facing run contracts; execution engines, provider URLs and customer identifiers intentionally omitted."
+  },
+  "servers": [
+    {
+      "url": "https://api.example.invalid",
+      "description": "Documentation-only placeholder; not a functional server"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "Runs",
+      "description": "Durable run admission and authorized delivery"
+    },
+    {
+      "name": "Registry",
+      "description": "Published agent definitions"
+    }
+  ],
+  "paths": {
+    "/v1/runs": {
+      "post": {
+        "tags": [
+          "Runs"
+        ],
+        "operationId": "startAgentRun",
+        "summary": "Durably admit a run",
+        "description": "Authenticate and authorize caller; pin published manifest and commit outbox before returning 202. A matching Idempotency-Key + body returns the same logical run; a conflicting body returns 409.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 200
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartRunRequest"
+              },
+              "example": {
+                "sessionId": "session-demo",
+                "target": {
+                  "type": "deployment",
+                  "id": "documentation-agent:prod"
+                },
+                "input": {
+                  "message": "How do I authenticate?"
+                },
+                "clientRequestId": "req-demo"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Durably accepted; not yet completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed or schema-invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Scope forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Idempotency conflict or invalid transition",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Quota/rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/runs/{runId}": {
+      "parameters": [
+        {
+          "name": "runId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "Tenant-scoped durable run identifier"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Runs"
+        ],
+        "operationId": "getRunStatus",
+        "summary": "Get the authoritative run projection",
+        "responses": {
+          "200": {
+            "description": "Authorized status and safe references",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Scope forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Run not visible to caller",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/runs/{runId}/events": {
+      "parameters": [
+        {
+          "name": "runId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "Tenant-scoped durable run identifier"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Runs"
+        ],
+        "operationId": "streamRunEvents",
+        "summary": "Replay authorized ordered run events over SSE",
+        "description": "Use Last-Event-ID to resume within retention. After cursor expiration obtain a REST run snapshot. Reconnection never restarts a run.",
+        "parameters": [
+          {
+            "name": "Last-Event-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Server-sent events; event IDs monotonic per run",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "id: 42\\nevent: run.completed\\ndata: {\"runId\":\"run-demo\",\"status\":\"SUCCEEDED\",\"resultRef\":\"artifact-demo\"}\\n\\n"
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Scope forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Run not visible",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Event cursor outside retention",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/runs/{runId}/cancel": {
+      "parameters": [
+        {
+          "name": "runId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "Tenant-scoped durable run identifier"
+        }
+      ],
+      "post": {
+        "tags": [
+          "Runs"
+        ],
+        "operationId": "cancelAgentRun",
+        "summary": "Idempotently request cancellation",
+        "responses": {
+          "200": {
+            "description": "Run already terminal or cancelled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CancelReceipt"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Cancellation requested; in-flight provider side effects may still need reconciliation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CancelReceipt"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Scope forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Run not visible",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Idempotency conflict or invalid transition",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agents/{agentId}/publish": {
+      "parameters": [
+        {
+          "name": "agentId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "tags": [
+          "Registry"
+        ],
+        "operationId": "publishAgentVersion",
+        "summary": "Validate and immutably publish a draft revision",
+        "description": "Publisher role and scoped grants required; publication and deployment alias updates are distinct actions.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublishAgentVersionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Validated immutable version created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublishedVersion"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed or schema-invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Scope forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Idempotency conflict or invalid transition",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Quota/rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "traceId": {
+            "type": "string"
+          }
+        }
+      },
+      "StartRunRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "target",
+          "input"
+        ],
+        "properties": {
+          "sessionId": {
+            "type": "string"
+          },
+          "target": {
+            "$ref": "#/components/schemas/RunTarget"
+          },
+          "input": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "message"
+            ],
+            "properties": {
+              "message": {
+                "type": "string",
+                "maxLength": 12000
+              }
+            }
+          },
+          "clientRequestId": {
+            "type": "string"
+          }
+        }
+      },
+      "RunTarget": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "deployment",
+              "auto"
+            ]
+          },
+          "id": {
+            "type": "string",
+            "description": "Required when type is deployment; authorization resolves the pinned version."
+          }
+        }
+      },
+      "RunReceipt": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "runId",
+          "status",
+          "eventsUrl"
+        ],
+        "properties": {
+          "runId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "QUEUED",
+              "ROUTING"
+            ]
+          },
+          "agentId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "agentVersion": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "eventsUrl": {
+            "type": "string"
+          }
+        }
+      },
+      "RunStatus": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "runId",
+          "status"
+        ],
+        "properties": {
+          "runId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ROUTING",
+              "QUEUED",
+              "RUNNING",
+              "WAITING_APPROVAL",
+              "WAITING_EXTERNAL_JOB",
+              "SUCCEEDED",
+              "FAILED",
+              "CANCELLED"
+            ]
+          },
+          "agentVersionDigest": {
+            "type": "string"
+          },
+          "resultRef": {
+            "type": "string"
+          },
+          "errorCode": {
+            "type": "string"
+          },
+          "usage": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [],
+            "properties": {
+              "inputTokens": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "outputTokens": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "costUsd": {
+                "type": "number",
+                "minimum": 0
+              }
+            }
+          }
+        }
+      },
+      "CancelReceipt": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "runId",
+          "status"
+        ],
+        "properties": {
+          "runId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "CANCELLING",
+              "CANCELLED",
+              "SUCCEEDED",
+              "FAILED"
+            ]
+          }
+        }
+      },
+      "PublishAgentVersionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "draftRevision"
+        ],
+        "properties": {
+          "draftRevision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "targetEnvironment": {
+            "type": "string"
+          }
+        }
+      },
+      "PublishedVersion": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "agentId",
+          "version",
+          "manifestDigest",
+          "status"
+        ],
+        "properties": {
+          "agentId": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "manifestDigest": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PUBLISHED"
+            ]
+          }
+        }
+      }
+    }
+  }
+}
