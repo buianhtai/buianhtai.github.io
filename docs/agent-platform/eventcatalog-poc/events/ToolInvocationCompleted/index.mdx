@@ -1,0 +1,31 @@
+---
+id: ToolInvocationCompleted
+name: Tool Invocation Completed
+version: "0.1.0"
+summary: Records the normalized outcome of one reviewed tool invocation.
+schemaPath: schema.json
+---
+# Tool Invocation Completed
+
+**Status: proposed versioned interface, not evidence of a deployed implementation.**
+
+Records the normalized outcome of one reviewed tool invocation.
+
+<NodeGraph />
+
+## Contract semantics
+
+OUTCOME_UNKNOWN is distinct from FAILED: a remote write may have been accepted before its acknowledgment was lost, so retry requires reconciliation.
+
+## Field reference
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| runId | string | Tenant-scoped logical run reference |
+| invocationId | string | Required; validated against authority-owned data |
+| toolVersionRef | string | Optional contextual reference |
+| outcome | string | Required; validated against authority-owned data |
+| resultRef | string | Optional contextual reference |
+| completedAt | string | Optional contextual reference |
+
+The included [JSON Schema](/architecture/schemas/events/ToolInvocationCompleted/0.1.0/) is an illustrative machine-readable contract. Actual tenancy, authorization and idempotency checks are performed by trusted services and cannot be delegated to schema validation alone.
