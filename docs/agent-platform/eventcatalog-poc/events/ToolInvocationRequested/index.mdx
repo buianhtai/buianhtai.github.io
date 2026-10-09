@@ -2,10 +2,23 @@
 id: ToolInvocationRequested
 name: Tool Invocation Requested
 version: "0.1.0"
-summary: Proposed internal invocation request requiring independent gateway authorization.
+summary: A worker proposed an external tool operation that must pass the Tool Gateway.
+schemaPath: schema.json
 ---
-# ToolInvocationRequested
+# Tool Invocation Requested
 
-**Proposed internal command/event boundary**, not permission to execute. The request identifies runId, invocationId, tool binding version, tenant-scoped principal, and validated argument reference. The Tool Gateway must recheck authorization.
+**Status:** Illustrative event contract; not proof this event is deployed.
 
 <NodeGraph />
+
+## Meaning and invariants
+
+This is an **internal, pre-authorization intent**, not proof of execution. Tool Gateway still validates tool binding, resource permissions, arguments and budget. Do not include credentials or unredacted user input in the event.
+
+## Schema
+
+The colocated JSON Schema enumerates the expected keys and types. The envelope may additionally carry trusted transport metadata, but the caller must never use that metadata to bypass tenant authorization.
+
+## Consumers and failure modes
+
+Events are persisted and published at least once; consumers should deduplicate by the stable event identity and sequence. Consumers must handle delayed and reordered delivery across different runs, redact sensitive fields, and refer to the authoritative Run Service state for a current snapshot. See [Run Service](/architecture/docs/services/RunService/0.1.0/) and [Agent Run](/architecture/docs/entities/AgentRun/0.1.0/).
