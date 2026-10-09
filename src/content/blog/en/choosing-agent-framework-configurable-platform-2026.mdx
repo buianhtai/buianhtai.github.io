@@ -145,7 +145,8 @@ async def handle_support_email(email, principal, services):
     if await services.inbox.already_processed(email.id):
         return {"status": "duplicate"}
 
-    if match = services.rules.match(email):
+    match = services.rules.match(email)
+    if match:
         return await services.approvals.queue_draft(
             principal, email, render_template(match)
         )
