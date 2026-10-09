@@ -1,21 +1,24 @@
 ---
 const year = new Date().getFullYear();
+const {lang = 'en'} = Astro.props;
+const vi = lang === 'vi';
 ---
 <footer class="ed-footer">
   <div class="ed-container ed-footer-in">
     <div class="ed-footer-grid">
       <div>
         <a class="ed-wordmark" href="/">tai<span>.</span>bui<span>_</span></a>
-        <p>Notes on building systems, exploring AI infrastructure, and learning in public. Written with curiosity and a production mindset.</p>
+        <p>{vi ? 'Ghi chép về kiến trúc hệ thống, AI infrastructure và hành trình học hỏi qua thực hành.' : 'Notes on building systems, exploring AI infrastructure, and learning in public. Written with curiosity and a production mindset.'}</p>
       </div>
       <div>
-        <h3>Explore</h3>
-        <a href="/en/blog">Writing</a>
-        <a href="/en/foundations">Foundations</a>
-        <a href="/en/tags">Topics</a>
+        <h3>{vi?'Khám phá':'Explore'}</h3>
+        <a href={'/'+lang+'/blog/'}>{vi?'Bài viết':'Writing'}</a>
+        <a href={'/'+lang+'/foundations/'}>{vi?'Kiến thức nền':'Foundations'}</a>
+        <a href={'/'+lang+'/tags/'}>{vi?'Chủ đề':'Topics'}</a>
+        <a href={'/'+lang+'/about/'}>{vi?'Giới thiệu':'About'}</a>
       </div>
       <div>
-        <h3>Elsewhere</h3>
+        <h3>{vi?'Liên kết':'Elsewhere'}</h3>
         <a href="https://github.com/buianhtai" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
         <a href="https://twitter.com/buianhtai90" target="_blank" rel="noopener noreferrer">X / Twitter ↗</a>
         <a href="/rss.xml">RSS feed ↗</a>
@@ -23,7 +26,7 @@ const year = new Date().getFullYear();
     </div>
     <div class="ed-footer-bottom">
       <span>© {year} Tai Bui. Built with Astro.</span>
-      <span>Designing · Building · Learning</span>
+      <span>{vi?'Thiết kế · Xây dựng · Học hỏi':'Designing · Building · Learning'}</span>
     </div>
   </div>
 </footer>
