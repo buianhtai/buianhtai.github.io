@@ -1,0 +1,71 @@
+---
+id: StateAndDataModel
+name: Logical Data Model and Run State
+version: "0.1.0"
+summary: Entity relationships and durable run states from admission to terminal results.
+owners:
+  - architecture-stewards
+x-implementation-status: proposed
+x-diagram-class: ERD
+---
+# Logical Data Model and Run State
+
+**Status: proposed design.** Fictional, domain-neutral, and implementation-neutral; not evidence of deployed cloud infrastructure or an approved technology stack.
+
+## Diagram
+
+~~~mermaid
+erDiagram
+  AGENT_VERSION ||--o{ TOOL_BINDING : grants
+  TOOL_DEFINITION ||--o{ TOOL_BINDING : referenced_by
+  AGENT_VERSION ||--o{ AGENT_RUN : pins
+  TRIGGER_BINDING ||--o{ AGENT_RUN : starts
+  AGENT_RUN ||--o{ RUN_ATTEMPT : records
+  AGENT_RUN ||--o{ RUN_EVENT : emits
+  AGENT_RUN ||--o{ TOOL_INVOCATION : proposes
+  AGENT_RUN ||--o{ APPROVAL_REQUEST : awaits
+  AGENT_RUN ||--o{ DELEGATION_REQUEST : delegates
+  DELEGATION_REQUEST ||--|| AGENT_RUN : child_run
+  RUN_ATTEMPT ||--o{ CHECKPOINT : persists
+  TOOL_INVOCATION ||--o| APPROVAL_REQUEST : requires
+  AGENT_VERSION {
+    string digest PK
+    string agentId
+    string modelProfileRef
+  }
+  AGENT_RUN {
+    string runId PK
+    string agentVersionDigest FK
+    string status
+    string tenantId
+  }
+  TOOL_INVOCATION {
+    string invocationId PK
+    string runId FK
+    string outcome
+  }
+  RUN_EVENT {
+    string runId FK
+    int sequence
+    string eventType
+  }
+  APPROVAL_REQUEST {
+    string approvalId PK
+    string intentHash
+    string status
+  }
+~~~
+
+## How to read it
+
+Conceptual **logical data** rather than an endorsed physical SQL schema. AgentVersion is immutable; AgentRun is the user-facing durable identity; RunAttempt may repeat; ToolInvocation and ApprovalRequest retain effect provenance; RunEvent provides ordered replay. Physical implementations may divide these across transactional, event and object stores.
+
+## Continue exploring
+
+- [Durability boundaries](/architecture/diagrams/EventDataFlow/0.1.0/)
+- [Version lifecycle](/architecture/diagrams/AgentLifecycle/0.1.0/)
+- [Attempts and crash recovery](/architecture/diagrams/ResilienceOverview/0.1.0/)
+
+## Related native resources
+
+[Agent Platform domain](/architecture/domains/AgentPlatform/0.1.0/) · [Agent Execution Platform system](/architecture/systems/AgentExecutionPlatform/0.1.0/) · [Execution flows](/architecture/discover/flows/)
