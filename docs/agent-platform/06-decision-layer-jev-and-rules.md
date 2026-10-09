@@ -8,7 +8,7 @@
 
 Many workflows need a decision, **not** an agent that generates prose or repeatedly invokes tools:
 
-- Route a support request to \`documentation\`, \`technical\`, or \`human\`.
+- Route a support request to `documentation`, `technical`, or `human`.
 - Classify whether an issue merits deeper investigation.
 - Score urgency on a defined scale.
 - Choose between a simple workflow and a bounded reasoning agent.
@@ -40,13 +40,13 @@ flowchart TD
 
 ### Recommended policy chain
 
-\`RuleEngine -> DecisionProvider (optional) -> Validator -> ThresholdPolicy -> AgentRouter/Workflow -> ToolGateway\`
+`RuleEngine -> DecisionProvider (optional) -> Validator -> ThresholdPolicy -> AgentRouter/Workflow -> ToolGateway`
 
-The \`DecisionProvider\` is a replaceable adapter (Jev, a small structured-output LLM, a local classifier). The rules engine can use normal code, a rules service, or a DMN engine. It is useful even if the decision model provider is unavailable.
+The `DecisionProvider` is a replaceable adapter (Jev, a small structured-output LLM, a local classifier). The rules engine can use normal code, a rules service, or a DMN engine. It is useful even if the decision model provider is unavailable.
 
 ## 3. Configuration and registration
 
-Define **DecisionDefinition**, **DecisionVersion**, and **DecisionBinding** independently from \`AgentDefinition\`:
+Define **DecisionDefinition**, **DecisionVersion**, and **DecisionBinding** independently from `AgentDefinition`:
 
 ~~~yaml
 apiVersion: agent-platform/v1alpha1
@@ -119,10 +119,10 @@ class DecisionProvider(Protocol):
 
 Implementations may include:
 
-- \`RulesDecisionProvider\` — deterministic exact mappings or DMN, **no model cost**.
-- \`JevDecisionProvider\` — typed choice/score/probability API where available and reviewed.
-- \`StructuredLLMDecisionProvider\` — constrained JSON/enum outputs from a small LLM. Its "confidence" is not inherently calibrated.
-- \`HumanDecisionProvider\` — explicit review/escalation for cases that cannot be safely automated.
+- `RulesDecisionProvider` — deterministic exact mappings or DMN, **no model cost**.
+- `JevDecisionProvider` — typed choice/score/probability API where available and reviewed.
+- `StructuredLLMDecisionProvider` — constrained JSON/enum outputs from a small LLM. Its "confidence" is not inherently calibrated.
+- `HumanDecisionProvider` — explicit review/escalation for cases that cannot be safely automated.
 
 **Do not confuse DecisionProvider with ModelProfile for conversational agent generation.** The former outputs a bounded, machine-actionable decision; the latter can generate text and invoke tools. A single account/gateway may support both provider types but the contracts remain different.
 
@@ -170,7 +170,7 @@ According to [TypeSafe's announcement](https://typesafe.ai/blog/introducing-syst
 Before adoption:
 
 1. Verify current official API/schema, provider availability, licensing and data-residency requirements with primary documentation.
-2. Test outputs for \`choice\` / \`score\` / yes-or-no probability (the exact question type label is provider-specific).
+2. Test outputs for `choice` / `score` / yes-or-no probability (the exact question type label is provider-specific).
 3. Pin an explicitly supported model revision and log provider/model version with every decision.
 4. Build a dataset of manually labeled cases; compare false positives/negatives, confusion matrix, calibration and selective accuracy (accuracy at each acceptance threshold).
 5. Compare measured end-to-end latency, per-decision price, retry/failure behavior, throughput and operational availability against a small structured-output LLM and plain rules.
@@ -217,13 +217,13 @@ Typical strategies:
 - Known workflow: zero or one decision call; zero generative calls unless a draft/explanation is needed.
 - Complex research: bounded LLM plus tools/subagents, explicit maximum cost.
 
-Decision outputs and cost accounting must be recorded with \`decisionId\`, \`runId\`, model/profile version, policy version, latency, and usage. Falling back to a more expensive model requires available budget and permitted residency.
+Decision outputs and cost accounting must be recorded with `decisionId`, `runId`, model/profile version, policy version, latency, and usage. Falling back to a more expensive model requires available budget and permitted residency.
 
 ## 8. Acceptance tests
 
 - Explicitly selected agent and fixed trigger skip all AI-based routing.
 - A Jev-like provider returns a valid typed choice but it references a forbidden agent => **deny**.
-- Provider returns \`unknown\`, low margin, timeout or malformed output => clarify/escalate, no privileged fallback.
+- Provider returns `unknown`, low margin, timeout or malformed output => clarify/escalate, no privileged fallback.
 - Two similar input texts receive differing decisions => evaluation flags instability and a human review route.
 - A revoked agent fails the final eligibility check even if decision model ranked it highest.
 - A decision model suggests approval for a write requiring human approval => mandatory approval remains.
