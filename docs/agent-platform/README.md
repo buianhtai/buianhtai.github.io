@@ -16,6 +16,7 @@ This documentation lives in `docs/` and is **not a blog article or a production 
 6. **[06 — Decision layer, Jev and deterministic rules](./06-decision-layer-jev-and-rules.md)**: typed choice/score results, replaceable decision providers, eligibility checks, DMN/FEEL rules and evaluation.
 7. **[07 — Complete orchestration scenario](./07-end-to-end-orchestration-scenario.md)**: one fictional SaaS workflow connecting routing, agent tools, child agents, approval-gated remote jobs and SSE.
 8. **[08 — Plug-and-play adapters and plugins](./08-plugin-and-adapter-architecture.md)**: stable typed extension interfaces, package/instance/capability/binding separation, manifests, version pinning, installation approval, isolation, upgrades and compatibility.
+9. **[09 — Scalability and reliability](./09-scalability-reliability-and-operations.md)**: horizontal pools, transactional admission/outbox, at-least-once delivery, worker leases, budgets, tenant QoS, circuit breakers, SSE durability, disaster recovery, SLOs and failure testing.
 
 See also [RFC-001: Configuration-Driven Agent Platform](https://github.com/buianhtai/buianhtai.github.io/pull/6), a separate, **currently proposed** RFC about the control-plane registry, policy model, declarative configuration schema, tool/skill catalog, and framework adapters. These documents intentionally complement that RFC but are reviewable independently.
 
