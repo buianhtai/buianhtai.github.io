@@ -10,7 +10,7 @@ const source=path.join(root,'docs','agent-platform','eventcatalog-poc');
 const require=createRequire(path.join(root,'architecture-catalog','package.json'));
 const YAML=require('yaml');
 const errors=[]; const resources=new Map();
-const kindOf=p=>p.includes('/entities/')?'entity':p.includes('/adrs/')?'adr':p.includes('/teams/')?'team':p.split('/')[0].replace(/s$/,'');
+const kindOf=p=>p.includes('/entities/')?'entity':p.startsWith('adrs/')?'adr':p.startsWith('teams/')?'team':p.split('/')[0].replace(/s$/,'');
 function walk(dir) {if (!existsSync(dir)) return [];return readdirSync(dir,{withFileTypes:true}).flatMap(ent=>ent.isDirectory()?walk(path.join(dir,ent.name)):[path.join(dir,ent.name)]);}
 function key(k,id){return k+':'+id;}
 function report(what,msg){errors.push(what+': '+msg);}
@@ -23,7 +23,7 @@ for(const full of textPaths){
  if(!front){report(rel,'missing YAML frontmatter');continue;}
  let d;
  try{d=YAML.parse(front[1],{uniqueKeys:true})}catch(e){report(rel,'invalid YAML: '+e.message);continue;}
- const kind=kindOf('/'+rel),id=d?.id;
+ const kind=kindOf(rel),id=d?.id;
  if(!id || !d?.name){report(rel,'missing id or name');continue;}
  if(kind!=='team' && !d.version)report(rel,'missing version');
  if(kind!=='team' && !['adr'].includes(kind)){
