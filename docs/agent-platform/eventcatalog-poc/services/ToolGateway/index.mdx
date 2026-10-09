@@ -2,15 +2,51 @@
 id: ToolGateway
 name: Tool Gateway
 version: "0.1.0"
-summary: Validates and authorizes every tool request before any MCP, REST or external job adapter invocation.
+summary: Independent authorization, adapter dispatch, approval and audit for all tool operations.
 receives:
   - id: InvokeTool
+    version: "0.1.0"
+  - id: ApprovalResolved
+    version: "0.1.0"
+sends:
+  - id: RequestApproval
+    version: "0.1.0"
+  - id: ToolInvocationCompleted
     version: "0.1.0"
 ---
 # Tool Gateway
 
-Checks effective principal, agent/tool binding, argument schema, tenant/resource access, budgets, and approval policy. It invokes only registered and reviewed operations.
-
-Shell execution is restricted to approved job templates on isolated external runners; no general free-form shell command capability is implied.
+**Status: proposed logical component; not evidence of a deployed service.**
 
 <NodeGraph />
+
+## Tool is not connector
+
+A ToolDefinition specifies a versioned reviewed capability and input/output schemas. A connector instance identifies the approved MCP/HTTP/job integration and secret reference. An AgentVersion ToolBinding narrows allowed operations, arguments, scope, call count and approval. A ToolInvocation records a single attempt and outcome.
+
+## Plug-and-play invocation
+
+~~~mermaid
+flowchart LR
+  A["Bound tool request"] --> G["Tool Gateway"]
+  G --> P{"Schema, tenant ACL, budget, risk"}
+  P -->|No| X["Deny + audit"]
+  P -->|Yes| T{"Reviewed adapter"}
+  T --> M["MCP"]
+  T --> H["Typed HTTP"]
+  T --> J["Approved external job"]
+~~~
+
+| Stage | Required check |
+| --- | --- |
+| Resolve | Pinned tool version, registered adapter and operation |
+| Authorize | Principal ∩ agent binding ∩ tenant resource ACL |
+| Validate | Closed JSON schema, request size, egress allowlist |
+| Bound | Per-run calls, timeout, rate/concurrency and monetary limit |
+| Approve | For writes, human review of exact immutable intent |
+| Execute | Scoped secret reference, remote ID and idempotency key |
+| Finish | Normalized outcome and audit, including OUTCOME_UNKNOWN |
+
+For remote scripts use a **signed/pinned named operation**, not arbitrary shell text or URLs. If a remote write times out after acceptance, correlate its job ID before attempting any retry.
+
+**Example:** [ApprovalGatedExternalJob](/architecture/docs/flows/ApprovalGatedExternalJob/0.1.0/).

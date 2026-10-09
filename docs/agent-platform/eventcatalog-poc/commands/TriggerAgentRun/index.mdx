@@ -1,0 +1,30 @@
+---
+id: TriggerAgentRun
+name: Trigger Agent Run
+version: "0.1.0"
+summary: Normalize a verified external event into idempotent run admission.
+schemaPath: schema.json
+---
+# Trigger Agent Run
+
+**Status: proposed versioned interface, not evidence of a deployed implementation.**
+
+Normalize a verified external event into idempotent run admission.
+
+<NodeGraph />
+
+## Contract semantics
+
+The incoming payload cannot choose the target agent or grant a new principal. The trigger binding specifies both; the sourceEventId is deduplicated before admission.
+
+## Field reference
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| bindingId | string | Required; validated against authority-owned data |
+| sourceEventId | string | Required; validated against authority-owned data |
+| sourceType | string | Optional contextual reference |
+| principalRef | string | Least-privileged service identity |
+| payloadRef | string | Optional contextual reference |
+
+The included [JSON Schema](/architecture/schemas/commands/TriggerAgentRun/0.1.0/) is an illustrative machine-readable contract. Actual tenancy, authorization and idempotency checks are performed by trusted services and cannot be delegated to schema validation alone.

@@ -1,0 +1,57 @@
+---
+id: DelegationRequest
+name: Delegation Request
+version: "0.1.0"
+summary: Scoped, bounded request from one parent run to an approved child agent.
+properties:
+  - name: delegationId
+    type: UUID
+    required: true
+    description: Idempotent delegation identity
+  - name: parentRunId
+    type: UUID
+    required: true
+    description: Originating run
+    references: AgentRun
+    referencesIdentifier: runId
+    relationType: belongsTo
+  - name: targetAgentVersion
+    type: String
+    required: true
+    description: Published allowed specialist
+  - name: childRunId
+    type: UUID
+    required: true
+    description: Linked internal child run
+  - name: scopeRef
+    type: String
+    required: true
+    description: Delegated least-privilege grants
+  - name: budgetReservation
+    type: Decimal
+    required: true
+    description: Reserved spend for child
+  - name: depth
+    type: Integer
+    required: true
+    description: Bounded recursion depth
+---
+# Delegation Request
+
+**Status:** Proposed domain model, not an implemented persistence schema. **Logical owner:** DelegationGateway.
+
+## Properties
+
+<EntityPropertiesTable />
+
+## Lifecycle and invariants
+
+A parent may call only approved subagent aliases; the child receives a deliberately narrow task/context and never unrestricted parent credentials. Child rights are the intersection of the parent delegation, child grants, principal and resource ACL. Budgets, maximum depth, cancellation and failures propagate through typed run results.
+
+## Fictional example
+
+A research coordinator delegates evidence lookup to a read-only specialist, waits for its result and publishes a combined answer with provenance.
+
+## Related models
+
+[Agent Platform domain](/architecture/domains/AgentPlatform/0.1.0/) · [Agent execution overview](/architecture/docs/flows/ExplicitAgentRun/0.1.0/). This is a logical entity: physical persistence may use relational rows, JSON snapshots or projections instead of a one-to-one table.

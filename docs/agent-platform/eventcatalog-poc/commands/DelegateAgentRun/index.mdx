@@ -1,0 +1,30 @@
+---
+id: DelegateAgentRun
+name: Delegate Agent Run
+version: "0.1.0"
+summary: Create a bounded child run against a previously approved subagent alias.
+schemaPath: schema.json
+---
+# Delegate Agent Run
+
+**Status: proposed versioned interface, not evidence of a deployed implementation.**
+
+Create a bounded child run against a previously approved subagent alias.
+
+<NodeGraph />
+
+## Contract semantics
+
+The target is resolved from a pinned parent-agent binding, not a global lookup. Deduplication keeps one child per delegation identity, with limited context and permissions.
+
+## Field reference
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| parentRunId | string | Required; validated against authority-owned data |
+| delegationId | string | Required; validated against authority-owned data |
+| subagentAlias | string | Required; validated against authority-owned data |
+| taskRef | string | Optional contextual reference |
+| budgetReservation | number | Optional contextual reference |
+
+The included [JSON Schema](/architecture/schemas/commands/DelegateAgentRun/0.1.0/) is an illustrative machine-readable contract. Actual tenancy, authorization and idempotency checks are performed by trusted services and cannot be delegated to schema validation alone.

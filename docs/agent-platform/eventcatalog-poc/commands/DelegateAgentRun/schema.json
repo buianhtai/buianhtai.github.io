@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:example:agent-platform:DelegateAgentRun:0.1.0",
+  "title": "DelegateAgentRun",
+  "description": "Create a bounded child run against a previously approved subagent alias.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "parentRunId",
+    "delegationId",
+    "subagentAlias"
+  ],
+  "properties": {
+    "parentRunId": {
+      "type": "string"
+    },
+    "delegationId": {
+      "type": "string"
+    },
+    "subagentAlias": {
+      "type": "string"
+    },
+    "taskRef": {
+      "type": "string"
+    },
+    "budgetReservation": {
+      "type": "number",
+      "minimum": 0
+    }
+  }
+}

@@ -1,0 +1,50 @@
+---
+id: AgentRegistry
+name: Agent Registry and Compiler
+version: "0.1.0"
+summary: Validates, versions and publishes agent definitions as immutable runtime manifests.
+receives:
+  - id: PublishAgentVersion
+    version: "0.1.0"
+sends:
+  - id: AgentVersionPublished
+    version: "0.1.0"
+---
+# Agent Registry and Compiler
+
+**Status: proposed logical service.** The responsibility may live in a module rather than its own process.
+
+<NodeGraph />
+
+## Ownership
+
+The registry is the **source of truth for agent definitions and published versions**. Agent Studio edits a draft; publishing resolves model profile, skill sources, tool versions, adapter compatibility, tenant-scoped policies and optional subagent aliases into a validated immutable manifest digest.
+
+## Lifecycle
+
+| Stage | Required checks | Result |
+| --- | --- | --- |
+| Draft | UI syntax/schema validation | Mutable editing state, not executable |
+| Validate | Tool schemas, adapter availability, grants, budget, references, cycle/depth checks | Explainable validation report |
+| Publish | Authorization and immutable snapshot transaction | AgentVersionPublished with digest |
+| Deploy alias | Workspace permission and environment policy | Version eligible for new runs |
+| Roll back | Repoint deployment alias to earlier published digest | Existing runs remain pinned |
+
+## Example manifest (illustrative)
+
+~~~yaml
+agentId: support-triage
+revision: 2
+modelProfileRef: small-classifier@1
+runtimeAdapterRef: simple-loop@1
+tools:
+  - toolRef: knowledge.search@1
+    scopeRef: support-guides-readonly
+limits: { maxSteps: 5, maxToolCalls: 3, maxCostUsd: 0.03 }
+~~~
+
+## Failure and operational contracts
+
+Reject unresolved references, missing adapter versions, write grants not approved by a policy owner, and cyclic subagent bindings. Never store plaintext provider secrets in the published manifest. Recompilation cannot silently mutate an existing digest. The API resolves the deployed alias at admission and records the immutable digest in the AgentRun.
+
+**Related:** [Configuration lifecycle](/architecture/docs/flows/AgentConfigurationLifecycle/0.1.0/) · [Agent Version entity](/architecture/docs/entities/AgentVersion/0.1.0/).

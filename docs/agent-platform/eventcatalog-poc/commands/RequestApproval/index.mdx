@@ -1,0 +1,31 @@
+---
+id: RequestApproval
+name: Request Approval
+version: "0.1.0"
+summary: Request a human decision for one immutable side-effect intent.
+schemaPath: schema.json
+---
+# Request Approval
+
+**Status: proposed versioned interface, not evidence of a deployed implementation.**
+
+Request a human decision for one immutable side-effect intent.
+
+<NodeGraph />
+
+## Contract semantics
+
+Approval applies to exact canonical arguments and target encoded by intentHash. The decision service never executes the side effect itself; execution is a separate authorization check.
+
+## Field reference
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| runId | string | Tenant-scoped logical run reference |
+| invocationId | string | Required; validated against authority-owned data |
+| intentHash | string | Canonical operation and arguments hash |
+| toolVersionRef | string | Required; validated against authority-owned data |
+| reviewerPolicyRef | string | Optional contextual reference |
+| expiresAt | string | Optional contextual reference |
+
+The included [JSON Schema](/architecture/schemas/commands/RequestApproval/0.1.0/) is an illustrative machine-readable contract. Actual tenancy, authorization and idempotency checks are performed by trusted services and cannot be delegated to schema validation alone.

@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:example:agent-platform:ChildRunCompleted:0.1.0",
+  "title": "ChildRunCompleted",
+  "description": "Correlates a terminal internal specialist run back to its parent request.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "delegationId",
+    "parentRunId",
+    "childRunId",
+    "status"
+  ],
+  "properties": {
+    "delegationId": {
+      "type": "string"
+    },
+    "parentRunId": {
+      "type": "string"
+    },
+    "childRunId": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "SUCCEEDED",
+        "FAILED",
+        "CANCELLED"
+      ]
+    },
+    "resultRef": {
+      "type": "string"
+    },
+    "completedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

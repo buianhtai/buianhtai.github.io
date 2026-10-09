@@ -2,26 +2,50 @@
 id: RunService
 name: Run Service
 version: "0.1.0"
-summary: Owns run identity, accepted status, version pinning, policy and the durable user-facing projection.
+summary: Durable admission, authoritative AgentRun lifecycle, immutable version pinning and budget projection.
 receives:
   - id: StartAgentRun
     version: "0.1.0"
+  - id: TriggerAgentRun
+    version: "0.1.0"
   - id: GetRunStatus
+    version: "0.1.0"
+  - id: ApprovalResolved
     version: "0.1.0"
 sends:
   - id: RunAccepted
     version: "0.1.0"
-  - id: RunCompleted
-    version: "0.1.0"
   - id: RunStarted
+    version: "0.1.0"
+  - id: RunCompleted
     version: "0.1.0"
   - id: RunFailed
     version: "0.1.0"
 ---
 # Run Service
 
-Creates one durable `runId` per logical request, pins an approved published agent version, records admission and orchestrator correlation IDs, and exposes terminal state through the Platform API.
-
-**RunAccepted** and **RunCompleted** are illustrative architecture messages. If the execution engine owns internal step state, the Run Service only projects normalized transitions rather than implementing a competing durable step scheduler.
+**Status: proposed logical component; not evidence of a deployed service.**
 
 <NodeGraph />
+
+## Durability first
+
+One transaction commits runId, tenant/principal, idempotency claim, pinned immutable AgentVersion digest, effective policy/budget, input reference and outbox dispatch intent. No HTTP 202 is returned before commit. The dispatcher can deliver a run more than once, but the Run Service admits one logical run.
+
+## Public status vocabulary
+
+| Status | Meaning |
+| --- | --- |
+| QUEUED | Durable acceptance; awaiting capacity or retry |
+| RUNNING | Fenced worker attempt owns execution |
+| WAITING_APPROVAL | Exact side-effect intent needs a reviewer |
+| WAITING_EXTERNAL_JOB | Remote job is outstanding; status must reconcile |
+| SUCCEEDED / FAILED / CANCELLED | Terminal projection and result reference |
+
+A workflow engine may own internal checkpoints and timers; it must not compete with the Run Service for public run status. Commit terminal transitions atomically and reject a stale fencing token.
+
+## Safety and telemetry
+
+An unknown external write result is distinct from failure; do not blindly retry. Events include stable runId, monotonic per-run sequence, traceId and safe outcome, with detailed artifacts behind authorization. Measure admitted runs, queue age, retry exhaustion, successful recovery and spend per run.
+
+**Model:** [AgentRun](/architecture/docs/entities/AgentRun/0.1.0/) · **Flow:** [AgentRunRecovery](/architecture/docs/flows/AgentRunRecovery/0.1.0/).

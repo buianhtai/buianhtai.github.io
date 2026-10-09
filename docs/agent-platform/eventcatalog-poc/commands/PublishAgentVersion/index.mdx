@@ -1,0 +1,29 @@
+---
+id: PublishAgentVersion
+name: Publish Agent Version
+version: "0.1.0"
+summary: Request validation and immutable publication of one draft agent revision.
+schemaPath: schema.json
+---
+# Publish Agent Version
+
+**Status: proposed versioned interface, not evidence of a deployed implementation.**
+
+Request validation and immutable publication of one draft agent revision.
+
+<NodeGraph />
+
+## Contract semantics
+
+Only an authorized publisher may request publication. The registry validates compatibility, tool bindings and policy, then emits AgentVersionPublished or a typed validation error. No live running agent is changed in place.
+
+## Field reference
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| agentId | string | Required; validated against authority-owned data |
+| draftRevision | integer | Required; validated against authority-owned data |
+| targetEnvironment | string | Optional contextual reference |
+| clientRequestId | string | Required; validated against authority-owned data |
+
+The included [JSON Schema](/architecture/schemas/commands/PublishAgentVersion/0.1.0/) is an illustrative machine-readable contract. Actual tenancy, authorization and idempotency checks are performed by trusted services and cannot be delegated to schema validation alone.

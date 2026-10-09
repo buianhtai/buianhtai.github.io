@@ -2,10 +2,32 @@
 id: AgentRuntime
 name: Agent Runtime
 version: "0.1.0"
-summary: Runs the bounded agent reasoning loop with a pinned configuration and policy.
+summary: Bounded reasoning loop over a pinned AgentVersion with no direct integration privileges.
 ---
 # Agent Runtime
 
-**Proposed logical component.** Loaded by an Agent Worker, the runtime manages model turns, accepted tool responses, step limits, and final-answer composition. It is not a separate router. It never executes external actions directly: all tool requests cross the [Tool Gateway](../../ToolGateway/0.1.0/).
+**Status: proposed logical component; not evidence of a deployed service.**
 
 <NodeGraph />
+
+## Loop contract
+
+An approved RuntimeAdapter receives pinned manifest digest, scoped context, session/checkpoint reference, available tool **schemas** and budget. It asks an approved model for a next step, forwards any proposed tool call to the Tool Gateway, handles validated evidence and produces a typed final result. The runtime **does not route the initial user request** or grant its own permissions.
+
+~~~mermaid
+flowchart TD
+    A["Pinned config + scoped context"] --> B["Model Gateway"]
+    B --> C{"Tool requested?"}
+    C -->|No| D["Validate structured answer"]
+    C -->|Yes| E["Tool Gateway authorizes call"]
+    E --> F["Sanitize result and checkpoint"]
+    F --> G{"Hard budget / step limit met?"}
+    G -->|No| B
+    G -->|Yes| H["Typed partial / limit outcome"]
+~~~
+
+## Runtime policies
+
+Enforce maximum turns, tokens, tool calls, total spend, timeout, cancellation and maximum delegated children in trusted code, **not solely prompts**. Model errors, missing sources and invalid tool arguments return typed failures. A simple loop is enough for bounded read-only tasks; a graph runtime may be configured for complex checkpointed execution. Both produce the same platform events.
+
+**Related:** [Model Gateway](/architecture/docs/services/ModelGateway/0.1.0/) · [Tool Execution](/architecture/docs/flows/ToolExecution/0.1.0/).

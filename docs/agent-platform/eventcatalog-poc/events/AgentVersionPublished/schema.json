@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:example:agent-platform:AgentVersionPublished:0.1.0",
+  "title": "AgentVersionPublished",
+  "description": "Indicates that a validated immutable agent version is available for deployment alias resolution.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "agentId",
+    "version",
+    "manifestDigest"
+  ],
+  "properties": {
+    "agentId": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string"
+    },
+    "manifestDigest": {
+      "type": "string"
+    },
+    "publishedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "traceId": {
+      "type": "string"
+    }
+  }
+}

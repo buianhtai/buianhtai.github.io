@@ -56,4 +56,41 @@ steps:
 
 <NodeGraph />
 
-Only read-only tool execution is illustrated here. External scripts, writes and approval-gated jobs require stronger isolated runner and reconciliation contracts; see the [tool registry architecture](https://github.com/buianhtai/buianhtai.github.io/blob/docs/agent-platform-invocation-architecture/docs/agent-platform/04-tool-registry-and-external-execution.md).
+Only read-only tool execution is illustrated here. External scripts, writes and approval-gated jobs require stronger isolated runner and reconciliation contracts; see the [tool registry architecture](https://github.com/buianhtai/buianhtai.github.io/blob/main/docs/agent-platform/04-tool-registry-and-external-execution.md).
+
+## What user configurability actually means
+
+An administrator can register an **approved connector instance** and create a ToolDefinition with a versioned operation, JSON input/output schema, risk class, quota and adapter reference. A published AgentVersion has a **ToolBinding** that narrows the capability. The model receives only bound tool schemas, not credentials or unrestricted network access.
+
+~~~yaml
+tool:
+  id: knowledge.search
+  version: 1
+  executor: { kind: mcp, connectorRef: knowledge-readonly }
+  inputSchema: { type: object, required: [query] }
+agentBinding:
+  toolRef: knowledge.search@1
+  scopeRef: public-guides
+  maxCallsPerRun: 5
+~~~
+
+## Execution ownership
+
+| Responsibility | Owner |
+| --- | --- |
+| Define and review capability | Registry and platform operator |
+| Configure tenant connection/secret references | Tenant admin + connector manager |
+| Propose argument values | Agent Runtime / model |
+| Verify agent permission, resource ACL, schema, quotas | Tool Gateway |
+| Execute reviewed operation | Connector adapter |
+| Record outcome and correlate retries | Invocation store + Tool Gateway |
+
+## Failure and side-effect policy
+
+Read-only tools can be retried when their input is safe and policy allows. Mutating operations need idempotency or external status reconciliation. A model cannot request arbitrary URL targets or shell commands; script execution is a named, pinned external operation requiring additional authorization and often a human review. ToolInvocationCompleted must distinguish SUCCEEDED, FAILED, DENIED and OUTCOME_UNKNOWN.
+
+## Acceptance checks
+
+Reject unknown argument fields, wrong version, disabled connector, missing resource grant, exceeded quota and expired approval **before** contacting an external integration. Correlate invocationId for replay and auditing. Return bounded sanitized tool results without leaking connector secrets or cross-tenant artifacts.
+
+**Go deeper:** [Tool Gateway](/architecture/docs/services/ToolGateway/0.1.0/) · [Approval-gated job](/architecture/docs/flows/ApprovalGatedExternalJob/0.1.0/).

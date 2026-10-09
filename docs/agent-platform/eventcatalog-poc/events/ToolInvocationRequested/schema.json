@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:example:agent-platform:ToolInvocationRequested:0.1.0",
+  "title": "ToolInvocationRequested",
+  "description": "A worker proposed an external tool operation that must pass the Tool Gateway.",
+  "type": "object",
+  "properties": {
+    "runId": {
+      "type": "string"
+    },
+    "invocationId": {
+      "type": "string"
+    },
+    "toolVersionRef": {
+      "type": "string"
+    },
+    "argumentsRef": {
+      "type": "string"
+    },
+    "tenantId": {
+      "type": "string"
+    },
+    "traceId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "runId",
+    "invocationId",
+    "toolVersionRef"
+  ],
+  "additionalProperties": false
+}

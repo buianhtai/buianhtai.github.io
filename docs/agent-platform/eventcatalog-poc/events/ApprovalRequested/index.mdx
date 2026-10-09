@@ -1,0 +1,30 @@
+---
+id: ApprovalRequested
+name: Approval Requested
+version: "0.1.0"
+summary: Signals that a run is paused awaiting human approval of exact side-effect intent.
+schemaPath: schema.json
+---
+# Approval Requested
+
+**Status: proposed versioned interface, not evidence of a deployed implementation.**
+
+Signals that a run is paused awaiting human approval of exact side-effect intent.
+
+<NodeGraph />
+
+## Contract semantics
+
+A user-facing notification references a safe preview; it does not carry private connector credentials, unrestricted raw payloads or approval powers.
+
+## Field reference
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| approvalId | string | Required; validated against authority-owned data |
+| runId | string | Tenant-scoped logical run reference |
+| intentHash | string | Canonical operation and arguments hash |
+| expiresAt | string | Optional contextual reference |
+| reviewerPolicyRef | string | Optional contextual reference |
+
+The included [JSON Schema](/architecture/schemas/events/ApprovalRequested/0.1.0/) is an illustrative machine-readable contract. Actual tenancy, authorization and idempotency checks are performed by trusted services and cannot be delegated to schema validation alone.

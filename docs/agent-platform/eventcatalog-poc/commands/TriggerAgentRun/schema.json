@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:example:agent-platform:TriggerAgentRun:0.1.0",
+  "title": "TriggerAgentRun",
+  "description": "Normalize a verified external event into idempotent run admission.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "bindingId",
+    "sourceEventId",
+    "principalRef"
+  ],
+  "properties": {
+    "bindingId": {
+      "type": "string"
+    },
+    "sourceEventId": {
+      "type": "string"
+    },
+    "sourceType": {
+      "type": "string",
+      "enum": [
+        "email",
+        "webhook",
+        "schedule"
+      ]
+    },
+    "principalRef": {
+      "type": "string"
+    },
+    "payloadRef": {
+      "type": "string"
+    }
+  }
+}

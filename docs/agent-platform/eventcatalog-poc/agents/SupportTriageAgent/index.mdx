@@ -1,0 +1,48 @@
+---
+id: SupportTriageAgent
+name: Support Triage Agent
+version: "0.1.0"
+summary: Low-cost document-grounded support triage that creates drafts, never auto-sends.
+tools:
+  - name: Knowledge search
+    type: mcp
+    description: Read approved public support guidance
+  - name: Draft classifier
+    type: internal
+    description: Classify request intent with deterministic-first fallback
+---
+# Support Triage Agent
+
+**Status: illustrative design.** This catalog does not deploy a running agent.
+
+<NodeGraph />
+
+## Declared capabilities
+
+<AgentTools />
+
+## Goal and example requests
+
+Route fictional support inbox messages to a documented answer, a safe draft, or human escalation. Example questions: "Where can I reset my test account password?" and "My API integration reports a timeout; what information should I provide?"
+
+## Configuration (illustrative)
+
+~~~yaml
+agentId: support-triage
+modelProfileRef: small-classifier@1
+skills: [support-tone@1]
+tools: [knowledge.search@1]
+approvalPolicy: customer-reply-human-review
+limits: { maxSteps: 5, maxToolCalls: 3, maxCostUsd: 0.03 }
+escalation: { onLowConfidence: human, onSensitiveIntent: human }
+~~~
+
+## Decision and cost path
+
+Deterministic templates and basic validation run before the model. A bounded classifier is used only for ambiguous messages; a full generative model is invoked only when a draft requires evidence-backed synthesis. The initial design **never automatically sends an email**, even when model confidence is high.
+
+## Safety and evaluation
+
+Mailbox payloads are untrusted, can contain prompt injection, and may contain personally identifying information. Sanitize attachments, redact sensitive evidence, restrict tool scope and keep an approval record for outbound messages. Measure correct routing, human escalation rate, cost/email, citation accuracy and duplication/retry behavior.
+
+**Explore:** [Support email intake](/architecture/docs/flows/SupportEmailIntake/0.1.0/) and [Approval service](/architecture/docs/services/ApprovalService/0.1.0/).

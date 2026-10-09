@@ -1,0 +1,185 @@
+---
+id: ApprovalGatedExternalJob
+name: Approval-Gated External Job
+version: "0.1.0"
+summary: A bounded agent invokes an approved external operation, pauses for review and handles uncertain outcomes.
+steps:
+  - id: worker
+    title: "Model proposes an approved named external operation"
+    service:
+      id: AgentWorker
+      version: "0.1.0"
+    next_step:
+      id: invoke
+      label: "Tool command"
+  - id: invoke
+    title: "Request reviewed tool execution"
+    message:
+      id: InvokeTool
+      version: "0.1.0"
+    next_step:
+      id: gateway
+      label: "Check policy"
+  - id: gateway
+    title: "Validate tool version, args, scope and budget"
+    service:
+      id: ToolGateway
+      version: "0.1.0"
+    next_step:
+      id: risk
+      label: "Classify risk"
+  - id: risk
+    title: "Is write approval required?"
+    custom:
+      title: "Risk decision"
+      type: Decision
+      summary: "Is write approval required?"
+    next_steps:
+      - id: approval
+        label: "Yes"
+      - id: dispatch
+        label: "No, safely preauthorized"
+      - id: denied
+        label: "Not authorized"
+  - id: approval
+    title: "Request decision for immutable intent hash"
+    message:
+      id: RequestApproval
+      version: "0.1.0"
+    next_step:
+      id: service
+      label: "Persist pending request"
+  - id: service
+    title: "Create expiring reviewer task and pause run"
+    service:
+      id: ApprovalService
+      version: "0.1.0"
+    next_step:
+      id: requested
+      label: "Notify reviewer"
+  - id: requested
+    title: "Approval needed"
+    message:
+      id: ApprovalRequested
+      version: "0.1.0"
+    next_step:
+      id: reviewer
+      label: "Review exact action"
+  - id: reviewer
+    title: "Authorized reviewer approves or denies"
+    actor:
+      name: "Human Reviewer"
+    next_step:
+      id: resolved
+      label: "Record decision"
+  - id: resolved
+    title: "Approval decision emitted"
+    message:
+      id: ApprovalResolved
+      version: "0.1.0"
+    next_step:
+      id: check
+      label: "Apply decision"
+  - id: check
+    title: "Revalidate status, hash, current ACL and limits"
+    service:
+      id: ToolGateway
+      version: "0.1.0"
+    next_steps:
+      - id: dispatch
+        label: "Approved and still valid"
+      - id: denied
+        label: "Denied, expired or changed"
+  - id: dispatch
+    title: "Submit pinned template to isolated external runner"
+    service:
+      id: ToolGateway
+      version: "0.1.0"
+    next_step:
+      id: outcome
+      label: "Correlate invocation ID"
+  - id: outcome
+    title: "Did provider return an authoritative outcome?"
+    custom:
+      title: "Outcome decision"
+      type: Decision
+      summary: "Did provider return an authoritative outcome?"
+    next_steps:
+      - id: finished
+        label: "Known terminal outcome"
+      - id: uncertain
+        label: "Acknowledgment lost"
+  - id: finished
+    title: "Record normalized tool outcome"
+    message:
+      id: ToolInvocationCompleted
+      version: "0.1.0"
+    next_step:
+      id: resume
+      label: "Resume caller"
+  - id: uncertain
+    title: "Reconcile remote job ID; never blindly retry writes"
+    custom:
+      title: "Outcome unknown"
+      type: Decision
+      summary: "Reconcile remote job ID; never blindly retry writes"
+    next_step:
+      id: resume
+      label: "Return pending/uncertain result"
+  - id: resume
+    title: "Persist result or reconciliation request"
+    service:
+      id: RunService
+      version: "0.1.0"
+  - id: denied
+    title: "Audit denial without executing side effect"
+    custom:
+      title: "Policy denied"
+      type: Decision
+      summary: "Audit denial without executing side effect"
+---
+# Approval-Gated External Job
+
+**Status: proposed design, not deployed workflow code.** Native EventCatalog Flow nodes below link directly to referenced services, commands and events.
+
+<NodeGraph />
+
+## The scenario
+
+A report assistant proposes the named capability "reports.run_preview@2". Unlike an unrestricted shell command, this maps to a **reviewed operation**, fixed runtime image/workflow and allowlisted endpoint. The request carries a validated period and an immutable invocationId.
+
+## Control plane versus effect
+
+~~~mermaid
+sequenceDiagram
+    participant W as Worker
+    participant G as Tool Gateway
+    participant A as Approval Service
+    actor H as Reviewer
+    participant E as External Runner
+    W->>G: reports.run_preview(period=week)
+    G->>G: Validate tool version, grants, budget
+    G->>A: RequestApproval(intentHash)
+    A-->>H: Exact operation preview
+    H->>A: Approve intentHash
+    A-->>G: ApprovalResolved
+    G->>G: Recheck policy and exact hash
+    G->>E: Invoke reviewed operation with invocationId
+    alt Confirmed result
+      E-->>G: remoteId and terminal status
+      G-->>W: Typed ToolInvocationCompleted
+    else Unknown remote effect
+      E--xG: Timeout after possible acceptance
+      G-->>W: OUTCOME_UNKNOWN; reconciliation needed
+    end
+~~~
+
+## Reliability rules
+
+The user cannot configure an arbitrary shell, network URL or script body through a prompt. External effects require approved adapter installations, immutable operation references and narrow credentials. A worker may release its lease while awaiting a human or remote callback; the durable Run Service continues to track WAITING_APPROVAL or external-job wait reason. An **OUTCOME_UNKNOWN** result may represent a successful remote write: reconcile using remoteId/idempotency keys, never blindly repeat.
+
+## Acceptance checks
+
+A rejected, changed or expired approval leads to zero side effects. Replaying a gateway invocation uses the same invocationId. A malformed argument fails schema validation before contacting an external endpoint. Human reviewer and service principals are independently authorized. The worker never owns a direct browser connection.
+
+**Explore:** [Approval Service](/architecture/docs/services/ApprovalService/0.1.0/) · [Tool Gateway](/architecture/docs/services/ToolGateway/0.1.0/) · [ApprovalRequest entity](/architecture/docs/entities/ApprovalRequest/0.1.0/).

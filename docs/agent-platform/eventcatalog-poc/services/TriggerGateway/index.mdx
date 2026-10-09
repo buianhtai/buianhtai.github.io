@@ -1,0 +1,36 @@
+---
+id: TriggerGateway
+name: Trigger Gateway
+version: "0.1.0"
+summary: Verifies scheduled, email and webhook events and maps them to fixed authorized run targets.
+sends:
+  - id: TriggerAgentRun
+    version: "0.1.0"
+---
+# Trigger Gateway
+
+**Status: proposed logical service.** The responsibility may live in a module rather than its own process.
+
+<NodeGraph />
+
+## Ownership
+
+A trigger **starts** a run; a skill or model does not subscribe to mailboxes or schedulers. Approved adapters normalize provider-specific schedules, webhooks, and mailbox deliveries, verify authenticity and map events through a TriggerBinding.
+
+## Normalized intake
+
+| Input | Validation | Deduplication | Target resolution |
+| --- | --- | --- | --- |
+| Webhook | Signature, timestamp, origin allowlist | Source event ID | Reviewed binding |
+| Email poll | Connector identity, mailbox subscription and account scopes | Message ID + mailbox ID | Fixed support workflow |
+| Schedule | Schedule ID, tenant and service principal | Occurrence ID | Fixed workflow or agent |
+
+Persist a source-event receipt and an idempotent admission intent before acknowledging successful intake. Tenant and target must derive from binding configuration, not untrusted incoming fields.
+
+## Failure handling
+
+Missing or disabled bindings return a safe rejection. Invalid signatures cannot trigger runs. Duplicate source events reuse the existing logical run. Backpressure and throttling protect tenant quotas; a failed downstream admission is retried only with the same idempotency identity.
+
+The Trigger Gateway can be a module in an existing integration service and does **not** need to duplicate scheduling or polling capabilities offered by Kestra or another provider.
+
+**Related:** [Scheduled support intake](/architecture/docs/flows/SupportEmailIntake/0.1.0/) · [Trigger Binding entity](/architecture/docs/entities/TriggerBinding/0.1.0/).

@@ -1,0 +1,50 @@
+---
+id: TriggerBinding
+name: Trigger Binding
+version: "0.1.0"
+summary: Reviewed mapping from one authenticated external trigger to a fixed workflow or agent.
+properties:
+  - name: triggerId
+    type: String
+    required: true
+    description: Configured source binding ID
+  - name: sourceKind
+    type: String
+    required: true
+    description: Webhook, email or schedule
+  - name: connectorRef
+    type: String
+    required: true
+    description: Approved trigger adapter instance
+  - name: targetRef
+    type: String
+    required: true
+    description: Fixed agent or workflow deployment
+  - name: principalRef
+    type: String
+    required: true
+    description: Least-privileged service identity
+  - name: dedupeStrategy
+    type: String
+    required: true
+    description: Stable event identity rule
+---
+# Trigger Binding
+
+**Status:** Proposed domain model, not an implemented persistence schema. **Logical owner:** TriggerGateway.
+
+## Properties
+
+<EntityPropertiesTable />
+
+## Lifecycle and invariants
+
+Trigger adapters verify source authenticity and deduplicate deliveries before run admission. Payloads must not override the target deployment, model privileges, credentials or tenant. A scheduled source and a direct chat message can both initiate a run, but the admission protocol remains the same.
+
+## Fictional example
+
+A support mailbox trigger binds verified message events to a low-cost triage workflow with a scoped support service principal.
+
+## Related models
+
+[Agent Platform domain](/architecture/domains/AgentPlatform/0.1.0/) · [Agent execution overview](/architecture/docs/flows/ExplicitAgentRun/0.1.0/). This is a logical entity: physical persistence may use relational rows, JSON snapshots or projections instead of a one-to-one table.

@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:example:agent-platform:ToolInvocationCompleted:0.1.0",
+  "title": "ToolInvocationCompleted",
+  "description": "Records the normalized outcome of one reviewed tool invocation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "runId",
+    "invocationId",
+    "outcome"
+  ],
+  "properties": {
+    "runId": {
+      "type": "string"
+    },
+    "invocationId": {
+      "type": "string"
+    },
+    "toolVersionRef": {
+      "type": "string"
+    },
+    "outcome": {
+      "type": "string",
+      "enum": [
+        "SUCCEEDED",
+        "FAILED",
+        "DENIED",
+        "OUTCOME_UNKNOWN"
+      ]
+    },
+    "resultRef": {
+      "type": "string"
+    },
+    "completedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

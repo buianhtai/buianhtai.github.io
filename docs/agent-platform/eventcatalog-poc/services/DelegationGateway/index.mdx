@@ -1,0 +1,41 @@
+---
+id: DelegationGateway
+name: Agent Delegation Gateway
+version: "0.1.0"
+summary: Authorizes, tracks and limits parent-child agent execution across approved subagent bindings.
+receives:
+  - id: DelegateAgentRun
+    version: "0.1.0"
+sends:
+  - id: ChildRunCompleted
+    version: "0.1.0"
+---
+# Agent Delegation Gateway
+
+**Status: proposed logical service.** The responsibility may live in a module rather than its own process.
+
+<NodeGraph />
+
+## Ownership
+
+A primary agent may request a specialist only through an **explicitly published subagent binding**. The Delegation Gateway admits one bounded child run, propagates lineage and budget reservations, and returns typed outcomes to the parent.
+
+## Internal delegation
+
+| Check | Rule |
+| --- | --- |
+| Target | Must be an approved alias bound in the parent's pinned AgentVersion |
+| Security | Effective child scope is parent delegation ∩ child grants ∩ principal ∩ resource ACL |
+| Context | Only explicitly selected task and artifact references cross boundary |
+| Cost | Reserve child budget before admission; parent retains aggregate hard cap |
+| Reliability | Stable delegationId maps repeated requests to one child run |
+| Fan-out | Enforce depth, concurrent children, total children and timeout |
+| Failure | Child rejection, cancellation or timeout returns typed outcome |
+
+An external autonomous agent uses a separately reviewed A2A adapter, authenticated partner endpoint and data-egress policy. MCP tool invocation and agent delegation remain different semantics.
+
+## Cancellation and result delivery
+
+The child persists events with a parentRunId correlation; the parent waits on a durable completion reference, not a direct worker-to-worker socket. Parent cancellation propagates best effort, and late outcomes are reconciled. No automatic global discovery grants new permissions.
+
+**Related:** [Delegated agent run](/architecture/docs/flows/DelegatedAgentRun/0.1.0/) · [Delegation Request entity](/architecture/docs/entities/DelegationRequest/0.1.0/).

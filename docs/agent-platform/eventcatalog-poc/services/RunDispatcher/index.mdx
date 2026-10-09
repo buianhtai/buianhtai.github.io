@@ -2,10 +2,34 @@
 id: RunDispatcher
 name: Run Dispatcher
 version: "0.1.0"
-summary: Dispatches accepted runs through an interchangeable queue or durable workflow adapter.
+summary: Durable work dispatch, lease and retry coordination behind a pluggable scheduling adapter.
+receives:
+  - id: RunAccepted
+    version: "0.1.0"
 ---
 # Run Dispatcher
 
-**Proposed logical component.** Consumes durably accepted work, schedules execution, manages worker leases and retries. Direct queue and durable-workflow implementations are alternatives, not simultaneously required. Delivery can be at least once; execution is protected by idempotency and fencing.
+**Status: proposed logical component; not evidence of a deployed service.**
 
 <NodeGraph />
+
+## Execution strategy
+
+Consume the committed outbox and dispatch accepted run IDs to authorized workers. Start with a PostgreSQL queue or equivalent for a small workload; switch through a WorkflowEngineAdapter if a durable engine better handles long waits, timers and retries. The user-facing run API does not change.
+
+## Guarantees and tradeoffs
+
+| Concern | Contract |
+| --- | --- |
+| Delivery | At least once, not exactly once |
+| Ownership | Lease and monotonically increasing fencing token |
+| Recovery | Resume only from validated checkpoint and safe effect outcome |
+| Retry | Explicit finite attempts, exponential backoff and jitter |
+| Scale | Separate cheap/expensive worker pools and fair tenant queues |
+| Observability | Queue lag, oldest queued age, lease expiry and dead-letter count |
+
+## Crash example
+
+Worker A owns fencing token 7 and crashes before acknowledging an authorized read. A second worker acquires token 8, reloads the pinned manifest and checkpoint, and safely resumes; a late response from A cannot overwrite the run result. The same approach **cannot** assume an external write was never applied.
+
+**Flow:** [AgentRunRecovery](/architecture/docs/flows/AgentRunRecovery/0.1.0/).

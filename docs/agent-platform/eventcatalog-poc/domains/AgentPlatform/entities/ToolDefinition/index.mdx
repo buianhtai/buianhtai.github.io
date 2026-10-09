@@ -1,0 +1,54 @@
+---
+id: ToolDefinition
+name: Tool Definition
+version: "0.1.0"
+summary: Reviewed, versioned capability contract independent from its connector installation.
+properties:
+  - name: toolId
+    type: String
+    required: true
+    description: Stable capability identifier
+  - name: version
+    type: String
+    required: true
+    description: Immutable interface revision
+  - name: inputSchemaRef
+    type: String
+    required: true
+    description: Validated input contract
+  - name: outputSchemaRef
+    type: String
+    required: true
+    description: Normalized result contract
+  - name: adapterRef
+    type: String
+    required: true
+    description: Approved adapter implementation
+  - name: riskClass
+    type: String
+    required: true
+    description: Read, write or external execution
+  - name: operationRef
+    type: String
+    required: true
+    description: Approved provider operation
+---
+# Tool Definition
+
+**Status:** Proposed domain model, not an implemented persistence schema. **Logical owner:** ToolGateway.
+
+## Properties
+
+<EntityPropertiesTable />
+
+## Lifecycle and invariants
+
+A tool is not an unrestricted URL or shell command. Tool versions define input/output schemas, execution semantics, risk class, and reviewed provider operation. Connector instances carry per-tenant endpoint and credential references separately. Any model-generated arguments must be schema-validated and checked again at invocation.
+
+## Fictional example
+
+knowledge.search@1 is read-only through MCP; reports.run_preview@2 maps to a pinned external job template and requires approval.
+
+## Related models
+
+[Agent Platform domain](/architecture/domains/AgentPlatform/0.1.0/) · [Agent execution overview](/architecture/docs/flows/ExplicitAgentRun/0.1.0/). This is a logical entity: physical persistence may use relational rows, JSON snapshots or projections instead of a one-to-one table.
