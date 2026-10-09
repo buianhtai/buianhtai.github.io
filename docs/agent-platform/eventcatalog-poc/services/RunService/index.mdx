@@ -3,6 +3,11 @@ id: RunService
 name: Run Service
 version: "0.1.0"
 summary: Owns run identity, accepted status, version pinning, policy and the durable user-facing projection.
+receives:
+  - id: StartAgentRun
+    version: "0.1.0"
+  - id: GetRunStatus
+    version: "0.1.0"
 sends:
   - id: RunAccepted
     version: "0.1.0"
