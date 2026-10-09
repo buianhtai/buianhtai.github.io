@@ -215,6 +215,8 @@ An inbound webhook typically requires connector-level `eventId` deduplication **
 
 ## 5. MVP backlog in dependency order
 
+For durable worker/orchestration implementation, compare [Hatchet, DBOS, Kestra and other Temporal alternatives](./10-open-source-durable-worker-engines.md) before writing a complex custom run scheduler. Trigger ingestion is separate from worker-engine selection.
+
 | Order | Work item | Depends on | Definition of done |
 | --- | --- | --- | --- |
 | M0.1 | `AgentDefinition`, immutable `AgentVersion`, `AgentDeployment` | DB schema, tenant/workspace identity | One published test agent, clear version/digest |
