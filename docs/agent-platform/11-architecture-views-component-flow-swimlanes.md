@@ -331,3 +331,20 @@ stateDiagram-v2
 - **Reproducibility:** keep editable Mermaid diagrams in Git; don't use only screenshots.
 
 **See also:** [12 — EventCatalog adoption and sample](./12-eventcatalog-architecture-catalog.md).
+
+## Interactive EventCatalog diagram gallery
+
+The standalone [EventCatalog Community architecture portal](https://buianhtai.github.io/architecture/) now contains first-class diagram pages separate from the markdown-only diagrams in this chapter. Each resource is individually versioned and linked from the native EventCatalog domain/system and service sidebars.
+
+| Level | Direct link |
+| --- | --- |
+| Overview | [Architecture Overview](https://buianhtai.github.io/architecture/diagrams/ArchitectureOverview/0.1.0/) |
+| C4 L1 | [System Context](https://buianhtai.github.io/architecture/diagrams/C4SystemContext/0.1.0/) |
+| C4 L2 | [Containers](https://buianhtai.github.io/architecture/diagrams/C4Containers/0.1.0/) |
+| C4 L3 | [Control Plane Components](https://buianhtai.github.io/architecture/diagrams/C4ControlPlane/0.1.0/) |
+| C4 L3 | [Execution Plane Components](https://buianhtai.github.io/architecture/diagrams/C4ExecutionPlane/0.1.0/) |
+| Deployment | [Proposed Deployment Topology](https://buianhtai.github.io/architecture/diagrams/C4Deployment/0.1.0/) |
+| Cross-cutting | [Tool and Model Adapters](https://buianhtai.github.io/architecture/diagrams/IntegrationAdapters/0.1.0/), [Trust Boundaries](https://buianhtai.github.io/architecture/diagrams/TrustBoundaries/0.1.0/), [Reliability](https://buianhtai.github.io/architecture/diagrams/ResilienceOverview/0.1.0/) |
+
+The diagrams are a proposed logical model, not verified as deployed. Use this chapter for explanatory Mermaid views and the EventCatalog diagram pages for navigation and versioned ownership.
+
