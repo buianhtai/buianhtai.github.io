@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:example:agent-platform:ApprovalRequested:0.1.0",
+  "title": "ApprovalRequested",
+  "description": "Signals that a run is paused awaiting human approval of exact side-effect intent.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "approvalId",
+    "runId",
+    "intentHash"
+  ],
+  "properties": {
+    "approvalId": {
+      "type": "string"
+    },
+    "runId": {
+      "type": "string"
+    },
+    "intentHash": {
+      "type": "string"
+    },
+    "expiresAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "reviewerPolicyRef": {
+      "type": "string"
+    }
+  }
+}
