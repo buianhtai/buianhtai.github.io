@@ -52,7 +52,7 @@ const dateLabel = (date:Date)=>date.toLocaleDateString(vi?'vi-VN':'en-US',{month
         </p>
         <div class="ed-hero-actions">
           <a class="ed-btn ed-btn-primary" href={`/${lang}/blog`}>{vi?'Khám phá bài viết':'Explore articles'} <span aria-hidden="true">→</span></a>
-          <a class="ed-btn ed-btn-quiet" href={`/${lang}/#projects`}>{vi?'Giới thiệu':'About me'} <span aria-hidden="true">↗</span></a>
+          <a class="ed-btn ed-btn-quiet" href={'/'+lang+'/about/'}>{vi?'Giới thiệu':'About me'} <span aria-hidden="true">↗</span></a>
         </div>
         <div class="ed-hero-stats" aria-label={vi?'Thống kê bài viết':'Publishing overview'}>
           <div class="ed-hero-stat"><strong>{articles.length}</strong><span>{vi?'Bài viết':'Articles'}</span></div>
@@ -153,7 +153,7 @@ const dateLabel = (date:Date)=>date.toLocaleDateString(vi?'vi-VN':'en-US',{month
           ? 'Tôi ghi lại những kiến thức, thử nghiệm và đánh đổi kiến trúc trong quá trình xây dựng phần mềm và tìm hiểu hạ tầng AI. Viết giúp tôi hiểu sâu hơn và chia sẻ những gì hữu ích.'
           : 'I document the systems, experiments, and architectural trade-offs I encounter while building software and exploring AI infrastructure. Writing is how I learn, and how I share what I find.'}</p>
       </div>
-      <a href="https://github.com/buianhtai" class="ed-btn ed-btn-quiet" target="_blank" rel="noopener noreferrer">{vi?'Xem GitHub':'View GitHub'} ↗</a>
+      <a href={'/'+lang+'/about/'} class="ed-btn ed-btn-quiet">{vi?'Đọc giới thiệu':'More about me'} ↗</a>
     </div>
   </section>
 </div>
