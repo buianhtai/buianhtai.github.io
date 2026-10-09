@@ -99,7 +99,7 @@ flowchart TB
     API --> UI
 ~~~
 
-**Ownership decisions:** the Run Service owns the platform \`runId\`, budget, approval and user-facing status projection. The selected workflow engine owns its internal step execution/recovery. The worker owns the model/tool loop. The Tool Gateway owns **every per-tool authorization check**. The API alone exposes SSE to the browser. These are logical components, not necessarily separate deployments.
+**Ownership decisions:** the Run Service owns the platform `runId`, budget, approval and user-facing status projection. The selected workflow engine owns its internal step execution/recovery. The worker owns the model/tool loop. The Tool Gateway owns **every per-tool authorization check**. The API alone exposes SSE to the browser. These are logical components, not necessarily separate deployments.
 
 ## C. Sequence — user input -> agent selection -> tools -> response
 
@@ -306,7 +306,7 @@ stateDiagram-v2
     RECONCILIATION_REQUIRED --> [*]
 ~~~
 
-**Contract note:** \`WAITING_EXTERNAL_JOB\` is a **proposed addition** to the public run-state vocabulary. If the platform chooses to represent it as \`WAITING\` plus \`waitReason: "EXTERNAL_JOB"\`, all API schemas and related state diagrams must be reconciled before implementation. Don't make this solely a diagram-level change.
+**Contract note:** `WAITING_EXTERNAL_JOB` is a **proposed addition** to the public run-state vocabulary. If the platform chooses to represent it as `WAITING` plus `waitReason: "EXTERNAL_JOB"`, all API schemas and related state diagrams must be reconciled before implementation. Don't make this solely a diagram-level change.
 
 ## 2. Suggested diagram ownership and documentation mapping
 
