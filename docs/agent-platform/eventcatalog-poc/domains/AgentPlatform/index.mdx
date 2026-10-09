@@ -43,6 +43,29 @@ services:
     version: "0.1.0"
   - id: DelegationGateway
     version: "0.1.0"
+diagrams:
+  - id: ArchitectureOverview
+    version: "0.1.0"
+  - id: C4SystemContext
+    version: "0.1.0"
+  - id: C4Containers
+    version: "0.1.0"
+  - id: C4ControlPlane
+    version: "0.1.0"
+  - id: C4ExecutionPlane
+    version: "0.1.0"
+  - id: C4Deployment
+    version: "0.1.0"
+  - id: IntegrationAdapters
+    version: "0.1.0"
+  - id: EventDataFlow
+    version: "0.1.0"
+  - id: TrustBoundaries
+    version: "0.1.0"
+  - id: ResilienceOverview
+    version: "0.1.0"
+  - id: StateAndDataModel
+    version: "0.1.0"
 entities:
   - id: AgentVersion
     version: "0.1.0"
@@ -65,6 +88,27 @@ entities:
 **Status: proposed, generic reference architecture.** No catalog resource by itself proves a running service, deployed agent, production event, or executable workflow. All examples use fictional SaaS data without private customer or product details.
 
 This catalog explains **what happens between incoming input and a completed response**: how an agent is configured, selected, admitted, scheduled, executed with controlled tools, reviewed for side effects, and returned to the caller.
+
+## Architecture diagrams — start with the overview
+
+The existing native relationship map is useful for navigating resources but it does **not** show system boundaries, deployment topology or failure modes. These first-class visual diagrams are editable, versioned and linked to system/service pages.
+
+| View | Question answered |
+| --- | --- |
+| [One-page architecture overview](/architecture/diagrams/ArchitectureOverview/0.1.0/) | What are the major planes and paths through the platform? |
+| [C4 L1 — System Context](/architecture/diagrams/C4SystemContext/0.1.0/) | Who and what is outside the platform? |
+| [C4 L2 — Containers](/architecture/diagrams/C4Containers/0.1.0/) | What are the logical applications, queues and stores? |
+| [C4 L3 — Control Plane](/architecture/diagrams/C4ControlPlane/0.1.0/) | How do config, routing, policy, admission and review interact? |
+| [C4 L3 — Execution Plane](/architecture/diagrams/C4ExecutionPlane/0.1.0/) | How do worker, runtime, checkpoint and gateway ports relate? |
+| [C4 Deployment](/architecture/diagrams/C4Deployment/0.1.0/) | How might replicas, worker pools and persistent state be deployed? |
+| [Integration and adapters](/architecture/diagrams/IntegrationAdapters/0.1.0/) | Where can MCP, REST, model, trigger and job adapters plug in? |
+| [End-to-end run sequence](/architecture/diagrams/RunLifecycleSequence/0.1.0/) | How does a question become a durable result? |
+| [Security trust boundaries](/architecture/diagrams/TrustBoundaries/0.1.0/) | Which boundaries prevent model-generated privileges and side effects? |
+| [Event/data flow](/architecture/diagrams/EventDataFlow/0.1.0/) | Where are run state, audit, checkpoints and result artifacts stored? |
+| [Reliability and scaling](/architecture/diagrams/ResilienceOverview/0.1.0/) | What happens on crash, lease expiry, backpressure or uncertain writes? |
+| [Logical data model](/architecture/diagrams/StateAndDataModel/0.1.0/) | How do published agent versions, runs and approval/delegation records relate? |
+
+All diagrams describe **proposed logical architecture**, not a selected technology stack or verified production deployment.
 
 ## Start here: choose your question
 
