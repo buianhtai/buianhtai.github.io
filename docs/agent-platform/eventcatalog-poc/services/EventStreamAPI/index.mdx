@@ -2,17 +2,54 @@
 id: EventStreamAPI
 name: Event Streaming API
 version: "0.1.0"
-summary: Presents authorized durable run progress/results to users via REST and SSE.
+summary: Tenant-authorized, ordered, replayable run results over REST and SSE.
 receives:
   - id: RunAccepted
     version: "0.1.0"
+  - id: RunStarted
+    version: "0.1.0"
   - id: RunCompleted
+    version: "0.1.0"
+  - id: RunFailed
+    version: "0.1.0"
+  - id: ApprovalRequested
+    version: "0.1.0"
+  - id: ApprovalResolved
+    version: "0.1.0"
+  - id: ChildRunCompleted
     version: "0.1.0"
 ---
 # Event Streaming API
 
-A **logical API projection**, potentially implemented in the same process as Platform API. Reads normalized ordered durable events and presents status/deltas through authorized SSE subscriptions, with replay cursors.
-
-SSE disconnection cannot restart or duplicate an agent run.
+**Status: proposed logical component; not evidence of a deployed service.**
 
 <NodeGraph />
+
+## Client result path
+
+The worker persists normalized events; the API reads the event store and authenticates each subscription. A browser never connects directly to a worker, and disconnecting the UI **never restarts** execution.
+
+~~~text
+GET /v1/runs/run-example/events
+Last-Event-ID: 41
+
+id: 42
+event: run.completed
+data: {"runId":"run-example","status":"SUCCEEDED","resultRef":"artifact-example"}
+~~~
+
+## Replay behavior
+
+Use a monotonic event cursor per run and a configured retention period. On reconnect, replay committed entries after Last-Event-ID; on expired cursor return an explicit cursor-expired error plus a status snapshot path. Large/sensitive content remains behind scoped artifact references instead of broadcast events.
+
+| Incident | Contract |
+| --- | --- |
+| Proxy idle timeout | Client reconnects with cursor |
+| Duplicate notification | Client deduplicates by event sequence |
+| Worker failure | Existing events and terminal projection remain durable |
+| Access revoked | Reject subscription and artifact access |
+| Old cursor | Return typed expiration and latest status |
+
+Track active connections, time-to-first-update, reconnect rate and event replay lag.
+
+**Flow:** [ExplicitAgentRun](/architecture/docs/flows/ExplicitAgentRun/0.1.0/).
