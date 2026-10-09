@@ -1,0 +1,135 @@
+---
+id: AgentConfigurationLifecycle
+name: Configure, Validate and Publish an Agent
+version: "0.1.0"
+summary: An administrator publishes an immutable agent revision from configured models, tools and policy.
+steps:
+  - id: editor
+    title: "Edit model, skill, tool and budget configuration"
+    actor:
+      name: "Workspace Admin"
+    next_step:
+      id: submit
+      label: "Save draft"
+  - id: submit
+    title: "Submit authorized draft for validation"
+    service:
+      id: PlatformAPI
+      version: "0.1.0"
+    next_step:
+      id: publish_request
+      label: "Publish request"
+  - id: publish_request
+    title: "Request immutable version publication"
+    message:
+      id: PublishAgentVersion
+      version: "0.1.0"
+    next_step:
+      id: registry
+      label: "Resolve references"
+  - id: registry
+    title: "Validate draft and compile effective manifest"
+    service:
+      id: AgentRegistry
+      version: "0.1.0"
+    next_step:
+      id: decision
+      label: "Compatibility and governance checks"
+  - id: decision
+    title: "Validate grants, adapter versions, schemas and policy"
+    custom:
+      title: "Validation decision"
+      type: Decision
+      summary: "Validate grants, adapter versions, schemas and policy"
+    next_steps:
+      - id: published
+        label: "Valid"
+      - id: invalid
+        label: "Invalid"
+  - id: invalid
+    title: "Return structured validation errors to Agent Studio"
+    service:
+      id: PlatformAPI
+      version: "0.1.0"
+  - id: published
+    title: "Persist immutable manifest digest and version"
+    service:
+      id: AgentRegistry
+      version: "0.1.0"
+    next_step:
+      id: event
+      label: "Publication committed"
+  - id: event
+    title: "Agent version publication event"
+    message:
+      id: AgentVersionPublished
+      version: "0.1.0"
+    next_step:
+      id: deployment
+      label: "Deployment eligibility"
+  - id: deployment
+    title: "Authorized workspace deployment alias resolves the version"
+    custom:
+      title: "Deployment gate"
+      type: Decision
+      summary: "Authorized workspace deployment alias resolves the version"
+    next_step:
+      id: ready
+      label: "New runs may use published version"
+  - id: ready
+    title: "New runs pin manifest digest at admission"
+    service:
+      id: RunService
+      version: "0.1.0"
+---
+# Configure, Validate and Publish an Agent
+
+**Status: proposed design, not deployed workflow code.** Native EventCatalog Flow nodes below link directly to referenced services, commands and events.
+
+<NodeGraph />
+
+## Why this flow exists
+
+User-defined agents are useful only when editing a model/tool list is separated from **publishing an executable, secure revision**. A draft is mutable and cannot run; a published AgentVersion is immutable and can be pinned to a run.
+
+## Fictional scenario
+
+A workspace administrator creates a support-assistant revision using an economical classification model, a documentation-search MCP tool, a support-answer skill, and a 3-cent per-run cap. The registry resolves tool schema versions, connector availability, knowledge scopes, allowed delegation aliases, role grants and model compatibility. Publishing fails with explicit diagnostics if an adapter is missing or a tool requires a write permission the administrator cannot grant.
+
+## Configuration pipeline
+
+~~~mermaid
+sequenceDiagram
+  actor Admin
+  participant UI as Agent Studio
+  participant API as Platform API
+  participant REG as Agent Registry
+  participant RUN as Run Service
+  Admin->>UI: Edit draft model/tools/skills/limits
+  UI->>API: PublishAgentVersion(draftRevision)
+  API->>REG: Validate authorized draft
+  REG->>REG: Resolve schemas, adapters and grants
+  alt Validation rejected
+    REG-->>UI: Typed validation diagnostics
+  else Validation succeeds
+    REG->>REG: Compile immutable manifest digest
+    REG-->>UI: AgentVersionPublished
+    UI->>API: Deploy alias with permission
+    API->>RUN: New run resolves and pins digest
+  end
+~~~
+
+## Publication decisions
+
+| Concern | Rule |
+| --- | --- |
+| Versioning | Immutable digest, explicit deployment alias; rollback repoints alias |
+| Tool permissions | ToolBinding narrows published ToolDefinition, never widens |
+| Secrets | Connector instance stores secret reference; no plaintext prompt secrets |
+| Testing | Validate schemas, fake tool results, denied paths and budget limits |
+| Sessions | Continuing session may remain pinned to earlier revision |
+| Cost | Bounded steps, tokens, tool calls and total spend enforced by runtime |
+
+## Acceptance checks
+
+A draft with a missing tool adapter cannot publish. A granted read-only tool cannot become a write tool by agent prompt. A published version remains stable after editing the draft. A run always records the version digest, principal, tenant and policy. [Explore the Agent Registry](/architecture/docs/services/AgentRegistry/0.1.0/).
