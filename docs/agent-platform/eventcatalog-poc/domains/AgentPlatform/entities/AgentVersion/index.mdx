@@ -1,0 +1,50 @@
+---
+id: AgentVersion
+name: Agent Version
+version: "0.1.0"
+summary: Immutable published agent configuration used to compile one runtime execution.
+properties:
+  - name: agentId
+    type: String
+    required: true
+    description: Stable agent identity
+  - name: version
+    type: String
+    required: true
+    description: Immutable published revision
+  - name: modelProfileRef
+    type: String
+    required: true
+    description: Approved model profile reference
+  - name: runtimeAdapterRef
+    type: String
+    required: true
+    description: Versioned runtime implementation
+  - name: policyRef
+    type: String
+    required: true
+    description: Effective execution policy reference
+  - name: manifestDigest
+    type: String
+    required: true
+    description: Content-addressed executable configuration
+---
+# Agent Version
+
+**Status:** Proposed domain model, not an implemented persistence schema. **Logical owner:** AgentRegistry.
+
+## Properties
+
+<EntityPropertiesTable />
+
+## Lifecycle and invariants
+
+Publishing validates tools, skills, subagent bindings, model compatibility and policy before producing a digest. A run pins this digest; changing the draft or active alias must not mutate an admitted run. A rollback switches an alias to an earlier published revision rather than rewriting history.
+
+## Fictional example
+
+A documentation assistant is published as version 2. An existing session continues version 1 under its pinned policy; new sessions can resolve version 2 after publication.
+
+## Related models
+
+[Agent Platform domain](/architecture/docs/domains/AgentPlatform/0.1.0/) · [Agent execution overview](/architecture/docs/flows/ExplicitAgentRun/0.1.0/). This is a logical entity: physical persistence may use relational rows, JSON snapshots or projections instead of a one-to-one table.
