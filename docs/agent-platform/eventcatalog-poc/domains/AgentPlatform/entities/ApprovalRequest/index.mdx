@@ -12,6 +12,9 @@ properties:
     type: UUID
     required: true
     description: Parent run
+    references: AgentRun
+    referencesIdentifier: runId
+    relationType: belongsTo
   - name: intentHash
     type: String
     required: true
