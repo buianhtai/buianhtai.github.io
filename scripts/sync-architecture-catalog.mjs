@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const catalog = path.join(repoRoot, 'architecture-catalog');
 const examples = path.join(repoRoot, 'docs', 'agent-platform', 'eventcatalog-poc');
-for (const segment of ['agents', 'domains', 'systems', 'services', 'events', 'commands', 'queries', 'flows']) {
+for (const segment of ['agents', 'domains', 'systems', 'services', 'events', 'commands', 'queries', 'flows', 'adrs', 'teams']) {
   const source = path.join(examples, segment);
   const target = path.join(catalog, segment);
   if (!existsSync(source)) throw new Error(`Missing catalog content: ${source}`);
