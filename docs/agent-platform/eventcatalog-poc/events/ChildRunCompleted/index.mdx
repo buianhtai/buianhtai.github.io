@@ -1,0 +1,31 @@
+---
+id: ChildRunCompleted
+name: Child Run Completed
+version: "0.1.0"
+summary: Correlates a terminal internal specialist run back to its parent request.
+schemaPath: schema.json
+---
+# Child Run Completed
+
+**Status: proposed versioned interface, not evidence of a deployed implementation.**
+
+Correlates a terminal internal specialist run back to its parent request.
+
+<NodeGraph />
+
+## Contract semantics
+
+The parent consumes a scoped result reference, not child credentials. Failure and cancellation are first-class terminal outcomes; no automatic unbounded re-delegation.
+
+## Field reference
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| delegationId | string | Required; validated against authority-owned data |
+| parentRunId | string | Required; validated against authority-owned data |
+| childRunId | string | Required; validated against authority-owned data |
+| status | string | Required; validated against authority-owned data |
+| resultRef | string | Optional contextual reference |
+| completedAt | string | Optional contextual reference |
+
+The included [JSON Schema](/architecture/schemas/events/ChildRunCompleted/0.1.0/) is an illustrative machine-readable contract. Actual tenancy, authorization and idempotency checks are performed by trusted services and cannot be delegated to schema validation alone.
