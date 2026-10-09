@@ -17,6 +17,12 @@ services:
     version: "0.1.0"
   - id: EventStreamAPI
     version: "0.1.0"
+  - id: AgentRuntime
+    version: "0.1.0"
+  - id: RunDispatcher
+    version: "0.1.0"
+  - id: ModelGateway
+    version: "0.1.0"
 ---
 # Agent Platform
 
@@ -24,4 +30,4 @@ A **proposed**, domain-neutral architecture. These logical components may be mod
 
 <NodeGraph />
 
-Start with the **ExplicitAgentRun** flow to see how an authorized question becomes an agent run. For a restart scenario, see **AgentRunRecovery**. Detailed component, sequence and swimlane views remain in the version-controlled architecture document.
+Explore **ExplicitAgentRun**, **RoutedAgentRun**, **ToolExecution**, and **AgentRunRecovery** under Flows. These native graph resources model normal admission, optional routing, gateway authorization, and recovery. Detailed component, sequence and swimlane views remain in the version-controlled architecture document.
