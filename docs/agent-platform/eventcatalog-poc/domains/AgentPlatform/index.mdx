@@ -31,3 +31,12 @@ A **proposed**, domain-neutral architecture. These logical components may be mod
 <NodeGraph />
 
 Explore **ExplicitAgentRun**, **RoutedAgentRun**, **ToolExecution**, and **AgentRunRecovery** under Flows. These native graph resources model normal admission, optional routing, gateway authorization, and recovery. Detailed component, sequence and swimlane views remain in the version-controlled architecture document.
+
+
+## Interface contracts
+
+- `StartAgentRun`: authenticated admission command.
+- `InvokeTool`: independently authorized gateway command.
+- `GetRunStatus`: scoped run-status query.
+
+These resources have versioned example JSON Schemas and service producer/consumer references.
