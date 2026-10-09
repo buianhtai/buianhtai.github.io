@@ -60,3 +60,10 @@ A workflow engine may own internal checkpoints and timers; it must not compete w
 An unknown external write result is distinct from failure; do not blindly retry. Events include stable runId, monotonic per-run sequence, traceId and safe outcome, with detailed artifacts behind authorization. Measure admitted runs, queue age, retry exhaustion, successful recovery and spend per run.
 
 **Model:** [AgentRun](/architecture/docs/entities/AgentRun/0.1.0/) · **Flow:** [AgentRunRecovery](/architecture/docs/flows/AgentRunRecovery/0.1.0/).
+
+## Lifecycle contract authority
+
+The local **AsyncAPI 3** specification is a proposed broker-facing event model. The `RunAccepted`, `RunStarted`, `RunCompleted` and `RunFailed` EventCatalog message resources provide the **versioned canonical field names** to validate against. The event store is authoritative for ordering and replay; AsyncAPI describes what consumers may subscribe to, not transport exactly-once behavior.
+
+On implementation, generate or synchronize from the source event schema rather than manually maintaining divergent copies, and record any compatibility break as a new message version.
+
