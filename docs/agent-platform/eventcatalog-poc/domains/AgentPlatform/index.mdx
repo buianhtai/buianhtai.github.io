@@ -2,41 +2,153 @@
 id: AgentPlatform
 name: Agent Platform
 version: "0.1.0"
-summary: Proposed generic platform for configurable agent execution, tools and durable runs.
+summary: Governed, pluggable agent execution with configurable models, tools, triggers and durable runs.
+systems:
+  - id: AgentExecutionPlatform
+    version: "0.1.0"
 agents:
   - id: DocumentationAgent
+    version: "0.1.0"
+  - id: SupportTriageAgent
+    version: "0.1.0"
+  - id: ResearchCoordinatorAgent
     version: "0.1.0"
 services:
   - id: PlatformAPI
     version: "0.1.0"
+  - id: AgentRegistry
+    version: "0.1.0"
   - id: RunService
     version: "0.1.0"
+  - id: RunDispatcher
+    version: "0.1.0"
+  - id: AgentRuntime
+    version: "0.1.0"
   - id: AgentWorker
+    version: "0.1.0"
+  - id: ModelGateway
     version: "0.1.0"
   - id: ToolGateway
     version: "0.1.0"
   - id: EventStreamAPI
     version: "0.1.0"
-  - id: AgentRuntime
+  - id: TriggerGateway
     version: "0.1.0"
-  - id: RunDispatcher
+  - id: ApprovalService
     version: "0.1.0"
-  - id: ModelGateway
+  - id: DelegationGateway
+    version: "0.1.0"
+entities:
+  - id: AgentVersion
+    version: "0.1.0"
+  - id: ToolDefinition
+    version: "0.1.0"
+  - id: ToolBinding
+    version: "0.1.0"
+  - id: AgentRun
+    version: "0.1.0"
+  - id: TriggerBinding
+    version: "0.1.0"
+  - id: ApprovalRequest
+    version: "0.1.0"
+  - id: DelegationRequest
     version: "0.1.0"
 ---
-# Agent Platform
 
-A **proposed**, domain-neutral architecture. These logical components may be modules instead of separate deployable services.
+# Agent Platform — living architecture reference
+
+**Status: proposed, generic reference architecture.** No catalog resource by itself proves a running service, deployed agent, production event, or executable workflow. All examples use fictional SaaS data without private customer or product details.
+
+This catalog explains **what happens between incoming input and a completed response**: how an agent is configured, selected, admitted, scheduled, executed with controlled tools, reviewed for side effects, and returned to the caller.
+
+## Start here: choose your question
+
+| I want to understand… | Open this native EventCatalog resource |
+| --- | --- |
+| The entire system and who owns what | [Agent Execution Platform system](/architecture/docs/systems/AgentExecutionPlatform/0.1.0/) |
+| How users configure models, tools, skills and policies | [Configure and publish an agent](/architecture/docs/flows/AgentConfigurationLifecycle/0.1.0/) |
+| What happens after the user selects an agent | [Explicit Agent Run](/architecture/docs/flows/ExplicitAgentRun/0.1.0/) |
+| How automatic selection differs from tool selection | [Routed Agent Run](/architecture/docs/flows/RoutedAgentRun/0.1.0/) |
+| How MCP / REST / external actions are authorized | [Tool Execution](/architecture/docs/flows/ToolExecution/0.1.0/) |
+| How scheduled support email can avoid unnecessary LLM cost | [Support Email Intake](/architecture/docs/flows/SupportEmailIntake/0.1.0/) |
+| How a human approves an external job | [Approval-Gated External Job](/architecture/docs/flows/ApprovalGatedExternalJob/0.1.0/) |
+| How one agent asks another to do work | [Delegated Agent Run](/architecture/docs/flows/DelegatedAgentRun/0.1.0/) |
+| What happens when a worker or provider fails | [Agent Run Recovery](/architecture/docs/flows/AgentRunRecovery/0.1.0/) |
+
+## High-level architecture
+
+~~~mermaid
+flowchart TB
+  C["Chat UI / Agent Studio / Public API"] --> API["Platform API"]
+  S["Schedules / Email / Webhooks"] --> TR["Trigger Gateway"]
+  TR --> API
+  API --> REG["Agent Registry: published versions"]
+  API --> RUN["Run Service: policy + durable state"]
+  RUN --> Q["Dispatcher / workflow adapter"]
+  Q --> W["Worker + Runtime Adapter"]
+  W --> M["Model Gateway"]
+  W --> T["Tool Gateway: auth + audit"]
+  T --> EXT["Reviewed MCP / HTTP / external-job adapters"]
+  T --> APPROVAL["Approval Service: gated writes"]
+  W --> DELEG["Delegation Gateway: bounded child runs"]
+  DELEG --> RUN
+  RUN --> EV["Event Stream API: SSE + replay"]
+  EV --> C
+~~~
+
+**Control plane** comprises API, registry, run/admission, policy and approval. **Execution plane** comprises dispatch, workers and runtime. **Integration plane** comprises tool, model, trigger and delegation adapters. These are logical component responsibilities, not a mandate for twelve microservices.
+
+## Native relationship map
 
 <NodeGraph />
 
-Explore **ExplicitAgentRun**, **RoutedAgentRun**, **ToolExecution**, and **AgentRunRecovery** under Flows. These native graph resources model normal admission, optional routing, gateway authorization, and recovery. Detailed component, sequence and swimlane views remain in the version-controlled architecture document.
+## System context
 
+<ContextDiagram />
 
-## Interface contracts
+## Domain model: definition versus execution
 
-- `StartAgentRun`: authenticated admission command.
-- `InvokeTool`: independently authorized gateway command.
-- `GetRunStatus`: scoped run-status query.
+~~~mermaid
+erDiagram
+  AgentVersion ||--o{ ToolBinding : grants
+  ToolDefinition ||--o{ ToolBinding : referenced_by
+  AgentVersion ||--o{ AgentRun : pinned_by
+  TriggerBinding ||--o{ AgentRun : starts
+  AgentRun ||--o{ ApprovalRequest : may_require
+  AgentRun ||--o{ DelegationRequest : may_create
+  AgentRun ||--o{ AgentRun : parent_child
+~~~
 
-These resources have versioned example JSON Schemas and service producer/consumer references.
+- **AgentVersion** — immutable, published configuration digest, not a runtime process.
+- **ToolDefinition** — reviewed versioned capability; **ToolBinding** — narrower grant for a specific agent revision.
+- **TriggerBinding** — verified event-to-fixed-target mapping; distinct from a skill or a tool.
+- **AgentRun** — durable logical execution with user-facing state; attempts and checkpoints are implementation detail.
+- **ApprovalRequest** — exact side-effect intent with human consent, expiry and revalidation.
+- **DelegationRequest** — scoped parent-to-child run with reserved budget and lineage.
+
+Select the entity resources in this domain for properties, invariants and worked examples.
+
+## Five platform design invariants
+
+1. **Explicit agent selection skips routing.** If auto-routing is enabled, eligibility filtering precedes any cheap model-based ranking; an ambiguous route returns a safe clarification.
+2. **No model self-authorizes tools or external actions.** A model proposes a reviewed tool; the Tool Gateway checks schema, principal/tenant, binding, resource ACL, quota and approval.
+3. **Durable admission before acknowledgment.** The platform stores run, pinned manifest and outbox intent before returning HTTP 202; duplicate dispatch cannot create duplicate logical runs.
+4. **Approved intent is not completed effect.** Side effects use idempotency/correlation and distinguish success, failure, denial and unknown remote outcome.
+5. **Budgets are enforced outside prompts.** Hard limits apply to model tokens, turns, tool calls, elapsed time, child runs and spend.
+
+## MVP versus target
+
+| Capability | MVP | Target evolution |
+| --- | --- | --- |
+| Invocation | Explicit UI selection; direct POST /runs | Auto-routing, API/webhook/schedule bindings |
+| Registry | Pinned agent revision with fixed read-only tools | UI-controlled versioned model/skill/tool catalog and publisher workflow |
+| Execution | One bounded worker/runtime and read-only KB | Durable parallel/deep agents, multiple worker pools |
+| Integration | Registered MCP/read-only API adapters | Approved HTTP/workflow/job adapters, human-gated writes |
+| Delivery | HTTP 202 + persisted status / SSE | Replay, reliable callbacks, multi-channel delivery |
+| Operations | Per-run audit and token/latency metering | Tenant QoS, escalation evaluation, cost dashboards and chaos testing |
+
+## Suggested learning path
+
+Start with [AgentConfigurationLifecycle](/architecture/docs/flows/AgentConfigurationLifecycle/0.1.0/), then follow [ExplicitAgentRun](/architecture/docs/flows/ExplicitAgentRun/0.1.0/) and [ToolExecution](/architecture/docs/flows/ToolExecution/0.1.0/). Once that contract is clear, explore [SupportEmailIntake](/architecture/docs/flows/SupportEmailIntake/0.1.0/) and [DelegatedAgentRun](/architecture/docs/flows/DelegatedAgentRun/0.1.0/) for durable triggers and subagent orchestration.
+
+The deeper design rationale remains in [the version-controlled architecture chapters](https://github.com/buianhtai/buianhtai.github.io/tree/main/docs/agent-platform), and the EventCatalog resource pages make its actors, events, commands and models discoverable.
