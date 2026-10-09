@@ -12,6 +12,9 @@ properties:
     type: UUID
     required: true
     description: Originating run
+    references: AgentRun
+    referencesIdentifier: runId
+    relationType: belongsTo
   - name: targetAgentVersion
     type: String
     required: true
