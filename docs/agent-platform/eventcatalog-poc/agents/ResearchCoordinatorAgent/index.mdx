@@ -1,0 +1,46 @@
+---
+id: ResearchCoordinatorAgent
+name: Research Coordinator Agent
+version: "0.1.0"
+summary: Example coordinating agent that may delegate a bounded read-only evidence task.
+tools:
+  - name: Delegate to specialist
+    type: internal
+    description: Request a pinned child agent through the Delegation Gateway
+---
+# Research Coordinator Agent
+
+**Status: illustrative design.** This catalog does not deploy a running agent.
+
+<NodeGraph />
+
+## Declared capabilities
+
+<AgentTools />
+
+## Goal and example request
+
+Answer a multi-source research question in a generic SaaS workspace. The coordinator can ask a published documentation specialist to retrieve evidence and then synthesize a short answer with citations. It does not grant itself new tools.
+
+## Pinned subagent binding (illustrative)
+
+~~~yaml
+agentId: research-coordinator
+modelProfileRef: economical-model@1
+subagents:
+  - alias: docs-specialist
+    agentRef: documentation-agent@2
+    scopeRef: approved-documents-only
+    budgetUsd: 0.05
+limits: { maxDepth: 2, maxTotalChildRuns: 2, maxCostUsd: 0.15 }
+~~~
+
+## Execution responsibilities
+
+The parent selects only the alias exposed in its approved version. Delegation Gateway intersects permissions and reserves child budget. A child receives a narrow task and artifact references, not the full parent conversation or credentials. The parent waits for durable child completion and handles timeout/denial as a typed result.
+
+## When not to delegate
+
+For single-document questions, one agent with a read-only knowledge-search tool is cheaper, simpler and easier to audit. Delegation is justified when separate agent specialization, context isolation or ownership boundaries materially help.
+
+**Explore:** [Delegated Agent Run](/architecture/docs/flows/DelegatedAgentRun/0.1.0/) and [Delegation Gateway](/architecture/docs/services/DelegationGateway/0.1.0/).
