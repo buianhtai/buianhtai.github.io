@@ -11,14 +11,14 @@ Agents generally do **not** poll queues, read mailboxes or subscribe to arbitrar
 | Source | Initiator | Preferred binding | Does agent routing happen? |
 | --- | --- | --- | --- |
 | Agent selected in Chat UI | Authenticated human | Explicit deployment/version | **No** |
-| General-assistant Chat UI | Authenticated human | \`target:auto\` | **Yes**, once per new session |
+| General-assistant Chat UI | Authenticated human | `target:auto` | **Yes**, once per new session |
 | Application API request | Authorized client/service | Explicit deployment preferred | Usually no |
-| Webhook | Registered integration | Fixed \`TriggerBinding\` | No unless explicitly designed |
+| Webhook | Registered integration | Fixed `TriggerBinding` | No unless explicitly designed |
 | Email received | Mail connector | Fixed support workflow | Optional intent classifier within workflow |
 | Recurring task | Scheduler / Kestra | Fixed workflow or agent | No |
 | Another agent invokes a subagent | Authorized parent runtime | Explicit published subagent ref | No general router by default |
 
-**Do not conflate "trigger" and "agent skill."** A \`SKILL.md\` file guides agent behavior once running. It does not subscribe to incoming email or make itself a scheduled job.
+**Do not conflate "trigger" and "agent skill."** A `SKILL.md` file guides agent behavior once running. It does not subscribe to incoming email or make itself a scheduled job.
 
 ## 2. TriggerBinding: the minimal contract
 
@@ -47,7 +47,7 @@ spec:
     timeoutSeconds: 300
 ~~~
 
-\`TriggerBinding\` is configuration owned by the platform/integration layer; the incoming event body cannot freely choose the target or elevated credentials. An administrator must explicitly authorize the connector and deployment.
+`TriggerBinding` is configuration owned by the platform/integration layer; the incoming event body cannot freely choose the target or elevated credentials. An administrator must explicitly authorize the connector and deployment.
 
 Fields worth adding over time: source-specific signature-verification config reference, event filters, delivery and retry policy, timezone, rate limits, queue priority, deployment environment, and non-secret reference to outbound completion actions.
 
@@ -134,7 +134,7 @@ flowchart TD
 
 **Reliability notes:** record the external message ID before accepting processing; workflow retries must not send duplicate mail. Model drafts are evidence-backed, reviewed and never auto-sent in the initial version. A large model is only invoked if the bounded workflow decides it is warranted.
 
-**Integration:** Kestra (or a similar scheduler/orchestrator) can receive/poll messages and invoke \`POST /v1/runs\`; the platform handles agent execution. The agent runtime should not implement a second mailbox polling engine.
+**Integration:** Kestra (or a similar scheduler/orchestrator) can receive/poll messages and invoke `POST /v1/runs`; the platform handles agent execution. The agent runtime should not implement a second mailbox polling engine.
 
 ### Flow D — Scheduled summary task
 
@@ -199,33 +199,33 @@ Response (illustrative):
 }
 ~~~
 
-When no confident or eligible match is found, return an explicit routing outcome (e.g. \`UNROUTABLE\`) with a safe message asking for agent selection; never send request content to all agents. When resolution is asynchronous, the initial accepted run can have \`status: ROUTING\` and a null selected agent until a \`route.selected\` event occurs.
+When no confident or eligible match is found, return an explicit routing outcome (e.g. `UNROUTABLE`) with a safe message asking for agent selection; never send request content to all agents. When resolution is asynchronous, the initial accepted run can have `status: ROUTING` and a null selected agent until a `route.selected` event occurs.
 
 ### Response transport by channel
 
 | Channel | Recommended response |
 | --- | --- |
-| Chat/browser | HTTP 202 + \`runId\`, then authenticated SSE and REST status |
+| Chat/browser | HTTP 202 + `runId`, then authenticated SSE and REST status |
 | API client | HTTP 202 + polling URL; SSE optional |
 | Email trigger | Execution finishes, creates review draft; email reply is a separate authorized action |
 | Webhook | Immediate 2xx acknowledgement after durable acceptance; caller receives run status by polling or configured signed callback |
 | Schedule | Persist run and artifact, optionally issue notification through an approved connector |
 
-An inbound webhook typically requires connector-level \`eventId\` deduplication **and** platform \`Idempotency-Key\` protection. The reply transport is not necessarily the same connection that delivered the original trigger.
+An inbound webhook typically requires connector-level `eventId` deduplication **and** platform `Idempotency-Key` protection. The reply transport is not necessarily the same connection that delivered the original trigger.
 
 ## 5. MVP backlog in dependency order
 
 | Order | Work item | Depends on | Definition of done |
 | --- | --- | --- | --- |
-| M0.1 | \`AgentDefinition\`, immutable \`AgentVersion\`, \`AgentDeployment\` | DB schema, tenant/workspace identity | One published test agent, clear version/digest |
-| M0.2 | Scoped \`ToolDefinition\` / \`ToolBinding\` and model profile resolution | Existing tool integrations | Allow/deny before tool execution |
-| M0.3 | \`AgentRun\` + idempotent \`POST /runs\` | Registry, policy | Return stable run ID; duplicate submission does not duplicate run |
+| M0.1 | `AgentDefinition`, immutable `AgentVersion`, `AgentDeployment` | DB schema, tenant/workspace identity | One published test agent, clear version/digest |
+| M0.2 | Scoped `ToolDefinition` / `ToolBinding` and model profile resolution | Existing tool integrations | Allow/deny before tool execution |
+| M0.3 | `AgentRun` + idempotent `POST /runs` | Registry, policy | Return stable run ID; duplicate submission does not duplicate run |
 | M0.4 | Worker and one simple runtime adapter | Run coordinator | Read-only KB tool can be invoked by explicitly selected agent |
-| M0.5 | Append-only event store and \`GET /events\` SSE | Run service | UI renders status, tool progress, and final answer; reconnect works |
+| M0.5 | Append-only event store and `GET /events` SSE | Run service | UI renders status, tool progress, and final answer; reconnect works |
 | M0.6 | Basic chat UI with **explicit agent selection** | APIs and event stream | A user can choose an agent and see results without a router |
 | M1.1 | Session affinity and explicit agent switching | Sessions and registry | Follow-ups stay on same authorized agent |
 | M1.2 | Eligible-agent discovery + low-cost router | Agent metadata and policy | Unambiguous request selects one; ambiguous request escalates |
-| M1.3 | Webhook and schedule \`TriggerBinding\` | Integration auth, service identity | Bound event invokes expected target once |
+| M1.3 | Webhook and schedule `TriggerBinding` | Integration auth, service identity | Bound event invokes expected target once |
 | M1.4 | Email workflow with human review | Email connector + workflow engine | No model call for template case, no unapproved sends |
 | M2.1 | Durable checkpoints, human approval and mutation idempotency | Persisted run state/tool intents | Pause/restart/resume without unauthorized writes |
 | M2.2 | Deep Agents and constrained subagents | Adapter contract, runtime limits | Run respects budgets/tool scopes/delegation cap |
