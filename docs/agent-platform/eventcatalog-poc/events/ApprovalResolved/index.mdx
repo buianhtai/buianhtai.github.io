@@ -1,0 +1,30 @@
+---
+id: ApprovalResolved
+name: Approval Resolved
+version: "0.1.0"
+summary: Records a human decision and whether execution can be resumed under fresh policy checks.
+schemaPath: schema.json
+---
+# Approval Resolved
+
+**Status: proposed versioned interface, not evidence of a deployed implementation.**
+
+Records a human decision and whether execution can be resumed under fresh policy checks.
+
+<NodeGraph />
+
+## Contract semantics
+
+APPROVED is not proof that an external effect has happened. The tool gateway re-evaluates binding, scope, budget and intentHash before execution.
+
+## Field reference
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| approvalId | string | Required; validated against authority-owned data |
+| runId | string | Tenant-scoped logical run reference |
+| decision | string | Required; validated against authority-owned data |
+| resolvedAt | string | Optional contextual reference |
+| intentHash | string | Canonical operation and arguments hash |
+
+The included [JSON Schema](/architecture/schemas/events/ApprovalResolved/0.1.0/) is an illustrative machine-readable contract. Actual tenancy, authorization and idempotency checks are performed by trusted services and cannot be delegated to schema validation alone.
