@@ -2,10 +2,23 @@
 id: RunFailed
 name: Run Failed
 version: "0.1.0"
-summary: Proposed terminal failure event for an admitted agent run.
+summary: An admitted run reached a terminal failure without a completed response.
+schemaPath: schema.json
 ---
-# RunFailed
+# Run Failed
 
-Proposed event contract: runId, safeErrorCode, failedAt, traceId and retryExhausted. Exclude raw model/tool payloads and secrets.
+**Status:** Illustrative event contract; not proof this event is deployed.
 
 <NodeGraph />
+
+## Meaning and invariants
+
+The error code is stable and safe for clients. Full exception and potentially sensitive tool/model details remain in scoped diagnostic logs. Retry exhaustion means no further automatic attempt; reconciliation may require a separate operational process.
+
+## Schema
+
+The colocated JSON Schema enumerates the expected keys and types. The envelope may additionally carry trusted transport metadata, but the caller must never use that metadata to bypass tenant authorization.
+
+## Consumers and failure modes
+
+Events are persisted and published at least once; consumers should deduplicate by the stable event identity and sequence. Consumers must handle delayed and reordered delivery across different runs, redact sensitive fields, and refer to the authoritative Run Service state for a current snapshot. See [Run Service](/architecture/docs/services/RunService/0.1.0/) and [Agent Run](/architecture/docs/entities/AgentRun/0.1.0/).
