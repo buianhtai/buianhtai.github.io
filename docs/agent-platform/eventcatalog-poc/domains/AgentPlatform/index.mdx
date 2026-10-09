@@ -163,3 +163,23 @@ Select the entity resources in this domain for properties, invariants and worked
 Start with [AgentConfigurationLifecycle](/architecture/docs/flows/AgentConfigurationLifecycle/0.1.0/), then follow [ExplicitAgentRun](/architecture/docs/flows/ExplicitAgentRun/0.1.0/) and [ToolExecution](/architecture/docs/flows/ToolExecution/0.1.0/). Once that contract is clear, explore [SupportEmailIntake](/architecture/docs/flows/SupportEmailIntake/0.1.0/) and [DelegatedAgentRun](/architecture/docs/flows/DelegatedAgentRun/0.1.0/) for durable triggers and subagent orchestration.
 
 The deeper design rationale remains in [the version-controlled architecture chapters](https://github.com/buianhtai/buianhtai.github.io/tree/main/docs/agent-platform), and the EventCatalog resource pages make its actors, events, commands and models discoverable.
+
+## Decisions, ownership and implementation readiness
+
+All native resources link to the **Architecture Stewards (Proposed)** placeholder owner, not a confirmed team or deployed service. Each page carries `x-implementation-status: proposed`, a repository reference, and an unassigned tracking status. Before implementation, replace the placeholder with a verified team and connect actual code and planning tickets.
+
+| Architecture decision (all proposed) | Question under review |
+| --- | --- |
+| [ADR-001 — Durable workflow boundary](/architecture/docs/adrs/adr-001-workflow-engine/0.1.0/) | Queue/outbox versus DBOS, Hatchet, Temporal or Kestra-adapter responsibilities |
+| [ADR-002 — Agent runtime adapter](/architecture/docs/adrs/adr-002-runtime-adapter/0.1.0/) | Simple bounded loop versus graph runtime |
+| [ADR-003 — Secure tool execution](/architecture/docs/adrs/adr-003-tool-security/0.1.0/) | Reviewed capabilities and connector isolation |
+| [ADR-004 — Agent selection](/architecture/docs/adrs/adr-004-agent-routing/0.1.0/) | Explicit selection, rules, embeddings and cheap-ranker fallback |
+
+### Reference contracts
+
+The [Platform API](/architecture/docs/services/PlatformAPI/0.1.0/) now contains an **illustrative OpenAPI 3.1 specification** for the public `/v1/runs` and version-publication endpoints. The [Run Service](/architecture/docs/services/RunService/0.1.0/) contains an **illustrative AsyncAPI 3 specification** for lifecycle notifications. Event and command pages continue to have separately versioned JSON Schemas.
+
+**Contract distinction:** `StartAgentRun` is the catalog's internal *command intent*, while `POST /v1/runs` is the proposed external wire API. They can differ structurally: the public `target`/`input` request is authenticated, resolved and normalized into the internal admission command. Do not treat their JSON Schemas as interchangeable or assert a deployed endpoint exists.
+
+Review the [Governance and Contract Authoring Guide](https://github.com/buianhtai/buianhtai.github.io/blob/main/docs/agent-platform/eventcatalog-poc/GOVERNANCE.md) for ownership changes, compatibility rules and CI controls.
+
