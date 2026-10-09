@@ -1,6 +1,7 @@
 # 03 — Trigger Adapters, Example Flows, and MVP Implementation Plan
 
 **Status:** Proposed  
+**Extension contract:** Each webhook/email/scheduler integration can be implemented by a typed `TriggerAdapter` that produces normalized, authenticated events; see [08 — Plug-and-play Adapter Architecture](./08-plugin-and-adapter-architecture.md). 
 **Depends on:** [Architecture index](./README.md) · [Agent invocation and routing](./01-invocation-and-routing.md) · [Runtime and event delivery](./02-runtime-workers-and-events.md)
 
 ## 1. What starts an agent?
