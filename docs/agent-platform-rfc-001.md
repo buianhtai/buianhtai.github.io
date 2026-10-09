@@ -15,6 +15,8 @@ Build a developer-friendly, user-configurable platform for creating, testing, pu
 
 This is a design contract for review. Framework calls, provider features, and version compatibility must be smoke-tested and pinned before code implementation.
 
+**Companion artifacts:** [JSON Schema (v1alpha1)](./contracts/agent-platform-v1alpha1.schema.json) · [example agent manifest](./examples/agent-platform-incident-triage.json). These are proposed contracts and should be versioned and automatically validated when implementation starts.
+
 ## 2. Motivation and scope
 
 Existing agent frameworks supply execution loops but do not automatically give product users safe, auditable, multi-tenant configuration. We need a clear boundary between an agent definition (desired behavior), an installed deployment (approved effective behavior), and a run (what actually happened).
