@@ -65,3 +65,34 @@ steps:
 <NodeGraph />
 
 Unlike [ExplicitAgentRun](../ExplicitAgentRun/0.1.0/), this flow includes a selection step. Both flows converge at durable run admission.
+
+## Route once, execute once
+
+Unlike an explicit request, a general chat request can ask the platform to choose a single agent. Eligibility filtering is a **hard authorization decision** and happens before any ranking. The router compares descriptions and example questions **only among eligible published deployments**. A low-confidence or tied result becomes an UNROUTABLE/clarification outcome; it does not broadcast the prompt to every agent.
+
+## Example
+
+Three fictional authorized deployments are available: Documentation Agent (how-to and API guides), Support Triage (customer request intake), and Research Coordinator (multi-document synthesis). The request "Why does my request return 401?" can be routed to Documentation Agent if the policy and evaluation threshold accept it. The chosen agent's runtime then decides whether to propose a knowledge-search **tool**; routing is not tool selection.
+
+## Decision pipeline
+
+~~~mermaid
+flowchart TD
+    R["Incoming question + tenant principal"] --> E["Filter eligible published agent deployments"]
+    E --> C{"Any authorized candidates?"}
+    C -->|No| U["Return UNROUTABLE / ask user"]
+    C -->|Yes| Rank["Cheap embedding / small-model ranking"]
+    Rank --> Conf{"Confidence, margin and policy pass?"}
+    Conf -->|No| U
+    Conf -->|Yes| A["Pin winning AgentVersion"]
+    A --> D["Durably admit one run"]
+    D --> W["Worker executes through Tool Gateway"]
+~~~
+
+## Contracts and cost
+
+The router may use static rules, embeddings or a small model; provider-specific confidence scores must be calibrated, not treated as intrinsic probabilities. Record candidate count, selected version, policy-filter reason, confidence/margin and evaluation revision. Set a strict latency and token budget; routing should cost far less than the specialist execution it enables.
+
+**Failure policy:** no eligible agent → no run; ambiguous ranking → explicit selection; pinned agent unpublished mid-run → existing run remains pinned; selected agent fails → typed run failure, not unbounded broadcast.
+
+**Compare with:** [ExplicitAgentRun](/architecture/docs/flows/ExplicitAgentRun/0.1.0/).
