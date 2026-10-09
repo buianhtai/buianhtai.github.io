@@ -10,7 +10,7 @@ const source=path.join(root,'docs','agent-platform','eventcatalog-poc');
 const require=createRequire(path.join(root,'architecture-catalog','package.json'));
 const YAML=require('yaml');
 const errors=[]; const resources=new Map();
-const kindOf=p=>p.includes('/entities/')?'entity':p.startsWith('adrs/')?'adr':p.startsWith('teams/')?'team':p.split('/')[0].replace(/s$/,'');
+const kindOf=p=>p.includes('/entities/')?'entity':p.startsWith('adrs/')?'adr':p.startsWith('teams/')?'team':({queries:'query'}[p.split('/')[0]]??p.split('/')[0].replace(/s$/,''));
 function walk(dir) {if (!existsSync(dir)) return [];return readdirSync(dir,{withFileTypes:true}).flatMap(ent=>ent.isDirectory()?walk(path.join(dir,ent.name)):[path.join(dir,ent.name)]);}
 function key(k,id){return k+':'+id;}
 function report(what,msg){errors.push(what+': '+msg);}
