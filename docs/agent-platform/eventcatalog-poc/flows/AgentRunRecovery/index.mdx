@@ -3,6 +3,11 @@ id: AgentRunRecovery
 name: Agent Run Recovery
 version: "0.1.0"
 summary: Illustrative worker failure, safe replay from durable state and final user-visible status.
+owners:
+  - architecture-stewards
+x-implementation-status: proposed
+x-source-repository: https://github.com/buianhtai/buianhtai.github.io
+x-tracking-status: unassigned
 steps:
   - id: run_start
     title: Read accepted run and version
@@ -75,6 +80,8 @@ steps:
 A workflow engine may restore a safely persisted step or wait for reconciliation. This flow illustrates **architectural intent**, not a claim that a particular engine gives exactly-once external side effects.
 
 <NodeGraph />
+
+<CustomProperties title="Architecture governance" />
 
 ## Why recovery is part of the architecture
 
