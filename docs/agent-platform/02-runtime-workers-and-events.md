@@ -104,6 +104,8 @@ A **simple MVP** can run a worker loop in the API process during local developme
 
 ## 5. Runtime adapter contract
 
+For pluggable adapter registration, version negotiation, operator-installed packages and scoped instances (rather than hard-coded framework switch statements), see [08 — Plug-and-play Adapter Architecture](./08-plugin-and-adapter-architecture.md).
+
 The public product uses a **normalized runtime interface**. Illustrative shape:
 
 ~~~python
