@@ -103,11 +103,40 @@ try {
   const index = await fetch(host + '/pagefind/pagefind.js');
   assert.equal(index.status, 200, 'Pagefind static index was not produced');
 
+  step = 'seo pages and social previews';
+  console.log('QA: localized About, 404, metadata and generated OG PNG');
+  for(const lang of ['en','vi']){
+    const page = await desktop.newPage();
+    await page.goto(host + '/'+lang+'/about/', {waitUntil:'domcontentloaded'});
+    assert.equal(await page.locator('h1').count(),1,'About page must have one H1');
+    assert((await page.locator('h1').innerText()).includes('Tai Bui'),'Author name missing');
+    assert.equal(await page.locator('meta[property="og:image"]').count(),1);
+    assert.equal(await page.locator('link[rel="alternate"][hreflang="en"]').count(),1);
+    assert.equal(await page.locator('link[rel="alternate"][hreflang="vi"]').count(),1);
+    const other=lang==='en'?'vi':'en';
+    assert.equal(await page.locator('.ed-header-lang').getAttribute('href'),'/'+other+'/about/');
+    await noOverflow(page, lang+' About desktop');
+    await page.screenshot({path:output+'/about-'+lang+'.png',timeout:8_000});
+    await page.close();
+  }
+  const preview = await fetch(host+'/og/en/adapter-facade-patterns.png');
+  assert.equal(preview.status,200,'Missing generated article social image');
+  assert.match(preview.headers.get('content-type')||'',/image\/png/,'Social image should be PNG');
+  assert((await preview.arrayBuffer()).byteLength>6000,'Generated social image suspiciously small');
+  const sitePreview = await fetch(host+'/og/site.png');
+  assert.equal(sitePreview.status,200,'Missing default site social image');
+  const robots = await (await fetch(host+'/robots.txt')).text();
+  assert(robots.includes('sitemap-index.xml'),'Robots should advertise sitemap');
+  const missing=await desktop.newPage();
+  await missing.goto(host+'/404.html',{waitUntil:'domcontentloaded'});
+  assert.match(await missing.locator('meta[name="robots"]').getAttribute('content'),/noindex/);
+  await missing.close();
+
   step = 'mobile layouts';
   console.log('QA: mobile 390px and 320px layouts');
   for (const width of [390, 320]) {
     const mobile = await context(width, 800);
-    for (const [label,url] of [['home','/en/'],['archive','/en/blog/']]) {
+    for (const [label,url] of [['home','/en/'],['archive','/en/blog/'],['about','/en/about/']]) {
       const page = await mobile.newPage();
       await page.goto(host + url, {waitUntil: 'domcontentloaded'});
       await noOverflow(page, width + 'px ' + label);
