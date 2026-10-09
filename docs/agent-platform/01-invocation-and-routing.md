@@ -12,7 +12,7 @@ A tool registry does not listen for requests or select an agent. The invocation 
 3. **Was a target specified?** An explicit selected agent, a configured trigger binding, or a continuing conversation session may already determine the target.
 4. **If not, how is one agent selected?** The router first filters authorized published candidates, then performs a bounded matching step. There is no guarantee that every input maps to an agent.
 5. **Which published version runs?** Resolve an active deployment and freeze the version/content digest before starting execution.
-6. **How does the caller learn the outcome?** Receive a \`runId\`; consume run events via SSE or poll state; scheduled/webhook clients may use a callback or outbound integration.
+6. **How does the caller learn the outcome?** Receive a `runId`; consume run events via SSE or poll state; scheduled/webhook clients may use a callback or outbound integration.
 
 ## 2. Ingress and target selection precedence
 
@@ -38,7 +38,7 @@ flowchart TD
 
 **Precedence and constraints:**
 
-1. **Explicit selection:** chat/API request includes \`agentId\` or \`deploymentId\`; validate access and allowlist. A request may not force an unpublished version.
+1. **Explicit selection:** chat/API request includes `agentId` or `deploymentId`; validate access and allowlist. A request may not force an unpublished version.
 2. **Trigger binding:** source (for example, a registered webhook) maps to a configured, authorized agent or deterministic workflow.
 3. **Session affinity:** follow-up chat messages continue using the session's bound agent, unless the caller explicitly starts a new session or requests an authorized switch. **Do not silently reroute a continuing conversation every turn.**
 4. **Automatic routing:** only new, unbound sessions and requests with no target reach the router.
@@ -101,6 +101,8 @@ enabled: true
 
 This schedule knows its target. The worker may use a model to summarize data, but **routing itself costs zero LLM calls**.
 
+Extension-specific routing and model/decision implementations remain behind the [plug-and-play adapter ports](./08-plugin-and-adapter-architecture.md). Routing must still filter authorized published agents before consulting those adapters.
+
 ## 3. Define the agent registry entries the router can understand
 
 At least these fields should be searchable on a **published agent version or approved routing projection**:
@@ -120,7 +122,7 @@ tenantScope: workspace
 routingEnabled: true
 ~~~
 
-\`requiredCapabilities\` is metadata for **filtering**, not a grant. Policies may exclude a deployed agent at invocation time if the caller cannot access the data/tools it needs.
+`requiredCapabilities` is metadata for **filtering**, not a grant. Policies may exclude a deployed agent at invocation time if the caller cannot access the data/tools it needs.
 
 Agent administrators control descriptions and examples; published versions are immutable. Re-index only after publish/deploy or access-policy change. Do not expose hidden agents or their descriptions to unauthorized principals.
 
@@ -169,7 +171,7 @@ async def resolve_target(request, context):
     return RouteOutcome.unroutable("ambiguous_or_out_of_scope")
 ~~~
 
-\`routing_policy.accept\` must use **evaluated/calibrated thresholds**, not a guessed fixed confidence number. Similarity scores are not probabilities. Its training/test data and per-intent failure rates should be reviewed. An LLM classifier can be added later for genuinely ambiguous cases with a token budget, strict allowed candidates and a verified post-selection check.
+`routing_policy.accept` must use **evaluated/calibrated thresholds**, not a guessed fixed confidence number. Similarity scores are not probabilities. Its training/test data and per-intent failure rates should be reviewed. An LLM classifier can be added later for genuinely ambiguous cases with a token budget, strict allowed candidates and a verified post-selection check.
 
 **Do not pass raw secret tool configurations or private agent definitions into embeddings or third-party model routing.** Route only on an authorized, minimized projection.
 
@@ -181,7 +183,7 @@ async def resolve_target(request, context):
 - **Router unavailable:** explicit and bound invocations still work; auto route returns a retryable routing error or safe fallback.
 - **Permission revoked:** stop before execution, regardless of router score.
 
-A \`RouteDecision\` record should save method, candidate IDs (not secret definitions), selected deployment/version, reason/status, sanitized request fingerprint, and timing.
+A `RouteDecision` record should save method, candidate IDs (not secret definitions), selected deployment/version, reason/status, sanitized request fingerprint, and timing.
 
 ## 5. Sessions: what happens on the second message?
 
@@ -211,7 +213,7 @@ sequenceDiagram
 
 **Session-binding policy:**
 
-- First auto-routed message binds the chosen \`deploymentId\`, if routing succeeds.
+- First auto-routed message binds the chosen `deploymentId`, if routing succeeds.
 - Continuing messages default to that agent. Switching agents should create a new thread or explicitly transfer the session with an audit event.
 - **Agent version stickiness is separate from agent identity.** For predictable conversations, pin a version to the session unless a deliberate migration policy says otherwise. Every run always records its exact version.
 - The session store identifies a conversation; LangGraph/Deep Agents' internal thread/checkpoint IDs belong to the runtime layer and should not be exposed as public client IDs.
@@ -224,13 +226,13 @@ sequenceDiagram
 
 | HTTP | Endpoint | Responsibility |
 | --- | --- | --- |
-| POST | \`/v1/runs\` | Admit execution of explicit, trigger-bound or auto target |
-| GET | \`/v1/runs/{runId}\` | Return status, resolved agent/version, usage summary |
-| GET | \`/v1/runs/{runId}/events\` | SSE event stream with resume cursor |
-| POST | \`/v1/runs/{runId}:cancel\` | Request cancellation |
-| GET | \`/v1/agents?eligible=true\` | List only caller-eligible agent deployments |
-| POST | \`/v1/sessions\` | Create scoped chat session |
-| GET | \`/v1/sessions/{sessionId}\` | Read current agent/session metadata |
+| POST | `/v1/runs` | Admit execution of explicit, trigger-bound or auto target |
+| GET | `/v1/runs/{runId}` | Return status, resolved agent/version, usage summary |
+| GET | `/v1/runs/{runId}/events` | SSE event stream with resume cursor |
+| POST | `/v1/runs/{runId}:cancel` | Request cancellation |
+| GET | `/v1/agents?eligible=true` | List only caller-eligible agent deployments |
+| POST | `/v1/sessions` | Create scoped chat session |
+| GET | `/v1/sessions/{sessionId}` | Read current agent/session metadata |
 
 Suggested admission response:
 
@@ -249,9 +251,9 @@ Content-Type: application/json
 }
 ~~~
 
-**Important:** In the MVP, explicit/bound/deterministically-routed target resolution may happen *before* \`202\`, so agent ID/version can be returned. If routing is asynchronous, return \`status: "ROUTING"\` with \`agentId: null\` until a \`route.selected\` event appears. Never invent an already-selected agent ID in a queued response.
+**Important:** In the MVP, explicit/bound/deterministically-routed target resolution may happen *before* `202`, so agent ID/version can be returned. If routing is asynchronous, return `status: "ROUTING"` with `agentId: null` until a `route.selected` event appears. Never invent an already-selected agent ID in a queued response.
 
-**Idempotency:** callers send a unique key per logical request. Persist admission responses by \`principal + tenant + endpoint + key\` and reject key reuse with a different payload. Duplicate retries must not enqueue multiple runs.
+**Idempotency:** callers send a unique key per logical request. Persist admission responses by `principal + tenant + endpoint + key` and reject key reuse with a different payload. Duplicate retries must not enqueue multiple runs.
 
 ## 7. Security and cost guardrails
 
@@ -269,5 +271,5 @@ Content-Type: application/json
 1. Which routing modes belong to the initial UI: explicit selection only, or explicit + auto?
 2. Should selected deployment persist for all chat follow-ups, or should the UI expose an explicit "switch agent" operation? Recommendation: sticky with explicit switch.
 3. Should embedding rankings be scoped to a workspace, an organization or approved shared agents? Recommendation: workspace by default, opt-in shared agents.
-4. Which service owns the \`TriggerBinding\` table: Control Plane or a shared Integration Service? Recommendation: Integration Service, registered through Control Plane.
+4. Which service owns the `TriggerBinding` table: Control Plane or a shared Integration Service? Recommendation: Integration Service, registered through Control Plane.
 5. Must the API synchronously resolve auto-routing, or can routing be queued? Recommendation: synchronous cheap routing in MVP, asynchronous when complexity justifies it.
