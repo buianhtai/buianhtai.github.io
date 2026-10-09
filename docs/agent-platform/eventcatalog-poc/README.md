@@ -12,6 +12,6 @@ This folder intentionally mirrors EventCatalog's `domains/`, `agents/`, `service
 4. Browse `AgentPlatform` domain, its linked services, and the `ExplicitAgentRun`, `RoutedAgentRun`, `ToolExecution`, and `AgentRunRecovery` flows.
 5. Compare rendered views with [Chapter 11 diagrams](../11-architecture-views-component-flow-swimlanes.md).
 
-The fixtures now include 8 logical services, 1 example agent, 5 proposed messages and 4 native flows. The fixtures contain **fictional generic architecture**. Events are **design proposals**, not production message contracts. No secrets or customer-specific data should be placed here.
+The fixtures include 8 logical services, 1 example agent, 5 proposed events/messages, 2 commands, 1 query, their illustrative JSON Schemas, and 4 native flows. Commands and queries use native producer/consumer relationships in service frontmatter. The fixtures contain **fictional generic architecture**. Events are **design proposals**, not production message contracts. No secrets or customer-specific data should be placed here.
 
 EventCatalog's `<NodeGraph />` is a native EventCatalog component, **not** a component of the existing Astro blog. Keep the catalog separate until a deliberate integration decision is made.
