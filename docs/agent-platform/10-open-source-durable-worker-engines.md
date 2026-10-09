@@ -107,13 +107,13 @@ class WorkflowHandle:
     backend_run_id: str
 ~~~
 
-Actual SDK contracts and runtime-specific features differ. In particular, \`recover\` may mean inspect/resume/reconcile rather than an imperative RPC. The adapter describes **capabilities** (\`supports_signals\`, \`supports_durable_sleep\`, \`supports_child_workflows\`, \`supports_cancel\`, \`supports_search\`) so publishing an incompatible agent/workflow fails validation.
+Actual SDK contracts and runtime-specific features differ. In particular, `recover` may mean inspect/resume/reconcile rather than an imperative RPC. The adapter describes **capabilities** (`supports_signals`, `supports_durable_sleep`, `supports_child_workflows`, `supports_cancel`, `supports_search`) so publishing an incompatible agent/workflow fails validation.
 
 ### Important ownership choice: avoid two competing coordinators
 
 **When using DBOS/Hatchet/Temporal as the durable source for step execution, do not implement a second independently advancing step-state machine in PostgreSQL.** Keep:
 
-1. **Agent Platform DB** as source of truth for tenant permissions, immutable agent config, audit and user-facing \`AgentRun\` admission/ownership/status *projection*.
+1. **Agent Platform DB** as source of truth for tenant permissions, immutable agent config, audit and user-facing `AgentRun` admission/ownership/status *projection*.
 2. **Chosen workflow engine** as source of truth for step ordering, durable step outcome, resume/signal/retry, and engine workflow execution state.
 3. **Run Event API** as normalized read/output interface. Append the engine's observed transitions using idempotent event mapping, with reconciliation after crashes; events can lag engine state.
 4. **Tool Gateway and external-job service** as authorization/side-effect boundary, with independent idempotency/outcome tracking.
@@ -211,9 +211,9 @@ For this platform's stated priorities—generic, pluggable, multi-tenant, Python
 
 ## 8. Architectural follow-through
 
-- Add **WorkflowEngineAdapter** as a distinct typed port to [08 — Adapters](./08-plugin-and-adapter-architecture.md). Do not overload \`RuntimeAdapter\` (LLM reasoning) or \`JobExecutorAdapter\` (external script).
-- Keep \`AgentRun\`, \`AgentVersion\`, \`ToolBinding\`, \`RunEvent\` and \`ApprovalRequest\` as stable product contracts regardless of engine.
-- Persist \`WorkflowHandle\` and mapping \`runId -> engine workflow ID\` with idempotent submission and event projection.
+- Add **WorkflowEngineAdapter** as a distinct typed port to [08 — Adapters](./08-plugin-and-adapter-architecture.md). Do not overload `RuntimeAdapter` (LLM reasoning) or `JobExecutorAdapter` (external script).
+- Keep `AgentRun`, `AgentVersion`, `ToolBinding`, `RunEvent` and `ApprovalRequest` as stable product contracts regardless of engine.
+- Persist `WorkflowHandle` and mapping `runId -> engine workflow ID` with idempotent submission and event projection.
 - Pin engine/adapter version per run; do not hot-swap in-flight workflows across engines without an explicit migration plan.
 - Enforce external tool permissions in Tool Gateway and provider budgets outside model prompts.
 - Treat workflow-engine HA and DB failover as a separate operational design (the engine adds stateful infrastructure even if your API/workers are stateless).
