@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "StartAgentRun",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "agentId",
+    "sessionId",
+    "message"
+  ],
+  "properties": {
+    "agentId": {
+      "type": "string"
+    },
+    "sessionId": {
+      "type": "string"
+    },
+    "message": {
+      "type": "string"
+    },
+    "clientRequestId": {
+      "type": "string"
+    }
+  }
+}

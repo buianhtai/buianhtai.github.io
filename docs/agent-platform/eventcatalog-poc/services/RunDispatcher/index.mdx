@@ -1,0 +1,11 @@
+---
+id: RunDispatcher
+name: Run Dispatcher
+version: "0.1.0"
+summary: Dispatches accepted runs through an interchangeable queue or durable workflow adapter.
+---
+# Run Dispatcher
+
+**Proposed logical component.** Consumes durably accepted work, schedules execution, manages worker leases and retries. Direct queue and durable-workflow implementations are alternatives, not simultaneously required. Delivery can be at least once; execution is protected by idempotency and fencing.
+
+<NodeGraph />

@@ -56,6 +56,22 @@ jobs:
           cp -R architecture-catalog/dist/. dist/architecture/
           test -s dist/architecture/index.html
           test -s dist/pagefind/pagefind.js
+          for flow in ExplicitAgentRun AgentRunRecovery ToolExecution RoutedAgentRun; do
+            find architecture-catalog/dist -type f -path "*/docs/flows/$flow/0.1.0/index.html" | grep -q . || {
+              echo "::error::Missing EventCatalog flow: $flow"
+              exit 1
+            }
+          done
+          for command in StartAgentRun InvokeTool; do
+            find architecture-catalog/dist -type f -path "*/docs/commands/$command/0.1.0/index.html" | grep -q . || {
+              echo "::error::Missing EventCatalog command: $command"
+              exit 1
+            }
+          done
+          find architecture-catalog/dist -type f -path "*/docs/queries/GetRunStatus/0.1.0/index.html" | grep -q . || {
+            echo "::error::Missing EventCatalog query: GetRunStatus"
+            exit 1
+          }
 
       - name: Install Playwright Chromium
         run: |

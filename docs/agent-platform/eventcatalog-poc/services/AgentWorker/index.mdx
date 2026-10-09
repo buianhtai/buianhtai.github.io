@@ -3,6 +3,11 @@ id: AgentWorker
 name: Agent Worker
 version: "0.1.0"
 summary: Executes one pinned agent configuration using a runtime adapter and approved model/tool calls.
+sends:
+  - id: InvokeTool
+    version: "0.1.0"
+  - id: ToolInvocationRequested
+    version: "0.1.0"
 ---
 # Agent Worker
 
