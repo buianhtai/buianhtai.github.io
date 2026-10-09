@@ -1,0 +1,164 @@
+---
+id: SupportEmailIntake
+name: Scheduled Support Email Intake
+version: "0.1.0"
+summary: A verified email trigger uses rules first, bounded AI only when useful, and a human-approved draft response.
+steps:
+  - id: mail
+    title: "New support message detected"
+    actor:
+      name: "Mail Connector"
+    next_step:
+      id: trigger
+      label: "Verified source event"
+  - id: trigger
+    title: "Verify message source and trigger binding"
+    service:
+      id: TriggerGateway
+      version: "0.1.0"
+    next_step:
+      id: duplicate
+      label: "Deduplicate event ID"
+  - id: duplicate
+    title: "Was this message already admitted?"
+    custom:
+      title: "Idempotency decision"
+      type: Decision
+      summary: "Was this message already admitted?"
+    next_steps:
+      - id: done
+        label: "Previously processed"
+      - id: cmd
+        label: "New event"
+  - id: done
+    title: "Acknowledge duplicate without starting another run"
+    custom:
+      title: "Duplicate ignored"
+      type: Decision
+      summary: "Acknowledge duplicate without starting another run"
+  - id: cmd
+    title: "Request processing through fixed support binding"
+    message:
+      id: TriggerAgentRun
+      version: "0.1.0"
+    next_step:
+      id: rules
+      label: "Use bound workflow"
+  - id: rules
+    title: "Deterministic spam, FAQ and attachment checks"
+    custom:
+      title: "Rules / policy"
+      type: Decision
+      summary: "Deterministic spam, FAQ and attachment checks"
+    next_steps:
+      - id: template
+        label: "Known template"
+      - id: admit
+        label: "Needs evidence-backed draft"
+      - id: review
+        label: "Unsafe or unclear"
+  - id: template
+    title: "Create approved deterministic reply draft"
+    custom:
+      title: "Template draft"
+      type: Decision
+      summary: "Create approved deterministic reply draft"
+    next_step:
+      id: review
+      label: "Queue review"
+  - id: admit
+    title: "Create durable triage run with scoped identity"
+    service:
+      id: RunService
+      version: "0.1.0"
+    next_step:
+      id: worker
+      label: "Queue agent run"
+  - id: worker
+    title: "Apply bounded classifier and optional KB search"
+    service:
+      id: AgentWorker
+      version: "0.1.0"
+    next_step:
+      id: draft
+      label: "Produce cited draft"
+  - id: draft
+    title: "Create evidence-backed support reply draft"
+    service:
+      id: ToolGateway
+      version: "0.1.0"
+    next_step:
+      id: review
+      label: "Never auto-send"
+  - id: review
+    title: "Request human review with safe preview"
+    service:
+      id: ApprovalService
+      version: "0.1.0"
+    next_step:
+      id: decision
+      label: "Reviewer evaluates"
+  - id: decision
+    title: "Approve sending the exact draft?"
+    custom:
+      title: "Review decision"
+      type: Decision
+      summary: "Approve sending the exact draft?"
+    next_steps:
+      - id: send
+        label: "Approved + revalidated"
+      - id: hold
+        label: "Denied, expired or changed"
+  - id: send
+    title: "Send through reviewed outbound email connector"
+    service:
+      id: ToolGateway
+      version: "0.1.0"
+    next_step:
+      id: final
+      label: "Record external ID"
+  - id: hold
+    title: "Keep draft or escalate to human support"
+    custom:
+      title: "No external send"
+      type: Decision
+      summary: "Keep draft or escalate to human support"
+  - id: final
+    title: "Persist disposition and deduplicate send receipt"
+    service:
+      id: RunService
+      version: "0.1.0"
+---
+# Scheduled Support Email Intake
+
+**Status: proposed design, not deployed workflow code.** Native EventCatalog Flow nodes below link directly to referenced services, commands and events.
+
+<NodeGraph />
+
+## Business purpose
+
+Process an inbound support mailbox without paying for a frontier model on every email. **External scheduling or email connectors trigger the workflow; the agent does not poll mail directly.** The initial version is deliberately human-reviewed for outbound mail.
+
+## Example walkthrough
+
+A fictional customer writes: "Where is the public authentication guide?" A verified mailbox adapter records the source message ID. Deterministic rules recognize a documentation question, then a low-cost read-only knowledge search supplies source references. A short draft is produced and placed in a review queue; an authorized human approves the exact recipient and content before a registered outbound connector sends it.
+
+## Cost and escalation policy
+
+| Condition | Route | Relative cost |
+| --- | --- | --- |
+| Spam/duplicate | Rules only; ignore and audit | Minimal |
+| Simple known FAQ | Template draft; human review | No LLM required |
+| Ambiguous issue | Bounded classifier, then knowledge retrieval | Small model |
+| Sensitive, low confidence or missing sources | Human escalation; no fabricated answer | Avoid unnecessary model loop |
+| Complex technical request | Optional specialist after explicit policy | Capped, measured escalation |
+
+## Reliability and safety
+
+Deduplicate incoming source IDs and outgoing send intents separately. Email body and attachments are untrusted instructions; never let them override agent grants or execute arbitrary tools. Consent/retention and sensitive-data handling belong to tenant policy. A failed send may have succeeded remotely; correlate external message ID before retrying. User-visible progress derives from the durable Run Service, not the mail provider's callback.
+
+## Acceptance checks
+
+Duplicate polls create one logical intake record. Invalid source verification cannot run a model. No customer reply is sent without an unexpired approval bound to exact content/recipient. Missing evidence escalates instead of hallucinating. Record per-email token cost, classifier accuracy, draft acceptance, and manual intervention rate.
+
+**Explore:** [Support Triage Agent](/architecture/docs/agents/SupportTriageAgent/0.1.0/) · [Trigger Gateway](/architecture/docs/services/TriggerGateway/0.1.0/).
