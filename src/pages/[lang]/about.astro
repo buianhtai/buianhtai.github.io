@@ -1,0 +1,105 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+
+export function getStaticPaths() {
+  return [{params:{lang:'en'}},{params:{lang:'vi'}}];
+}
+const lang = Astro.params.lang === 'vi' ? 'vi' : 'en';
+const vi = lang === 'vi';
+const strengths = vi ? [
+  {index:'01',title:'Kiến trúc hệ thống',detail:'Thiết kế dịch vụ backend, API, mô hình dữ liệu và hệ thống phân tán với sự chú trọng đến tính đúng đắn và độ tin cậy.'},
+  {index:'02',title:'AI Agents & nền tảng tri thức',detail:'Tìm hiểu agent orchestration, MCP, RAG, tìm kiếm hybrid, đánh giá chất lượng, bảo mật và vận hành.'},
+  {index:'03',title:'Cơ sở dữ liệu & hiệu năng',detail:'Phân tích truy vấn, thiết kế index, xử lý dữ liệu lớn và những đánh đổi về thông lượng, độ trễ, tính nhất quán.'},
+] : [
+  {index:'01',title:'Systems architecture',detail:'Backend services, APIs, data models, and distributed systems—designed with an emphasis on correctness and reliability.'},
+  {index:'02',title:'AI agents & knowledge infrastructure',detail:'Exploring agent orchestration, MCP, RAG, hybrid retrieval, evaluation, security, and operations.'},
+  {index:'03',title:'Databases & performance',detail:'Query planning, indexes, high-volume data workflows, and the trade-offs between throughput, latency, and consistency.'},
+];
+const personSchema = {
+  '@context':'https://schema.org',
+  '@type':'Person',
+  name:'Tai Bui',
+  url:'https://buianhtai.github.io/' + lang + '/about/',
+  description:vi
+    ? 'Kỹ sư phần mềm viết về AI agents, kiến trúc hệ thống, cơ sở dữ liệu và thực hành kỹ thuật.'
+    : 'Software engineer writing about AI agents, systems architecture, databases, and engineering practice.',
+  sameAs:['https://github.com/buianhtai','https://twitter.com/buianhtai90'],
+  knowsAbout:['Backend engineering','Distributed systems','Software architecture','AI agents','Databases'],
+};
+---
+<BaseLayout
+  title={vi?'Giới thiệu':'About'}
+  description={vi
+    ? 'Giới thiệu Tai Bui: kỹ sư backend chia sẻ các phân tích kỹ thuật về AI agents, kiến trúc hệ thống và cơ sở dữ liệu.'
+    : 'Meet Tai Bui, a backend engineer documenting deep dives into AI agents, distributed systems, databases, and software design.'}
+  lang={lang}
+>
+  <script type="application/ld+json" set:html={JSON.stringify(personSchema)}/>
+  <div class="ed-about-page">
+    <section class="ed-container ed-about-hero">
+      <div class="ed-kicker"><span class="ed-dot" aria-hidden="true"></span> {vi?'NGƯỜI ĐỨNG SAU NHỮNG BÀI VIẾT':'THE ENGINEER BEHIND THE NOTES'}</div>
+      <div class="ed-about-hero-grid">
+        <div>
+          <h1>{vi?'Xin chào,':'Hi, I’m'} <span>Tai Bui.</span></h1>
+          <p class="ed-about-lede">{vi
+            ? 'Tôi là kỹ sư phần mềm tập trung vào backend và kiến trúc hệ thống. Tôi viết để tìm hiểu cách hệ thống hoạt động thực sự — và lý do đằng sau những lựa chọn thiết kế.'
+            : 'I’m a software engineer focused on backend systems and architecture. I write to understand how systems really work—and why the design choices matter.'}</p>
+          <p class="ed-about-copy">{vi
+            ? 'Blog này tập hợp các ghi chép kỹ thuật, phân tích mã nguồn mở, thử nghiệm và bài học khi nghiên cứu AI infrastructure, cơ sở dữ liệu và hệ thống phân tán. Mục tiêu là giải thích rõ nguyên lý, không chỉ giới thiệu công cụ.'
+            : 'This site collects engineering notes, open-source architecture studies, experiments, and lessons from exploring AI infrastructure, databases, and distributed systems. My goal is to explain the underlying principles, not just the tools.'}</p>
+          <div class="ed-hero-actions">
+            <a class="ed-btn ed-btn-primary" href={'/'+lang+'/blog'}>{vi?'Đọc bài viết':'Read my writing'} <span aria-hidden="true">→</span></a>
+            <a class="ed-btn ed-btn-quiet" href="https://github.com/buianhtai" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
+          </div>
+        </div>
+        <div class="ed-about-identity" aria-label={vi?'Thẻ giới thiệu':'Profile summary'}>
+          <div class="ed-about-identity-mark" aria-hidden="true">TB<span>.</span></div>
+          <div class="ed-about-identity-label">TAI BUI / SOFTWARE ENGINEER</div>
+          <div class="ed-about-identity-line"></div>
+          <p>{vi?'Xây dựng hệ thống. Học từ nguyên lý. Chia sẻ những gì có ích.':'Build systems. Learn from first principles. Share what matters.'}</p>
+          <div class="ed-about-identity-pills"><span>Architecture</span><span>AI Agents</span><span>Databases</span></div>
+        </div>
+      </div>
+    </section>
+    <section class="ed-container ed-about-section" aria-labelledby="expertise">
+      <div class="ed-kicker">{vi?'NHỮNG CHỦ ĐỀ CHÍNH':'AREAS I EXPLORE'}</div>
+      <h2 id="expertise">{vi?'Từ ý tưởng đến hệ thống thực tế.':'From first principles to production.'}</h2>
+      <div class="ed-about-expertise">
+        {strengths.map(s => <article class="ed-about-expertise-card">
+          <span class="ed-about-expertise-number">{s.index}</span>
+          <h3>{s.title}</h3>
+          <p>{s.detail}</p>
+        </article>)}
+      </div>
+    </section>
+    <section class="ed-container ed-about-section ed-about-principles">
+      <div>
+        <div class="ed-kicker">{vi?'CÁCH TÔI VIẾT':'HOW I APPROACH WRITING'}</div>
+        <h2>{vi?'Dễ hiểu trước. Chi tiết tiếp theo.':'Clarity first. Depth where it counts.'}</h2>
+      </div>
+      <div class="ed-about-principles-copy">
+        <p>{vi
+          ? 'Mỗi bài viết cố gắng bắt đầu bằng một vấn đề thực tế, giải thích các lựa chọn, sau đó đi sâu vào kiến trúc, ví dụ hoặc số liệu khi có thể. Tôi luôn quan tâm đến giới hạn và đánh đổi của từng cách làm.'
+          : 'I try to start with a real engineering question, make the trade-offs explicit, and follow the architecture down to examples and measurements when possible. The limitations matter as much as the solutions.'}</p>
+        <p>{vi
+          ? 'Các quan điểm ở đây là ghi chép học tập và chia sẻ cá nhân; chúng không đại diện cho tổ chức hoặc khách hàng nào.'
+          : 'These notes reflect my own learning and opinions, not those of any employer or client.'}</p>
+        <a href={'/'+lang+'/foundations'}>{vi?'Khám phá kiến thức nền tảng':'Explore software foundations'} →</a>
+      </div>
+    </section>
+    <section class="ed-container ed-about-section">
+      <div class="ed-about-contact">
+        <div>
+          <div class="ed-kicker">{vi?'KẾT NỐI':'STAY CONNECTED'}</div>
+          <h2>{vi?'Cùng trao đổi về kỹ thuật.':'Always learning. Always building.'}</h2>
+          <p>{vi?'Xem các dự án và ghi chép công khai, hoặc theo dõi những bài viết mới.':'Explore my public projects and follow new writing as it is published.'}</p>
+        </div>
+        <div class="ed-about-socials">
+          <a href="https://github.com/buianhtai" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
+          <a href="https://twitter.com/buianhtai90" target="_blank" rel="noopener noreferrer">X / Twitter ↗</a>
+          <a href="/rss.xml">RSS ↗</a>
+        </div>
+      </div>
+    </section>
+  </div>
+</BaseLayout>
