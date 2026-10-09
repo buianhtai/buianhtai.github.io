@@ -1,0 +1,77 @@
+---
+id: AgentRunRecovery
+name: Agent Run Recovery
+version: "0.1.0"
+summary: Illustrative worker failure, safe replay from durable state and final user-visible status.
+steps:
+  - id: run_start
+    title: Read accepted run and version
+    service:
+      id: RunService
+      version: "0.1.0"
+    next_step:
+      id: worker_first
+      label: Lease worker
+  - id: worker_first
+    title: Execute safely checkpointed work
+    service:
+      id: AgentWorker
+      version: "0.1.0"
+    next_step:
+      id: crash
+      label: Worker process fails
+  - id: crash
+    title: Worker process crashes
+    custom:
+      title: Worker crash
+      type: Failure
+      summary: Worker terminates before reporting a completed step
+    next_step:
+      id: recovery
+      label: Detect lease expiration
+  - id: recovery
+    title: Reconcile persisted state and prior tool attempts
+    service:
+      id: RunService
+      version: "0.1.0"
+    next_steps:
+      - id: resumed
+        label: Safe to replay / resume
+      - id: uncertain
+        label: Remote write outcome uncertain
+  - id: resumed
+    title: Resume from durable checkpoint
+    service:
+      id: AgentWorker
+      version: "0.1.0"
+    next_step:
+      id: completed
+      label: Commit final outcome
+  - id: completed
+    title: Run completed
+    message:
+      id: RunCompleted
+      version: "0.1.0"
+    next_step:
+      id: final_user
+      label: Deliver status
+  - id: uncertain
+    title: Reconciliation required
+    custom:
+      title: Reconciliation required
+      type: Safety
+      summary: Remote side effect might already have occurred; do not blindly retry
+    next_step:
+      id: final_user
+      label: Report safe nonterminal or reconciliation status
+  - id: final_user
+    title: Display progress or reconciliation request
+    service:
+      id: EventStreamAPI
+      version: "0.1.0"
+---
+# Agent Run Recovery
+
+A workflow engine may restore a safely persisted step or wait for reconciliation. This flow illustrates **architectural intent**, not a claim that a particular engine gives exactly-once external side effects.
+
+<NodeGraph />
