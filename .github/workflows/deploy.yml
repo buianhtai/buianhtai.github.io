@@ -51,13 +51,13 @@ jobs:
           mkdir -p dist/architecture
           cp -R architecture-catalog/dist/. dist/architecture/
           test -s dist/architecture/index.html
-          for flow in ExplicitAgentRun AgentRunRecovery ToolExecution RoutedAgentRun; do
+          for flow in ExplicitAgentRun AgentRunRecovery ToolExecution RoutedAgentRun AgentConfigurationLifecycle SupportEmailIntake ApprovalGatedExternalJob DelegatedAgentRun; do
             find architecture-catalog/dist -type f -path "*/docs/flows/$flow/0.1.0/index.html" | grep -q . || {
               echo "::error::Missing EventCatalog flow: $flow"
               exit 1
             }
           done
-          for command in StartAgentRun InvokeTool; do
+          for command in StartAgentRun InvokeTool PublishAgentVersion TriggerAgentRun RequestApproval DelegateAgentRun; do
             find architecture-catalog/dist -type f -path "*/docs/commands/$command/0.1.0/index.html" | grep -q . || {
               echo "::error::Missing EventCatalog command: $command"
               exit 1
@@ -65,6 +65,17 @@ jobs:
           done
           find architecture-catalog/dist -type f -path "*/docs/queries/GetRunStatus/0.1.0/index.html" | grep -q . || {
             echo "::error::Missing EventCatalog query: GetRunStatus"
+            exit 1
+          }
+          test -s architecture-catalog/systems/AgentExecutionPlatform/index.mdx
+          test -s architecture-catalog/domains/AgentPlatform/entities/AgentVersion/index.mdx
+          test -s architecture-catalog/pages/homepage.astro
+          find architecture-catalog/dist -type f -path "*/docs/systems/AgentExecutionPlatform/0.1.0/index.html" | grep -q . || {
+            echo "::error::Missing EventCatalog system page: AgentExecutionPlatform"
+            exit 1
+          }
+          find architecture-catalog/dist -type f -path "*/docs/entities/AgentRun/0.1.0/index.html" | grep -q . || {
+            echo "::error::Missing EventCatalog entity page: AgentRun"
             exit 1
           }
 
