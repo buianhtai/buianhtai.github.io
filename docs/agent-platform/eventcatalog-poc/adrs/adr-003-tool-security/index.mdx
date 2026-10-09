@@ -1,0 +1,62 @@
+---
+id: adr-003-tool-security
+name: "ADR-003: Reviewed Tools and Safe External Execution"
+version: "0.1.0"
+status: proposed
+date: 2026-10-10
+summary: Separate tool definitions, per-agent grants, secure gateway authorization and external runner effects.
+owners:
+  - architecture-stewards
+decisionMakers:
+  - architecture-stewards
+appliesTo:
+  - type: system
+    id: AgentExecutionPlatform
+  - type: service
+    id: ToolGateway
+  - type: service
+    id: ApprovalService
+  - type: service
+    id: AgentRegistry
+  - type: flow
+    id: ToolExecution
+  - type: flow
+    id: ApprovalGatedExternalJob
+x-implementation-status: not-started
+x-review-status: awaiting-human-architecture-review
+x-source-repository: https://github.com/buianhtai/buianhtai.github.io
+---
+# ADR-003: Reviewed Tools and Safe External Execution
+
+**Proposal only. No architecture board or implementation owner has accepted this decision.** Decision makers and owners are provisional roles, not real individuals.
+
+## Context
+
+User-configurable tools must invoke MCP, HTTP and remote workflows safely while preventing prompt injection from turning arbitrary text into privileged side effects.
+
+## Alternatives evaluated
+
+| Approach | Trade-off |
+| --- | --- |
+| Unrestricted generic HTTP/shell tools | Flexible, but unacceptable SSRF, privilege and arbitrary-code risk for multi-tenant operation |
+| Reviewed versioned operations with scoped binding | Lower exposure, auditable and portable across adapters |
+| Dedicated isolated runner for approved jobs | Necessary for long-running scripts; adds scheduling/reconciliation cost |
+
+## Proposed direction (not an accepted decision)
+
+Propose immutable ToolDefinition/ToolVersion and per-AgentVersion ToolBinding, checked at invocation by a Tool Gateway. Connector instances hold endpoint and credential refs. Sensitive writes wait for approval of an exact immutable intent, and isolated runners accept only allowlisted template/job IDs. **Detailed rollout remains subject to security review**.
+
+## Consequences and open questions
+
+Limits extensibility to approved adapters, but provides tenant/resource isolation, auditability, predictable quotas and controlled effect reconciliation. Requires an adapter registry, input/output schema validation, egress controls, idempotency keys and policy tests.
+
+## Validation needed before acceptance
+
+- Agree on an accountable implementation owner and record a decision review date
+- Prototype the smallest generic SaaS scenario using non-sensitive synthetic fixtures
+- Measure correctness, reliability, latency, operational complexity, budget and access-control effectiveness
+- Record any production constraints and change the status only after review
+
+## Affected resources
+
+This ADR is linked through native EventCatalog `appliesTo` references; use the affected service or flow page to navigate the implementation boundary.
