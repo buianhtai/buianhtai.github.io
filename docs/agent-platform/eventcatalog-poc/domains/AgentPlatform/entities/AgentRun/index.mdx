@@ -20,6 +20,9 @@ properties:
     type: String
     required: true
     description: Pinned approved agent version
+    references: AgentVersion
+    referencesIdentifier: manifestDigest
+    relationType: belongsTo
   - name: status
     type: String
     required: true
