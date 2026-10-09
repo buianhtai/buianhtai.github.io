@@ -31,8 +31,31 @@ jobs:
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           "$HOME/.local/bin/d2" version
 
-      - name: Install, build, and upload
-        uses: withastro/action@v3
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Build Astro blog
+        run: |
+          npm ci
+          npm run build
+
+      - name: Build EventCatalog Community architecture portal
+        run: |
+          node scripts/sync-architecture-catalog.mjs
+          npm install --prefix architecture-catalog --no-audit --no-fund
+          npm run build --prefix architecture-catalog
+          test -s architecture-catalog/dist/index.html
+          mkdir -p dist/architecture
+          cp -R architecture-catalog/dist/. dist/architecture/
+          test -s dist/architecture/index.html
+
+      - name: Upload combined site as one GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
 
   deploy:
     needs: build
