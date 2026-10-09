@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:example:agent-platform:RunStarted:0.1.0",
+  "title": "RunStarted",
+  "description": "A fenced execution attempt has begun for a previously accepted logical run.",
+  "type": "object",
+  "properties": {
+    "runId": {
+      "type": "string"
+    },
+    "attemptId": {
+      "type": "string"
+    },
+    "fencingToken": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "startedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "traceId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "runId",
+    "attemptId",
+    "startedAt"
+  ],
+  "additionalProperties": false
+}
