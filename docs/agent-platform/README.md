@@ -64,7 +64,7 @@ This diagram is **logical**, not a demand to build eleven microservices. The MVP
 6. **Models propose; code enforces.** Business rules, quotas, tool access and approvals do not depend on trusting model instructions.
 7. **Worker never owns the client connection.** The API serves durable event streams, allowing retries/reconnections and scheduled invocations.
 8. **Use AI selectively.** Deterministic tasks should not invoke an LLM. A router may use embeddings or a small model only when needed.
-9. **No PLM- or customer-specific examples.** All names, identifiers, tenants and APIs below are illustrative.
+9. **No proprietary domain- or customer-specific examples.** All names, identifiers, tenants and APIs below are illustrative.
 
 ## Glossary / contract owners
 
