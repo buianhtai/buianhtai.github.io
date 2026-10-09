@@ -8,10 +8,16 @@ properties:
     type: String
     required: true
     description: Pinned consumer revision
+    references: AgentVersion
+    referencesIdentifier: manifestDigest
+    relationType: belongsTo
   - name: toolVersionRef
     type: String
     required: true
     description: Reviewed tool revision
+    references: ToolDefinition
+    referencesIdentifier: toolId
+    relationType: belongsTo
   - name: scopePolicyRef
     type: String
     required: true
