@@ -1,0 +1,62 @@
+---
+id: adr-002-runtime-adapter
+name: "ADR-002: Pluggable Agent Runtime"
+version: "0.1.0"
+status: proposed
+date: 2026-10-10
+summary: Compare simple bounded loops with graph runtimes under one pinned execution contract.
+owners:
+  - architecture-stewards
+decisionMakers:
+  - architecture-stewards
+appliesTo:
+  - type: system
+    id: AgentExecutionPlatform
+  - type: service
+    id: AgentRuntime
+  - type: service
+    id: AgentWorker
+  - type: service
+    id: ModelGateway
+  - type: flow
+    id: ExplicitAgentRun
+  - type: flow
+    id: DelegatedAgentRun
+x-implementation-status: not-started
+x-review-status: awaiting-human-architecture-review
+x-source-repository: https://github.com/buianhtai/buianhtai.github.io
+---
+# ADR-002: Pluggable Agent Runtime
+
+**Proposal only. No architecture board or implementation owner has accepted this decision.** Decision makers and owners are provisional roles, not real individuals.
+
+## Context
+
+Agents differ from short read-only questions to multi-step plans. Hardwiring a large framework into public run state creates migration and cost risks.
+
+## Alternatives evaluated
+
+| Approach | Trade-off |
+| --- | --- |
+| Simple bounded loop | Cheaper and easier to reason about for read-only retrieval and short tasks |
+| Graph runtime such as LangGraph | Typed state transitions and checkpointing, higher complexity and framework coupling |
+| Other runtime implementations | Compatibility through a typed interface, subject to validation and sandboxing |
+
+## Proposed direction (not an accepted decision)
+
+Define a RuntimeAdapter port with pinned manifest, bounded context, allowed tool schemas, checkpoint reference, cancellation, typed result and metered events. Prefer the simplest loop for early read-only cases; benchmark graph runtimes for cases requiring branching and durable checkpoints. **Framework selection remains open**.
+
+## Consequences and open questions
+
+Separates public AgentRun/event contracts from framework internals and supports testing a low-cost simple path. Adapter compatibility, checkpoint format/version, metrics, and interruption/restart behavior require conformance tests. Never let runtime plugins grant tool permissions.
+
+## Validation needed before acceptance
+
+- Agree on an accountable implementation owner and record a decision review date
+- Prototype the smallest generic SaaS scenario using non-sensitive synthetic fixtures
+- Measure correctness, reliability, latency, operational complexity, budget and access-control effectiveness
+- Record any production constraints and change the status only after review
+
+## Affected resources
+
+This ADR is linked through native EventCatalog `appliesTo` references; use the affected service or flow page to navigate the implementation boundary.
