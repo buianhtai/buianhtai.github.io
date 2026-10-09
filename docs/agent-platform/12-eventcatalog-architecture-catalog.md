@@ -92,9 +92,9 @@ This is **sample content for an EventCatalog project**, not a runnable EventCata
 
 ### Validation sequence for a real proof of concept
 
-1. Generate a clean, separate project with \`npx @eventcatalog/create-eventcatalog@latest agent-architecture-catalog\` using the official getting-started instructions. **Pin the generated version afterward**, especially because EventCatalog v4 is currently described as beta in migration docs.
-2. Copy \`eventcatalog-poc/domains\`, \`services\`, \`events\` and \`flows\` into the generated project root.
-3. Run the catalog's documented install/build scripts (typically \`npm install\`, \`npm run dev\`, \`npm run build\`), correct any version-specific MDX/frontmatter differences, and verify the NodeGraph and Flow views in a browser.
+1. Generate a clean, separate project with `npx @eventcatalog/create-eventcatalog@latest agent-architecture-catalog` using the official getting-started instructions. **Pin the generated version afterward**, especially because EventCatalog v4 is currently described as beta in migration docs.
+2. Copy `eventcatalog-poc/domains`, `services`, `events` and `flows` into the generated project root.
+3. Run the catalog's documented install/build scripts (typically `npm install`, `npm run dev`, `npm run build`), correct any version-specific MDX/frontmatter differences, and verify the NodeGraph and Flow views in a browser.
 4. Confirm service/event relations and both flow graphs navigate correctly, and that no confidential business details appear.
 5. Deploy **as a separate architecture URL** only after version and static hosting/base-path checks pass.
 6. Compare maintenance effort with plain Mermaid/docs; decide whether commercial sync/MCP functionality justifies its subscription.
@@ -106,13 +106,13 @@ This is **sample content for an EventCatalog project**, not a runnable EventCata
 | Diagram | Source / format | Render strategy |
 | --- | --- | --- |
 | System context / component | Mermaid Markdown, versioned service resources | Chapter 11 in Git; EventCatalog architecture map |
-| Detailed execution time order | Mermaid \`sequenceDiagram\` | Git Markdown, and link/embed in catalog docs if supported |
+| Detailed execution time order | Mermaid `sequenceDiagram` | Git Markdown, and link/embed in catalog docs if supported |
 | Swimlane orchestration | Mermaid lane-like subgraphs or BPMN designer | Git Markdown; catalog Flow as navigable high-level counterpart |
 | Events and dependencies | EventCatalog events/commands/services | Native visualizer and NodeGraph |
 | State machine / retry | Mermaid state diagram | Git alongside API/run contract |
 | Reviewable architecture decision | ADR Markdown + version references | Linked resource/ADR in catalog |
 
-EventCatalog supports MDX/diagrams and its own \`<NodeGraph />\` and \`<Flow />\` components. Use the latter **inside an EventCatalog project**, not in the existing blog's MDX renderer unless integrated separately. Commercial "bring your own documentation" and embedding features must be licensed where required.
+EventCatalog supports MDX/diagrams and its own `<NodeGraph />` and `<Flow />` components. Use the latter **inside an EventCatalog project**, not in the existing blog's MDX renderer unless integrated separately. Commercial "bring your own documentation" and embedding features must be licensed where required.
 
 ## 6. Practical adoption path and costs
 
