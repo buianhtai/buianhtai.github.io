@@ -15,8 +15,17 @@ This documentation lives in \`docs/\` and is **not a blog article or a productio
 5. **[05 — Agent-to-agent orchestration](./05-agent-to-agent-orchestration.md)**: parent/child runs, delegation policies, budget/permission inheritance, internal collaboration and external A2A protocol.
 6. **[06 — Decision layer, Jev and deterministic rules](./06-decision-layer-jev-and-rules.md)**: typed choice/score results, replaceable decision providers, eligibility checks, DMN/FEEL rules and evaluation.
 7. **[07 — Complete orchestration scenario](./07-end-to-end-orchestration-scenario.md)**: one fictional SaaS workflow connecting routing, agent tools, child agents, approval-gated remote jobs and SSE.
+8. **[08 — Plug-and-play adapters and plugins](./08-plugin-and-adapter-architecture.md)**: stable typed extension interfaces, package/instance/capability/binding separation, manifests, version pinning, installation approval, isolation, upgrades and compatibility.
 
 See also [RFC-001: Configuration-Driven Agent Platform](https://github.com/buianhtai/buianhtai.github.io/pull/6), a separate, **currently proposed** RFC about the control-plane registry, policy model, declarative configuration schema, tool/skill catalog, and framework adapters. These documents intentionally complement that RFC but are reviewable independently.
+
+## Architectural rule: stable core, replaceable integrations
+
+> **Register providers through typed adapters. Configure instances. Publish capabilities. Bind authorized versions to agents.** Core runtime, policy, run state and event contracts do not change when a new provider implements an existing interface.
+
+**[08 — Plug-and-play Adapter Architecture](./08-plugin-and-adapter-architecture.md)** specifies the common extension registry and adapter lifecycle for runtimes, models, MCP/HTTP tools, triggers, decisions, external jobs, internal/external agent delegation, and skill sources. An adapter **package** is installed/approved by the platform operator; an adapter **instance** is tenant/workspace configured; a **capability** is a reviewed catalog entry; an agent **binding** narrows what it may use. These objects are intentionally distinct.
+
+New implementations of known ports should not require changes to agent-runtime source. **Installing executable code** may still require a worker rollout, while an approved remote-RPC adapter can be configured without rebuilding the core. End users never gain arbitrary shell or unrestricted network execution.
 
 ## The main distinction
 
@@ -83,6 +92,7 @@ This diagram is **logical**, not a demand to build eleven microservices. The MVP
 7. **Worker never owns the client connection.** The API serves durable event streams, allowing retries/reconnections and scheduled invocations.
 8. **Use AI selectively.** Deterministic tasks should not invoke an LLM. A router may use embeddings or an optional Jev-style decision provider only when needed.
 9. **No proprietary domain- or customer-specific examples.** All names, identifiers, tenants and APIs below are illustrative.
+10. **Plugin ports are typed and security-gated.** A new provider implements an approved extension contract; no adapter can bypass the Tool Gateway, policy engine, secret boundary, budget or event service.
 
 ## Glossary / contract owners
 
