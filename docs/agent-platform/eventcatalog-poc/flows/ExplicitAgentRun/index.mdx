@@ -40,17 +40,44 @@ steps:
     service:
       id: AgentWorker
       version: "0.1.0"
-    next_step:
-      id: gateway
-      label: Ask for knowledge search
+    next_steps:
+      - id: gateway
+        label: Model requests knowledge search
+      - id: completed
+        label: Answer without a tool
+      - id: recovery_flow
+        label: Worker failure or lease expiry
   - id: gateway
     title: Validate and execute allowed search
     service:
       id: ToolGateway
       version: "0.1.0"
+    next_steps:
+      - id: completed
+        label: Authorized results and final answer
+      - id: tool_denied
+        label: Tool denied by policy
+      - id: recovery_flow
+        label: Timeout or recoverable worker error
+  - id: tool_denied
+    title: Audit denied tool request and fail safely
+    custom:
+      title: Authorization denied
+      type: Policy decision
+      summary: The model cannot override denied tool bindings or resource ACLs.
     next_step:
-      id: completed
-      label: Return evidence and synthesize response
+      id: rejected_result
+      label: Publish terminal policy error
+  - id: rejected_result
+    title: Return safe failure state to UI
+    service:
+      id: EventStreamAPI
+      version: "0.1.0"
+  - id: recovery_flow
+    title: Recover interrupted agent run
+    flow:
+      id: AgentRunRecovery
+      version: "0.1.0"
   - id: completed
     title: Persist completed run result
     message:
@@ -82,6 +109,10 @@ steps:
 - **Event Stream API:** expose durable, authorized SSE event replay to the browser. The worker never opens a direct browser channel.
 
 The [component ownership and general architecture diagrams](../../../11-architecture-views-component-flow-swimlanes.md) cover the broader platform.
+
+## Interactive EventCatalog graph
+
+Use the **NodeGraph above** to follow the normal path, the permitted no-tool path, authorization denial, and the reusable [Agent Run Recovery](/architecture/docs/flows/AgentRunRecovery/0.1.0/) subflow. Select a service or message node to navigate to its resource page. These are **proposed design paths**, not production telemetry; the gateway denial path is one conservative policy option.
 
 ## A. Request-to-result sequence
 
