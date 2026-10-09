@@ -10,8 +10,16 @@ steps:
       id: AgentWorker
       version: "0.1.0"
     next_step:
-      id: gateway
+      id: invoke_command
       label: Tool invocation request
+  - id: invoke_command
+    title: Request a reviewed tool invocation
+    message:
+      id: InvokeTool
+      version: "0.1.0"
+    next_step:
+      id: gateway
+      label: Authorize invocation
   - id: gateway
     title: Validate binding, schema, scope, resource ACL and budget
     service:
