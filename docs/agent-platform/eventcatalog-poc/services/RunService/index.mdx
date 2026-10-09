@@ -3,6 +3,15 @@ id: RunService
 name: Run Service
 version: "0.1.0"
 summary: Durable admission, authoritative AgentRun lifecycle, immutable version pinning and budget projection.
+owners:
+  - architecture-stewards
+x-implementation-status: proposed
+x-source-repository: https://github.com/buianhtai/buianhtai.github.io
+x-tracking-status: unassigned
+specifications:
+  - type: asyncapi
+    path: asyncapi.json
+    name: Proposed Run Lifecycle Events
 receives:
   - id: StartAgentRun
     version: "0.1.0"
@@ -27,6 +36,8 @@ sends:
 **Status: proposed logical component; not evidence of a deployed service.**
 
 <NodeGraph />
+
+<CustomProperties title="Architecture governance" />
 
 ## Durability first
 
