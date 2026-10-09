@@ -9,7 +9,6 @@
     "preview": "eventcatalog preview"
   },
   "dependencies": {
-    "@eventcatalog/core": "4.12.3",
-    "astro": "7.3.3"
+    "@eventcatalog/core": "4.12.3"
   }
 }
