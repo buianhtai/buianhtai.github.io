@@ -1,0 +1,11 @@
+---
+id: ToolInvocationRequested
+name: Tool Invocation Requested
+version: "0.1.0"
+summary: Proposed internal invocation request requiring independent gateway authorization.
+---
+# ToolInvocationRequested
+
+**Proposed internal command/event boundary**, not permission to execute. The request identifies runId, invocationId, tool binding version, tenant-scoped principal, and validated argument reference. The Tool Gateway must recheck authorization.
+
+<NodeGraph />
