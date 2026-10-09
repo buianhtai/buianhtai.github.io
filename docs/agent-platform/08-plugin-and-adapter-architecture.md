@@ -293,6 +293,8 @@ New adapter packages can provide **different implementations** behind the same t
 
 The same rules apply to external agent services: an A2A `DelegationAdapter` can submit tasks only to an explicitly registered/approved endpoint, with bounded payloads, secrets and delegation permissions.
 
+**Platform-wide reliability:** adapters must declare timeouts, idempotency classification, cancellation support, concurrency and failure modes. The host enforces limits and owns retries, circuit-breaking decisions and durable state according to [09 — Scalability and Reliability](./09-scalability-reliability-and-operations.md). Plugin authors cannot promise exactly-once external side effects merely by returning a successful result.
+
 ## 9. Schema, capability negotiation and error handling
 
 - **Common descriptor fields:** `id`, `version`, `port`, `adapterApiVersion`, `capabilities`, `configurationSchema`, `permissionRequests`, `distribution`, `digest`, `license`, `health`.
