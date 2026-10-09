@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "InvokeTool",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "runId",
+    "invocationId",
+    "toolId"
+  ],
+  "properties": {
+    "runId": {
+      "type": "string"
+    },
+    "invocationId": {
+      "type": "string"
+    },
+    "toolId": {
+      "type": "string"
+    },
+    "argumentsRef": {
+      "type": "string"
+    }
+  }
+}
