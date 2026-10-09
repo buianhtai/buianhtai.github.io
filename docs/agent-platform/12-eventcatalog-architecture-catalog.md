@@ -95,7 +95,7 @@ This is **sample content for an EventCatalog project**, not a runnable EventCata
 
 ### Validation sequence for a real proof of concept
 
-1. Generate a clean, separate project with `npx @eventcatalog/create-eventcatalog@latest agent-architecture-catalog` using the official getting-started instructions. **Pin the generated version afterward**, especially because EventCatalog v4 is currently described as beta in migration docs.
+1. Generate a clean, separate project with `npx @eventcatalog/create-eventcatalog@latest agent-architecture-catalog --empty` using the official [getting-started instructions](https://www.eventcatalog.dev/docs/development/getting-started/installation). This currently requires **Node.js 22+**. **Pin the generated version afterward**, especially because EventCatalog v4 is currently described as beta in migration docs.
 2. Copy `eventcatalog-poc/domains`, `services`, `events` and `flows` into the generated project root.
 3. Run the catalog's documented install/build scripts (typically `npm install`, `npm run dev`, `npm run build`), correct any version-specific MDX/frontmatter differences, and verify the NodeGraph and Flow views in a browser.
 4. Confirm service/event relations and both flow graphs navigate correctly, and that no confidential business details appear.
@@ -148,5 +148,7 @@ If schemas and interfaces change frequently, consider Business for automated syn
 - [EventCatalog open-source repo / mixed license](https://github.com/event-catalog/eventcatalog)
 - [Flow resource authoring](https://v2.eventcatalog.dev/docs/development/guides/flows/adding-flows)
 - [Service frontmatter](https://v2.eventcatalog.dev/docs/api/service-api)
+- [EventCatalog first-class agents and tools](https://www.eventcatalog.dev/docs/development/guides/resources/agents/create-agent)
+- [EventCatalog diagram resources](https://www.eventcatalog.dev/docs/bring-your-own-documentation/diagrams)
 - [Flow frontmatter](https://v2.eventcatalog.dev/docs/api/flow-api)
 - [v4 upgrade/beta status](https://www.eventcatalog.dev/docs/development/upgrading/v4)
