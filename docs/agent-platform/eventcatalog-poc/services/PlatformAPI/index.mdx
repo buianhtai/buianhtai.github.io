@@ -2,17 +2,44 @@
 id: PlatformAPI
 name: Platform API
 version: "0.1.0"
-summary: Authenticated ingress, admission API and session/run access.
+summary: Authenticated ingress, agent administration and stable public run/session APIs.
 sends:
   - id: StartAgentRun
     version: "0.1.0"
   - id: GetRunStatus
     version: "0.1.0"
+  - id: PublishAgentVersion
+    version: "0.1.0"
 ---
 # Platform API
 
-Receives requests from chat, API clients and verified trigger adapters. Performs authentication, authorization and request admission. User-facing API identifiers and response contracts are **platform-owned** rather than exposing workflow-engine internals.
-
-In production, this logical component can be horizontally replicated.
+**Status: proposed logical component; not evidence of a deployed service.**
 
 <NodeGraph />
+
+## Boundary
+
+Platform API authenticates people and integrations, checks workspace/tenant access, validates request shape and idempotency, and delegates run admission to the Run Service. The browser receives **202 only after a durable run/outbox transaction**; it never waits synchronously for an LLM to finish.
+
+## Proposed API
+
+~~~http
+POST /v1/runs
+Idempotency-Key: session-01-message-02
+Content-Type: application/json
+
+{"target":{"type":"deployment","id":"documentation-agent:prod"},"input":{"message":"How does authentication work?"}}
+~~~
+
+| Interface | Responsibility |
+| --- | --- |
+| POST /v1/runs | Authorized durable run admission |
+| GET /v1/runs/{id} | Tenant-scoped status, resultRef and metering |
+| GET /v1/runs/{id}/events | Replayable authenticated SSE |
+| POST /v1/agents/{id}/publish | Registry-backed validation and immutable publication |
+
+## Failure and operations
+
+Duplicate idempotency keys return the same logical run for the same payload, conflicting inputs get HTTP 409. Use typed 401/403/404/429 without leaking cross-tenant resource existence. Track p95 admission latency, rejection rate and API concurrency. Workers, tool execution, model calls and SSE state remain behind their owning components.
+
+**Journey:** [ExplicitAgentRun](/architecture/docs/flows/ExplicitAgentRun/0.1.0/).
