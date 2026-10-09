@@ -1,6 +1,7 @@
 # 05 — Agent-to-Agent Delegation and Interoperability
 
 **Status:** Proposed (not deployed)
+**Extension contract:** The internal child-run connector and external A2A transport are alternative implementations of a typed `DelegationAdapter`, registered and approved as described in [08 — Plug-and-play Adapter Architecture](./08-plugin-and-adapter-architecture.md). Delegation permissions remain enforced by the core service.
 **Related:** [Invocation and routing](./01-invocation-and-routing.md) · [Runtime and events](./02-runtime-workers-and-events.md) · [External tools](./04-tool-registry-and-external-execution.md)
 
 ## 1. Three things that look like "agent-to-agent" but are different
