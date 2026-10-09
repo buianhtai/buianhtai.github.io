@@ -34,7 +34,9 @@ const hubPath = category === 'foundations' ? `/${lang}/foundations` : `/${lang}/
 const hubLabel = category === 'foundations' ? 'foundations' : 'blog';
 ---
 
-<BaseLayout title={title} description={description} lang={lang} ogImage={heroImage}>
+<BaseLayout title={title} description={description} lang={lang}
+  ogImage={heroImage || ('/og/' + lang + '/' + getPostSlug(post) + '.png')}
+  article publishedDate={pubDate} modifiedDate={updatedDate} articleTags={tags}>
   <!-- Global foundations CSS tokens scoped to <html> via a class added below -->
   <div class="f-root">
 
