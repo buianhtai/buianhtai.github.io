@@ -193,6 +193,8 @@ This example is abbreviated and omits shared event-envelope fields (`seq`, `id`,
 
 UI might show parent agent, child tasks, their statuses and citations. Do not expose private child reasoning traces, hidden tool credentials, or raw third-party messages by default.
 
+**Scaling rule:** a parent run must reserve child-run capacity and budget before fanout; child runs run in their own worker slots and report back via durable run events. Parent cancellation is best-effort for remote agents. See [Scalability and Reliability](./09-scalability-reliability-and-operations.md) for fair scheduling, leases and per-tenant limits.
+
 ## 7. Failure and governance checklist
 
 | Failure mode | Required handling |
