@@ -75,6 +75,8 @@ eventcatalog-poc/
 ├── README.md
 ├── domains/
 │   └── AgentPlatform/index.mdx
+├── agents/
+│   └── DocumentationAgent/index.mdx
 ├── services/
 │   ├── PlatformAPI/index.mdx
 │   ├── RunService/index.mdx
