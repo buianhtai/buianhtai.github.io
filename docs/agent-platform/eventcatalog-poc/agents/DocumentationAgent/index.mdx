@@ -19,3 +19,43 @@ This resource documents an example agent's purpose and allowed read-only capabil
 ## Available capability
 
 <AgentTools />
+
+## Purpose and sample questions
+
+The Documentation Agent is a **read-only reference implementation**: answer generic product/API questions using an approved knowledge-search capability. Examples: "Where is the public API authentication guide?" and "What does the request limit error mean?" It is intentionally simple so engineers can validate run admission, tool boundaries, source citation and SSE before building auto-routing or multi-agent behavior.
+
+## Illustrative configuration
+
+~~~yaml
+agentId: documentation-agent
+runtimeAdapterRef: simple-loop@1
+modelProfileRef: economical-grounded@1
+skills: [documentation-assistant@1]
+tools:
+  - ref: knowledge.search@1
+    scopeRef: approved-guides-readonly
+limits:
+  maxSteps: 5
+  maxToolCalls: 5
+  maxCostUsd: 0.02
+  timeoutSeconds: 60
+~~~
+
+## One request from UI to result
+
+The caller chooses an authorized deployment. Platform API admits a pinned version, the worker asks the model to answer, and the model may propose a knowledge.search operation. Tool Gateway rechecks the current caller and document ACL, validates schema and returns source identifiers. The runtime composes a short cited answer; the API delivers the terminal result through durable events.
+
+If no eligible sources exist, the answer must say so rather than inventing references. A denied tool results in a safe answer or typed failure. No outgoing network action, email send, or shell execution is available to this agent.
+
+## Evaluation contract
+
+| Scenario | Expected behavior |
+| --- | --- |
+| Known public guide | Grounded answer with allowed source IDs |
+| Unanswerable question | Uncertainty or escalation without fabricated citations |
+| Caller lacks guide permission | Tool denies; no document content revealed |
+| KB tool timeout | Bounded retry or safe failure |
+| Reconnected SSE | Same runId and replayable result |
+| Duplicate request | Same logical run under idempotency key |
+
+Measure grounded-answer quality, false citation rate, per-question spend and tool denial handling. See [Explicit Agent Run](/architecture/docs/flows/ExplicitAgentRun/0.1.0/).
