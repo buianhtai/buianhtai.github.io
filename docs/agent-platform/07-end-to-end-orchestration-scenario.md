@@ -9,11 +9,13 @@ This walkthrough joins [routing](./01-invocation-and-routing.md), [worker execut
 User: "**Can you investigate why last night's scheduled usage report failed and prepare a summary?**"
 
 A generic SaaS platform has three user-configured agents:
-- \`Documentation Agent\`: read-only KB/documentation tools.
-- \`Troubleshooting Agent\`: read-only log, trace and workflow-status tools. May delegate to the Documentation Agent.
-- \`Report Agent\`: drafts reports from approved data; can start a **reviewed report-preview job** that runs in an isolated external environment, with approval.
+- `Documentation Agent`: read-only KB/documentation tools.
+- `Troubleshooting Agent`: read-only log, trace and workflow-status tools. May delegate to the Documentation Agent.
+- `Report Agent`: drafts reports from approved data; can start a **reviewed report-preview job** that runs in an isolated external environment, with approval.
 
 This is intentionally a complex illustrative example. A simpler workflow might solve a particular reporting issue more cheaply; do not assume agent orchestration is necessary for every incident.
+
+This scenario assumes each provider is installed as an approved [adapter package](./08-plugin-and-adapter-architecture.md), configured as a scoped instance, and exposed as published capabilities that agent authors can bind. No runtime source edit is needed when a new provider implements an existing adapter port.
 
 ## 1. What administrators preconfigure
 
@@ -24,8 +26,8 @@ Before this works, **developers and administrators** must supply these building 
 | AuthN/RBAC/tenant | Real identity and scoped execution grants | Select approved workspace and resources |
 | Agent registry | Draft/publish/version/deploy APIs | Publish agent instructions and routing examples |
 | Decision adapter | Code rules and optionally Jev-compatible client | Bind appropriate routing policy/profile |
-| MCP tools | Implement/install \`jobs.status\`, \`logs.search\`, \`kb.search\` with ACLs | Enable those read tools |
-| External job adapter | Register fixed report-preview workflow and isolated runner | Enable \`reports.run_preview@1\` within grants |
+| MCP tools | Implement/install `jobs.status`, `logs.search`, `kb.search` with ACLs | Enable those read tools |
+| External job adapter | Register fixed report-preview workflow and isolated runner | Enable `reports.run_preview@1` within grants |
 | Delegation gateway | Child-run creation, budget and access checks | Bind Documentation Agent as allowed subagent |
 | Run worker/API | Event store, model interface, Tool Gateway, streaming | Choose model/profile and run limits |
 
@@ -122,7 +124,7 @@ Notice **two distinct runs**: diagnosis (read-only) and report generation (write
 
 ## 4. Async external jobs: don't keep an LLM waiting
 
-A long script may take minutes. It should produce a durable \`ExternalJob\` and allow the agent/workflow to **suspend** while waiting for a verified completion event or polling result.
+A long script may take minutes. It should produce a durable `ExternalJob` and allow the agent/workflow to **suspend** while waiting for a verified completion event or polling result.
 
 ~~~mermaid
 stateDiagram-v2
@@ -144,22 +146,22 @@ stateDiagram-v2
     CANCELLED --> [*]
 ~~~
 
-Remote job status belongs to **External Job Service**, and the parent agent/workflow maintains a correlated waiting state/checkpoint. Merely returning \`jobId\` is not final success.
+Remote job status belongs to **External Job Service**, and the parent agent/workflow maintains a correlated waiting state/checkpoint. Merely returning `jobId` is not final success.
 
 ## 5. A2A instead of an internal child agent
 
 If the Documentation Agent belongs to another company or independent team and exposes A2A, replace the internal child run with:
-1. An approved \`ExternalAgentConnection\` (agent card, endpoint, identity and scopes).
-2. A \`DelegationRequest\` with sanitized task input and no secret parent memory.
-3. A remote A2A \`Task\` / \`taskId\` correlated to the local \`delegationId\`.
-4. Status and artifact polling/streaming mapped into parent \`RunEvents\`.
+1. An approved `ExternalAgentConnection` (agent card, endpoint, identity and scopes).
+2. A `DelegationRequest` with sanitized task input and no secret parent memory.
+3. A remote A2A `Task` / `taskId` correlated to the local `delegationId`.
+4. Status and artifact polling/streaming mapped into parent `RunEvents`.
 5. Validated returned evidence treated as untrusted, with provenance and tenant ACL.
 
 A2A transport does not override local or remote access policies; it is not required for two agents running under the same internal Run Service.
 
 ## 6. When to use Jev-like decision models
 
-The only likely Jev-style step in this scenario is the **routing/classification** step if the UI doesn't explicitly select an agent. For example, decide among \`documentation\`, \`troubleshooting\`, and \`report\` using a bounded typed-choice contract. Another optional step is to decide whether a technical report has enough evidence to request human review.
+The only likely Jev-style step in this scenario is the **routing/classification** step if the UI doesn't explicitly select an agent. For example, decide among `documentation`, `troubleshooting`, and `report` using a bounded typed-choice contract. Another optional step is to decide whether a technical report has enough evidence to request human review.
 
 Do not use the decision model to approve the external write, assert that the job completed, or bypass errors. Existing logic, status records, resource ACLs, and human approval are authoritative.
 
