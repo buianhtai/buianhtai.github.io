@@ -54,7 +54,7 @@ spec:
     maxDurationSeconds: 180
 ~~~
 
-**Not framework-native YAML**; the platform compiler resolves this into Deep Agents subagents or a dedicated delegation tool. The platform must support *either* framework-native subagent execution with policy interception *or* explicit child \`AgentRun\` records. The MVP recommendation is to use the latter for external/independently managed work and normalize events for both.
+**Not framework-native YAML**; the platform compiler resolves this into Deep Agents subagents or a dedicated delegation tool. The platform must support *either* framework-native subagent execution with policy interception *or* explicit child `AgentRun` records. The MVP recommendation is to use the latter for external/independently managed work and normalize events for both.
 
 ### Registry and run edges
 
@@ -69,10 +69,10 @@ erDiagram
   AGENT_RUN ||--o{ RUN_EVENT : emits
 ~~~
 
-For a remote A2A task, no local child \`AgentRun\` may exist; the \`DELEGATION_REQUEST\` then tracks the remote task and its state instead. Treat this ERD as conceptual, not a literal requirement for an exactly-one edge to a local child in all modes.
+For a remote A2A task, no local child `AgentRun` may exist; the `DELEGATION_REQUEST` then tracks the remote task and its state instead. Treat this ERD as conceptual, not a literal requirement for an exactly-one edge to a local child in all modes.
 
 Stored fields per delegation:
-\`delegationId\`, \`parentRunId\`, \`parentAgentVersionDigest\`, \`targetAgentVersionOrExternalRef\`, \`childRunId\` or \`remoteTaskId\`, \`principal\`, \`inputArtifactRefs\`, \`allowedScopes\`, \`remainingBudget\`, \`status\`, \`traceId\`, \`deadline\`, \`idempotencyKey\`.
+`delegationId`, `parentRunId`, `parentAgentVersionDigest`, `targetAgentVersionOrExternalRef`, `childRunId` or `remoteTaskId`, `principal`, `inputArtifactRefs`, `allowedScopes`, `remainingBudget`, `status`, `traceId`, `deadline`, `idempotencyKey`.
 
 ## 3. Internal agent delegation
 
@@ -101,11 +101,11 @@ sequenceDiagram
     EV-->>UI: Parent and safe child progress via SSE
 ~~~
 
-Critical: the child gets a **scoped task**, not unrestricted parent memory or all parent tools. The child version defines its own tools and skills. Its effective rights are bounded by \`parent's delegated grants ∩ child grants ∩ caller/service principal grants ∩ target ACL\`.
+Critical: the child gets a **scoped task**, not unrestricted parent memory or all parent tools. The child version defines its own tools and skills. Its effective rights are bounded by `parent's delegated grants ∩ child grants ∩ caller/service principal grants ∩ target ACL`.
 
 **Budget invariants:**
 - Parent budget reserves child spending before delegation; no child may outlive the parent's total hard budget without a separately authorized workflow.
-- \`maxDepth\`, fan-out, child count and concurrent child runs are enforced by the Run Service, independent of model instructions.
+- `maxDepth`, fan-out, child count and concurrent child runs are enforced by the Run Service, independent of model instructions.
 - Cyclic bindings and self-delegation are rejected during publish; runtime guards prevent recursive dynamic loops.
 - Child run failure is a typed result; parent must handle failure/timeout rather than hallucinate successful work.
 - Child outcome, sources and tool provenance are retained for audit and evaluation.
@@ -117,11 +117,11 @@ The primary **Agent Router** initially selects the first agent. A **Delegation G
 
 Two safe patterns:
 
-**Explicit binding (MVP for delegation):** parent knows allowed aliases (\`docs-specialist\`, \`summary-specialist\`) and can request one. The platform checks that alias and creates a child run.
+**Explicit binding (MVP for delegation):** parent knows allowed aliases (`docs-specialist`, `summary-specialist`) and can request one. The platform checks that alias and creates a child run.
 
 **Bounded specialist selector (later):** parent describes a bounded task; delegation router ranks *only* its preapproved subagent bindings. No arbitrary global agent discovery, no automatically granting new capabilities.
 
-Do not allow \`delegate_to_agent(agentId=anything)\` without an approved relationship and a scoped security token.
+Do not allow `delegate_to_agent(agentId=anything)` without an approved relationship and a scoped security token.
 
 ## 5. External agent-to-agent with A2A
 
@@ -176,7 +176,7 @@ class AgentDelegate(Protocol):
     async def artifacts(self, delegation_id, context): ...
 ~~~
 
-The return is a \`DelegationHandle\` with a durable ID and status. The parent may await or suspend for its result without blocking a worker process indefinitely.
+The return is a `DelegationHandle` with a durable ID and status. The parent may await or suspend for its result without blocking a worker process indefinitely.
 
 ## 6. How the UI shows agent collaboration
 
@@ -189,7 +189,7 @@ The browser connects **only** to the Platform API's run event stream. Event exam
 {"type":"run.completed","runId":"parent-001","payload":{"status":"SUCCEEDED"}}
 ~~~
 
-This example is abbreviated and omits shared event-envelope fields (\`seq\`, \`id\`, \`traceId\`, \`occurredAt\`). Production event schemas must include those fields as described in [02](./02-runtime-workers-and-events.md).
+This example is abbreviated and omits shared event-envelope fields (`seq`, `id`, `traceId`, `occurredAt`). Production event schemas must include those fields as described in [02](./02-runtime-workers-and-events.md).
 
 UI might show parent agent, child tasks, their statuses and citations. Do not expose private child reasoning traces, hidden tool credentials, or raw third-party messages by default.
 
