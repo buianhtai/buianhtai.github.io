@@ -3,6 +3,11 @@ id: AgentWorker
 name: Agent Worker
 version: "0.1.0"
 summary: Leased execution workers that run pinned configurations and commit durable, bounded results.
+owners:
+  - architecture-stewards
+x-implementation-status: proposed
+x-source-repository: https://github.com/buianhtai/buianhtai.github.io
+x-tracking-status: unassigned
 receives:
   - id: ToolInvocationCompleted
     version: "0.1.0"
@@ -21,6 +26,8 @@ sends:
 **Status: proposed logical component; not evidence of a deployed service.**
 
 <NodeGraph />
+
+<CustomProperties title="Architecture governance" />
 
 ## Attempt lifecycle
 
