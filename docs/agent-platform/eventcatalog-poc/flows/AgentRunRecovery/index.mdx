@@ -75,3 +75,34 @@ steps:
 A workflow engine may restore a safely persisted step or wait for reconciliation. This flow illustrates **architectural intent**, not a claim that a particular engine gives exactly-once external side effects.
 
 <NodeGraph />
+
+## Why recovery is part of the architecture
+
+Accepted runs must survive a worker, queue or provider crash without silently losing user work. Recovery starts from the platform's durable run, pinned configuration and last safe checkpoint—not worker memory or an SSE connection.
+
+## Crash walk-through
+
+1. Run 123 is admitted, and Worker A acquires lease token 7.
+2. Worker A completes a read-only search and persists the tool invocation result.
+3. Worker A terminates before acknowledging the step.
+4. Dispatcher detects the expired lease. Worker B acquires lease token 8.
+5. Worker B reloads pinned manifest, checkpoint and invocationId; it reuses the recorded result instead of losing work.
+6. Worker A's late completion is rejected because token 7 is stale.
+7. Run Service commits a single terminal status and UI subscribers replay the durable event history.
+
+## Side-effect distinction
+
+| Prior action | Recovery behavior |
+| --- | --- |
+| No operation started | Resume safe checkpoint |
+| Read-only request | Replay result or retry under limits |
+| Idempotent write with known remote ID | Fetch existing status; do not issue fresh effect |
+| Write accepted but reply lost | OUTCOME_UNKNOWN → reconciliation |
+| Approval expired while paused | Deny, do not execute |
+| Parent cancelled | Propagate child/job cancellation best effort |
+
+## Operational invariants
+
+Retries are finite and governed by backoff. A durable workflow engine does not guarantee exactly-once external writes. Persist run terminal status, ordered events, model usage, tool effects, lease fencing and reconciliation state. Monitor expired leases, recovery time, duplicate dispatch suppression and unresolved external outcomes.
+
+**Related:** [Run Service](/architecture/docs/services/RunService/0.1.0/) · [Run Dispatcher](/architecture/docs/services/RunDispatcher/0.1.0/).
