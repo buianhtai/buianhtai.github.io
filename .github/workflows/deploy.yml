@@ -77,6 +77,20 @@ jobs:
               exit 1
             }
           done
+          for diagram in ArchitectureOverview C4SystemContext C4Containers C4ControlPlane C4ExecutionPlane C4Deployment IntegrationAdapters RunLifecycleSequence AgentLifecycle EventDataFlow TrustBoundaries ResilienceOverview StateAndDataModel; do
+            find architecture-catalog/dist -type f -path "*/diagrams/$diagram/0.1.0/index.html" | grep -q . || {
+              echo "::error::Missing published architecture diagram: $diagram"
+              exit 1
+            }
+          done
+          find architecture-catalog/dist -type f -path "*/diagrams/ArchitectureOverview/0.1.0/embed/index.html" | grep -q . || {
+            echo "::error::Missing homepage architecture diagram embed"
+            exit 1
+          }
+          grep -q 'C4SystemContext' architecture-catalog/dist/index.html || {
+            echo "::error::Homepage missing C4 navigation"
+            exit 1
+          }
           test -s architecture-catalog/systems/AgentExecutionPlatform/index.mdx
           test -s architecture-catalog/domains/AgentPlatform/entities/AgentVersion/index.mdx
           test -s architecture-catalog/pages/homepage.astro
