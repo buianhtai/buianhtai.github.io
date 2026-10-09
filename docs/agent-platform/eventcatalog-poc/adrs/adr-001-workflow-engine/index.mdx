@@ -1,0 +1,64 @@
+---
+id: adr-001-workflow-engine
+name: "ADR-001: Durable Execution Engine Boundary"
+version: "0.1.0"
+status: proposed
+date: 2026-10-10
+summary: Evaluate DB queue, DBOS, Hatchet and Temporal behind an interchangeable workflow adapter.
+owners:
+  - architecture-stewards
+decisionMakers:
+  - architecture-stewards
+appliesTo:
+  - type: system
+    id: AgentExecutionPlatform
+  - type: service
+    id: RunDispatcher
+  - type: service
+    id: RunService
+  - type: service
+    id: AgentWorker
+  - type: flow
+    id: AgentRunRecovery
+  - type: flow
+    id: ApprovalGatedExternalJob
+x-implementation-status: not-started
+x-review-status: awaiting-human-architecture-review
+x-source-repository: https://github.com/buianhtai/buianhtai.github.io
+---
+# ADR-001: Durable Execution Engine Boundary
+
+**Proposal only. No architecture board or implementation owner has accepted this decision.** Decision makers and owners are provisional roles, not real individuals.
+
+## Context
+
+Agent runs require durable acceptance, retries, long waits, cancellation and safe restart without rebuilding a distributed workflow engine inside the runtime.
+
+## Alternatives evaluated
+
+| Approach | Trade-off |
+| --- | --- |
+| PostgreSQL queue + outbox | Simple MVP operations; application must implement leases, timers and recovery carefully |
+| DBOS | Embeddable DB-backed durable execution, less infrastructure but engine coupling |
+| Hatchet | Dedicated durable task orchestration, additional operational service |
+| Temporal | Mature durable workflow model, larger learning and operational footprint |
+| Kestra | Useful for integration and external jobs, but distinct from fine-grained agent session orchestration |
+
+## Proposed direction (not an accepted decision)
+
+Keep the public AgentRun record and Run Service as the durable tenant-facing contract. Introduce a versioned WorkflowEngineAdapter and evaluate a PostgreSQL queue/outbox for the simplest bounded MVP versus DBOS/Hatchet/Temporal for long-running, checkpoint-heavy work. Kestra can remain an external workflow adapter; **no engine has been selected**.
+
+## Consequences and open questions
+
+The architecture remains portable and public API semantics do not depend on a scheduler. Early implementation must include idempotent admission, fenced leases, replay and reconciliation tests. The team must benchmark latency, operations burden, license, availability and pricing before recording an accepted engine selection.
+
+## Validation needed before acceptance
+
+- Agree on an accountable implementation owner and record a decision review date
+- Prototype the smallest generic SaaS scenario using non-sensitive synthetic fixtures
+- Measure correctness, reliability, latency, operational complexity, budget and access-control effectiveness
+- Record any production constraints and change the status only after review
+
+## Affected resources
+
+This ADR is linked through native EventCatalog `appliesTo` references; use the affected service or flow page to navigate the implementation boundary.
