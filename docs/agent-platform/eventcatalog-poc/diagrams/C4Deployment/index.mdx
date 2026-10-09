@@ -1,0 +1,62 @@
+---
+id: C4Deployment
+name: C4 Deployment — Proposed Runtime Topology
+version: "0.1.0"
+summary: Illustrative high-availability placement of public APIs, workers, durable state and external providers.
+owners:
+  - architecture-stewards
+x-implementation-status: proposed
+x-diagram-class: C4
+---
+# C4 Deployment — Proposed Runtime Topology
+
+**Status: proposed design.** Fictional, domain-neutral, and implementation-neutral; not evidence of deployed cloud infrastructure or an approved technology stack.
+
+## Diagram
+
+~~~mermaid
+C4Deployment
+  title Proposed Deployment — logical clusters, not a selected cloud
+  Deployment_Node(user, "User Device", "Browser") {
+    Container(browser, "Chat and Agent Studio", "Web client", "Authenticated input and SSE")
+  }
+  Deployment_Node(edge, "Public Edge", "Managed ingress") {
+    Container(ingress, "API Ingress", "TLS + identity guard", "Routes protected client requests")
+  }
+  Deployment_Node(private, "Private Application Network", "Region / environment") {
+    Deployment_Node(control, "Control Plane", "Stateless replicas") {
+      Container(api, "Platform API and Run Control", "Replicated services", "Admission, routing, registry and status")
+    }
+    Deployment_Node(execution, "Worker Pools", "Auto-scaled compute") {
+      Container(worker, "Pinned Agent Workers", "Isolated processes", "Runtime and model/tool requests")
+    }
+    Deployment_Node(durable, "Durable State", "Managed or self-hosted") {
+      ContainerDb(db, "Run and Registry Database", "Durable transactional store", "Runs, outbox, approvals, manifests")
+      ContainerDb(eventstore, "Events and Artifacts", "Log / object storage", "Checkpoints and scoped results")
+      ContainerQueue(queue, "Dispatcher / Workflow Engine", "Replaceable backend", "Retries, timers, leases")
+    }
+  }
+  System_Ext(external, "Approved External Providers", "Model, MCP/HTTP and reviewed job operations")
+  Rel(browser, ingress, "Uses", "HTTPS / SSE")
+  Rel(ingress, api, "Forwards authenticated requests")
+  Rel(api, db, "Transactional writes")
+  Rel(api, eventstore, "Replays run events")
+  Rel(api, queue, "Dispatch intent")
+  Rel(queue, worker, "Leases work")
+  Rel(worker, eventstore, "Writes checkpoints and results")
+  Rel(worker, external, "Calls through gateways")
+~~~
+
+## How to read it
+
+**Deployment hypothesis, not a cloud architecture decision.** Regional placement, provider choice, HA/RPO/RTO, managed vs self-hosted stores and workflow engine are open. The immutable requirements are separate API and worker scaling, durable run admission, controlled egress, confidential connector secrets, and survivable worker restarts.
+
+## Continue exploring
+
+- [Logical containers](/architecture/diagrams/C4Containers/0.1.0/)
+- [Scaling and failure model](/architecture/diagrams/ResilienceOverview/0.1.0/)
+- [Network/trust boundaries](/architecture/diagrams/TrustBoundaries/0.1.0/)
+
+## Related native resources
+
+[Agent Platform domain](/architecture/domains/AgentPlatform/0.1.0/) · [Agent Execution Platform system](/architecture/systems/AgentExecutionPlatform/0.1.0/) · [Execution flows](/architecture/discover/flows/)
