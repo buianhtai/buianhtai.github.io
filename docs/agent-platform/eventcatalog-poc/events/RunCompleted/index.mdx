@@ -1,0 +1,13 @@
+---
+id: RunCompleted
+name: Run Completed
+version: "0.1.0"
+summary: Illustrative terminal successful run status with result reference and metered usage.
+---
+# RunCompleted
+
+**Proposed event/notification contract, not implemented.** Indicates that the platform has committed a successful terminal run result. Failure/cancellation events would be separate future resources.
+
+Suggested safe fields: `runId`, `resultRef`, `completedAt`, `usageSummary`, `traceId`. This does not imply any external write executed exactly once.
+
+<NodeGraph />
