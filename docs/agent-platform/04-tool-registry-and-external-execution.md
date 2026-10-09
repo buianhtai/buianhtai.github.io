@@ -1,6 +1,7 @@
 # 04 — Extensible Tool Registry, Connectors, External Jobs, and Script Execution
 
 **Status:** Proposed — architecture contract, not currently deployed.
+**Adapter foundation:** [08 — Plug-and-play Adapter Architecture](./08-plugin-and-adapter-architecture.md). Every `executor.kind` below maps to a typed, reviewed adapter package and configured instance; tool definitions and per-agent bindings are separate from adapter implementations.
 **Related:** [Overview](./README.md) · [Runtime & events](./02-runtime-workers-and-events.md) · [Triggers](./03-triggers-and-mvp.md)
 
 ## Why "we implemented tools" is not enough
