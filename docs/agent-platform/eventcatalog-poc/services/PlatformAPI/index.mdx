@@ -34,9 +34,9 @@ Content-Type: application/json
 | Interface | Responsibility |
 | --- | --- |
 | POST /v1/runs | Authorized durable run admission |
-| GET /v1/runs/{id} | Tenant-scoped status, resultRef and metering |
-| GET /v1/runs/{id}/events | Replayable authenticated SSE |
-| POST /v1/agents/{id}/publish | Registry-backed validation and immutable publication |
+| GET /v1/runs/:runId | Tenant-scoped status, resultRef and metering |
+| GET /v1/runs/:runId/events | Replayable authenticated SSE |
+| POST /v1/agents/:agentId/publish | Registry-backed validation and immutable publication |
 
 ## Failure and operations
 
