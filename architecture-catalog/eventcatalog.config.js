@@ -4,7 +4,7 @@ export default {
   tagline: 'Explore a generic, pluggable agent platform: services, tools, events, and workflows.',
   organizationName: 'Engineering Notes',
   homepageLink: 'https://buianhtai.github.io/',
-  editUrl: 'https://github.com/buianhtai/buianhtai.github.io/edit/main/architecture-catalog',
+  editUrl: 'https://github.com/buianhtai/buianhtai.github.io/edit/main/docs/agent-platform/eventcatalog-poc',
   theme: 'ocean',
   output: 'static',
   base: '/architecture',
