@@ -1,0 +1,48 @@
+---
+id: C4SystemContext
+name: C4 Level 1 — System Context
+version: "0.1.0"
+summary: People, external systems, and data flows around the proposed agent execution platform.
+owners:
+  - architecture-stewards
+x-implementation-status: proposed
+x-diagram-class: C4
+---
+# C4 Level 1 — System Context
+
+**Status: proposed design.** Fictional, domain-neutral, and technology-agnostic. This is an architectural view, not a live infrastructure map.
+
+## Diagram
+
+~~~mermaid
+C4Context
+  title Proposed Agent Platform — System Context
+  Person(user, "Application User", "Submits questions and consumes run results")
+  Person(admin, "Workspace Administrator", "Configures and publishes approved agents and tools")
+  Person(reviewer, "Human Reviewer", "Approves exact risky side-effect intents")
+  System(platform, "Agent Execution Platform", "Durable agent admission, execution, policy, tools and streamed results")
+  System_Ext(identity, "Identity Provider", "Authenticates users, service principals and scopes")
+  System_Ext(model, "Approved Model Providers", "LLM and approved smaller model inference")
+  System_Ext(integrations, "External Integrations", "MCP, HTTP and isolated reviewed job runners")
+  System_Ext(triggers, "Mail / Webhook / Scheduler", "Produces verified trigger events")
+  Rel(user, platform, "Asks questions; sees status and answers", "HTTPS / SSE")
+  Rel(admin, platform, "Publishes versions and connector bindings", "HTTPS")
+  Rel(reviewer, platform, "Reviews exact effect requests", "HTTPS")
+  Rel(platform, identity, "Validates identity and privileges", "OIDC / tokens")
+  Rel(platform, model, "Invokes approved model profiles", "Provider API")
+  Rel(platform, integrations, "Invokes scoped tools and jobs", "MCP / HTTPS")
+  Rel(triggers, platform, "Submits verified source events", "Webhook / poll")
+~~~
+
+## How to read it
+
+The platform boundary includes its API, run state, policy, worker coordination and gateways. Models and remote job runners are **external systems**, not trusted extensions of the model. The human reviewer acts independently of the agent. This C4 context view intentionally excludes internal services and database technology.
+
+## Continue exploring
+
+- [C4 Level 2 containers](/architecture/diagrams/C4Containers/0.1.0/)
+- [Threat and trust boundaries](/architecture/diagrams/TrustBoundaries/0.1.0/)
+
+## Architecture resources
+
+[Agent Platform domain](/architecture/domains/AgentPlatform/0.1.0/) · [Agent Execution Platform system](/architecture/systems/AgentExecutionPlatform/0.1.0/) · [Execution flows](/architecture/discover/flows/)

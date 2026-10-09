@@ -1,0 +1,64 @@
+---
+id: TrustBoundaries
+name: Security and Trust Boundary Map
+version: "0.1.0"
+summary: Untrusted input, tenant identity, policy enforcement and side-effect boundaries.
+owners:
+  - architecture-stewards
+x-implementation-status: proposed
+x-diagram-class: architecture-view
+---
+# Security and Trust Boundary Map
+
+**Status: proposed design.** Fictional, domain-neutral, and implementation-neutral; not evidence of deployed cloud infrastructure or an approved technology stack.
+
+## Diagram
+
+~~~mermaid
+flowchart LR
+  subgraph UNTRUSTED["Untrusted edge: messages and model content"]
+    HUMAN["User input / uploaded content"]
+    SOURCE["Mailbox, webhook and documents"]
+    MODEL["Model response / tool arguments"]
+  end
+  subgraph INGRESS["Identity and admission boundary"]
+    AUTH["Authentication + source verification"]
+    SCOPE["Tenant / workspace / role scope"]
+    RUN["Authorized immutable run"]
+  end
+  subgraph EFFECTS["Effect boundary"]
+    GATE["Tool Gateway + schema / ACL / budget"]
+    APPROVAL["Human approval of exact intent"]
+    CONNECT["Allowlisted adapter / scoped secret"]
+  end
+  subgraph DATA["Scoped durable state"]
+    AUDIT[("Append-only audit + run events")]
+    ARTIFACT[("Tenant-scoped outputs")]
+  end
+  HUMAN --> AUTH
+  SOURCE --> AUTH
+  AUTH --> SCOPE
+  SCOPE --> RUN
+  RUN --> MODEL
+  MODEL --> GATE
+  GATE -->|Read-only authorized| CONNECT
+  GATE -->|Risky write| APPROVAL
+  APPROVAL -->|Revalidate policy and intent hash| CONNECT
+  GATE --> AUDIT
+  CONNECT --> AUDIT
+  CONNECT --> ARTIFACT
+~~~
+
+## How to read it
+
+Trust changes at four points: inbound source verification, tenant/principal authorization, untrusted model-to-tool crossing, and human-approved side effects. Prompt text is not an ACL. Never allow arbitrary shell scripts, arbitrary URLs or secret expansion from model output; risky effects must be reviewed as a fixed operation and audited.
+
+## Continue exploring
+
+- [Adapter design](/architecture/diagrams/IntegrationAdapters/0.1.0/)
+- [External systems](/architecture/diagrams/C4SystemContext/0.1.0/)
+- [Incidents and recovery](/architecture/diagrams/ResilienceOverview/0.1.0/)
+
+## Related native resources
+
+[Agent Platform domain](/architecture/domains/AgentPlatform/0.1.0/) · [Agent Execution Platform system](/architecture/systems/AgentExecutionPlatform/0.1.0/) · [Execution flows](/architecture/discover/flows/)

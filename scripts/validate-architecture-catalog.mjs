@@ -47,9 +47,10 @@ for(const res of resources.values()){
  if(kind!=='team'){
   for(const owner of d.owners??[])exists('team',owner,rel);
   if(kind==='domain'||kind==='system'){
-   for(const [field,k] of [['services','service'],['systems','system'],['agents','agent'],['entities','entity']])refList(res,field,k);
+   for(const [field,k] of [['services','service'],['systems','system'],['agents','agent'],['entities','entity'],['diagrams','diagram']])refList(res,field,k);
   }
   if(kind==='service'){
+   refList(res,'diagrams','diagram');
    for(const fld of ['sends','receives'])for(const r of d[fld]??[])messageExists(r.id,rel);
    for(const spec of d.specifications??[]){
     if(!['openapi','asyncapi'].includes(spec.type))report(rel,'unsupported specification '+spec.type);
@@ -87,6 +88,11 @@ for(const res of resources.values()){
       }
     }
    }
+  }
+  if(kind==='diagram'){
+    const diagramSource=res.content.match(/~~~mermaid\n([\s\S]*?)\n~~~/);
+    if(!diagramSource || !diagramSource[1].trim())report(rel,'missing editable Mermaid diagram');
+    if(/^C4/.test(d.id) && !/^C4(?:Context|Container|Component|Deployment)\b/m.test(diagramSource?.[1]??''))report(rel,'C4 diagram must use native Mermaid C4 notation');
   }
   if(kind==='entity'){
     for(const p of d.properties??[])if(p.references)exists('entity',p.references,rel);

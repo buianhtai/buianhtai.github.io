@@ -21,7 +21,49 @@ const journeys = [
     </p>
     <div class="mt-7 flex flex-wrap gap-3">
       <a class="rounded-lg bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-700 dark:bg-sky-500 dark:text-slate-950" href={base + '/domains/AgentPlatform/0.1.0/'}>Explore the full domain</a>
-      <a class="rounded-lg border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-800 hover:bg-white dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-800" href={base + '/visualiser/system-context-map/'}>Open system context map</a>
+      <a class="rounded-lg border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-800 hover:bg-white dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-800" href={base + '/diagrams/C4SystemContext/0.1.0/'}>Open system context map</a>
+    </div>
+  </section>
+
+  <section class="py-10" aria-labelledby="visual-architecture-title">
+    <div class="mb-5 flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-widest text-sky-700 dark:text-sky-300">Architecture views · Source-controlled</p>
+        <h2 id="visual-architecture-title" class="mt-2 text-3xl font-bold text-slate-900 dark:text-white">See the system before exploring details</h2>
+        <p class="mt-2 max-w-3xl text-slate-600 dark:text-slate-300">A zoomable overview of the control plane, worker execution, secure integrations, and durable state. Each diagram has its own source and linked resource page.</p>
+      </div>
+      <a href={base + '/diagrams/ArchitectureOverview/0.1.0/'} class="text-sm font-semibold text-sky-700 dark:text-sky-300">Open full-size overview →</a>
+    </div>
+    <div class="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+      <iframe title="Agent Platform architecture overview diagram" loading="lazy" src={base + '/diagrams/ArchitectureOverview/0.1.0/embed/'} class="block h-[540px] w-full border-0 sm:h-[640px]"></iframe>
+    </div>
+    <div class="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      {[
+        { id: 'C4SystemContext', k: 'C4 · Level 1', t: 'System context', d: 'People, partner systems and platform boundary' },
+        { id: 'C4Containers', k: 'C4 · Level 2', t: 'Containers', d: 'Logical deployables, worker pools and persistent state' },
+        { id: 'C4ControlPlane', k: 'C4 · Level 3', t: 'Control plane', d: 'Registry, routing, run admission and approvals' },
+        { id: 'C4ExecutionPlane', k: 'C4 · Level 3', t: 'Execution plane', d: 'Worker lifecycle, runtime ports and checkpoints' },
+        { id: 'C4Deployment', k: 'C4 · Deployment', t: 'Deployment topology', d: 'Replicas, queues, durable stores and failure domains' },
+        { id: 'RunLifecycleSequence', k: 'Dynamic', t: 'End-to-end sequence', d: 'From client input to authorized tools and SSE answer' }
+      ].map((view) => (
+        <a href={base + '/diagrams/' + view.id + '/0.1.0/'} class="rounded-xl border border-slate-200 bg-white p-4 hover:border-sky-400 hover:shadow-sm dark:border-slate-700 dark:bg-slate-900">
+          <span class="text-xs font-semibold uppercase tracking-wide text-sky-700 dark:text-sky-300">{view.k}</span>
+          <h3 class="mt-1 text-lg font-semibold text-slate-900 dark:text-white">{view.t} →</h3>
+          <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">{view.d}</p>
+        </a>
+      ))}
+    </div>
+    <div class="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm">
+      {[
+        ['IntegrationAdapters', 'Adapters'],
+        ['EventDataFlow', 'Events and data'],
+        ['TrustBoundaries', 'Trust boundaries'],
+        ['ResilienceOverview', 'Reliability and scaling'],
+        ['StateAndDataModel', 'Data model'],
+        ['AgentLifecycle', 'Configuration lifecycle']
+      ].map(([id, name]) => (
+        <a href={base + '/diagrams/' + id + '/0.1.0/'} class="font-medium text-sky-700 hover:underline dark:text-sky-300">{name} ↗</a>
+      ))}
     </div>
   </section>
 

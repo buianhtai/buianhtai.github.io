@@ -1,0 +1,71 @@
+---
+id: IntegrationAdapters
+name: Tool, Model, Trigger and Delegation Adapters
+version: "0.1.0"
+summary: Replaceable adapters, capabilities and trust boundaries for extensible agent integrations.
+owners:
+  - architecture-stewards
+x-implementation-status: proposed
+x-diagram-class: architecture-view
+---
+# Tool, Model, Trigger and Delegation Adapters
+
+**Status: proposed design.** Fictional, domain-neutral, and implementation-neutral; not evidence of deployed cloud infrastructure or an approved technology stack.
+
+## Diagram
+
+~~~mermaid
+flowchart TB
+  subgraph CONFIG["Published and reviewed configuration"]
+    TD["ToolDefinition + versioned schemas"]
+    CB["Connector installation + secret refs"]
+    TB["ToolBinding: agent-specific scoped grant"]
+    MP["Model profile: approved deployments"]
+    TR["Trigger binding: fixed target and identity"]
+    DA["Subagent binding: allowed child + cap"]
+  end
+  subgraph PORTS["Stable platform ports"]
+    R["RuntimeAdapter"]
+    T["ToolGateway"]
+    M["ModelGateway"]
+    TG["TriggerGateway"]
+    DG["DelegationGateway"]
+  end
+  subgraph ADAPTERS["Replaceable implementations"]
+    MCP["MCP adapter"]
+    HTTP["Typed HTTP adapter"]
+    JOB["Approved job runner adapter"]
+    LLM["Approved model provider adapter"]
+    SOURCES["Mail / schedule / webhook adapter"]
+    A2A["Internal child run / trusted A2A"]
+  end
+  R --> T
+  R --> M
+  R --> DG
+  TD --> T
+  CB --> T
+  TB --> T
+  MP --> M
+  TR --> TG
+  DA --> DG
+  T --> MCP
+  T --> HTTP
+  T --> JOB
+  M --> LLM
+  TG --> SOURCES
+  DG --> A2A
+~~~
+
+## How to read it
+
+A connector installation and a ToolDefinition are **not** the same thing: the former holds reviewed destination/credential refs; the latter defines a stable capability. ToolBinding narrows an agent's access. Triggers initiate runs, models propose actions, and delegation starts child runs; none bypass gateway checks.
+
+## Continue exploring
+
+- [Trust model](/architecture/diagrams/TrustBoundaries/0.1.0/)
+- [Execution internals](/architecture/diagrams/C4ExecutionPlane/0.1.0/)
+- [Example invocation timeline](/architecture/diagrams/RunLifecycleSequence/0.1.0/)
+
+## Related native resources
+
+[Agent Platform domain](/architecture/domains/AgentPlatform/0.1.0/) · [Agent Execution Platform system](/architecture/systems/AgentExecutionPlatform/0.1.0/) · [Execution flows](/architecture/discover/flows/)

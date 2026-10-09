@@ -1,0 +1,77 @@
+---
+id: ArchitectureOverview
+name: Architecture Overview — One-Page Map
+version: "0.1.0"
+summary: The full conceptual journey from input and configuration through governed execution and delivery.
+owners:
+  - architecture-stewards
+x-implementation-status: proposed
+x-diagram-class: architecture-overview
+---
+# Architecture Overview — One-Page Map
+
+**Status: proposed design.** Fictional, domain-neutral, and technology-agnostic. This is an architectural view, not a live infrastructure map.
+
+## Diagram
+
+~~~mermaid
+flowchart LR
+  subgraph ENTRY["Experience and triggers"]
+    U["Chat UI / Agent Studio"]
+    X["Verified email, webhook, schedule"]
+  end
+  subgraph CONTROL["Control plane"]
+    API["Platform API"]
+    REG["Agent Registry<br/>immutable versions"]
+    RUN["Run Service<br/>admission and status"]
+    APR["Approval Service"]
+  end
+  subgraph EXEC["Execution plane"]
+    DISP["Durable dispatch adapter"]
+    W["Workers / RuntimeAdapter"]
+  end
+  subgraph INTEG["Integration plane"]
+    MG["Model Gateway"]
+    TG["Tool Gateway"]
+    DEL["Delegation Gateway"]
+  end
+  subgraph DATA["Durable state"]
+    DB[("Run, registry and policy DB")]
+    EV[("Event log + checkpoints")]
+    BLOB[("Scoped artifacts")]
+  end
+  EXT["Approved model and MCP/HTTP/job providers"]
+  U --> API
+  X --> API
+  API --> REG
+  API --> RUN
+  RUN --> DB
+  RUN --> DISP
+  DISP --> W
+  W --> MG
+  W --> TG
+  W --> DEL
+  DEL --> RUN
+  TG --> APR
+  MG --> EXT
+  TG --> EXT
+  W --> EV
+  W --> BLOB
+  EV --> API
+  API -. "REST + SSE" .-> U
+~~~
+
+## How to read it
+
+**Read left to right.** Only Platform API or a verified trigger adapter admits work; the Run Service creates a durable run before dispatch; the worker executes a pinned runtime; model, tool and delegation calls cross independent policy boundaries. Event streaming reads durable events, not worker sockets.
+
+## Continue exploring
+
+- [Zoom out to context](/architecture/diagrams/C4SystemContext/0.1.0/)
+- [Zoom into deployable containers](/architecture/diagrams/C4Containers/0.1.0/)
+- [Control-plane internals](/architecture/diagrams/C4ControlPlane/0.1.0/)
+- [Execution-plane internals](/architecture/diagrams/C4ExecutionPlane/0.1.0/)
+
+## Architecture resources
+
+[Agent Platform domain](/architecture/domains/AgentPlatform/0.1.0/) · [Agent Execution Platform system](/architecture/systems/AgentExecutionPlatform/0.1.0/) · [Execution flows](/architecture/discover/flows/)

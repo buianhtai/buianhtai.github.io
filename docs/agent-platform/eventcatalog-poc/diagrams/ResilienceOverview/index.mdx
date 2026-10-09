@@ -1,0 +1,53 @@
+---
+id: ResilienceOverview
+name: Reliability, Recovery and Scaling Map
+version: "0.1.0"
+summary: Failure domains, leases and fencing, backpressure, reconciliation and observability.
+owners:
+  - architecture-stewards
+x-implementation-status: proposed
+x-diagram-class: architecture-view
+---
+# Reliability, Recovery and Scaling Map
+
+**Status: proposed design.** Fictional, domain-neutral, and implementation-neutral; not evidence of deployed cloud infrastructure or an approved technology stack.
+
+## Diagram
+
+~~~mermaid
+flowchart TB
+  API["Stateless API replicas"] --> ADMIT["Durable admission + outbox"]
+  ADMIT --> QUEUE["Replaceable dispatcher"]
+  QUEUE --> FAIR{"Tenant quota and priority"}
+  FAIR --> W1["Fast worker pool"]
+  FAIR --> W2["Deep / long-running worker pool"]
+  W1 --> CHECK["Fenced checkpoints"]
+  W2 --> CHECK
+  CHECK --> RESULT["Committed run projection"]
+  CHECK --> FAIL{"Interruption / timeout?"}
+  FAIL -->|Safe read / known result| RETRY["Finite backoff + re-lease"]
+  RETRY --> QUEUE
+  FAIL -->|Unknown write outcome| RECON["External effect reconciliation"]
+  RECON --> RESULT
+  RESULT --> SSE["Replayable SSE and REST status"]
+  SSE --> CLIENT["Caller"]
+  OBS[("Metrics, traces and audits")] -.-> API
+  OBS -.-> QUEUE
+  OBS -.-> W1
+  OBS -.-> W2
+  OBS -.-> RECON
+~~~
+
+## How to read it
+
+Workers may crash, queues may redeliver, and remote writes may complete after their acknowledgments are lost. Never claim exactly-once side effects. Apply fencing to terminal commits, bounded retries to safe tasks, reconciliation to ambiguous remote effects, and tenant fairness to scheduling. Observe queue age, lease expiry, cost, tool denials, pending approvals and unreconciled outcomes.
+
+## Continue exploring
+
+- [Topology and failure domains](/architecture/diagrams/C4Deployment/0.1.0/)
+- [State and outbox](/architecture/diagrams/EventDataFlow/0.1.0/)
+- [Sequence of a run](/architecture/diagrams/RunLifecycleSequence/0.1.0/)
+
+## Related native resources
+
+[Agent Platform domain](/architecture/domains/AgentPlatform/0.1.0/) · [Agent Execution Platform system](/architecture/systems/AgentExecutionPlatform/0.1.0/) · [Execution flows](/architecture/discover/flows/)

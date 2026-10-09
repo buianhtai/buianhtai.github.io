@@ -1,0 +1,54 @@
+---
+id: C4ExecutionPlane
+name: C4 Level 3 — Execution Plane Components
+version: "0.1.0"
+summary: Worker leasing, runtime adapter loop, model/tool/delegation gates and checkpoints.
+owners:
+  - architecture-stewards
+x-implementation-status: proposed
+x-diagram-class: C4
+---
+# C4 Level 3 — Execution Plane Components
+
+**Status: proposed design.** Fictional, domain-neutral, and technology-agnostic. This is an architectural view, not a live infrastructure map.
+
+## Diagram
+
+~~~mermaid
+C4Component
+  title Proposed Execution Plane — Worker and Runtime Components
+  Container_Boundary(exec, "Execution Plane") {
+    Component(dispatch, "Lease / Workflow Adapter", "Pluggable durable engine", "Safe claims, retry, backoff and fencing")
+    Component(worker, "Agent Worker", "Isolated worker", "Loads pinned config and executes one attempt")
+    Component(runtime, "RuntimeAdapter", "Bounded loop or graph", "Orchestrates model turns and approved tools")
+    Component(checkpoint, "Checkpoint and Usage Writer", "Storage port", "Persists safe progress, budget and evidence")
+    Component(cancel, "Cancellation / Deadline Guard", "Policy", "Stops or interrupts bounded work")
+  }
+  Container_Ext(model, "Model Gateway", "Provider adapter", "Metered model calls")
+  Container_Ext(tool, "Tool Gateway", "Reviewed adapters", "Authorizes each operation")
+  Container_Ext(delegate, "Delegation Gateway", "Child runs", "Bounded specialist execution")
+  ContainerDb(store, "Run / Event Store", "Durable state", "Run projections, attempts and checkpoints")
+  Rel(dispatch, worker, "Leases pinned run", "At least once")
+  Rel(worker, runtime, "Invokes with version + limits")
+  Rel(runtime, model, "Requests reasoning or classification")
+  Rel(runtime, tool, "Requests authorized tools")
+  Rel(runtime, delegate, "Requests approved specialist")
+  Rel(runtime, checkpoint, "Saves safe steps and spend")
+  Rel(checkpoint, store, "Writes fenced state")
+  Rel(cancel, runtime, "Enforces deadlines and cancellation")
+  Rel(dispatch, store, "Reclaims expired leases")
+~~~
+
+## How to read it
+
+RuntimeAdapter is a plug-in seam, **not** a license for model-controlled network access. Every tool call crosses Tool Gateway; delegation creates separate bounded runs; retry of uncertain side effects is reconciled. Scale worker pools independently from API instances.
+
+## Continue exploring
+
+- [Adapter boundaries](/architecture/diagrams/IntegrationAdapters/0.1.0/)
+- [End-to-end sequence](/architecture/diagrams/RunLifecycleSequence/0.1.0/)
+- [Failure and scaling](/architecture/diagrams/ResilienceOverview/0.1.0/)
+
+## Architecture resources
+
+[Agent Platform domain](/architecture/domains/AgentPlatform/0.1.0/) · [Agent Execution Platform system](/architecture/systems/AgentExecutionPlatform/0.1.0/) · [Execution flows](/architecture/discover/flows/)

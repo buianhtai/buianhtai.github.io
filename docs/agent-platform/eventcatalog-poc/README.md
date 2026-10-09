@@ -67,3 +67,20 @@ For rationale beyond individual resources see [agent-platform chapters](../READM
 
 **Note:** The public REST request schema differs from the internal `StartAgentRun` command. Resolve target, verify caller and pin agent before constructing the internal intent. Do not conflate service specification links with a deployed API.
 
+## Visual architecture diagrams
+
+The portal contains **13 first-class, versioned and source-editable diagrams**, not just auto-generated NodeGraphs. They are linked from the homepage, domain, system, and relevant service sidebars.
+
+| Diagram group | Native EventCatalog diagram IDs |
+| --- | --- |
+| Start here | `ArchitectureOverview`, `RunLifecycleSequence` |
+| C4 system view | `C4SystemContext`, `C4Containers` |
+| C4 components | `C4ControlPlane`, `C4ExecutionPlane` |
+| C4 deployment | `C4Deployment` (proposed topology; cloud/vendor not selected) |
+| Integration and configuration | `IntegrationAdapters`, `AgentLifecycle` |
+| Cross-cutting concerns | `EventDataFlow`, `TrustBoundaries`, `ResilienceOverview`, `StateAndDataModel` |
+
+Start with the [architecture overview](./diagrams/ArchitectureOverview/index.mdx) and drill into [C4 context](./diagrams/C4SystemContext/index.mdx), [containers](./diagrams/C4Containers/index.mdx), [components](./diagrams/C4ControlPlane/index.mdx), and [deployment](./diagrams/C4Deployment/index.mdx).
+
+C4 Mermaid syntax is still experimental: keep the diagram source small and easy to review; a future pinned Mermaid update may require compatibility adjustments. CI checks that the routes and homepage iframe exist **and renders representative diagrams as SVGs in a browser**. C4 diagrams illustrate logical systems, containers and components; they are not confirmed microservices or a selected cloud configuration.
+

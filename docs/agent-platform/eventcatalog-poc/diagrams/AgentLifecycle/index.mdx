@@ -1,0 +1,47 @@
+---
+id: AgentLifecycle
+name: Agent Definition Lifecycle — Draft to Run
+version: "0.1.0"
+summary: Authoring, validation, immutable publication, deployment alias and pinned execution.
+owners:
+  - architecture-stewards
+x-implementation-status: proposed
+x-diagram-class: architecture-view
+---
+# Agent Definition Lifecycle — Draft to Run
+
+**Status: proposed design.** Fictional, domain-neutral, and implementation-neutral; not evidence of deployed cloud infrastructure or an approved technology stack.
+
+## Diagram
+
+~~~mermaid
+flowchart LR
+  A["Draft Agent Configuration"] --> V{"Validate"}
+  V -->|Invalid schema, grants or adapter| ERR["Explain diagnostics"]
+  ERR --> A
+  V -->|Valid| C["Compile immutable manifest"]
+  C --> P["Published AgentVersion"]
+  P --> D["Authorized deployment alias"]
+  D --> R["New AgentRun pins digest"]
+  P -. "Rollback chooses earlier version" .-> D
+  R --> E["Worker loads exact digest"]
+  E --> X["Bounded model + tool loop"]
+  X --> F["Terminal result and audit"]
+  subgraph SNAP["Immutable content"]
+    P
+  end
+~~~
+
+## How to read it
+
+Publishing an agent is **not executing it**. A published revision freezes model/skill/tool bindings, runtime adapter, budget and policy. A deployment alias affects new runs only. Editing a draft or rolling an alias back never silently mutates an admitted run.
+
+## Continue exploring
+
+- [Registry architecture](/architecture/diagrams/C4ControlPlane/0.1.0/)
+- [Run invocation](/architecture/diagrams/RunLifecycleSequence/0.1.0/)
+- [Version and run entities](/architecture/diagrams/StateAndDataModel/0.1.0/)
+
+## Related native resources
+
+[Agent Platform domain](/architecture/domains/AgentPlatform/0.1.0/) · [Agent Execution Platform system](/architecture/systems/AgentExecutionPlatform/0.1.0/) · [Execution flows](/architecture/discover/flows/)

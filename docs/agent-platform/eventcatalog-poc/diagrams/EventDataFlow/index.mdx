@@ -1,0 +1,55 @@
+---
+id: EventDataFlow
+name: Durable Data and Event Flow
+version: "0.1.0"
+summary: Sources of truth, outbox, run events, checkpoints, artifacts, and delivery contracts.
+owners:
+  - architecture-stewards
+x-implementation-status: proposed
+x-diagram-class: architecture-view
+---
+# Durable Data and Event Flow
+
+**Status: proposed design.** Fictional, domain-neutral, and implementation-neutral; not evidence of deployed cloud infrastructure or an approved technology stack.
+
+## Diagram
+
+~~~mermaid
+flowchart TB
+  CLIENT["Authenticated client / trigger"] --> API["Platform API"]
+  API --> ADMIT["Run admission transaction"]
+  subgraph STATE["Authoritative durable state"]
+    DB[("AgentVersion + AgentRun + Approval")]
+    OUTBOX[("Transactional outbox")]
+    EV[("Run event log: per-run ordered")]
+    CP[("Safe checkpoints + tool invocation ledger")]
+    ART[("Tenant-scoped artifacts")]
+  end
+  ADMIT --> DB
+  ADMIT --> OUTBOX
+  OUTBOX --> DISPATCH["Durable dispatch / at-least-once delivery"]
+  DISPATCH --> WORKER["Fenced worker attempt"]
+  WORKER --> CP
+  WORKER --> EV
+  WORKER --> ART
+  EV --> SSE["Event Stream API: cursor replay"]
+  DB --> REST["Status projection"]
+  SSE --> CLIENT
+  REST --> CLIENT
+  WORKER -->|Conditional, correlated| EXT["Reviewed external effect"]
+  EXT --> CP
+~~~
+
+## How to read it
+
+An outbox transaction prevents accepted requests from disappearing between database commit and dispatch. At-least-once delivery means checkpoint and tool invocation ledgers must be idempotent. Store sensitive result payloads behind scoped artifacts; stream normalized events and references only. The Run Service owns public state even if an engine owns its internal checkpoint format.
+
+## Continue exploring
+
+- [Failure and replay guarantees](/architecture/diagrams/ResilienceOverview/0.1.0/)
+- [Temporal view](/architecture/diagrams/RunLifecycleSequence/0.1.0/)
+- [Logical ER model](/architecture/diagrams/StateAndDataModel/0.1.0/)
+
+## Related native resources
+
+[Agent Platform domain](/architecture/domains/AgentPlatform/0.1.0/) · [Agent Execution Platform system](/architecture/systems/AgentExecutionPlatform/0.1.0/) · [Execution flows](/architecture/discover/flows/)

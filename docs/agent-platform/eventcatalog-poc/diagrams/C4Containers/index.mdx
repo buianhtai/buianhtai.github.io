@@ -1,0 +1,58 @@
+---
+id: C4Containers
+name: C4 Level 2 — Containers
+version: "0.1.0"
+summary: Logical deployment containers and data stores with explicit user/API/worker separation.
+owners:
+  - architecture-stewards
+x-implementation-status: proposed
+x-diagram-class: C4
+---
+# C4 Level 2 — Containers
+
+**Status: proposed design.** Fictional, domain-neutral, and technology-agnostic. This is an architectural view, not a live infrastructure map.
+
+## Diagram
+
+~~~mermaid
+C4Container
+  title Proposed Agent Platform — Containers
+  Person(user, "User / Administrator", "Chat, configuration and approvals")
+  System_Ext(identity, "Identity Provider", "Identity and workspace scopes")
+  System_Ext(provider, "Approved Model and Tool Providers", "External services")
+  System_Boundary(platform, "Agent Execution Platform") {
+    Container(web, "Web UI", "Browser SPA", "Agent Studio, chat, review and progress")
+    Container(api, "Platform API", "Stateless HTTP", "Auth, routing, run admission and SSE")
+    Container(control, "Control Services", "Logical services", "Registry, run state, policy and approvals")
+    Container(queue, "Dispatcher", "Queue or workflow adapter", "Durable tasks, retries and leases")
+    Container(worker, "Worker Pools", "Isolated processes", "Pinned agent runtime execution")
+    Container(gateway, "Integration Gateways", "Logical services", "Model, tools and delegation")
+    ContainerDb(db, "Operational Database", "Durable store", "Versions, runs, approvals and outbox")
+    ContainerDb(events, "Events and Artifacts", "Event log and object store", "Replay, checkpoints and scoped results")
+  }
+  Rel(user, web, "Uses", "HTTPS")
+  Rel(web, api, "Requests runs / subscribes", "REST / SSE")
+  Rel(api, identity, "Verifies credentials", "OIDC")
+  Rel(api, control, "Admits authorized work", "Internal API")
+  Rel(control, db, "Transactional state", "Storage adapter")
+  Rel(control, queue, "Dispatches committed intent", "Outbox")
+  Rel(queue, worker, "Delivers work and renews leases", "At least once")
+  Rel(worker, gateway, "Invokes governed capabilities", "Typed APIs")
+  Rel(gateway, provider, "Uses reviewed adapters", "MCP / HTTPS")
+  Rel(worker, events, "Checkpoints and result references", "Durable writes")
+  Rel(api, events, "Reads/replays progress", "Scoped read")
+~~~
+
+## How to read it
+
+**C4 container is not a microservices prescription.** Multiple logical control-plane services may share a deployment in an MVP. The durable queue/outbox and operational stores remain explicit because they are part of the reliability contract. Workers are separate from public HTTP/SSE processing.
+
+## Continue exploring
+
+- [C4 Level 3 control components](/architecture/diagrams/C4ControlPlane/0.1.0/)
+- [C4 Level 3 execution components](/architecture/diagrams/C4ExecutionPlane/0.1.0/)
+- [C4 deployment view](/architecture/diagrams/C4Deployment/0.1.0/)
+
+## Architecture resources
+
+[Agent Platform domain](/architecture/domains/AgentPlatform/0.1.0/) · [Agent Execution Platform system](/architecture/systems/AgentExecutionPlatform/0.1.0/) · [Execution flows](/architecture/discover/flows/)
