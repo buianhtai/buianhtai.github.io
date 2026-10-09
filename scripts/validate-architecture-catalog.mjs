@@ -67,6 +67,25 @@ for(const res of resources.values()){
        if(target===undefined)report(rel,'broken JSON $ref: '+v);
       }else verifyRefs(v);}}}
     verifyRefs(s);
+    if(spec.type==='asyncapi'){
+      for(const [id,ch] of Object.entries(s.channels??{})){
+        const event=resources.get(key('event',id));
+        if(!event){report(rel,'AsyncAPI channel lacks EventCatalog event: '+id);continue;}
+        const payload=ch.messages?.[id]?.payload;
+        if(!payload){report(rel,'AsyncAPI channel missing message payload: '+id);continue;}
+        const fp=path.join(source,path.dirname(event.rel),event.d.schemaPath??'');
+        if(!existsSync(fp)){report(rel,'event schema missing for '+id);continue;}
+        const catalogSchema=JSON.parse(readFileSync(fp,'utf8'));
+        for(const field of payload.required??[])if(!(catalogSchema.required??[]).includes(field))
+          report(rel,id+' required field not required in EventCatalog message: '+field);
+        for(const [field,decl] of Object.entries(payload.properties??{})){
+          const existing=catalogSchema.properties?.[field];
+          if(!existing){report(rel,id+' field missing from EventCatalog message: '+field);continue;}
+          if(decl.type && existing.type && decl.type!==existing.type)report(rel,id+' field type drift: '+field);
+          if(decl.const!==undefined && existing.const!==undefined && decl.const!==existing.const)report(rel,id+' constant drift: '+field);
+        }
+      }
+    }
    }
   }
   if(kind==='entity'){
