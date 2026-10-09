@@ -1,0 +1,62 @@
+name: Validate EventCatalog
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'docs/agent-platform/eventcatalog-poc/**'
+      - 'architecture-catalog/**'
+      - 'scripts/sync-architecture-catalog.mjs'
+      - '.github/workflows/validate-eventcatalog.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Sync resource definitions
+        run: |
+          node scripts/sync-architecture-catalog.mjs
+          test -s architecture-catalog/commands/StartAgentRun/index.mdx
+          test -s architecture-catalog/commands/InvokeTool/schema.json
+          test -s architecture-catalog/queries/GetRunStatus/schema.json
+          test -s architecture-catalog/flows/ToolExecution/index.mdx
+          test -s architecture-catalog/flows/RoutedAgentRun/index.mdx
+
+      - name: Install and build pinned EventCatalog
+        run: |
+          npm install --prefix architecture-catalog --no-audit --no-fund
+          npm run build --prefix architecture-catalog
+
+      - name: Verify published catalog pages
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s architecture-catalog/dist/index.html
+          for flow in ExplicitAgentRun AgentRunRecovery ToolExecution RoutedAgentRun; do
+            find architecture-catalog/dist -type f -path "*/docs/flows/$flow/0.1.0/index.html" | grep -q . || {
+              echo "::error::Missing built EventCatalog flow: $flow"
+              exit 1
+            }
+          done
+          for command in StartAgentRun InvokeTool; do
+            find architecture-catalog/dist -type f -path "*/docs/commands/$command/0.1.0/index.html" | grep -q . || {
+              echo "::error::Missing built EventCatalog command: $command"
+              exit 1
+            }
+          done
+          find architecture-catalog/dist -type f -path "*/docs/queries/GetRunStatus/0.1.0/index.html" | grep -q . || {
+            echo "::error::Missing built EventCatalog query: GetRunStatus"
+            exit 1
+          }
