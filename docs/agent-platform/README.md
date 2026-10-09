@@ -18,8 +18,14 @@ This documentation lives in `docs/` and is **not a blog article or a production 
 8. **[08 — Plug-and-play adapters and plugins](./08-plugin-and-adapter-architecture.md)**: stable typed extension interfaces, package/instance/capability/binding separation, manifests, version pinning, installation approval, isolation, upgrades and compatibility.
 9. **[09 — Scalability and reliability](./09-scalability-reliability-and-operations.md)**: horizontal pools, transactional admission/outbox, at-least-once delivery, worker leases, budgets, tenant QoS, circuit breakers, SSE durability, disaster recovery, SLOs and failure testing.
 10. **[10 — Open-source Temporal alternatives](./10-open-source-durable-worker-engines.md)**: Hatchet, DBOS, Kestra, Restate and other engines; licensing, worker orchestration semantics, a pluggable WorkflowEngineAdapter and a focused comparison POC.
+11. **[11 — Architecture views and swimlanes](./11-architecture-views-component-flow-swimlanes.md)**: context/component boundaries, agent execution sequence, role-based swimlanes, external approvals and crash recovery, and proposed run-state choreography.
+12. **[12 — EventCatalog adoption and POC](./12-eventcatalog-architecture-catalog.md)**: free-vs-paid features, Git-based architecture catalog strategy, resource mapping and a small Community sample catalog.
 
 See also [RFC-001: Configuration-Driven Agent Platform](https://github.com/buianhtai/buianhtai.github.io/pull/6), a separate, **currently proposed** RFC about the control-plane registry, policy model, declarative configuration schema, tool/skill catalog, and framework adapters. These documents intentionally complement that RFC but are reviewable independently.
+
+## Architecture visualizations and living catalog
+
+Read [Chapter 11](./11-architecture-views-component-flow-swimlanes.md) for six complementary views: C4-style context and components, sequence, swimlanes, failure recovery and state transitions. Read [Chapter 12](./12-eventcatalog-architecture-catalog.md) for an evaluation of [EventCatalog](https://www.eventcatalog.dev/pricing), current licensing and a [version-controlled sample catalog](./eventcatalog-poc/README.md). This is a **separate documentation portal**, not an agent runtime or a replacement for the blog.
 
 ## Architectural rule: stable core, replaceable integrations
 
