@@ -2,10 +2,35 @@
 id: ModelGateway
 name: Model Gateway
 version: "0.1.0"
-summary: Governed model invocation, accounting, provider routing and failure limits.
+summary: Versioned model profiles, approved providers, usage metering and bounded fallback.
 ---
 # Model Gateway
 
-**Proposed logical component.** Abstracts approved model providers, meters tokens/cost and enforces model request limits. The model may propose a tool call; it cannot authorize a tool call or access credentials directly.
+**Status: proposed logical component; not evidence of a deployed service.**
 
 <NodeGraph />
+
+## Model selection
+
+A model profile points to an approved endpoint/deployment, token and context limits, runtime settings, data-handling rules and optional fallback chain. Authorization of tools remains external to the model.
+
+| Task | Default | Escalation |
+| --- | --- | --- |
+| Spam and known FAQ | Deterministic rules | None |
+| Intent classification | Economical small model | Low confidence to human or approved larger model |
+| Grounded answer | Cost-effective model + retrieval | Missing evidence / output validation failure |
+| Complex reasoning | Reasoning-capable model, limited depth | Only when preauthorized by budget |
+
+~~~yaml
+modelProfileRef: support-economical@1
+maxInputTokens: 4000
+maxOutputTokens: 800
+timeoutSeconds: 25
+fallbackProfileRefs: []
+~~~
+
+## Reliability and cost
+
+Enforce provider RPM/TPM, per-tenant concurrency, request deadline, token budget and hard total spend. Fallback never silently sends sensitive data to a provider outside the approved policy. Record cost, latency, quality evaluation and escalation reason per agent revision. Model retries do not imply tool retries.
+
+**Flow:** [SupportEmailIntake](/architecture/docs/flows/SupportEmailIntake/0.1.0/).
