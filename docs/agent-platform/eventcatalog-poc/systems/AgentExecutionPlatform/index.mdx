@@ -8,6 +8,29 @@ owners:
 x-implementation-status: proposed
 x-source-repository: https://github.com/buianhtai/buianhtai.github.io
 x-tracking-status: unassigned
+diagrams:
+  - id: ArchitectureOverview
+    version: "0.1.0"
+  - id: C4SystemContext
+    version: "0.1.0"
+  - id: C4Containers
+    version: "0.1.0"
+  - id: C4ControlPlane
+    version: "0.1.0"
+  - id: C4ExecutionPlane
+    version: "0.1.0"
+  - id: C4Deployment
+    version: "0.1.0"
+  - id: IntegrationAdapters
+    version: "0.1.0"
+  - id: EventDataFlow
+    version: "0.1.0"
+  - id: TrustBoundaries
+    version: "0.1.0"
+  - id: ResilienceOverview
+    version: "0.1.0"
+  - id: StateAndDataModel
+    version: "0.1.0"
 services:
   - id: PlatformAPI
     version: "0.1.0"
@@ -41,6 +64,10 @@ services:
 ## What the system does
 
 An authenticated caller, verified integration, or schedule can request a run of a published AgentVersion. The control plane authorizes and durably admits the request; workers execute bounded model-and-tool loops with independent gateway checks; users or integrations consume ordered results through stable APIs. No model can directly grant itself permissions, launch scripts or choose an arbitrary external endpoint.
+
+## Visual architecture: C4 overview
+
+Start with the [one-page architecture map](/architecture/diagrams/ArchitectureOverview/0.1.0/), then follow [C4 system context](/architecture/diagrams/C4SystemContext/0.1.0/), [C4 containers](/architecture/diagrams/C4Containers/0.1.0/), [control-plane components](/architecture/diagrams/C4ControlPlane/0.1.0/), [execution components](/architecture/diagrams/C4ExecutionPlane/0.1.0/), and [deployment topology](/architecture/diagrams/C4Deployment/0.1.0/). EventCatalog's diagram links also appear in the resource sidebar.
 
 ## Architecture layers
 
