@@ -4,11 +4,11 @@
 **Last updated:** 2026-10-09  
 **Scope:** Domain-neutral reference architecture for a configurable agent platform
 
-This documentation lives in \`docs/\` and is **not a blog article or a production implementation**. It explains the missing components between an incoming request and existing MCP/REST tools: triggering, agent selection, run admission, runtime execution, tool invocation, worker coordination, and UI event delivery.
+This documentation lives in `docs/` and is **not a blog article or a production implementation**. It explains the missing components between an incoming request and existing MCP/REST tools: triggering, agent selection, run admission, runtime execution, tool invocation, worker coordination, and UI event delivery.
 
 ## Read in this order
 
-1. **[01 — Invocation and agent routing](./01-invocation-and-routing.md)**: entry points, \`TriggerBinding\`, eligibility filtering, direct selection vs automatic routing, sessions, router fallbacks, and request/response contract.
+1. **[01 — Invocation and agent routing](./01-invocation-and-routing.md)**: entry points, `TriggerBinding`, eligibility filtering, direct selection vs automatic routing, sessions, router fallbacks, and request/response contract.
 2. **[02 — Runtime, workers, tools, and events](./02-runtime-workers-and-events.md)**: how a selected agent runs, where tools are called, run state machine, checkpoint/approval design, worker-to-API-to-UI streaming, and failure recovery.
 3. **[03 — Trigger adapters, examples, and MVP plan](./03-triggers-and-mvp.md)**: chat, webhook, scheduled work, email and delegation, plus implementation backlog and executable acceptance scenarios.
 4. **[04 — Extensible Tool Registry and external execution](./04-tool-registry-and-external-execution.md)**: connectors, versioned tool definitions/bindings, third-party HTTP actions, approved remote jobs and isolated script runners.
@@ -98,15 +98,15 @@ This diagram is **logical**, not a demand to build eleven microservices. The MVP
 
 | Object | Owner | Key fields |
 | --- | --- | --- |
-| \`AgentDefinition\` / \`AgentVersion\` | Control Plane | description, routing examples, runtime kind, tools, skills, model profile |
-| \`AgentDeployment\` | Control Plane | environment, published version pointer, active flag |
-| \`TriggerBinding\` | Integration/Control Plane | trigger kind, source, target agent/workflow, principal, policy |
-| \`AgentSession\` | Session API | owner, workspace, conversation, selected agent, memory policy |
-| \`AgentRun\` | Run Service | runId, trigger, principal, version digest, status, budget, traceId |
-| \`AgentRouteDecision\` | Router | candidate set, selected version/deployment, method, routing outcome |
-| \`RunEvent\` | Run/Event Service | runId, sequence, type, time, safe payload |
-| \`ToolInvocation\` | Tool Gateway | tool/version, input digest, authorization, approval, outcome |
-| \`ApprovalRequest\` | Approval API | tool intent hash, approver role, expiration, decision |
+| `AgentDefinition` / `AgentVersion` | Control Plane | description, routing examples, runtime kind, tools, skills, model profile |
+| `AgentDeployment` | Control Plane | environment, published version pointer, active flag |
+| `TriggerBinding` | Integration/Control Plane | trigger kind, source, target agent/workflow, principal, policy |
+| `AgentSession` | Session API | owner, workspace, conversation, selected agent, memory policy |
+| `AgentRun` | Run Service | runId, trigger, principal, version digest, status, budget, traceId |
+| `AgentRouteDecision` | Router | candidate set, selected version/deployment, method, routing outcome |
+| `RunEvent` | Run/Event Service | runId, sequence, type, time, safe payload |
+| `ToolInvocation` | Tool Gateway | tool/version, input digest, authorization, approval, outcome |
+| `ApprovalRequest` | Approval API | tool intent hash, approver role, expiration, decision |
 
 ## Reference links
 
