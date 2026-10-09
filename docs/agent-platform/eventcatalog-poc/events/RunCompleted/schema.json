@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:example:agent-platform:RunCompleted:0.1.0",
+  "title": "RunCompleted",
+  "description": "A successful terminal result was committed to the authoritative run store.",
+  "type": "object",
+  "properties": {
+    "runId": {
+      "type": "string"
+    },
+    "status": {
+      "const": "SUCCEEDED"
+    },
+    "resultRef": {
+      "type": "string"
+    },
+    "completedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "usageSummary": {
+      "type": "object",
+      "properties": {
+        "inputTokens": {
+          "type": "integer"
+        },
+        "outputTokens": {
+          "type": "integer"
+        },
+        "costUsd": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false
+    },
+    "traceId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "runId",
+    "status",
+    "resultRef",
+    "completedAt"
+  ],
+  "additionalProperties": false
+}
