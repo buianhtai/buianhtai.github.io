@@ -1,0 +1,91 @@
+# Agent Platform Architecture
+
+**Status:** Proposed / design documentation, not a record of implemented services  
+**Last updated:** 2026-10-09  
+**Scope:** Domain-neutral reference architecture for a configurable agent platform
+
+This documentation lives in \`docs/\` and is **not a blog article or a production implementation**. It explains the missing components between an incoming request and existing MCP/REST tools: triggering, agent selection, run admission, runtime execution, tool invocation, worker coordination, and UI event delivery.
+
+## Read in this order
+
+1. **[01 — Invocation and agent routing](./01-invocation-and-routing.md)**: entry points, \`TriggerBinding\`, eligibility filtering, direct selection vs automatic routing, sessions, router fallbacks, and request/response contract.
+2. **[02 — Runtime, workers, tools, and events](./02-runtime-workers-and-events.md)**: how a selected agent runs, where tools are called, run state machine, checkpoint/approval design, worker-to-API-to-UI streaming, and failure recovery.
+3. **[03 — Trigger adapters, examples, and MVP plan](./03-triggers-and-mvp.md)**: chat, webhook, scheduled work, email and delegation, plus implementation backlog and executable acceptance scenarios.
+
+See also [RFC-001: Configuration-Driven Agent Platform](https://github.com/buianhtai/buianhtai.github.io/pull/6), a separate, **currently proposed** RFC about the control-plane registry, policy model, declarative configuration schema, tool/skill catalog, and framework adapters. These documents intentionally complement that RFC but are reviewable independently.
+
+## The main distinction
+
+| Concept | Meaning | Executes an LLM? |
+| --- | --- | --- |
+| Trigger | Event that starts a workflow/run (chat, webhook, schedule, email) | No |
+| Agent router | Picks one eligible published agent when none is specified | Not necessarily; start with rules/embeddings |
+| Agent registry | Stores versioned definitions, descriptions, tool and skill bindings | No |
+| Run service | Creates and owns a run, status, quotas, idempotency, and events | No |
+| Worker + runtime | Loads a pinned agent and executes the reasoning/tool loop | Usually, but not for deterministic workflows |
+| Tool Gateway | Validates and executes permitted MCP/REST/KB capabilities | No |
+| Skill | Task procedure/instructions and resources attached to an agent | No, not itself |
+| Model gateway | Executes approved model requests and meters usage | Yes, when called |
+| API/event service | Serves run state and event stream to UI/integrations | No |
+
+**Tools alone are not a platform:** if all we have are tools, we still must add the entry point, registry, admission/run service, routing policy, worker runtime and event response path. Existing tool implementations can be reused. Their presence alone does not imply the other boxes already exist.
+
+## Logical system overview
+
+~~~mermaid
+flowchart TB
+    CHAT["Chat UI"] --> API["Platform API: auth + runs"]
+    HOOK["Webhook / Email / Scheduler"] --> API
+    API --> ADMISSION["Admission: tenant + policy + quota"]
+    ADMISSION --> ROUTER{"Explicit, bound or routed?"}
+    ROUTER --> REG["Published Agent Registry"]
+    REG --> RUNS["Run Service: version + runId + status"]
+    RUNS --> QUEUE["Queue / worker lease"]
+    QUEUE --> WORKER["Execution Worker"]
+    WORKER --> ENGINE["Runtime Adapter: simple / deep / workflow"]
+    ENGINE --> MODEL["Model Gateway"]
+    ENGINE --> GW["Tool Gateway (enforced scopes)"]
+    GW --> TOOLS["MCP / REST / KB tools"]
+    WORKER --> EVENTS["Durable run events + checkpoints"]
+    EVENTS --> API
+    API --> CHAT
+    API --> HOOK
+~~~
+
+This diagram is **logical**, not a demand to build eleven microservices. The MVP can begin with a single API process plus a worker and PostgreSQL. Queue, gateway and router may initially be modules; separate them for independent scaling or isolation.
+
+## Design principles
+
+1. **Explicit agent > automatic agent selection.** If an authorized caller specifies an agent version/deployment, do not spend tokens re-routing.
+2. **Fixed workflow triggers > open-ended routing.** A scheduled report normally invokes a configured workflow or agent.
+3. **Authorization before routing.** The router sees only agents eligible for the caller and workspace. Model routing never grants permission.
+4. **Immutable execution manifest.** Start a run with the resolved published agent version, exact tool/skill versions, effective policy, and adapter version.
+5. **One run, one primary agent (initially).** The agent can invoke tools; optional subagent delegation is a separate, authorized feature.
+6. **Models propose; code enforces.** Business rules, quotas, tool access and approvals do not depend on trusting model instructions.
+7. **Worker never owns the client connection.** The API serves durable event streams, allowing retries/reconnections and scheduled invocations.
+8. **Use AI selectively.** Deterministic tasks should not invoke an LLM. A router may use embeddings or a small model only when needed.
+9. **No PLM- or customer-specific examples.** All names, identifiers, tenants and APIs below are illustrative.
+
+## Glossary / contract owners
+
+| Object | Owner | Key fields |
+| --- | --- | --- |
+| \`AgentDefinition\` / \`AgentVersion\` | Control Plane | description, routing examples, runtime kind, tools, skills, model profile |
+| \`AgentDeployment\` | Control Plane | environment, published version pointer, active flag |
+| \`TriggerBinding\` | Integration/Control Plane | trigger kind, source, target agent/workflow, principal, policy |
+| \`AgentSession\` | Session API | owner, workspace, conversation, selected agent, memory policy |
+| \`AgentRun\` | Run Service | runId, trigger, principal, version digest, status, budget, traceId |
+| \`AgentRouteDecision\` | Router | candidate set, selected version/deployment, method, routing outcome |
+| \`RunEvent\` | Run/Event Service | runId, sequence, type, time, safe payload |
+| \`ToolInvocation\` | Tool Gateway | tool/version, input digest, authorization, approval, outcome |
+| \`ApprovalRequest\` | Approval API | tool intent hash, approver role, expiration, decision |
+
+## Reference links
+
+- [LangChain agent patterns](https://docs.langchain.com/oss/python/langchain/overview)
+- [Deep Agents](https://docs.langchain.com/oss/python/deepagents/overview)
+- [LangGraph persistence and checkpoints](https://docs.langchain.com/oss/python/langgraph/persistence)
+- [MCP specification](https://modelcontextprotocol.io/specification/2025-11-25)
+- [Agent Skills specification](https://agentskills.io/specification)
+
+Version pinning, adapter compatibility, security and deployment decisions require implementation validation. Examples are proposed contracts, **not** representations of deployed services.
