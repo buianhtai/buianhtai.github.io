@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:example:agent-platform:PublishAgentVersion:0.1.0",
+  "title": "PublishAgentVersion",
+  "description": "Request validation and immutable publication of one draft agent revision.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "agentId",
+    "draftRevision",
+    "clientRequestId"
+  ],
+  "properties": {
+    "agentId": {
+      "type": "string"
+    },
+    "draftRevision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "targetEnvironment": {
+      "type": "string"
+    },
+    "clientRequestId": {
+      "type": "string"
+    }
+  }
+}
