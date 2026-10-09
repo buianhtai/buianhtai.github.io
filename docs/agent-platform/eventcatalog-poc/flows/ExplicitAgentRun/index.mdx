@@ -65,8 +65,231 @@ steps:
       id: EventStreamAPI
       version: "0.1.0"
 ---
+
 # Explicit Agent Run
 
-Shows a low-cost, read-only agent call. No auto-router or subagent is required. The runtime and workflow engine are not rendered here as separate steps; refer to the detailed sequence and component diagrams in the architecture documentation.
+**Status: proposed logical design, not implemented behavior.** This example uses a fictional, read-only Documentation Agent. The user explicitly selects an eligible deployed agent; **no automatic routing, multi-agent delegation, or expensive general-purpose workflow is required**.
 
 <NodeGraph />
+
+## Purpose and boundaries
+
+- **Client / API:** authenticate the request, authorize the selected deployment, admit it and return a durable `runId`. HTTP 202 means the run has been persisted, **not** that the answer is ready.
+- **Run Service:** own platform run state, pinned immutable configuration version, idempotent admission, budget and events/outbox.
+- **Dispatcher / workflow adapter:** deliver accepted work to available execution capacity at least once; an implementation may use a queue or an optional durable workflow engine.
+- **Agent Worker:** own the bounded model and tool loop using the pinned version; it must not bypass the Tool Gateway.
+- **Tool Gateway:** validate tool binding, principal/tenant/resource ACLs and input schema on **every** invocation.
+- **Event Stream API:** expose durable, authorized SSE event replay to the browser. The worker never opens a direct browser channel.
+
+The [component ownership and general architecture diagrams](../../../11-architecture-views-component-flow-swimlanes.md) cover the broader platform.
+
+## A. Request-to-result sequence
+
+~~~mermaid
+sequenceDiagram
+    autonumber
+    actor U as User
+    participant UI as Chat UI
+    participant API as Platform API
+    participant RUN as Run Service
+    participant Q as Dispatcher
+    participant W as Agent Worker
+    participant M as Model Gateway
+    participant T as Tool Gateway
+    participant EV as Run Events
+
+    U->>UI: Select Documentation Agent; ask question
+    UI->>API: POST /agents/{agentId}/runs (Idempotency-Key)
+    API->>API: Authenticate, authorize selected deployment
+    API->>RUN: Admit request with pinned config and policy
+    RUN->>EV: Atomic run + outbox persist
+    RUN-->>API: runId, PENDING/QUEUED
+    API-->>UI: 202 Accepted, runId, eventsUrl
+    UI->>API: GET /runs/{runId}/events (SSE)
+    RUN->>Q: Dispatch accepted run from outbox
+    Q->>W: Lease run / attempt
+    W->>M: Prompt and allowed tool schemas
+    alt Model proposes authorized search
+      M-->>W: knowledge.search(arguments)
+      W->>T: Invoke with principal + run + tool binding
+      T->>T: Check tool binding, ACL, input, limits
+      T-->>W: Evidence with source references
+      W->>M: Continue using trusted evidence
+    else No tool required
+      M-->>W: Final answer
+    end
+    M-->>W: Final answer, usage
+    W->>EV: Persist result, usage, run.completed
+    EV-->>API: Replayable ordered run events
+    API-->>UI: SSE run.completed
+    UI-->>U: Answer with source references
+~~~
+
+**Important:** the sequence represents logical control flow. Outbox delivery may happen asynchronously and the exact dispatcher implementation is deliberately replaceable. Rejected access or invalid requests return errors without creating an executable run.
+
+## B. Run lifecycle and failure behavior
+
+~~~mermaid
+stateDiagram-v2
+    [*] --> QUEUED: durable admission
+    QUEUED --> RUNNING: worker lease acquired
+    RUNNING --> SUCCEEDED: result committed
+    RUNNING --> QUEUED: retryable failure / lease expiry
+    RUNNING --> FAILED: terminal error or budget exhausted
+    QUEUED --> CANCELLED: cancellation committed
+    RUNNING --> CANCELLING: cancellation requested
+    CANCELLING --> CANCELLED: worker stopped safely
+    CANCELLING --> SUCCEEDED: completion won race
+    SUCCEEDED --> [*]
+    FAILED --> [*]
+    CANCELLED --> [*]
+~~~
+
+| Case | Required contract |
+| --- | --- |
+| Duplicate HTTP submit | Same principal, agent and idempotency key resolve to the same admitted run; conflicting payload returns a conflict. |
+| Tool denied | Produce an auditable denied-invocation event; worker may safely answer without tool data or fail under policy. |
+| Model timeout | Respect deadline and retry budget; never loop without bounds. |
+| Worker crashes | Lease expires; next worker restores the pinned run and safe checkpoint. Fencing prevents stale commits. |
+| Tool result uncertain | A read-only tool may be retried safely under limits; do not generalize that rule to write operations. |
+| SSE disconnect | Client reconnects with event cursor / Last-Event-ID and replays durable events; execution continues independently. |
+| Cancellation | Cancellation is best-effort for in-flight provider calls; terminal state is decided using a single atomic transition. |
+
+Approval-gated writes and external jobs belong to [Tool Execution / external runner design](../../../04-tool-registry-and-external-execution.md), not this read-only example.
+
+## C. Suggested API contracts (illustrative, not implemented)
+
+Create a run:
+
+~~~http
+POST /agents/documentation-agent/runs
+Authorization: Bearer <access-token>
+Idempotency-Key: 7d61cdb1-1234-4a24-aef2-47e5a4e7e508
+Content-Type: application/json
+
+{
+  "sessionId": "session-example",
+  "message": "How do I authenticate to the public API?",
+  "clientRequestId": "request-example"
+}
+~~~
+
+Response after successful **durable** admission:
+
+~~~json
+{
+  "runId": "run-example",
+  "agentId": "documentation-agent",
+  "agentVersion": "0.1.0",
+  "status": "QUEUED",
+  "eventsUrl": "/runs/run-example/events"
+}
+~~~
+
+Other proposed endpoints:
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /runs/{runId}` | Authorized status, terminal result, error code and usage summary |
+| `GET /runs/{runId}/events` | Authorized SSE stream with event ids, ordering and replay |
+| `POST /runs/{runId}/cancel` | Idempotent cancellation request |
+
+Example normalized SSE event:
+
+~~~text
+id: 42
+event: run.completed
+data: {"runId":"run-example","status":"SUCCEEDED","answer":"...","sources":[]}
+~~~
+
+Contract considerations: scope all IDs to the authenticated tenant, avoid placing secrets in payloads or events, return stable machine-readable errors, define retention and cursor expiry, and keep a consistent vocabulary between the REST API, run store and events.
+
+## D. Configuration snapshot and minimum runtime model
+
+~~~mermaid
+erDiagram
+    AgentDefinition ||--o{ AgentVersion : versions
+    AgentVersion ||--o{ AgentRun : pinned_by
+    AgentVersion ||--o{ ToolBinding : authorizes
+    ToolDefinition ||--o{ ToolBinding : referenced_by
+    AgentRun ||--o{ RunStep : records
+    AgentRun ||--o{ RunEvent : emits
+    RunStep ||--o{ ToolInvocation : records
+
+    AgentDefinition {
+      string agentId
+      string name
+      string owner
+    }
+    AgentVersion {
+      string version
+      string modelRef
+      string policyRef
+    }
+    ToolDefinition {
+      string toolId
+      string schemaVersion
+      string adapterRef
+    }
+    ToolBinding {
+      string toolId
+      string allowedScope
+    }
+    AgentRun {
+      string runId
+      string principalId
+      string tenantId
+      string state
+      string agentVersion
+    }
+    RunStep {
+      string stepId
+      string state
+      int attempt
+    }
+    ToolInvocation {
+      string invocationId
+      string outcome
+    }
+    RunEvent {
+      int sequence
+      string eventType
+    }
+~~~
+
+The ERD is **logical**, not a prescribed SQL or graph schema. An admitted run persists a snapshot/reference to immutable agent version, model/adapter versions, bounded tool bindings, execution policy, tenant/principal context and trace/correlation identifiers. A deployed agent's active configuration may subsequently change without mutating the admitted run.
+
+Example constrained configuration:
+
+~~~yaml
+agentId: documentation-agent
+agentVersion: 0.1.0
+routing:
+  mode: explicit
+model:
+  providerRef: approved-provider
+  modelRef: economical-model
+tools:
+  - toolRef: knowledge.search
+    adapterType: mcp
+    permissions: [read]
+execution:
+  mode: interactive
+  maxSteps: 5
+  maxToolCalls: 5
+  deadlineSeconds: 60
+  allowDelegation: false
+  allowExternalWrites: false
+~~~
+
+## E. Implementation acceptance scenarios
+
+1. An authorized user explicitly selects an eligible documentation agent and receives HTTP 202 **only after** durable admission.
+2. A tool request is checked by the Tool Gateway against the **selected agent version's** binding and the caller's current resource ACLs.
+3. A disconnected UI can resume status and replay events without restarting the run.
+4. Duplicate admission is idempotent; repeated queue delivery cannot commit two terminal outcomes.
+5. A worker crash recovers safely; an expired lease holder cannot commit a stale result.
+6. Limits on steps, calls, tokens, cost, and deadline are enforced by trusted runtime policy, not merely prompt text.
+7. All examples remain tenant-neutral and fictional; docs never assert proposed events/services are deployed.
+
+**See also:** [runtime and workers](../../../02-runtime-workers-and-events.md), [plug-and-play adapters](../../../08-plugin-and-adapter-architecture.md), [reliability design](../../../09-scalability-reliability-and-operations.md), and [architecture views](../../../11-architecture-views-component-flow-swimlanes.md).
