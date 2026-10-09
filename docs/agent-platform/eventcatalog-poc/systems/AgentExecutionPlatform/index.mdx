@@ -1,0 +1,64 @@
+---
+id: AgentExecutionPlatform
+name: Agent Execution Platform
+version: "0.1.0"
+summary: Control, execution and integration capabilities that safely run configurable agents.
+services:
+  - id: PlatformAPI
+    version: "0.1.0"
+  - id: AgentRegistry
+    version: "0.1.0"
+  - id: RunService
+    version: "0.1.0"
+  - id: RunDispatcher
+    version: "0.1.0"
+  - id: AgentRuntime
+    version: "0.1.0"
+  - id: AgentWorker
+    version: "0.1.0"
+  - id: ModelGateway
+    version: "0.1.0"
+  - id: ToolGateway
+    version: "0.1.0"
+  - id: EventStreamAPI
+    version: "0.1.0"
+  - id: TriggerGateway
+    version: "0.1.0"
+  - id: ApprovalService
+    version: "0.1.0"
+  - id: DelegationGateway
+    version: "0.1.0"
+---
+# Agent Execution Platform
+
+**Status: target logical architecture.** This system documents platform responsibilities; service names do not require one deployment per box.
+
+## What the system does
+
+An authenticated caller, verified integration, or schedule can request a run of a published AgentVersion. The control plane authorizes and durably admits the request; workers execute bounded model-and-tool loops with independent gateway checks; users or integrations consume ordered results through stable APIs. No model can directly grant itself permissions, launch scripts or choose an arbitrary external endpoint.
+
+## Architecture layers
+
+| Layer | Responsibilities | Invariants |
+| --- | --- | --- |
+| Experience & ingress | Chat/API, Agent Studio, external triggers | Authenticate caller and source before admission |
+| Control plane | Registry, policy, run admission, decisions and approvals | Immutable version pinning; transactionally durable acceptance |
+| Execution plane | Dispatcher, workers, runtime, model gateway | Bounded attempts, leases, budgets and concurrency |
+| Integration plane | Tool gateway, MCP/HTTP/job adapters, delegation | Per-operation authorization, fixed reviewed targets |
+| State and audit | Run store, events, checkpoints, artifacts | Replayable events; tenant-scoped access; reconciliation |
+
+## Explore the journeys
+
+- [Configure and publish an agent](/architecture/docs/flows/AgentConfigurationLifecycle/0.1.0/) explains draft validation and immutable version publication.
+- [Explicit agent invocation](/architecture/docs/flows/ExplicitAgentRun/0.1.0/) follows a user question through response.
+- [Scheduled support intake](/architecture/docs/flows/SupportEmailIntake/0.1.0/) shows deterministic-first triage and human-review drafts.
+- [Approval-gated external job](/architecture/docs/flows/ApprovalGatedExternalJob/0.1.0/) demonstrates safe async side effects.
+- [Bounded child-agent delegation](/architecture/docs/flows/DelegatedAgentRun/0.1.0/) shows agent-to-agent work without unrestricted discovery.
+
+## Operational design
+
+The Run Service is authoritative for public run status; the workflow adapter may own its own internal checkpoints. Workers use fenced leases. Side effects have idempotent invocation records; ambiguous results enter reconciliation rather than blind retry. Event streaming is driven from a durable store, so reconnecting a browser does not restart execution. Limits apply per principal, tenant, agent version and adapter.
+
+## Context map
+
+<NodeGraph />
