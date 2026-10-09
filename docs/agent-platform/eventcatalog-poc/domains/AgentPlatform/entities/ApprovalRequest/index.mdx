@@ -1,0 +1,50 @@
+---
+id: ApprovalRequest
+name: Approval Request
+version: "0.1.0"
+summary: Human decision record bound to one immutable side-effect intent.
+properties:
+  - name: approvalId
+    type: UUID
+    required: true
+    description: Stable decision record
+  - name: runId
+    type: UUID
+    required: true
+    description: Parent run
+  - name: intentHash
+    type: String
+    required: true
+    description: Canonical operation and argument digest
+  - name: reviewerPolicyRef
+    type: String
+    required: true
+    description: Eligible decision makers
+  - name: expiresAt
+    type: DateTime
+    required: true
+    description: Time after which action is denied
+  - name: status
+    type: String
+    required: true
+    description: Pending, approved, rejected or expired
+---
+# Approval Request
+
+**Status:** Proposed domain model, not an implemented persistence schema. **Logical owner:** ApprovalService.
+
+## Properties
+
+<EntityPropertiesTable />
+
+## Lifecycle and invariants
+
+An approval is not a blank permission token. It authorizes only the exact tool version, target, arguments and risk classification bound by intentHash. Before executing, policy and ACLs must be re-evaluated. Rejection or expiration must never trigger an external write.
+
+## Fictional example
+
+A generated customer-email draft waits for an authorized reviewer. Editing its recipients or body invalidates the prior approval hash.
+
+## Related models
+
+[Agent Platform domain](/architecture/docs/domains/AgentPlatform/0.1.0/) · [Agent execution overview](/architecture/docs/flows/ExplicitAgentRun/0.1.0/). This is a logical entity: physical persistence may use relational rows, JSON snapshots or projections instead of a one-to-one table.
