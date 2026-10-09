@@ -1,0 +1,24 @@
+---
+id: AgentPlatform
+name: Agent Platform
+version: "0.1.0"
+summary: Proposed generic platform for configurable agent execution, tools and durable runs.
+services:
+  - id: PlatformAPI
+    version: "0.1.0"
+  - id: RunService
+    version: "0.1.0"
+  - id: AgentWorker
+    version: "0.1.0"
+  - id: ToolGateway
+    version: "0.1.0"
+  - id: EventStreamAPI
+    version: "0.1.0"
+---
+# Agent Platform
+
+A **proposed**, domain-neutral architecture. These logical components may be modules instead of separate deployable services.
+
+<NodeGraph />
+
+Start with the **ExplicitAgentRun** flow to see how an authorized question becomes an agent run. For a restart scenario, see **AgentRunRecovery**. Detailed component, sequence and swimlane views remain in the version-controlled architecture document.
