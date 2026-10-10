@@ -1,5 +1,5 @@
 ---
-const { Flow, NodeGraph } = Astro.props.components;
+const { Flow, NodeGraph, SystemContextMap, ArchitectureGraph, EntityMap } = Astro.props.components;
 const base = '/architecture';
 const journeys = [
   { title: 'Configure & publish', label: 'Control plane', description: 'Define agent models, tools, skills and policies; validate before publishing an immutable version.', path: '/docs/flows/AgentConfigurationLifecycle/0.1.0/' },
@@ -30,13 +30,43 @@ const journeys = [
       <div>
         <p class="text-xs font-semibold uppercase tracking-widest text-sky-700 dark:text-sky-300">Architecture views · Source-controlled</p>
         <h2 id="visual-architecture-title" class="mt-2 text-3xl font-bold text-slate-900 dark:text-white">See the system before exploring details</h2>
-        <p class="mt-2 max-w-3xl text-slate-600 dark:text-slate-300">A zoomable overview of the control plane, worker execution, secure integrations, and durable state. Each diagram has its own source and linked resource page.</p>
+        <p class="mt-2 max-w-3xl text-slate-600 dark:text-slate-300">Interactive EventCatalog maps are generated from the actual resource relationships. C4 views below provide additional purpose-built context, container and component diagrams.</p>
       </div>
       <a href={base + '/diagrams/ArchitectureOverview/0.1.0/'} class="text-sm font-semibold text-sky-700 dark:text-sky-300">Open full-size overview →</a>
     </div>
-    <div class="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
-      <iframe title="Agent Platform architecture overview diagram" loading="lazy" src={base + '/diagrams/ArchitectureOverview/0.1.0/embed/'} class="block h-[540px] w-full border-0 sm:h-[640px]"></iframe>
+    <div class="grid gap-5 lg:grid-cols-2">
+      <section class="min-w-0 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+        <div class="mb-3 flex items-center justify-between gap-2">
+          <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Native System Context Map</h3>
+          <a class="text-sm font-medium text-sky-700 dark:text-sky-300" href={base + '/visualiser/system-context-map/'}>Full screen ↗</a>
+        </div>
+        <p class="mb-3 text-sm text-slate-600 dark:text-slate-300">Generated from native systems, external dependencies and actors—not manually maintained C4 lines.</p>
+        <SystemContextMap />
+      </section>
+      <section class="min-w-0 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+        <div class="mb-3 flex items-center justify-between gap-2">
+          <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Catalog Architecture Graph</h3>
+          <a class="text-sm font-medium text-sky-700 dark:text-sky-300" href={base + '/visualiser/graph/'}>Explore graph ↗</a>
+        </div>
+        <p class="mb-3 text-sm text-slate-600 dark:text-slate-300">Explore linked domains, systems, services, agents, messages and ownership using native search and lenses.</p>
+        <ArchitectureGraph id="AgentPlatform" type="domain" depth="3" lens="all" lensPicker="true" search="true" legend="true" />
+      </section>
     </div>
+    <div class="mt-5 grid gap-5 lg:grid-cols-2">
+      <section class="min-w-0 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+        <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Native Entity Map</h3>
+        <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">AgentVersion, tool binding, run, approval and delegation entities with interactive relationships.</p>
+        <EntityMap id="AgentPlatform" version="0.1.0" title="Agent Platform Domain Model" />
+      </section>
+      <section class="min-w-0 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+        <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Native Execution Flow</h3>
+        <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">Walk through service and message nodes in an admitted run, including branches.</p>
+        <Flow id="ExplicitAgentRun" version="0.1.0" legend={false} walkthrough={true} search={true} />
+      </section>
+    </div>
+    <p class="mt-4 text-sm text-slate-600 dark:text-slate-300">
+      The C4 diagrams below remain detailed, editable design views. The native maps above are generated from EventCatalog resource metadata and should be the main navigation entry point.
+    </p>
     <div class="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {[
         { id: 'C4SystemContext', k: 'C4 · Level 1', t: 'System context', d: 'People, partner systems and platform boundary' },
