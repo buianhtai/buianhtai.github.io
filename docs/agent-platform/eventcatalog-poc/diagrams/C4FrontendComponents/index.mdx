@@ -1,0 +1,66 @@
+---
+id: C4FrontendComponents
+name: "L3 — Frontend Components and API Boundary"
+version: "0.1.0"
+summary: Browser-side chat, configuration, approvals, SSE and their backend interfaces.
+owners:
+  - architecture-stewards
+x-implementation-status: proposed
+x-diagram-class: C4
+---
+# L3 — Frontend Components and API Boundary
+
+**Status: proposed, generic reference architecture.** Not proof of a deployed service or accepted technology choice.
+
+## Diagram
+
+~~~mermaid
+C4Component
+  title Proposed Frontend Components — Browser and Server Boundary
+  Container_Boundary(web, "Frontend: Chat UI and Agent Studio") {
+    Component(chat, "Chat and Agent Picker", "UI module", "User input and explicit agent selection")
+    Component(studio, "Agent Studio", "UI module", "Edit draft config and request publication")
+    Component(approvals, "Approval Inbox", "UI module", "Review and approve exact effects")
+    Component(history, "Run History / Results", "UI module", "Show status, evidence and trace links")
+    Component(client, "Authenticated API Client", "Frontend port", "REST, retries and idempotency header")
+    Component(sse, "SSE Session / Cursor", "Frontend port", "Replay events and recover reconnects")
+  }
+  Container_Ext(api, "Platform API", "Backend", "Authorizes requests and serves run status")
+  Container_Ext(stream, "Event Stream API", "Backend", "Authorized committed events and cursor replay")
+  Container_Ext(approvalService, "Approval Service", "Backend", "Persists decisions for exact intents")
+  Rel(chat, client, "Submit input and selected deployment")
+  Rel(studio, client, "Validate/publish draft")
+  Rel(approvals, client, "Submit exact reviewer decision")
+  Rel(history, sse, "Subscribe to current run")
+  Rel(client, api, "HTTPS REST, scoped principal")
+  Rel(sse, stream, "SSE, Last-Event-ID")
+  Rel(api, approvalService, "Persist authorized decision")
+  Rel(stream, history, "Ordered progress and terminal result")
+~~~
+
+## Interpretation
+
+**The browser is a consumer, not the execution plane.** Frontend can cache a session cursor or render approval forms, but token scopes, agent eligibility, run pinning and side-effect permissions are enforced in the backend. The UI can reattach to a durable run using its runId and cursor after disconnect. A named frontend module does not imply a separate microfrontend deployment.
+
+## Frontend contracts
+
+| Component | Input | Backend interaction | Failure state |
+| --- | --- | --- | --- |
+| Chat & agent picker | Text, selected eligible deployment | POST /v1/runs | 409 idempotency conflict, 403 denied, 429 quota |
+| Agent Studio | Draft, model/skill/tool refs | Registry-backed validate/publish | Typed draft diagnostics; never client-side authoritative validation |
+| Approval Inbox | Authorized exact intent | Approval Service via API | Expired/hash-mismatch -> reject and refresh |
+| Run History | runId, workspace | GET /v1/runs/:runId | Revocation -> no longer show protected artifacts |
+| SSE client | Authorized run and cursor | GET events + Last-Event-ID | Reconnect same run; fallback to status snapshot |
+
+## Security / accessibility
+
+Use stable focus and keyboard access for approval forms; label pending and terminal status updates appropriately. Never expose provider credentials or unrestricted tool arguments to frontend state. Treat rendered model content as untrusted output; prevent arbitrary embedded script execution.
+
+## Explore the next level
+
+- [Parent container view](/architecture/diagrams/C4Containers/0.1.0/)
+- [Backend API components](/architecture/diagrams/C4APIComponents/0.1.0/)
+- [Run lifecycle](/architecture/diagrams/AgentRunStateMachine/0.1.0/)
+- [Approval and tool call](/architecture/diagrams/ToolInvocationSequence/0.1.0/)
+
+[Agent Platform domain](/architecture/domains/AgentPlatform/0.1.0/) · [Agent Execution Platform system](/architecture/systems/AgentExecutionPlatform/0.1.0/)
