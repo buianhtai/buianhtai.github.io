@@ -16,31 +16,50 @@ x-diagram-class: C4
 
 ~~~mermaid
 C4Container
-  title Proposed Agent Platform — Containers
-  Person(user, "User / Administrator", "Chat, configuration and approvals")
-  System_Ext(identity, "Identity Provider", "Identity and workspace scopes")
-  System_Ext(provider, "Approved Model and Tool Providers", "External services")
+  title Proposed Agent Platform — Logical Container Boundaries
+  Person(user, "Application User", "Interacts through web UI")
+  System_Ext(identity, "Identity Provider", "External auth and claims")
+  System_Ext(provider, "Approved Providers", "Model inference, MCP, HTTP and isolated jobs")
   System_Boundary(platform, "Agent Execution Platform") {
-    Container(web, "Web UI", "Browser SPA", "Agent Studio, chat, review and progress")
-    Container(api, "Platform API", "Stateless HTTP", "Auth, routing, run admission and SSE")
-    Container(control, "Control Services", "Logical services", "Registry, run state, policy and approvals")
-    Container(queue, "Dispatcher", "Queue or workflow adapter", "Durable tasks, retries and leases")
-    Container(worker, "Worker Pools", "Isolated processes", "Pinned agent runtime execution")
-    Container(gateway, "Integration Gateways", "Logical services", "Model, tools and delegation")
-    ContainerDb(db, "Operational Database", "Durable store", "Versions, runs, approvals and outbox")
-    ContainerDb(events, "Events and Artifacts", "Event log and object store", "Replay, checkpoints and scoped results")
+    Container_Boundary(frontend, "Frontend — Browser Application") {
+      Container(web, "Chat UI and Agent Studio", "SPA", "Input, configuration, approvals, run history")
+    }
+    Container_Boundary(control, "Backend — Control Plane Services") {
+      Container(api, "Platform API", "Backend REST and SSE", "Verifies principal and exposes runs")
+      Container(registry, "Agent Registry", "Logical service", "Published immutable agent definitions")
+      Container(run, "Run Service", "Logical service", "Durable run admission and status")
+      Container(approval, "Approval Service", "Logical service", "Human review before sensitive effects")
+    }
+    Container_Boundary(execution, "Execution Plane — Isolated Workers") {
+      Container(queue, "Run Dispatcher", "Durable workflow adapter", "Claims, leases, retries, backoff")
+      Container(worker, "Agent Worker", "RuntimeAdapter", "Executes pinned agent attempts")
+    }
+    Container_Boundary(integrations, "Integration Services — Policy Boundary") {
+      Container(model, "Model Gateway", "Metered provider adapter", "Approves configured model access")
+      Container(tool, "Tool Gateway", "Secured adapter host", "Authorizes and records each tool invocation")
+    }
+    Container_Boundary(persistence, "Data Plane — Durable Stores") {
+      ContainerDb(configdb, "Config Store", "Logical DB", "Agent versions and bindings")
+      ContainerDb(events, "Run and Event Store", "Logical DB and outbox", "Run status, events, attempts, approvals")
+      ContainerDb(artifacts, "Artifact Store", "Scoped object store", "Results and checkpoint evidence")
+    }
   }
   Rel(user, web, "Uses", "HTTPS")
-  Rel(web, api, "Requests runs / subscribes", "REST / SSE")
-  Rel(api, identity, "Verifies credentials", "OIDC")
-  Rel(api, control, "Admits authorized work", "Internal API")
-  Rel(control, db, "Transactional state", "Storage adapter")
-  Rel(control, queue, "Dispatches committed intent", "Outbox")
-  Rel(queue, worker, "Delivers work and renews leases", "At least once")
-  Rel(worker, gateway, "Invokes governed capabilities", "Typed APIs")
-  Rel(gateway, provider, "Uses reviewed adapters", "MCP / HTTPS")
-  Rel(worker, events, "Checkpoints and result references", "Durable writes")
-  Rel(api, events, "Reads/replays progress", "Scoped read")
+  Rel(web, api, "Requests, subscribes", "REST / SSE")
+  Rel(api, identity, "Verifies caller")
+  Rel(api, registry, "Resolves published versions")
+  Rel(api, run, "Durably admits")
+  Rel(registry, configdb, "Reads and writes")
+  Rel(run, events, "Persists outbox and events")
+  Rel(run, queue, "Schedules committed work")
+  Rel(queue, worker, "Delivers fenced attempts")
+  Rel(worker, model, "Calls approved model")
+  Rel(worker, tool, "Invokes allowed tool")
+  Rel(tool, approval, "Requests human decision")
+  Rel(model, provider, "Metered inference")
+  Rel(tool, provider, "Approved scoped effects")
+  Rel(worker, artifacts, "Stores results")
+  Rel(api, events, "Replays run status")
 ~~~
 
 ## How to read it

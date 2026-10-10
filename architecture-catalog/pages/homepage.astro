@@ -145,7 +145,7 @@ const journeys = [
   <section class="my-10 rounded-xl border border-slate-200 p-5 dark:border-slate-700 sm:p-7" aria-labelledby="archify-lab-title">
     <p class="text-xs font-semibold uppercase tracking-widest text-sky-700 dark:text-sky-300">Experimental · Enterprise diagram showcase</p>
     <h2 id="archify-lab-title" class="mt-2 text-2xl font-bold text-slate-900 dark:text-white">Compare Archify with native EventCatalog views</h2>
-    <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-600 dark:text-slate-300">Three source-controlled, interactive diagrams illustrate recognized enterprise patterns: a C4-inspired container map, a UML-style request sequence, and a BPMN-inspired approval swimlane. These are explanatory views of a proposed platform—not strict notation exports or live telemetry.</p>
+    <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-600 dark:text-slate-300">Three source-controlled, interactive diagrams illustrate recognized enterprise patterns: a boundary-aware C4-inspired container map, a UML-style request sequence, and a BPMN-inspired approval swimlane. These are explanatory views of a proposed platform—not strict notation exports or live telemetry.</p>
     <div class="mt-5 hidden overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700 sm:block">
       <iframe
         title="Archify proposed container architecture demo"
@@ -158,7 +158,7 @@ const journeys = [
     </div>
     <div class="mt-4 grid gap-3 sm:grid-cols-3">
       {[
-        { name: 'Container map', path: 'agent-platform-container-map', note: 'Logical API, queue, worker, stores and trust boundaries' },
+        { name: 'Container map', path: 'agent-platform-container-map', note: 'Distinct frontend, backend services, worker pool, gateways, data and external providers' },
         { name: 'Request sequence', path: 'agent-run-sequence', note: 'Durable admission, model/tool calls and SSE response' },
         { name: 'Approval swimlane', path: 'approval-swimlane', note: 'Policy validation, human review and safe execution' }
       ].map((diagram) => (

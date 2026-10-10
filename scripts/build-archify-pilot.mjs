@@ -24,6 +24,32 @@ for(const scenario of scenarios){
     const resource=path.join(catalog,'services',ref,'index.mdx');
     if(!existsSync(resource))throw new Error('Archify pilot refers to missing EventCatalog service: '+ref);
   }
+  if(scenario.slug==='agent-platform-container-map'){
+    // Guard against repeating the original flat graph where Platform API was
+    // accidentally rendered as frontend and no trust or deployment zones existed.
+    const nodeTypes=new Map((diagram.components??[]).map(node=>[node.id,node.type]));
+    const boundaries=(diagram.boundaries??[]);
+    const required={
+      frontend:['web'],backend:['api','registry','runs','approval'],
+      execution:['queue','worker'],integration:['model','tools'],
+      data:['configdb','events','artifacts'],external:['modelprovider','toolprovider']
+    };
+    if(nodeTypes.get('web')!=='frontend'||nodeTypes.get('api')!=='backend')
+      throw new Error('Logical FE/BE separation missing: Chat UI must be frontend and Platform API backend');
+    const covered=new Set();
+    for(const [key,members] of Object.entries(required)){
+      const b=boundaries.find(v=>v.label?.toLowerCase().includes(key));
+      if(!b)throw new Error('Missing diagram boundary '+key);
+      for(const id of members){
+        if(!b.wraps?.includes(id))throw new Error('Boundary '+key+' does not wrap '+id);
+        if(covered.has(id))throw new Error('Node '+id+' is ambiguously assigned to multiple logical boundaries');
+        covered.add(id);
+      }
+    }
+    if(!diagram.connections?.some(e=>e.from==='web'&&e.to==='api'))
+      throw new Error('Missing UI-to-backend API communication link');
+    console.log('Verified frontend/backend/execution/integration/data/external boundaries');
+  }
   const out=path.join(root,expected);
   mkdirSync(path.dirname(out),{recursive:true});
   const args=(command,...extra)=>[vendor,command,scenario.type,source,...extra,'--quality','standard'];
