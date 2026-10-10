@@ -25,6 +25,40 @@ const journeys = [
     </div>
   </section>
 
+  <section class="py-10" aria-labelledby="arch-levels-title">
+    <div class="mb-5">
+      <p class="text-xs font-semibold uppercase tracking-widest text-sky-700 dark:text-sky-300">Start simple · Drill down when needed</p>
+      <h2 id="arch-levels-title" class="mt-2 text-3xl font-bold text-slate-900 dark:text-white">Architecture, from one-minute overview to implementation details</h2>
+      <p class="mt-2 max-w-3xl text-slate-600 dark:text-slate-300">
+        One diagram introduces the platform. Each level below adds one kind of detail—without requiring everyone to read the entire service graph.
+      </p>
+    </div>
+    <div class="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+      <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 dark:border-slate-700">
+        <div>
+          <h3 class="font-semibold text-slate-900 dark:text-white">L0 · Executive architecture overview</h3>
+          <p class="text-sm text-slate-600 dark:text-slate-300">Five core capabilities, controlled boundaries, and one result path</p>
+        </div>
+        <a href={base + '/diagrams/ExecutiveOverview/0.1.0/'} class="text-sm font-semibold text-sky-700 dark:text-sky-300">View full diagram and explanation →</a>
+      </div>
+      <iframe title="Simple agent platform architecture overview" loading="lazy" src={base + '/diagrams/ExecutiveOverview/0.1.0/embed/'} class="block h-[320px] w-full border-0 sm:h-[400px]"></iframe>
+    </div>
+    <div class="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      {[
+        { level: 'L1 · Context', title: 'What connects?', description: 'People, systems, identity and external providers', path: '/diagrams/C4SystemContext/0.1.0/' },
+        { level: 'L2 · Containers', title: 'Where are boundaries?', description: 'Frontend, backend, workers, integrations and durable data', path: '/diagrams/C4Containers/0.1.0/' },
+        { level: 'L3 · Components', title: 'What do services own?', description: 'Internal frontend, API, runtime and adapter responsibilities', path: '/diagrams/C4FrontendComponents/0.1.0/' },
+        { level: 'L4 · Behavior', title: 'How does it execute?', description: 'Durable state, tool review, failure and recovery', path: '/diagrams/AgentRunStateMachine/0.1.0/' }
+      ].map((view) => (
+        <a href={base + view.path} class="group rounded-xl border border-slate-200 bg-white p-4 transition hover:border-sky-400 hover:shadow-sm dark:border-slate-700 dark:bg-slate-900">
+          <span class="text-xs font-semibold uppercase tracking-wide text-sky-700 dark:text-sky-300">{view.level}</span>
+          <h3 class="mt-1 font-semibold text-slate-900 group-hover:text-sky-700 dark:text-white">{view.title} →</h3>
+          <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">{view.description}</p>
+        </a>
+      ))}
+    </div>
+  </section>
+
   <section class="py-10" aria-labelledby="visual-architecture-title">
     <div class="mb-5 flex flex-wrap items-end justify-between gap-3">
       <div>
@@ -73,6 +107,9 @@ const journeys = [
         { id: 'C4Containers', k: 'C4 · Level 2', t: 'Containers', d: 'Logical deployables, worker pools and persistent state' },
         { id: 'C4ControlPlane', k: 'C4 · Level 3', t: 'Control plane', d: 'Registry, routing, run admission and approvals' },
         { id: 'C4ExecutionPlane', k: 'C4 · Level 3', t: 'Execution plane', d: 'Worker lifecycle, runtime ports and checkpoints' },
+        { id: 'C4FrontendComponents', k: 'C4 · Level 3', t: 'Frontend modules', d: 'Chat, Agent Studio, approval inbox and SSE client' },
+        { id: 'C4APIComponents', k: 'C4 · Level 3', t: 'Backend API internals', d: 'Authentication, routing, admission and status' },
+        { id: 'C4IntegrationComponents', k: 'C4 · Level 3', t: 'Integration gateways', d: 'Schemas, grants, approvals, adapters and effects' },
         { id: 'C4Deployment', k: 'C4 · Deployment', t: 'Deployment topology', d: 'Replicas, queues, durable stores and failure domains' },
         { id: 'RunLifecycleSequence', k: 'Dynamic', t: 'End-to-end sequence', d: 'From client input to authorized tools and SSE answer' }
       ].map((view) => (
@@ -90,7 +127,9 @@ const journeys = [
         ['TrustBoundaries', 'Trust boundaries'],
         ['ResilienceOverview', 'Reliability and scaling'],
         ['StateAndDataModel', 'Data model'],
-        ['AgentLifecycle', 'Configuration lifecycle']
+        ['AgentLifecycle', 'Configuration lifecycle'],
+        ['AgentRunStateMachine', 'Run state machine'],
+        ['ToolInvocationSequence', 'Tool approval sequence']
       ].map(([id, name]) => (
         <a href={base + '/diagrams/' + id + '/0.1.0/'} class="font-medium text-sky-700 hover:underline dark:text-sky-300">{name} ↗</a>
       ))}
@@ -110,23 +149,6 @@ const journeys = [
           <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">{journey.description}</p>
         </a>
       ))}
-    </div>
-  </section>
-
-  <section class="grid gap-7 py-4 lg:grid-cols-2">
-    <div class="min-w-0 rounded-xl border border-slate-200 p-5 dark:border-slate-700">
-      <div class="mb-4">
-        <h2 class="text-xl font-bold text-slate-900 dark:text-white">Platform relationship map</h2>
-        <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">Start from the domain and select a service or agent to explore ownership.</p>
-      </div>
-      <NodeGraph id="AgentPlatform" version="0.1.0" type="domain" />
-    </div>
-    <div class="min-w-0 rounded-xl border border-slate-200 p-5 dark:border-slate-700">
-      <div class="mb-4">
-        <h2 class="text-xl font-bold text-slate-900 dark:text-white">Follow a live architecture flow</h2>
-        <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">A selected agent run, with reviewable service and event nodes.</p>
-      </div>
-      <Flow id="ExplicitAgentRun" version="0.1.0" includeKey={false} />
     </div>
   </section>
 
