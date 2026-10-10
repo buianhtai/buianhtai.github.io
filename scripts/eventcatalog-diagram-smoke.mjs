@@ -35,7 +35,7 @@ try{
   await contextPlaceholder.locator('.react-flow').first().waitFor({state:'visible',timeout:25000});
   console.log('Native SystemContextMap and ArchitectureGraph mounted successfully');
   await page.screenshot({path:output+'/NativeArchitectureHomepage.png',fullPage:false,timeout:15000});
-  const ids=['ArchitectureOverview','C4SystemContext','C4Containers','C4ControlPlane','C4ExecutionPlane','C4Deployment','TrustBoundaries'];
+  const ids=['ExecutiveOverview','ArchitectureOverview','C4SystemContext','C4Containers','C4ControlPlane','C4ExecutionPlane','C4FrontendComponents','C4APIComponents','C4IntegrationComponents','C4Deployment','AgentRunStateMachine','ToolInvocationSequence','TrustBoundaries'];
   for(const id of ids){
     const url=host+'/architecture/diagrams/'+id+'/0.1.0/embed/';
     const response=await page.goto(url,{waitUntil:'domcontentloaded',timeout:20000});
@@ -48,7 +48,7 @@ try{
     const pageText=await page.locator('body').innerText();
     assert(!/syntax error in text|mermaid version .*error/i.test(pageText),'Mermaid error on '+id);
     console.log('Rendered '+id+' ('+n+' SVG)');
-    if(id==='ArchitectureOverview'||id==='C4Containers'||id==='C4Deployment'){
+    if(id==='ExecutiveOverview'||id==='C4FrontendComponents'||id==='C4Containers'||id==='C4Deployment'){
       await page.screenshot({path:output+'/'+id+'.png',fullPage:true,timeout:15000});
     }
   }
