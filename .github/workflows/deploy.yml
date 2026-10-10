@@ -151,6 +151,29 @@ jobs:
             test -s "dist/architecture/showcase/${name}.html"
           done
 
+      - name: Generate editorial SVG and editable diagrams.net views
+        run: |
+          node scripts/build-editorial-diagrams.mjs
+          for id in executive containers; do
+            test -s "dist/architecture/showcase/editorial-${id}.svg"
+            test -s "dist/architecture/showcase/editorial-${id}.drawio"
+          done
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+          for name in ("executive","containers"):
+              base=Path("dist/architecture/showcase/editorial-"+name)
+              ET.parse(str(base)+".svg")
+              root=ET.parse(str(base)+".drawio").getroot()
+              assert root.tag == "mxfile"
+              cells=root.findall(".//mxCell")
+              assert len(cells) > (12 if name=="executive" else 23)
+              if name=="containers":
+                  ids={c.get("id") for c in cells}
+                  assert {"fe","be","workers","gateways","data","external"}.issubset(ids)
+          print("Editorial SVG/XML and editable draw.io boundary checks passed.")
+          PY
+
       - name: Upload combined site as one GitHub Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
