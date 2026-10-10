@@ -1,0 +1,203 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Human Approval - Cross-Team Workflow",
+    "subtitle": "BPMN-inspired lanes; not executable BPMN 2.0",
+    "output": "dist/architecture/showcase/approval-swimlane.html",
+    "quality_profile": "standard"
+  },
+  "lanes": [
+    {
+      "id": "request",
+      "label": "Agent / Runtime"
+    },
+    {
+      "id": "policy",
+      "label": "Tool Policy + Gateway"
+    },
+    {
+      "id": "review",
+      "label": "Human Review",
+      "variant": "exception"
+    },
+    {
+      "id": "external",
+      "label": "Approved Integration"
+    }
+  ],
+  "phases": [
+    {
+      "id": "prepare",
+      "label": "Propose and validate",
+      "fromCol": 0,
+      "toCol": 1
+    },
+    {
+      "id": "authorize",
+      "label": "Approve exact intent",
+      "fromCol": 2,
+      "toCol": 3,
+      "variant": "security"
+    },
+    {
+      "id": "execute",
+      "label": "Execute and reconcile",
+      "fromCol": 4,
+      "toCol": 5,
+      "variant": "dashed"
+    }
+  ],
+  "mainPath": [
+    "propose",
+    "check",
+    "approval",
+    "decision",
+    "execute",
+    "reconcile",
+    "answer"
+  ],
+  "nodes": [
+    {
+      "id": "propose",
+      "lane": "request",
+      "col": 0,
+      "type": "backend",
+      "label": "Propose tool",
+      "sublabel": "Named operation",
+      "width": 140
+    },
+    {
+      "id": "check",
+      "lane": "policy",
+      "col": 1,
+      "type": "security",
+      "label": "Validate request",
+      "sublabel": "Schema and ACL",
+      "width": 140
+    },
+    {
+      "id": "approval",
+      "lane": "review",
+      "col": 2,
+      "type": "security",
+      "label": "Review exact intent",
+      "sublabel": "Hash + expiry",
+      "width": 140
+    },
+    {
+      "id": "decision",
+      "lane": "review",
+      "col": 3,
+      "type": "security",
+      "label": "Approve or reject",
+      "sublabel": "Authorized reviewer",
+      "width": 140
+    },
+    {
+      "id": "denied",
+      "lane": "policy",
+      "col": 4,
+      "type": "security",
+      "label": "Safe denial",
+      "sublabel": "No side effect",
+      "width": 140
+    },
+    {
+      "id": "execute",
+      "lane": "external",
+      "col": 4,
+      "type": "cloud",
+      "label": "Execute operation",
+      "sublabel": "Allowlisted adapter",
+      "width": 140
+    },
+    {
+      "id": "reconcile",
+      "lane": "external",
+      "col": 5,
+      "type": "messagebus",
+      "label": "Confirm outcome",
+      "sublabel": "Remote ID / unknown",
+      "width": 140
+    },
+    {
+      "id": "answer",
+      "lane": "request",
+      "col": 5,
+      "type": "backend",
+      "label": "Resume run",
+      "sublabel": "Persist typed result",
+      "width": 140
+    }
+  ],
+  "edges": [
+    {
+      "from": "propose",
+      "to": "check",
+      "label": "tool intent",
+      "variant": "default"
+    },
+    {
+      "from": "check",
+      "to": "approval",
+      "label": "risk requires review",
+      "variant": "security"
+    },
+    {
+      "from": "approval",
+      "to": "decision",
+      "label": "exact target",
+      "variant": "security"
+    },
+    {
+      "from": "decision",
+      "to": "execute",
+      "label": "approved",
+      "variant": "emphasis"
+    },
+    {
+      "from": "decision",
+      "to": "denied",
+      "label": "rejected / expired",
+      "variant": "security",
+      "role": "error"
+    },
+    {
+      "from": "execute",
+      "to": "reconcile",
+      "label": "external id",
+      "variant": "emphasis"
+    },
+    {
+      "from": "reconcile",
+      "to": "answer",
+      "label": "typed outcome",
+      "variant": "emphasis"
+    },
+    {
+      "from": "denied",
+      "to": "answer",
+      "label": "without effect",
+      "variant": "dashed"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "rose",
+      "title": "Approval is not execution",
+      "items": [
+        "The approved intent hash binds exact operation + arguments",
+        "Gateway rechecks policy before any external effect"
+      ]
+    },
+    {
+      "dot": "orange",
+      "title": "Unknown outcomes",
+      "items": [
+        "A timeout after remote acceptance requires reconciliation",
+        "Never blindly repeat non-idempotent writes"
+      ]
+    }
+  ]
+}
