@@ -35,6 +35,27 @@ try{
   await contextPlaceholder.locator('.react-flow').first().waitFor({state:'visible',timeout:25000});
   console.log('Native SystemContextMap and ArchitectureGraph mounted successfully');
   await page.screenshot({path:output+'/NativeArchitectureHomepage.png',fullPage:false,timeout:15000});
+  const executiveImage=page.locator('[data-editorial-overview] img');
+  await executiveImage.waitFor({state:'visible',timeout:20000});
+  const executiveValid=await executiveImage.evaluate((img)=>img.complete && img.naturalWidth >= 1400);
+  assert(executiveValid,'Editorial L0 SVG missing or not loaded');
+  for(const name of ['executive','containers']){
+    const url=host+'/architecture/showcase/editorial-'+name+'.svg';
+    const response=await page.request.get(url);
+    assert.equal(response.status(),200,'Editorial SVG route unavailable: '+name);
+    const data=await response.text();
+    assert(data.includes('<svg') && data.includes('diagram-title'),'Invalid generated editorial vector '+name);
+    const editable=await page.request.get(host+'/architecture/showcase/editorial-'+name+'.drawio');
+    assert.equal(editable.status(),200,'Editable draw.io view missing: '+name);
+    assert((await editable.text()).includes('<mxfile'),'Invalid diagrams.net source '+name);
+  }
+  await page.locator('#editorial-container-details summary').click();
+  const containerImage=page.locator('#editorial-container-details img');
+  await containerImage.waitFor({state:'visible',timeout:15000});
+  assert(await containerImage.evaluate((img)=>img.complete && img.naturalWidth>=1800),'Editable container SVG preview not visible');
+  console.log('Professional L0/L2 vector previews and editable diagrams.net downloads passed');
+  await page.screenshot({path:output+'/EditorialContainerBoundaries.png',fullPage:false,timeout:15000});
+
   const ids=['ExecutiveOverview','ArchitectureOverview','C4SystemContext','C4Containers','C4ControlPlane','C4ExecutionPlane','C4FrontendComponents','C4APIComponents','C4IntegrationComponents','C4Deployment','AgentRunStateMachine','ToolInvocationSequence','TrustBoundaries'];
   for(const id of ids){
     const url=host+'/architecture/diagrams/'+id+'/0.1.0/embed/';
