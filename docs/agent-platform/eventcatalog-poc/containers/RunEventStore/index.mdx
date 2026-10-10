@@ -1,0 +1,24 @@
+---
+id: RunEventStore
+name: Run and Event Store
+version: "0.1.0"
+summary: Logical run states, outbox, event replay, attempts and tool invocation ledger
+container_type: database
+technology: undecided
+classification: internal
+owners:
+  - architecture-stewards
+x-implementation-status: proposed
+x-tracking-status: unassigned
+---
+# Run and Event Store
+
+**Proposed logical data store, not an installed database or cloud resource.**
+
+Durability and per-run ordering are requirements; a single physical database is not prescribed.
+
+## Native data dependencies
+
+<NodeGraph mode="full" />
+
+Data residency, retention policy, RPO/RTO and encryption-key ownership require separate architecture and compliance decisions. Linked services declare `readsFrom` and `writesTo` relationships so EventCatalog can derive dependency graphs automatically.
