@@ -1,0 +1,86 @@
+---
+id: ToolInvocationSequence
+name: "L4 — Secure Tool Invocation and Approval Sequence"
+version: "0.1.0"
+summary: Step-by-step authorization, exact review, adapter execution and unknown-effect recovery.
+owners:
+  - architecture-stewards
+x-implementation-status: proposed
+x-diagram-class: sequence
+---
+# L4 — Secure Tool Invocation and Approval Sequence
+
+**Status: proposed, generic reference architecture.** Not proof of a deployed service or accepted technology choice.
+
+## Diagram
+
+~~~mermaid
+sequenceDiagram
+  autonumber
+  participant W as Agent Worker
+  participant G as Tool Gateway
+  participant P as Policy / Schema
+  participant A as Approval Service
+  actor H as Authorized Reviewer
+  participant E as External Adapter
+  participant L as Invocation Ledger
+  W->>G: invoke(toolVersion, invocationId, proposedArgs)
+  G->>P: Resolve binding + principal + tenant + ACL
+  P-->>G: Validate schema, budget and risk
+  alt Denied or invalid
+    G->>L: Record DENIED
+    G-->>W: Safe typed denial
+  else Preauthorized read
+    G->>E: Call allowlisted operation
+    E-->>G: Typed evidence
+    G->>L: Record completed invocation
+    G-->>W: Scoped result ref
+  else Mutating or high-risk effect
+    G->>A: RequestApproval(exact intentHash, expiry)
+    A-->>H: Preview immutable operation and target
+    alt Approved before expiry
+      H->>A: Approve exact intent
+      A-->>G: Decision + approved hash
+      G->>P: Recheck current ACL, quota, hash
+      P-->>G: Allowed now
+      G->>E: Execute reviewed operation with invocationId
+      alt Provider returns result
+        E-->>G: Remote ID + confirmed status
+        G->>L: Commit outcome
+        G-->>W: Typed success/failure
+      else Timeout after possible acceptance
+        E--xG: Response lost
+        G->>L: OUTCOME_UNKNOWN + reconciliation reference
+        G-->>W: Do not blindly retry effect
+      end
+    else Rejected, changed or expired
+      A-->>G: Denied or invalid
+      G->>L: Record DENIED
+      G-->>W: No external effect
+    end
+  end
+~~~
+
+## Interpretation
+
+The Tool Gateway is a hard boundary between untrusted model-proposed operations and effects. A reviewer approves one canonical intent digest, not a generic blank permission token. External writes retain a stable invocationId and their remote correlation; partial failures can be **outcome unknown**, requiring reconciliation rather than replay.
+
+## What to test
+
+- Unknown tool ID, unbound tool version, extra argument field → denied before network request
+- Missing tenant ACL, exhausted quota, revoked principal → denied and audited
+- Approval expired or argument/recipient changed → previous approval invalid
+- Duplicate invocationId → reuse recorded effect/outcome, not a second write
+- Remote timeout after acceptance → OUTCOME_UNKNOWN and reconciliation
+- Model-driven prompt injection in tool output → cannot expand tools, permissions or endpoint allowlist
+
+Keep message bodies and connector secrets out of broadly visible progress events. Only safe result references cross back to the caller.
+
+## Explore the next level
+
+- [Gateway internals](/architecture/diagrams/C4IntegrationComponents/0.1.0/)
+- [Full flow](/architecture/diagrams/ApprovalGatedExternalJob/0.1.0/)
+- [Trust model](/architecture/diagrams/TrustBoundaries/0.1.0/)
+- [Run statuses](/architecture/diagrams/AgentRunStateMachine/0.1.0/)
+
+[Agent Platform domain](/architecture/domains/AgentPlatform/0.1.0/) · [Agent Execution Platform system](/architecture/systems/AgentExecutionPlatform/0.1.0/)
