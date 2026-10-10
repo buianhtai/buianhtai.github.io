@@ -1,0 +1,68 @@
+---
+id: AgentRunStateMachine
+name: "L4 — Durable Agent Run State Machine"
+version: "0.1.0"
+summary: A proposed public run lifecycle that separates acceptance, waiting, retries, cancellation and terminal states.
+owners:
+  - architecture-stewards
+x-implementation-status: proposed
+x-diagram-class: state
+---
+# L4 — Durable Agent Run State Machine
+
+**Status: proposed, generic reference architecture.** Not proof of a deployed service or accepted technology choice.
+
+## Diagram
+
+~~~mermaid
+stateDiagram-v2
+  [*] --> QUEUED: Authorize + persist run/outbox
+  QUEUED --> RUNNING: Acquire fenced worker lease
+  RUNNING --> WAITING_APPROVAL: Persist exact approval intent
+  WAITING_APPROVAL --> QUEUED: Approved + policy revalidated
+  WAITING_APPROVAL --> FAILED: Denied / expired
+  RUNNING --> WAITING_EXTERNAL_JOB: Remote job acknowledged
+  WAITING_EXTERNAL_JOB --> QUEUED: Callback/status reconciled
+  WAITING_EXTERNAL_JOB --> FAILED: Terminal external failure
+  RUNNING --> SUCCEEDED: Persist verified result
+  RUNNING --> FAILED: Non-retryable / exhausted budget
+  RUNNING --> QUEUED: Safe checkpoint + finite retry
+  QUEUED --> CANCELLED: Cancellation accepted
+  RUNNING --> CANCELLED: Fenced cancellation finalized
+  WAITING_APPROVAL --> CANCELLED: Review cancelled
+  WAITING_EXTERNAL_JOB --> CANCELLED: Safe cancellation confirmed
+  SUCCEEDED --> [*]
+  FAILED --> [*]
+  CANCELLED --> [*]
+~~~
+
+## Interpretation
+
+This is the **logical user-facing AgentRun status**, not the internal engine's detailed attempt or checkpoint state. A run can have multiple worker attempts; retries do not create new logical run IDs. WAITING states release worker capacity. Unknown external write outcomes must be reconciled before treating work as safely retryable or cancelled.
+
+## Transition and retry matrix
+
+| Current status | Event | Next status | Invariant |
+| --- | --- | --- | --- |
+| QUEUED | Atomic lease acquired | RUNNING | Fencing token increments |
+| RUNNING | Safe model/tool transient failure | QUEUED | Only with checkpoint, hard deadline and attempt budget |
+| RUNNING | Exact approval intent persisted | WAITING_APPROVAL | Worker need not block waiting for a human |
+| WAITING_APPROVAL | Consent + fresh policy valid | QUEUED | Same intentHash or deny |
+| RUNNING | External async job accepted | WAITING_EXTERNAL_JOB | Remote ID and invocation ledger retained |
+| WAITING_EXTERNAL_JOB | Verified terminal callback | QUEUED/FAILED | No blind duplicate writes |
+| RUNNING | Result committed | SUCCEEDED | Authored final result stored and per-run event emitted |
+
+## Terminal semantics
+
+SUCCEEDED, FAILED and CANCELLED are final public statuses. An effect discovered after terminalization belongs to explicit reconciliation/audit, not an unaudited silent status rewrite. The workflow adapter may use additional internal statuses such as RETRY_DELAY or CANCELLING, but the public API should not leak unversioned engine internals.
+
+**Design note:** The optional automatic-routing phase can precede run admission; for routing that itself is durable, model a separate routing job or explicit ROUTING state in a revised API contract.
+
+## Explore the next level
+
+- [Request sequence](/architecture/diagrams/RunLifecycleSequence/0.1.0/)
+- [Durable events and effects](/architecture/diagrams/EventDataFlow/0.1.0/)
+- [Failure path](/architecture/diagrams/ResilienceOverview/0.1.0/)
+- [Worker components](/architecture/diagrams/C4ExecutionPlane/0.1.0/)
+
+[Agent Platform domain](/architecture/domains/AgentPlatform/0.1.0/) · [Agent Execution Platform system](/architecture/systems/AgentExecutionPlatform/0.1.0/)
