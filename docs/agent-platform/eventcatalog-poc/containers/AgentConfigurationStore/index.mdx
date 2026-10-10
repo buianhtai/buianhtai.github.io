@@ -1,0 +1,24 @@
+---
+id: AgentConfigurationStore
+name: Agent Configuration Store
+version: "0.1.0"
+summary: Immutable published manifests, drafts, bindings and approval policies
+container_type: database
+technology: undecided
+classification: internal
+owners:
+  - architecture-stewards
+x-implementation-status: proposed
+x-tracking-status: unassigned
+---
+# Agent Configuration Store
+
+**Proposed logical data store, not an installed database or cloud resource.**
+
+Authoritative registry records and immutable version digests; the specific backing database engine is not yet selected.
+
+## Native data dependencies
+
+<NodeGraph mode="full" />
+
+Data residency, retention policy, RPO/RTO and encryption-key ownership require separate architecture and compliance decisions. Linked services declare `readsFrom` and `writesTo` relationships so EventCatalog can derive dependency graphs automatically.
