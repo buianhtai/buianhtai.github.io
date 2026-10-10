@@ -43,6 +43,10 @@ containers:
   - id: ArtifactStore
     version: "0.1.0"
 diagrams:
+  - id: PlugAndPlayBlueprint
+    version: "0.1.0"
+  - id: ExtensionLifecycle
+    version: "0.1.0"
   - id: ExecutiveOverview
     version: "0.1.0"
   - id: C4FrontendComponents
@@ -110,6 +114,12 @@ services:
 ## What the system does
 
 An authenticated caller, verified integration, or schedule can request a run of a published AgentVersion. The control plane authorizes and durably admits the request; workers execute bounded model-and-tool loops with independent gateway checks; users or integrations consume ordered results through stable APIs. No model can directly grant itself permissions, launch scripts or choose an arbitrary external endpoint.
+
+## Build and extend, before you run
+
+Start with the [illustrated product blueprint](/architecture/illustrations/agent-platform-plug-and-play.svg) and [Plug-and-Play Blueprint](/architecture/diagrams/PlugAndPlayBlueprint/0.1.0/) to see agent assembly, configuration publication and shared execution. The [Extension Lifecycle](/architecture/diagrams/ExtensionLifecycle/0.1.0/) shows how operator-reviewed packages become scoped agent capabilities; the [Agent Configuration Flow](/architecture/docs/flows/AgentConfigurationLifecycle/0.1.0/) explains validation and immutable version pinning.
+
+The **Agent Compiler** is a proposed logical responsibility of Registry in the MVP, not a mandatory new deployed service. A versioned skill is data/instructions, not an executable tool grant.
 
 ## Visual architecture: C4 overview
 
