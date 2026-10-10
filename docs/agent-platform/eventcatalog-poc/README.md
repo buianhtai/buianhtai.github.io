@@ -4,6 +4,10 @@
 
 This directory is the source of truth for native EventCatalog resources that are synchronized into the separate `architecture-catalog/` Community application and published under `/architecture/` together with the existing Astro blog. The deployment is handled by the repository's GitHub Pages workflow on `main`.
 
+## Recommended starting point
+
+The public portal introduces the [illustrated plug-and-play architecture](/architecture/illustrations/agent-platform-plug-and-play.svg), then the native [Plug-and-Play Blueprint](./diagrams/PlugAndPlayBlueprint/index.mdx) and [Adapter Extension Lifecycle](./diagrams/ExtensionLifecycle/index.mdx). These distinguish agent-author configuration from operator-installed adapters, and both from runtime execution. Detailed behavior stays in the EventCatalog resource graph, versioned native flows and contract pages.
+
 ## What's here
 
 | Type | Number | Why it matters |

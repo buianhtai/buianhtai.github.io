@@ -1,0 +1,94 @@
+---
+id: PlugAndPlayBlueprint
+name: "Plug-and-Play Agent Platform — Product Blueprint"
+version: "0.1.0"
+summary: End-to-end distinction between assembling an agent, registering reviewed extensions, publishing a pinned manifest, and executing through independent platform guards.
+owners:
+  - architecture-stewards
+x-implementation-status: proposed
+x-diagram-class: reference-architecture
+---
+# Plug-and-Play Agent Platform — Product Blueprint
+
+**Status: proposed, vendor-neutral reference architecture.** No named connector or model is implied to be deployed, and no plugin bypasses policy.
+
+## Diagram
+
+~~~mermaid
+flowchart TB
+  subgraph AUTHOR["Author experience — Agent Studio"]
+    A["Purpose + instructions"]
+    M["Approved model profile"]
+    S["Versioned skills + scoped knowledge"]
+    T["Bound reviewed tool capabilities"]
+    TR["Verified trigger + allowed subagents"]
+  end
+  subgraph EXT["Extension lifecycle — controlled by operator/admin"]
+    PK["AdapterPackage<br/>typed port + signed version"]
+    IN["AdapterInstance<br/>workspace + secret references"]
+    CAP["Published Capability<br/>schemas + risk classification"]
+    BD["AgentBinding<br/>narrowed scopes and quotas"]
+    PK -->|"approve/install"| IN
+    IN -->|"health + review"| CAP
+    CAP -->|"eligible for selection"| BD
+  end
+  subgraph CTRL["Control plane — own and govern configuration"]
+    COMP["Agent Registry / Compiler<br/>resolve refs + compatibility + permissions"]
+    VER["Immutable AgentVersion<br/>manifest digest + deployment alias"]
+    RUN["Run Service<br/>authorized durable admission"]
+    COMP -->|"publish"| VER
+    VER -->|"pin revision"| RUN
+  end
+  subgraph EXEC["Execution plane — isolated and replaceable runtime"]
+    Q["Durable dispatch"]
+    W["Agent Worker + RuntimeAdapter"]
+    Q --> W
+  end
+  subgraph GATE["Guarded extension gateways"]
+    MOD["Model Gateway"]
+    TOOL["Tool Gateway<br/>policy + approval"]
+    DELEG["Delegation Gateway<br/>bounded child run"]
+  end
+  STATE[("Durable runs / events / artifacts")]
+  PROVIDERS["Reviewed remote adapters / providers<br/>outside platform trust boundary"]
+  A --> COMP
+  M --> COMP
+  S --> COMP
+  T --> COMP
+  TR --> COMP
+  BD --> COMP
+  RUN --> Q
+  RUN --> STATE
+  W --> MOD
+  W --> TOOL
+  W --> DELEG
+  MOD --> PROVIDERS
+  TOOL --> PROVIDERS
+  DELEG --> RUN
+  W --> STATE
+~~~
+
+## Core reading
+
+**Configuration is not execution.** An author assembles eligible parts of an agent; the Registry's logical compiler validates and pins a version; the Run Service admits execution; separate workers run through model/tool/delegation gateways. A trusted operator's reviewed AdapterPackage is **not** automatically visible as a runnable tool, and published capabilities do not automatically give an agent permission.
+
+### Extension and configuration boundaries
+
+| Object | Who manages it | Stability and permission |
+| --- | --- | --- |
+| AdapterPackage | Operator | Reviewed code/distribution, typed port and pinned version |
+| AdapterInstance | Operator/workspace admin | Workspace endpoint, credential reference, health and egress |
+| Published Capability | Platform admin/catalog owner | Stable reviewed operation/schema and risk class |
+| AgentBinding | Agent author with grants | Narrower versioned scopes; never expands operator permission |
+| AgentVersion | Authorized publisher | Immutable manifest digest of model, skills, knowledge, tools, triggers and permitted subagents |
+| AgentRun | Platform backend | Pinned published revision, hard runtime budget, durable events |
+
+The **Agent Compiler** is a logical control-plane responsibility, not an independently required microservice. Skills are instructions/data, not scripts that install new permissions. Knowledge sources are scoped and versioned independently from the tools that retrieve them.
+
+### Read next
+
+[Extension installation and binding](/architecture/diagrams/ExtensionLifecycle/0.1.0/) · [Container architecture](/architecture/diagrams/C4Containers/0.1.0/) · [Agent configuration flow](/architecture/docs/flows/AgentConfigurationLifecycle/0.1.0/) · [Tool approval sequence](/architecture/diagrams/ToolInvocationSequence/0.1.0/)
+
+## Architecture source
+
+[Plug-and-play product blueprint chapter](https://github.com/buianhtai/buianhtai.github.io/blob/main/docs/agent-platform/13-plug-and-play-platform-blueprint.md) · [Native Agent Platform domain](/architecture/domains/AgentPlatform/0.1.0/) · [Agent Execution Platform system](/architecture/systems/AgentExecutionPlatform/0.1.0/)

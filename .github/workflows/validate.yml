@@ -56,6 +56,21 @@ jobs:
           mkdir -p dist/architecture
           cp -R architecture-catalog/dist/. dist/architecture/
           test -s dist/architecture/index.html
+          for image in agent-platform-plug-and-play extension-lifecycle; do
+            test -s "dist/architecture/illustrations/${image}.svg" || {
+              echo "::error::Missing plug-and-play infographic: $image"
+              exit 1
+            }
+            python3 -c 'import sys, xml.etree.ElementTree as ET; root=ET.parse(sys.argv[1]).getroot(); assert root.tag.endswith("svg")' "dist/architecture/illustrations/${image}.svg"
+            if grep -Eiq 'Glide|Sanmina|\bPLM\b|10x|99.9%' "dist/architecture/illustrations/${image}.svg"; then
+              echo "::error::Unexpected vendor/customer branding or invented metrics in $image"
+              exit 1
+            fi
+          done
+          grep -q 'What plug-and-play actually means' architecture-catalog/dist/index.html || {
+            echo "::error::Architecture homepage missing plug-and-play product story"
+            exit 1
+          }
           test -s dist/architecture/atlas/index.html
           grep -q 'ARCHITECTURE ATLAS' dist/architecture/atlas/index.html || {
             echo "::error::Architecture Atlas preview missing from combined site"
@@ -91,7 +106,7 @@ jobs:
               exit 1
             }
           done
-          for diagram in ExecutiveOverview ArchitectureOverview C4SystemContext C4Containers C4ControlPlane C4ExecutionPlane C4FrontendComponents C4APIComponents C4IntegrationComponents C4Deployment IntegrationAdapters RunLifecycleSequence ToolInvocationSequence AgentLifecycle AgentRunStateMachine EventDataFlow TrustBoundaries ResilienceOverview StateAndDataModel; do
+          for diagram in PlugAndPlayBlueprint ExtensionLifecycle ExecutiveOverview ArchitectureOverview C4SystemContext C4Containers C4ControlPlane C4ExecutionPlane C4FrontendComponents C4APIComponents C4IntegrationComponents C4Deployment IntegrationAdapters RunLifecycleSequence ToolInvocationSequence AgentLifecycle AgentRunStateMachine EventDataFlow TrustBoundaries ResilienceOverview StateAndDataModel; do
             find architecture-catalog/dist -type f -path "*/diagrams/$diagram/0.1.0/index.html" | grep -q . || {
               echo "::error::Missing published architecture diagram: $diagram"
               exit 1
@@ -136,7 +151,7 @@ jobs:
           test -s architecture-catalog/systems/AgentExecutionPlatform/index.mdx
           test -s architecture-catalog/domains/AgentPlatform/entities/AgentVersion/index.mdx
           test -s architecture-catalog/pages/homepage.astro
-          grep -q 'Configurable agents, explained' architecture-catalog/dist/index.html || {
+          grep -q 'Build agents by configuration' architecture-catalog/dist/index.html || {
             echo "::error::Custom EventCatalog homepage did not render"
             exit 1
           }

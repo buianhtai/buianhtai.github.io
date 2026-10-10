@@ -35,6 +35,25 @@ try{
   await contextPlaceholder.locator('.react-flow').first().waitFor({state:'visible',timeout:25000});
   console.log('Native SystemContextMap and ArchitectureGraph mounted successfully');
   await page.screenshot({path:output+'/NativeArchitectureHomepage.png',fullPage:false,timeout:15000});
+  for(const name of ['agent-platform-plug-and-play','extension-lifecycle']){
+    const imageUrl=host+'/architecture/illustrations/'+name+'.svg';
+    const response=await page.request.get(imageUrl);
+    assert.equal(response.status(),200,'Missing infographic illustration: '+name);
+    const raw=await response.text();
+    assert(raw.includes('<svg') && raw.includes('role="img"'),'Invalid or inaccessible infographic SVG: '+name);
+    assert(!/Glide|Sanmina|\bPLM\b|99\.9%/i.test(raw),'Branded or fabricated claims in infographic: '+name);
+  }
+  const heroInfographic=page.locator('img[src$="agent-platform-plug-and-play.svg"]').first();
+  await heroInfographic.waitFor({state:'visible',timeout:15000});
+  await heroInfographic.scrollIntoViewIfNeeded();
+  await page.waitForFunction(() => {
+    const image=document.querySelector('img[src$="agent-platform-plug-and-play.svg"]');
+    return image?.complete && image.naturalWidth > 0 && image.naturalHeight > 0;
+  },null,{timeout:15000});
+  assert(await heroInfographic.isVisible(),'Illustrated platform image not visible in Chromium');
+  await page.screenshot({path:output+'/PlugAndPlayInfographic.png',fullPage:false,timeout:15000});
+  console.log('Brand-neutral architecture illustrations loaded and rendered successfully');
+
   const executiveImage=page.locator('[data-editorial-overview] img');
   await executiveImage.waitFor({state:'visible',timeout:20000});
   const executiveValid=await executiveImage.evaluate((img)=>img.complete && img.naturalWidth >= 1400);
@@ -56,7 +75,7 @@ try{
   console.log('Professional L0/L2 vector previews and editable diagrams.net downloads passed');
   await page.screenshot({path:output+'/EditorialContainerBoundaries.png',fullPage:false,timeout:15000});
 
-  const ids=['ExecutiveOverview','ArchitectureOverview','C4SystemContext','C4Containers','C4ControlPlane','C4ExecutionPlane','C4FrontendComponents','C4APIComponents','C4IntegrationComponents','C4Deployment','AgentRunStateMachine','ToolInvocationSequence','TrustBoundaries'];
+  const ids=['PlugAndPlayBlueprint','ExtensionLifecycle','ExecutiveOverview','ArchitectureOverview','C4SystemContext','C4Containers','C4ControlPlane','C4ExecutionPlane','C4FrontendComponents','C4APIComponents','C4IntegrationComponents','C4Deployment','AgentRunStateMachine','ToolInvocationSequence','TrustBoundaries'];
   for(const id of ids){
     const url=host+'/architecture/diagrams/'+id+'/0.1.0/embed/';
     const response=await page.goto(url,{waitUntil:'domcontentloaded',timeout:20000});

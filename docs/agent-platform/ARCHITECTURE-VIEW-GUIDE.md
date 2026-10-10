@@ -2,6 +2,12 @@
 
 **Status:** proposed reference architecture; no technology or deployment decisions are asserted to be implemented. This material is generic and uses no customer-specific details.
 
+## Product purpose before topology
+
+The most important public-facing illustration is now [Plug-and-Play Platform Blueprint](/architecture/diagrams/PlugAndPlayBlueprint/0.1.0/), supported by the [product infographic](/architecture/illustrations/agent-platform-plug-and-play.svg) and [Extension Lifecycle](/architecture/diagrams/ExtensionLifecycle/0.1.0/). Show author configuration, reviewed adapters and immutable publication **before** detailed worker, queue and service topology. The logical Agent Compiler may live inside Agent Registry for the MVP. The compiler must not be depicted as an already deployed microservice.
+
+Illustrations must be **brand-neutral and domain-neutral**. Do not show customer/vendor branding, named PLM capabilities or fabricated uptime, ROI, response time or other performance claims. Source-control vectors and link to their exact native diagrams.
+
 ## How to use these views
 
 Don't put every agent, API, connector, queue and metric in the same drawing. Architecture review works better when each view answers **one question** and keeps its abstraction level consistent:

@@ -1,0 +1,61 @@
+---
+id: ExtensionLifecycle
+name: "Plug-in Lifecycle — From Adapter to Authorized Agent"
+version: "0.1.0"
+summary: Operator review, instance configuration, capability publication, agent binding and safe runtime invocation.
+owners:
+  - architecture-stewards
+x-implementation-status: proposed
+x-diagram-class: reference-architecture
+---
+# Plug-in Lifecycle — From Adapter to Authorized Agent
+
+**Status: proposed, vendor-neutral reference architecture.** No named connector or model is implied to be deployed, and no plugin bypasses policy.
+
+## Diagram
+
+~~~mermaid
+flowchart LR
+  DEV["Adapter developer<br/>implement typed SPI"] --> P["AdapterPackage<br/>signed version"]
+  P --> V{"Operator review<br/>provenance + permissions"}
+  V -->|"Denied"| DENY["Quarantine<br/>no installation"]
+  V -->|"Approved"| I["AdapterInstance<br/>workspace + secret refs"]
+  I --> H{"Health + compatibility<br/>schema negotiation"}
+  H -->|"Fail"| FIX["Disable / fix config"]
+  H -->|"Valid"| C["Reviewed Capability<br/>operation schema + risk"]
+  C --> B["AgentBinding<br/>narrower scope"]
+  B --> MAN["Agent Compiler<br/>immutable manifest"]
+  MAN --> R["Authorized run<br/>pinned versions"]
+  R --> G{"Gateway policy<br/>quota + approvals"}
+  G -->|"Allowed"| E["Typed adapter invocation"]
+  G -->|"Denied"| AUDIT["Audited denial"]
+  E --> OUT["Result / unknown effect<br/>reconcile + record"]
+  OUT --> AUDIT
+~~~
+
+## Why these steps matter
+
+A developer can add a new implementation **only behind a supported typed platform port**, and the operator must approve the adapter. A workspace admin then configures credentials by reference and exposes reviewed capabilities. The agent author may bind only eligible operations, with narrowed resource scopes. Publishing pins all relevant versions; the Tool Gateway still reauthorizes each call.
+
+### UI experience by role
+
+| Role | Screens | Exit criteria |
+| --- | --- | --- |
+| Developer | Adapter manifest, typed SPI tests, reviewed deployment | Port compatibility and distribution verified |
+| Operator | Install, permission review, version comparison, disable/upgrade | Package approved or quarantined |
+| Workspace admin | Instance wizard, secrets, egress allowlist, health, catalog publication | Instance ready and capability reviewed |
+| Agent author | Catalog picker, scopes, test run, draft and publish | Immutable agent manifest accepted |
+| Reviewer/operator | Run trace, invocation approval, unknown-effect ledger, revocation | Safe outcome or explicit investigation |
+
+### Non-negotiable boundaries
+
+- Installing an adapter is **not** enabling every tool and **not** granting it to every agent.
+- A new remote-RPC adapter with a supported port may need **no core runtime source change**; a new port or trusted Python package can require code and deployment work.
+- Risky writes require exact-intent review where policy demands it; a timeout after dispatch may mean outcome unknown.
+- Disabled or revoked instances cannot keep issuing calls merely because they were pinned by an earlier version.
+
+[Product blueprint](/architecture/diagrams/PlugAndPlayBlueprint/0.1.0/) · [Integration internals](/architecture/diagrams/C4IntegrationComponents/0.1.0/) · [Tool invocation](/architecture/diagrams/ToolInvocationSequence/0.1.0/)
+
+## Architecture source
+
+[Plug-and-play product blueprint chapter](https://github.com/buianhtai/buianhtai.github.io/blob/main/docs/agent-platform/13-plug-and-play-platform-blueprint.md) · [Native Agent Platform domain](/architecture/domains/AgentPlatform/0.1.0/) · [Agent Execution Platform system](/architecture/systems/AgentExecutionPlatform/0.1.0/)
