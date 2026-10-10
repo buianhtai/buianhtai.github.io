@@ -96,6 +96,26 @@ jobs:
             echo "::error::Homepage missing C4 navigation"
             exit 1
           }
+          for system in AgentExecutionPlatform IdentityAndAccess ModelProviders IntegrationProviders TriggerSources; do
+            test -s architecture-catalog/systems/$system/index.mdx || {
+              echo "::error::Missing native EventCatalog system: $system"
+              exit 1
+            }
+          done
+          for dataStore in AgentConfigurationStore RunEventStore ArtifactStore; do
+            find architecture-catalog/dist -type f -path "*/docs/containers/$dataStore/0.1.0/index.html" | grep -q . || {
+              echo "::error::Missing native data store: $dataStore"
+              exit 1
+            }
+          done
+          grep -q 'system-context-map-portal' architecture-catalog/dist/index.html || {
+            echo "::error::Homepage missing native SystemContextMap component"
+            exit 1
+          }
+          grep -q 'data-architecture-graph-portal' architecture-catalog/dist/index.html || {
+            echo "::error::Homepage missing native ArchitectureGraph component"
+            exit 1
+          }
           test -s architecture-catalog/systems/AgentExecutionPlatform/index.mdx
           test -s architecture-catalog/domains/AgentPlatform/entities/AgentVersion/index.mdx
           test -s architecture-catalog/pages/homepage.astro

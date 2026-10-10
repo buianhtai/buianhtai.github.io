@@ -1,0 +1,24 @@
+---
+id: ArtifactStore
+name: Scoped Artifact Store
+version: "0.1.0"
+summary: Tenant-guarded results, attachments and large model/tool evidence
+container_type: objectStore
+technology: undecided
+classification: internal
+owners:
+  - architecture-stewards
+x-implementation-status: proposed
+x-tracking-status: unassigned
+---
+# Scoped Artifact Store
+
+**Proposed logical data store, not an installed database or cloud resource.**
+
+Only opaque artifact references are emitted to general run event subscribers; actual blob technology and region are undecided.
+
+## Native data dependencies
+
+<NodeGraph mode="full" />
+
+Data residency, retention policy, RPO/RTO and encryption-key ownership require separate architecture and compliance decisions. Linked services declare `readsFrom` and `writesTo` relationships so EventCatalog can derive dependency graphs automatically.

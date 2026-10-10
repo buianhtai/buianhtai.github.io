@@ -11,6 +11,7 @@ export default {
   trailingSlash: true,
   outDir: 'dist',
   search: { type: 'resource' },
+  visualiser: { enabled: true, architectureGraph: { enabled: true } },
   navigation: { pages: ['list:top-level-domains', 'list:all'] },
   llmsTxt: { enabled: false },
   cId: '25f91af5-7b8c-43b2-9a06-51a2d1e6bdb9',

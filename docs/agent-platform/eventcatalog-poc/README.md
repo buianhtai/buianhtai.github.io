@@ -84,3 +84,23 @@ Start with the [architecture overview](./diagrams/ArchitectureOverview/index.mdx
 
 C4 Mermaid syntax is still experimental: keep the diagram source small and easy to review; a future pinned Mermaid update may require compatibility adjustments. CI checks that the routes and homepage iframe exist **and renders representative diagrams as SVGs in a browser**. C4 diagrams illustrate logical systems, containers and components; they are not confirmed microservices or a selected cloud configuration.
 
+## Native-first architecture visualizations
+
+The **primary interactive architecture maps now use built-in EventCatalog components**, rather than relying on Mermaid drawings as the entire architecture model:
+
+| Native capability | Where used | Relationship source |
+| --- | --- | --- |
+| `SystemContextMap` | Catalog homepage | Systems, external system relationships, people/actors |
+| `ContextDiagram` | Agent Execution Platform | Native system context and dependency metadata |
+| `ArchitectureGraph` | Homepage, domain, system | Full catalog graph with search, lenses and resource traversal |
+| `NodeGraph` | Domain, services, systems, stores | Versioned resources and message/data-store associations |
+| `EntityMap` | Homepage and domain | Native entity references and typed properties |
+| `Flow` | Homepage and domain | Native service/message steps with walkthrough controls |
+| `ResourceGroupTable` | Domain hub | Searchable catalog services and workflows |
+| `CustomProperties` | Component pages | Implementation, source and tracking status |
+
+Native data stores (`containers/`) model configuration, run-event and scoped-artifact stores, with `readsFrom`/`writesTo` references on services. Native **external systems** identify provider dependencies and trigger sources, and the Agent Execution Platform defines actors and labeled relationships. These are the source of truth for the generated context and architecture graphs.
+
+**C4 and sequence diagrams remain supplemental:** EventCatalog's generated graphs do not automatically invent all C4 component, deployment and trust details. The 13 versioned diagram pages capture that design intent explicitly. A catalog resource and its links should always remain the canonical representation of ownership and interactions.
+
+**Caveat:** All resources remain proposed reference architecture; not a statement of deployed systems, confirmed teams or chosen cloud infrastructure.
