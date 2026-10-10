@@ -13,10 +13,9 @@ const journeys = [
 <main class="mx-auto max-w-7xl px-5 py-8 sm:px-8 sm:py-12">
   <section class="rounded-2xl border border-slate-200 bg-slate-50 p-6 dark:border-slate-700 dark:bg-slate-900 sm:p-10">
     <p class="mb-3 text-sm font-semibold uppercase tracking-widest text-sky-700 dark:text-sky-300">Architecture reference · Proposed</p>
-    <h1 class="mb-4 max-w-4xl text-4xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-5xl">Configurable agents, explained from configuration to execution.</h1>
+    <h1 class="mb-4 max-w-4xl text-4xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-5xl">Build agents by configuration. Extend safely through adapters.</h1>
     <p class="max-w-3xl text-lg leading-relaxed text-slate-600 dark:text-slate-300">
-      Follow the actual responsibilities behind an agent platform: versioned definitions, intelligent but constrained routing,
-      durable runs, model and tool boundaries, human approvals, and safe delegation.
+      See how authors assemble agents from approved models, tools, skills, knowledge and triggers; operators review and publish reusable adapters; and the shared platform executes governed, durable runs.
       The examples are fictional and document a proposed architecture—not deployed production services.
     </p>
     <div class="mt-7 flex flex-wrap gap-3">
@@ -24,6 +23,36 @@ const journeys = [
       <a class="rounded-lg border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-800 hover:bg-white dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-800" href={base + '/diagrams/C4SystemContext/0.1.0/'}>Open system context map</a>
       <a class="rounded-lg border border-sky-300 bg-sky-50 px-5 py-3 text-sm font-semibold text-sky-900 hover:bg-sky-100 dark:border-sky-700 dark:bg-sky-950 dark:text-sky-200 dark:hover:bg-sky-900" href={base + '/atlas/'}>Launch Architecture Atlas · interactive prototype ↗</a>
     </div>
+  </section>
+
+  <section class="py-10" aria-labelledby="plug-and-play-illustrations">
+    <div class="mb-5 flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-widest text-sky-700 dark:text-sky-300">Product concept · Generic reference</p>
+        <h2 id="plug-and-play-illustrations" class="mt-2 text-3xl font-bold tracking-tight text-slate-900 dark:text-white">What plug-and-play actually means</h2>
+        <p class="mt-2 max-w-3xl text-slate-600 dark:text-slate-300">Choose eligible pieces, validate and publish a version, then run through shared services. Adding a new tool requires a reviewed adapter and scoped binding—not a new hardcoded agent loop.</p>
+      </div>
+      <a class="font-semibold text-sky-700 dark:text-sky-300" href={base + '/diagrams/PlugAndPlayBlueprint/0.1.0/'}>Explore the architecture model →</a>
+    </div>
+    <figure class="overflow-hidden rounded-xl border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-900">
+      <a href={base + '/illustrations/agent-platform-plug-and-play.svg'} aria-label="Open the full-resolution plug-and-play agent platform infographic" class="block">
+        <img src={base + '/illustrations/agent-platform-plug-and-play.svg'} alt="Architecture illustration: agent author assembles approved model, skills, tools, knowledge, triggers and collaborators; registry validates and publishes an immutable version; control plane, workers, gateways and durable state execute and deliver results" width="1740" height="1040" loading="lazy" decoding="async" class="h-auto w-full" />
+      </a>
+      <figcaption class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-4 py-3 text-sm text-slate-600 dark:border-slate-700 dark:text-slate-300">
+        <span>Architecture illustration, not a screenshot. Proposed logical services; no vendor or performance claims.</span>
+        <a class="font-semibold text-sky-700 dark:text-sky-300" href={base + '/illustrations/agent-platform-plug-and-play.svg'}>View at full resolution ↗</a>
+      </figcaption>
+    </figure>
+    <details class="mt-4 rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+      <summary class="cursor-pointer px-5 py-4 font-semibold text-slate-900 dark:text-white">How do we add a new connector without changing the agent core?</summary>
+      <div class="px-5 pb-5">
+        <p class="mb-3 text-sm leading-relaxed text-slate-600 dark:text-slate-300">An operator approves an adapter package, configures an instance, publishes a typed capability, and an authorized agent author binds a narrower versioned grant. Existing supported ports may require no runtime-loop code changes; new port types and trusted executable packages can still require engineering or rollout.</p>
+        <a href={base + '/illustrations/extension-lifecycle.svg'} aria-label="Open full-resolution adapter extension lifecycle">
+          <img src={base + '/illustrations/extension-lifecycle.svg'} alt="Four-stage extension illustration: reviewed adapter package, workspace instance, published capability and agent binding, leading to version publication and gateway-authorized invocation" width="1740" height="690" loading="lazy" decoding="async" class="h-auto w-full rounded-lg border border-slate-200 dark:border-slate-700" />
+        </a>
+        <p class="mt-3 text-sm"><a class="font-semibold text-sky-700 dark:text-sky-300" href={base + '/diagrams/ExtensionLifecycle/0.1.0/'}>Review the native adapter lifecycle and security rules →</a></p>
+      </div>
+    </details>
   </section>
 
   <section class="py-10" aria-labelledby="arch-levels-title">
