@@ -1,10 +1,16 @@
 # Agent Platform Architecture
 
 **Status:** Proposed / design documentation, not a record of implemented services  
-**Last updated:** 2026-10-09  
+**Last updated:** 2026-10-10  
 **Scope:** Domain-neutral reference architecture for a configurable agent platform
 
 This documentation lives in `docs/` and is **not a blog article or a production implementation**. It explains the missing components between an incoming request and existing MCP/REST tools: triggering, agent selection, run admission, runtime execution, tool invocation, worker coordination, and UI event delivery.
+
+## Start with the plug-and-play product intent
+
+Our goal is a **configurable, extensible agent platform** rather than a fixed PLM or single-vendor workflow: assemble an agent from approved models, skills, knowledge, tools, triggers and subagents, publish a versioned manifest, then execute via shared, governed runtimes. [Chapter 13 — Plug-and-play product blueprint](./13-plug-and-play-platform-blueprint.md) ties together the user journeys, compiler responsibilities, extension lifecycle and infographic design.
+
+The [brand-neutral infographic](/architecture/illustrations/agent-platform-plug-and-play.svg) shows this story; the [adapter installation illustration](/architecture/illustrations/extension-lifecycle.svg) explains package → instance → capability → binding. All public examples are fictional and **proposed**, with no vendor branding, hard performance numbers or guarantee of arbitrary no-code extensions.
 
 ## Read in this order
 
@@ -20,6 +26,8 @@ This documentation lives in `docs/` and is **not a blog article or a production 
 10. **[10 — Open-source Temporal alternatives](./10-open-source-durable-worker-engines.md)**: Hatchet, DBOS, Kestra, Restate and other engines; licensing, worker orchestration semantics, a pluggable WorkflowEngineAdapter and a focused comparison POC.
 11. **[11 — Architecture views and swimlanes](./11-architecture-views-component-flow-swimlanes.md)**: context/component boundaries, agent execution sequence, role-based swimlanes, external approvals and crash recovery, and proposed run-state choreography.
 12. **[12 — EventCatalog adoption and POC](./12-eventcatalog-architecture-catalog.md)**: free-vs-paid features, Git-based architecture catalog strategy, resource mapping and a small Community sample catalog.
+
+13. **[13 — Plug-and-play product blueprint and infographic guide](./13-plug-and-play-platform-blueprint.md)**: agent-building UI, adapter onboarding and authorization, logical compiler, three independent lifecycles, illustrated high-level views, proof-of-concept checks.
 
 See also [RFC-001: Configuration-Driven Agent Platform](https://github.com/buianhtai/buianhtai.github.io/pull/6), a separate, **currently proposed** RFC about the control-plane registry, policy model, declarative configuration schema, tool/skill catalog, and framework adapters. These documents intentionally complement that RFC but are reviewable independently.
 
