@@ -1,0 +1,54 @@
+---
+id: ExecutiveOverview
+name: "L0 — Agent Platform Executive Overview"
+version: "0.1.0"
+summary: Simple five-capability architecture map for readers new to the proposed platform.
+owners:
+  - architecture-stewards
+x-implementation-status: proposed
+x-diagram-class: overview
+---
+# L0 — Agent Platform Executive Overview
+
+**Status: proposed, generic reference architecture.** Not proof of a deployed service or accepted technology choice.
+
+## Diagram
+
+~~~mermaid
+flowchart LR
+  PERSON["User or verified trigger"] --> EXPERIENCE["Experience<br/>Chat and Agent Studio"]
+  EXPERIENCE --> CONTROL["Governed control plane<br/>Identity, registry, admission"]
+  CONTROL --> EXECUTE["Durable execution<br/>Queue, workers, runtime"]
+  EXECUTE --> CAPABILITIES["Approved capabilities<br/>Models, tools, child agents"]
+  CONTROL --> STATE[("Durable state<br/>Versions, runs, audit")]
+  EXECUTE --> STATE
+  STATE -. "Authorized results and progress" .-> EXPERIENCE
+  CAPABILITIES --> PROVIDERS["Reviewed external providers"]
+~~~
+
+## Interpretation
+
+**One-minute explanation:** Users and verified triggers submit work through a frontend. The backend decides what the principal may run, pins an approved agent revision and records durable work. Workers execute within explicit resource/cost limits, accessing external services only through reviewed gateways. Results come back through the backend from durable state, not directly from the worker. This view intentionally hides individual microservices.
+
+## Five non-negotiable rules
+
+| Rule | Why it matters |
+| --- | --- |
+| Frontend is never a trusted execution authority | All access decisions run server-side |
+| Agent revisions are pinned at admission | Mid-run configuration changes cannot silently change behavior |
+| A run is durable before it is acknowledged | Worker and queue failures cannot silently lose accepted work |
+| Models propose; policy authorizes | Tool calls and external effects cross independent permission boundaries |
+| UI reads public run projection | SSE reconnects and worker restarts do not duplicate work |
+
+## What is intentionally out of scope?
+
+No database vendor, cloud provider, workflow engine or specific runtime framework is selected here. These belong in implementation/deployment decisions, not the executive diagram.
+
+## Explore the next level
+
+- [L1 — System context](/architecture/diagrams/C4SystemContext/0.1.0/)
+- [L2 — Containers and boundaries](/architecture/diagrams/C4Containers/0.1.0/)
+- [L3 — Frontend components](/architecture/diagrams/C4FrontendComponents/0.1.0/)
+- [L4 — Request sequence](/architecture/diagrams/RunLifecycleSequence/0.1.0/)
+
+[Agent Platform domain](/architecture/domains/AgentPlatform/0.1.0/) · [Agent Execution Platform system](/architecture/systems/AgentExecutionPlatform/0.1.0/)
