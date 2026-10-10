@@ -1,0 +1,69 @@
+---
+id: C4IntegrationComponents
+name: "L3 — Integration Gateway and Adapter Components"
+version: "0.1.0"
+summary: Tool definitions, policy checks, approvals, external adapters and effect reconciliation.
+owners:
+  - architecture-stewards
+x-implementation-status: proposed
+x-diagram-class: C4
+---
+# L3 — Integration Gateway and Adapter Components
+
+**Status: proposed, generic reference architecture.** Not proof of a deployed service or accepted technology choice.
+
+## Diagram
+
+~~~mermaid
+C4Component
+  title Proposed Integration Boundary — Governed Tool and Model Access
+  Container_Boundary(tool, "Tool Gateway: Enforcement Boundary") {
+    Component(resolve, "Tool Version Resolver", "Registry port", "Pin reviewed schema and connector")
+    Component(schema, "Arguments Validator", "JSON Schema gate", "Reject unknown operations and args")
+    Component(authorize, "Policy and Resource ACL", "Authorization engine", "Principal, tenant, binding and quota")
+    Component(risk, "Risk and Approval Gate", "Effect policy", "Human review of exact immutable intent")
+    Component(dispatch, "Adapter Dispatcher", "Typed port", "MCP, HTTP and reviewed named jobs")
+    Component(ledger, "Invocation Ledger", "Effect record", "Idempotency, remote IDs and reconciliation")
+  }
+  Container_Ext(runtime, "Agent Runtime", "Isolated worker", "Proposes tool call with arguments")
+  Container_Ext(approver, "Approval Service", "Control service", "Human decision and expiration")
+  Container_Ext(connectors, "Connector Instances", "Configured integration", "Endpoint and secret refs")
+  System_Ext(providers, "External Tool and Job Providers", "Untrusted remote systems", "MCP, API, isolated job runner")
+  Rel(runtime, resolve, "Requests bound tool version")
+  Rel(resolve, schema, "Validate typed operation")
+  Rel(schema, authorize, "Authorized argument envelope")
+  Rel(authorize, risk, "Classify side-effect risk")
+  Rel(risk, approver, "Request exact human consent")
+  Rel(risk, dispatch, "Approve or deny by policy")
+  Rel(dispatch, connectors, "Resolve reviewed adapter")
+  Rel(connectors, providers, "Invoke fixed operation")
+  Rel(dispatch, ledger, "Record typed outcomes")
+  Rel(ledger, runtime, "Result or outcome unknown")
+~~~
+
+## Interpretation
+
+**The model cannot authorize external calls or supply arbitrary shell commands/URLs.** The tool boundary owns version resolution, schema validation, ACL, budget, immutable approval, allowed adapter execution and reconciliation. Connector installation identity is distinct from a ToolDefinition and per-agent ToolBinding. External A2A delegation follows its own gateway rather than pretending to be an unrestricted MCP tool.
+
+## Adapter extension points
+
+| Adapter | Reviewed configuration | Security gate | Failure / replay |
+| --- | --- | --- | --- |
+| MCP | Allowed server instance, exposed tool version | Per-tool/argument/tenant scopes | Safe read retries; bounded result sizes |
+| Typed REST | Allowlisted host+operationRef, schema, credentialRef | Egress, ACL, quota, explicit write privilege | Stable invocationId, remote status |
+| External job | Pinned template/image, approved runner, callback auth | Often human approval of exact intent | UNKNOWN effect -> reconcile, never blind retry |
+| Model gateway | Model profile and approved deployment | Tenant data policy, token and spend budget | Approved fallback only |
+| Delegation | Pinned subagent alias, parent budget and rights intersection | Scoped child run with max depth | Child terminal event or bounded timeout |
+
+## Key distinctions
+
+**Approval requested** does not mean approval granted. **Approval granted** does not mean the external effect succeeded. **Remote timeout** does not prove the effect failed. These distinctions must appear in logs, status, result contracts and recovery tests.
+
+## Explore the next level
+
+- [Adapter architecture](/architecture/diagrams/IntegrationAdapters/0.1.0/)
+- [Detailed tool sequence](/architecture/diagrams/ToolInvocationSequence/0.1.0/)
+- [Trust model](/architecture/diagrams/TrustBoundaries/0.1.0/)
+- [Approval flow](/architecture/diagrams/ApprovalGatedExternalJob/0.1.0/)
+
+[Agent Platform domain](/architecture/domains/AgentPlatform/0.1.0/) · [Agent Execution Platform system](/architecture/systems/AgentExecutionPlatform/0.1.0/)

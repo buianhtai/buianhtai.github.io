@@ -104,3 +104,9 @@ Native data stores (`containers/`) model configuration, run-event and scoped-art
 **C4 and sequence diagrams remain supplemental:** EventCatalog's generated graphs do not automatically invent all C4 component, deployment and trust details. The 13 versioned diagram pages capture that design intent explicitly. A catalog resource and its links should always remain the canonical representation of ownership and interactions.
 
 **Caveat:** All resources remain proposed reference architecture; not a statement of deployed systems, confirmed teams or chosen cloud infrastructure.
+
+## Architecture levels (start with the minimal view)
+
+Start at the [L0 Executive Overview](./diagrams/ExecutiveOverview/index.mdx) for a five-capability sketch, then follow the [C4 System Context](./diagrams/C4SystemContext/index.mdx), [C4 Container Boundaries](./diagrams/C4Containers/index.mdx), or new L3 [Frontend](./diagrams/C4FrontendComponents/index.mdx), [Backend API](./diagrams/C4APIComponents/index.mdx), and [Integration](./diagrams/C4IntegrationComponents/index.mdx) components. For L4 behavioral questions use the [AgentRun State Machine](./diagrams/AgentRunStateMachine/index.mdx) and [Tool Invocation Sequence](./diagrams/ToolInvocationSequence/index.mdx).
+
+The [Architecture View Guide](../ARCHITECTURE-VIEW-GUIDE.md) defines audiences, what belongs at each level and cross-view acceptance rules. A high-level overview must remain understandable without reading every implementation detail; detailed views should link to existing EventCatalog resources rather than duplicate them as prose.

@@ -44,6 +44,18 @@ services:
   - id: DelegationGateway
     version: "0.1.0"
 diagrams:
+  - id: ExecutiveOverview
+    version: "0.1.0"
+  - id: C4FrontendComponents
+    version: "0.1.0"
+  - id: C4APIComponents
+    version: "0.1.0"
+  - id: C4IntegrationComponents
+    version: "0.1.0"
+  - id: AgentRunStateMachine
+    version: "0.1.0"
+  - id: ToolInvocationSequence
+    version: "0.1.0"
   - id: ArchitectureOverview
     version: "0.1.0"
   - id: C4SystemContext
@@ -119,6 +131,21 @@ entities:
 **Status: proposed, generic reference architecture.** No catalog resource by itself proves a running service, deployed agent, production event, or executable workflow. All examples use fictional SaaS data without private customer or product details.
 
 This catalog explains **what happens between incoming input and a completed response**: how an agent is configured, selected, admitted, scheduled, executed with controlled tools, reviewed for side effects, and returned to the caller.
+
+## Architecture reading guide: start high level, then drill down
+
+**Do not read every diagram at once.** Start at [L0 Executive Overview](/architecture/diagrams/ExecutiveOverview/0.1.0/), then choose the next level that matches your question.
+
+| Zoom level | Key architecture views | Who needs it |
+| --- | --- | --- |
+| **L0** — One-minute overview | [Executive Overview](/architecture/diagrams/ExecutiveOverview/0.1.0/) | Stakeholders and new readers |
+| **L1** — Context | [System Context](/architecture/diagrams/C4SystemContext/0.1.0/) | System owners, product and security |
+| **L2** — Logical containers | [Container Boundaries](/architecture/diagrams/C4Containers/0.1.0/), [interactive Archify](/architecture/showcase/agent-platform-container-map.html) | Technical leads and architects |
+| **L3** — Code-facing components | [Frontend](/architecture/diagrams/C4FrontendComponents/0.1.0/), [Backend API](/architecture/diagrams/C4APIComponents/0.1.0/), [Control Plane](/architecture/diagrams/C4ControlPlane/0.1.0/), [Execution](/architecture/diagrams/C4ExecutionPlane/0.1.0/), [Integration](/architecture/diagrams/C4IntegrationComponents/0.1.0/) | Implementers |
+| **L4** — Dynamics and state | [Run State Machine](/architecture/diagrams/AgentRunStateMachine/0.1.0/), [Tool Invocation Sequence](/architecture/diagrams/ToolInvocationSequence/0.1.0/), [Run Lifecycle](/architecture/diagrams/RunLifecycleSequence/0.1.0/) | Backend/agent developers and QA |
+| **Cross-cutting** | [Trust Boundaries](/architecture/diagrams/TrustBoundaries/0.1.0/), [Data and Events](/architecture/diagrams/EventDataFlow/0.1.0/), [Reliability](/architecture/diagrams/ResilienceOverview/0.1.0/), [Deployment](/architecture/diagrams/C4Deployment/0.1.0/) | Security, SRE and architects |
+
+Each diagram explains the **intent, ownership, interfaces, failure modes and related resources**, while the native EventCatalog maps provide current resource navigation. A logical C4 component is not automatically an independently deployed microservice.
 
 ## Native EventCatalog exploration
 

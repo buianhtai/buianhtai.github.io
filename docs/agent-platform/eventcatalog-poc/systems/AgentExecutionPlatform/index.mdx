@@ -43,6 +43,18 @@ containers:
   - id: ArtifactStore
     version: "0.1.0"
 diagrams:
+  - id: ExecutiveOverview
+    version: "0.1.0"
+  - id: C4FrontendComponents
+    version: "0.1.0"
+  - id: C4APIComponents
+    version: "0.1.0"
+  - id: C4IntegrationComponents
+    version: "0.1.0"
+  - id: AgentRunStateMachine
+    version: "0.1.0"
+  - id: ToolInvocationSequence
+    version: "0.1.0"
   - id: ArchitectureOverview
     version: "0.1.0"
   - id: C4SystemContext
@@ -102,6 +114,10 @@ An authenticated caller, verified integration, or schedule can request a run of 
 ## Visual architecture: C4 overview
 
 Start with the [one-page architecture map](/architecture/diagrams/ArchitectureOverview/0.1.0/), then follow [C4 system context](/architecture/diagrams/C4SystemContext/0.1.0/), [C4 containers](/architecture/diagrams/C4Containers/0.1.0/), [control-plane components](/architecture/diagrams/C4ControlPlane/0.1.0/), [execution components](/architecture/diagrams/C4ExecutionPlane/0.1.0/), and [deployment topology](/architecture/diagrams/C4Deployment/0.1.0/). EventCatalog's diagram links also appear in the resource sidebar.
+
+## Drill-down views
+
+For a single-slide explanation open the [L0 Executive Overview](/architecture/diagrams/ExecutiveOverview/0.1.0/). Drill into the [Frontend](/architecture/diagrams/C4FrontendComponents/0.1.0/), [Backend API](/architecture/diagrams/C4APIComponents/0.1.0/), [Control Plane](/architecture/diagrams/C4ControlPlane/0.1.0/), [Execution Plane](/architecture/diagrams/C4ExecutionPlane/0.1.0/) and [Integration](/architecture/diagrams/C4IntegrationComponents/0.1.0/) components. To understand runtime correctness, follow the [Run State Machine](/architecture/diagrams/AgentRunStateMachine/0.1.0/) and [Tool Invocation Sequence](/architecture/diagrams/ToolInvocationSequence/0.1.0/). Native diagrams appear in the linked diagram section of each service as well.
 
 ## Architecture layers
 
