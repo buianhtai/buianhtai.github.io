@@ -175,12 +175,20 @@
       "from": "runs",
       "to": "events",
       "label": "commit outbox",
-      "variant": "emphasis"
+      "variant": "emphasis",
+      "labelAt": [
+        547,
+        413
+      ]
     },
     {
       "from": "runs",
       "to": "queue",
-      "label": "dispatch intent"
+      "label": "dispatch intent",
+      "labelAt": [
+        673,
+        413
+      ]
     },
     {
       "from": "queue",
@@ -197,7 +205,11 @@
       "from": "worker",
       "to": "tools",
       "label": "propose tool",
-      "variant": "security"
+      "variant": "security",
+      "labelAt": [
+        1022,
+        413
+      ]
     },
     {
       "from": "model",
