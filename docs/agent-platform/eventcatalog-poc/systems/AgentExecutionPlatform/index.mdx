@@ -8,6 +8,40 @@ owners:
 x-implementation-status: proposed
 x-source-repository: https://github.com/buianhtai/buianhtai.github.io
 x-tracking-status: unassigned
+scope: internal
+actors:
+  - id: end-user
+    name: Application User
+    label: submits questions and receives results
+    direction: inbound
+  - id: workspace-admin
+    name: Workspace Administrator
+    label: configures and publishes agents
+    direction: inbound
+  - id: reviewer
+    name: Authorized Reviewer
+    label: reviews exact side-effect intents
+    direction: inbound
+relationships:
+  - id: IdentityAndAccess
+    version: "0.1.0"
+    label: validates identities and scopes with
+  - id: ModelProviders
+    version: "0.1.0"
+    label: invokes metered models from
+  - id: IntegrationProviders
+    version: "0.1.0"
+    label: executes approved operations through
+  - id: TriggerSources
+    version: "0.1.0"
+    label: admits verified events from
+containers:
+  - id: AgentConfigurationStore
+    version: "0.1.0"
+  - id: RunEventStore
+    version: "0.1.0"
+  - id: ArtifactStore
+    version: "0.1.0"
 diagrams:
   - id: ArchitectureOverview
     version: "0.1.0"
@@ -91,8 +125,16 @@ Start with the [one-page architecture map](/architecture/diagrams/ArchitectureOv
 
 The Run Service is authoritative for public run status; the workflow adapter may own its own internal checkpoints. Workers use fenced leases. Side effects have idempotent invocation records; ambiguous results enter reconciliation rather than blind retry. Event streaming is driven from a durable store, so reconnecting a browser does not restart execution. Limits apply per principal, tenant, agent version and adapter.
 
-## Context map
+## Interactive system context (EventCatalog)
 
-<NodeGraph />
+<ContextDiagram />
+
+This interactive map is generated from this system's **native actor and external-system relationships**. It is authoritative for catalog topology and updates automatically with resource metadata.
+
+## System resources and dependencies
+
+<NodeGraph mode="full" />
+
+<ArchitectureGraph id="AgentExecutionPlatform" type="system" depth="2" lens="systems" />
 
 <CustomProperties title="Architecture governance" />
