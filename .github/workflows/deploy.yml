@@ -77,7 +77,7 @@ jobs:
               exit 1
             }
           done
-          for diagram in ArchitectureOverview C4SystemContext C4Containers C4ControlPlane C4ExecutionPlane C4Deployment IntegrationAdapters RunLifecycleSequence AgentLifecycle EventDataFlow TrustBoundaries ResilienceOverview StateAndDataModel; do
+          for diagram in ExecutiveOverview ArchitectureOverview C4SystemContext C4Containers C4ControlPlane C4ExecutionPlane C4FrontendComponents C4APIComponents C4IntegrationComponents C4Deployment IntegrationAdapters RunLifecycleSequence ToolInvocationSequence AgentLifecycle AgentRunStateMachine EventDataFlow TrustBoundaries ResilienceOverview StateAndDataModel; do
             find architecture-catalog/dist -type f -path "*/diagrams/$diagram/0.1.0/index.html" | grep -q . || {
               echo "::error::Missing published architecture diagram: $diagram"
               exit 1
@@ -85,6 +85,14 @@ jobs:
           done
           find architecture-catalog/dist -type f -path "*/diagrams/ArchitectureOverview/0.1.0/embed/index.html" | grep -q . || {
             echo "::error::Missing homepage architecture diagram embed"
+            exit 1
+          }
+          find architecture-catalog/dist -type f -path "*/diagrams/ExecutiveOverview/0.1.0/embed/index.html" | grep -q . || {
+            echo "::error::L0 homepage overview embed missing"
+            exit 1
+          }
+          grep -q 'Architecture, from one-minute overview to implementation details' architecture-catalog/dist/index.html || {
+            echo "::error::Homepage missing progressive L0-L4 guide"
             exit 1
           }
           grep -q 'C4SystemContext' architecture-catalog/dist/index.html || {
