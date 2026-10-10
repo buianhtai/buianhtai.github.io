@@ -47,10 +47,16 @@ for(const res of resources.values()){
  if(kind!=='team'){
   for(const owner of d.owners??[])exists('team',owner,rel);
   if(kind==='domain'||kind==='system'){
-   for(const [field,k] of [['services','service'],['systems','system'],['agents','agent'],['entities','entity'],['diagrams','diagram']])refList(res,field,k);
+   for(const [field,k] of [['services','service'],['systems','system'],['agents','agent'],['entities','entity'],['diagrams','diagram'],['containers','container']])refList(res,field,k);
+  }
+  if(kind==='system'){
+    refList(res,'relationships','system');
+    for(const actor of d.actors??[])if(!actor.id || !actor.name)report(rel,'system actor requires id/name');
   }
   if(kind==='service'){
    refList(res,'diagrams','diagram');
+   refList(res,'readsFrom','container');
+   refList(res,'writesTo','container');
    for(const fld of ['sends','receives'])for(const r of d[fld]??[])messageExists(r.id,rel);
    for(const spec of d.specifications??[]){
     if(!['openapi','asyncapi'].includes(spec.type))report(rel,'unsupported specification '+spec.type);
