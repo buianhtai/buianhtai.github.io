@@ -1,0 +1,401 @@
+{
+  "slug": "containers",
+  "width": 1980,
+  "height": 1240,
+  "kicker": "REFERENCE ARCHITECTURE   /   C4 LEVEL 2",
+  "title": "Clear boundaries. Clear ownership.",
+  "subtitle": "Logical containers—not one pod per service. Cross-boundary calls require explicit contracts and policy.",
+  "footer": "PROPOSED DESIGN  •  CONTAINERS ≠ MICROSERVICES  •  EXTERNAL EFFECTS REQUIRE SEPARATE AUTHORIZATION",
+  "boxes": [
+    {
+      "kind": "boundary",
+      "id": "platform",
+      "x": 260,
+      "y": 225,
+      "w": 1335,
+      "h": 915,
+      "title": "AGENT EXECUTION PLATFORM",
+      "desc": "LOGICAL APPLICATION & TRUST BOUNDARY",
+      "accent": "slate",
+      "parent": null
+    },
+    {
+      "kind": "boundary",
+      "id": "fe",
+      "x": 285,
+      "y": 304,
+      "w": 260,
+      "h": 530,
+      "title": "FRONTEND",
+      "desc": "BROWSER / CLIENT",
+      "accent": "blue",
+      "parent": "platform"
+    },
+    {
+      "kind": "boundary",
+      "id": "be",
+      "x": 572,
+      "y": 304,
+      "w": 395,
+      "h": 530,
+      "title": "BACKEND CONTROL PLANE",
+      "desc": "HTTP + DURABLE STATE",
+      "accent": "violet",
+      "parent": "platform"
+    },
+    {
+      "kind": "boundary",
+      "id": "workers",
+      "x": 995,
+      "y": 304,
+      "w": 255,
+      "h": 530,
+      "title": "EXECUTION PLANE",
+      "desc": "LEASED / ISOLATED",
+      "accent": "teal",
+      "parent": "platform"
+    },
+    {
+      "kind": "boundary",
+      "id": "gateways",
+      "x": 1278,
+      "y": 304,
+      "w": 290,
+      "h": 530,
+      "title": "INTEGRATION SERVICES",
+      "desc": "PER-CALL POLICY",
+      "accent": "amber",
+      "parent": "platform"
+    },
+    {
+      "kind": "boundary",
+      "id": "data",
+      "x": 572,
+      "y": 866,
+      "w": 996,
+      "h": 239,
+      "title": "DATA PLANE",
+      "desc": "PROTECTED • DURABLE • REPLAYABLE",
+      "accent": "slate",
+      "parent": "platform"
+    },
+    {
+      "kind": "boundary",
+      "id": "external",
+      "x": 1628,
+      "y": 304,
+      "w": 307,
+      "h": 530,
+      "title": "EXTERNAL SYSTEMS",
+      "desc": "OUTSIDE TRUST BOUNDARY",
+      "accent": "slate",
+      "parent": null
+    },
+    {
+      "kind": "card",
+      "id": "person",
+      "x": 38,
+      "y": 461,
+      "w": 190,
+      "h": 115,
+      "title": "Application User",
+      "desc": "Interactive or scheduled",
+      "accent": "slate",
+      "parent": null
+    },
+    {
+      "kind": "card",
+      "id": "web",
+      "x": 306,
+      "y": 419,
+      "w": 218,
+      "h": 106,
+      "title": "Chat UI / Agent Studio",
+      "desc": "Submit • configure • review",
+      "accent": "blue",
+      "parent": "fe"
+    },
+    {
+      "kind": "card",
+      "id": "sse",
+      "x": 306,
+      "y": 564,
+      "w": 218,
+      "h": 92,
+      "title": "Run UI / SSE Client",
+      "desc": "Status • cursors • artifacts",
+      "accent": "blue",
+      "parent": "fe"
+    },
+    {
+      "kind": "card",
+      "id": "api",
+      "x": 593,
+      "y": 417,
+      "w": 165,
+      "h": 106,
+      "title": "Platform API",
+      "desc": "Auth • REST • SSE",
+      "accent": "violet",
+      "parent": "be"
+    },
+    {
+      "kind": "card",
+      "id": "registry",
+      "x": 781,
+      "y": 417,
+      "w": 165,
+      "h": 106,
+      "title": "Agent Registry",
+      "desc": "Immutable versions",
+      "accent": "violet",
+      "parent": "be"
+    },
+    {
+      "kind": "card",
+      "id": "run",
+      "x": 593,
+      "y": 562,
+      "w": 165,
+      "h": 106,
+      "title": "Run Service",
+      "desc": "Idempotent admission",
+      "accent": "violet",
+      "parent": "be"
+    },
+    {
+      "kind": "card",
+      "id": "approval",
+      "x": 781,
+      "y": 562,
+      "w": 165,
+      "h": 106,
+      "title": "Approval Service",
+      "desc": "Human consent",
+      "accent": "violet",
+      "parent": "be"
+    },
+    {
+      "kind": "card",
+      "id": "dispatcher",
+      "x": 1017,
+      "y": 420,
+      "w": 211,
+      "h": 104,
+      "title": "Run Dispatcher",
+      "desc": "Queue • retries • leases",
+      "accent": "teal",
+      "parent": "workers"
+    },
+    {
+      "kind": "card",
+      "id": "worker",
+      "x": 1017,
+      "y": 562,
+      "w": 211,
+      "h": 106,
+      "title": "Agent Workers",
+      "desc": "Pinned RuntimeAdapter",
+      "accent": "teal",
+      "parent": "workers"
+    },
+    {
+      "kind": "card",
+      "id": "model",
+      "x": 1301,
+      "y": 419,
+      "w": 245,
+      "h": 106,
+      "title": "Model Gateway",
+      "desc": "Profiles • tokens • spend",
+      "accent": "amber",
+      "parent": "gateways"
+    },
+    {
+      "kind": "card",
+      "id": "tool",
+      "x": 1301,
+      "y": 562,
+      "w": 245,
+      "h": 106,
+      "title": "Tool Gateway",
+      "desc": "ACL • schema • effects",
+      "accent": "amber",
+      "parent": "gateways"
+    },
+    {
+      "kind": "card",
+      "id": "models",
+      "x": 1653,
+      "y": 419,
+      "w": 254,
+      "h": 106,
+      "title": "Model Providers",
+      "desc": "External inference",
+      "accent": "slate",
+      "parent": "external"
+    },
+    {
+      "kind": "card",
+      "id": "tools",
+      "x": 1653,
+      "y": 562,
+      "w": 254,
+      "h": 106,
+      "title": "MCP / HTTP / Job Runner",
+      "desc": "Reviewed operations",
+      "accent": "slate",
+      "parent": "external"
+    },
+    {
+      "kind": "data",
+      "id": "config",
+      "x": 598,
+      "y": 958,
+      "w": 289,
+      "h": 104,
+      "title": "Config / Version Store",
+      "desc": "Agent manifests • bindings",
+      "accent": "violet",
+      "parent": "data"
+    },
+    {
+      "kind": "data",
+      "id": "runstore",
+      "x": 915,
+      "y": 958,
+      "w": 289,
+      "h": 104,
+      "title": "Run & Event Store",
+      "desc": "Outbox • state • audit",
+      "accent": "teal",
+      "parent": "data"
+    },
+    {
+      "kind": "data",
+      "id": "artifact",
+      "x": 1232,
+      "y": 958,
+      "w": 309,
+      "h": 104,
+      "title": "Artifact Store",
+      "desc": "Scoped results • evidence",
+      "accent": "blue",
+      "parent": "data"
+    }
+  ],
+  "edges": [
+    {
+      "id": "user-fe",
+      "points": [
+        [
+          228,
+          500
+        ],
+        [
+          306,
+          500
+        ]
+      ],
+      "label": "HTTPS",
+      "accent": "blue",
+      "dashed": false
+    },
+    {
+      "id": "fe-be",
+      "points": [
+        [
+          524,
+          499
+        ],
+        [
+          593,
+          499
+        ]
+      ],
+      "label": "REST / SSE",
+      "accent": "blue",
+      "dashed": false
+    },
+    {
+      "id": "control-worker",
+      "points": [
+        [
+          967,
+          753
+        ],
+        [
+          995,
+          753
+        ]
+      ],
+      "label": "dispatch",
+      "accent": "violet",
+      "dashed": false
+    },
+    {
+      "id": "worker-gate",
+      "points": [
+        [
+          1250,
+          753
+        ],
+        [
+          1278,
+          753
+        ]
+      ],
+      "label": "policy",
+      "accent": "teal",
+      "dashed": false
+    },
+    {
+      "id": "gateway-ext",
+      "points": [
+        [
+          1568,
+          753
+        ],
+        [
+          1628,
+          753
+        ]
+      ],
+      "label": "approved",
+      "accent": "amber",
+      "dashed": false
+    },
+    {
+      "id": "control-store",
+      "points": [
+        [
+          805,
+          834
+        ],
+        [
+          805,
+          866
+        ]
+      ],
+      "label": "state",
+      "accent": "slate",
+      "dashed": true
+    },
+    {
+      "id": "worker-store",
+      "points": [
+        [
+          1125,
+          834
+        ],
+        [
+          1125,
+          866
+        ]
+      ],
+      "label": "events",
+      "accent": "slate",
+      "dashed": true
+    }
+  ]
+}

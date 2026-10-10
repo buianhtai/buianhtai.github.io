@@ -1,0 +1,273 @@
+{
+  "slug": "executive",
+  "width": 1800,
+  "height": 855,
+  "kicker": "REFERENCE ARCHITECTURE   /   L0 EXECUTIVE VIEW",
+  "title": "An agent platform, at a glance",
+  "subtitle": "One trusted path from user intent to governed execution and explainable results.",
+  "footer": "PROPOSED DESIGN  •  ALL EXAMPLES GENERIC  •  EXPLORE L1–L4 FOR IMPLEMENTATION DETAILS",
+  "boxes": [
+    {
+      "kind": "boundary",
+      "id": "platform",
+      "x": 286,
+      "y": 234,
+      "w": 1162,
+      "h": 545,
+      "title": "AGENT EXECUTION PLATFORM",
+      "desc": "GOVERNED • DURABLE • PLUGGABLE",
+      "accent": "slate",
+      "parent": null
+    },
+    {
+      "kind": "boundary",
+      "id": "fe",
+      "x": 316,
+      "y": 309,
+      "w": 248,
+      "h": 328,
+      "title": "01   EXPERIENCE",
+      "desc": "FRONTEND APPLICATION",
+      "accent": "blue",
+      "parent": "platform"
+    },
+    {
+      "kind": "boundary",
+      "id": "control",
+      "x": 592,
+      "y": 309,
+      "w": 256,
+      "h": 328,
+      "title": "02   CONTROL",
+      "desc": "BACKEND SERVICES",
+      "accent": "violet",
+      "parent": "platform"
+    },
+    {
+      "kind": "boundary",
+      "id": "runtime",
+      "x": 876,
+      "y": 309,
+      "w": 256,
+      "h": 328,
+      "title": "03   EXECUTION",
+      "desc": "ISOLATED WORKERS",
+      "accent": "teal",
+      "parent": "platform"
+    },
+    {
+      "kind": "boundary",
+      "id": "integration",
+      "x": 1160,
+      "y": 309,
+      "w": 258,
+      "h": 328,
+      "title": "04   INTEGRATION",
+      "desc": "POLICY GATEWAYS",
+      "accent": "amber",
+      "parent": "platform"
+    },
+    {
+      "kind": "card",
+      "id": "person",
+      "x": 56,
+      "y": 416,
+      "w": 198,
+      "h": 118,
+      "title": "User / Trigger",
+      "desc": "Questions • events",
+      "accent": "slate",
+      "parent": null
+    },
+    {
+      "kind": "card",
+      "id": "web",
+      "x": 335,
+      "y": 417,
+      "w": 210,
+      "h": 112,
+      "title": "Chat / Agent Studio",
+      "desc": "Configure • submit • review",
+      "accent": "blue",
+      "parent": "fe"
+    },
+    {
+      "kind": "card",
+      "id": "api",
+      "x": 614,
+      "y": 417,
+      "w": 212,
+      "h": 112,
+      "title": "Platform API",
+      "desc": "Authenticate • authorize",
+      "accent": "violet",
+      "parent": "control"
+    },
+    {
+      "kind": "card",
+      "id": "worker",
+      "x": 898,
+      "y": 417,
+      "w": 212,
+      "h": 112,
+      "title": "Durable Agent Run",
+      "desc": "Dispatch • execute • recover",
+      "accent": "teal",
+      "parent": "runtime"
+    },
+    {
+      "kind": "card",
+      "id": "gateway",
+      "x": 1181,
+      "y": 417,
+      "w": 215,
+      "h": 112,
+      "title": "Approved Capabilities",
+      "desc": "Models • tools • agents",
+      "accent": "amber",
+      "parent": "integration"
+    },
+    {
+      "kind": "card",
+      "id": "provider",
+      "x": 1506,
+      "y": 416,
+      "w": 230,
+      "h": 118,
+      "title": "External Providers",
+      "desc": "Approved APIs • job runners",
+      "accent": "slate",
+      "parent": null
+    },
+    {
+      "kind": "data",
+      "id": "data",
+      "x": 615,
+      "y": 676,
+      "w": 491,
+      "h": 64,
+      "title": "Versioned config • runs • events • results",
+      "desc": "Protected, durable state",
+      "accent": "slate",
+      "parent": "platform"
+    },
+    {
+      "kind": "note",
+      "id": "scope",
+      "x": 56,
+      "y": 660,
+      "w": 215,
+      "h": 95,
+      "title": "LOGICAL ARCHITECTURE",
+      "desc": "Not a deployment claim",
+      "accent": "slate",
+      "parent": null
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "points": [
+        [
+          254,
+          474
+        ],
+        [
+          335,
+          474
+        ]
+      ],
+      "label": "HTTPS",
+      "accent": "blue",
+      "dashed": false
+    },
+    {
+      "id": "e2",
+      "points": [
+        [
+          545,
+          474
+        ],
+        [
+          614,
+          474
+        ]
+      ],
+      "label": "REST",
+      "accent": "blue",
+      "dashed": false
+    },
+    {
+      "id": "e3",
+      "points": [
+        [
+          826,
+          474
+        ],
+        [
+          898,
+          474
+        ]
+      ],
+      "label": "admit",
+      "accent": "violet",
+      "dashed": false
+    },
+    {
+      "id": "e4",
+      "points": [
+        [
+          1110,
+          474
+        ],
+        [
+          1181,
+          474
+        ]
+      ],
+      "label": "policy",
+      "accent": "teal",
+      "dashed": false
+    },
+    {
+      "id": "e5",
+      "points": [
+        [
+          1396,
+          474
+        ],
+        [
+          1506,
+          474
+        ]
+      ],
+      "label": "approved",
+      "accent": "amber",
+      "dashed": false
+    },
+    {
+      "id": "store",
+      "points": [
+        [
+          1003,
+          529
+        ],
+        [
+          1003,
+          659
+        ],
+        [
+          861,
+          659
+        ],
+        [
+          861,
+          676
+        ]
+      ],
+      "label": "",
+      "accent": "slate",
+      "dashed": true
+    }
+  ]
+}
