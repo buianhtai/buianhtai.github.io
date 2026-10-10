@@ -81,6 +81,31 @@ try{
     console.log('Archify pilot rendered: '+slug);
     if(slug==='agent-platform-container-map')await page.screenshot({path:output+'/ArchifyContainerPilot.png',fullPage:false});
   }
+  // Atlas is a self-contained design prototype published alongside EventCatalog:
+  // verify the static route, responsive 2D fallback and a meaningful interaction.
+  const atlasErrors=[];
+  const atlasErrorListener=error=>atlasErrors.push(error.message);
+  page.on('pageerror',atlasErrorListener);
+  const atlas=await page.goto(host+'/architecture/atlas/',{waitUntil:'domcontentloaded',timeout:20000});
+  assert.equal(atlas?.status(),200,'Architecture Atlas preview missing');
+  await page.locator('#spatial').waitFor({state:'visible',timeout:15000});
+  await page.locator('#view2d').click();
+  await page.locator('#svgmap.show').waitFor({state:'visible',timeout:15000});
+  await page.locator('[data-scenario="approval"]').click();
+  await page.locator('#policyChoice:not(.hidden)').waitFor({state:'visible',timeout:15000});
+  await page.locator('[data-policy="denied"]').click();
+  assert.equal(await page.locator('[data-policy="denied"]').getAttribute('aria-pressed'),'true','Approval rejection simulation failed');
+  await page.locator('#view3d').click();
+  await page.screenshot({path:output+'/AtlasDesktop.png',fullPage:false,timeout:15000});
+  await page.setViewportSize({width:390,height:844});
+  await page.locator('#view2d').click();
+  assert(await page.locator('#svgmap.show').isVisible(),'Atlas mobile schematic unavailable');
+  const noHorizontalOverflow=await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+2);
+  assert(noHorizontalOverflow,'Atlas mobile layout overflows the page');
+  await page.screenshot({path:output+'/AtlasMobile.png',fullPage:false,timeout:15000});
+  assert.equal(atlasErrors.length,0,'Atlas JavaScript errors: '+atlasErrors.join('; '));
+  page.off('pageerror',atlasErrorListener);
+  console.log('Architecture Atlas public route, interactions and mobile layout passed');
   await context.close();
 }finally{
   await browser?.close().catch(()=>{});

@@ -56,6 +56,15 @@ jobs:
           mkdir -p dist/architecture
           cp -R architecture-catalog/dist/. dist/architecture/
           test -s dist/architecture/index.html
+          test -s dist/architecture/atlas/index.html
+          grep -q 'ARCHITECTURE ATLAS' dist/architecture/atlas/index.html || {
+            echo "::error::Architecture Atlas preview missing from combined site"
+            exit 1
+          }
+          grep -q 'Launch Architecture Atlas' architecture-catalog/dist/index.html || {
+            echo "::error::Architecture portal missing Atlas navigation"
+            exit 1
+          }
           test -s dist/pagefind/pagefind.js
           for flow in ExplicitAgentRun AgentRunRecovery ToolExecution RoutedAgentRun AgentConfigurationLifecycle SupportEmailIntake ApprovalGatedExternalJob DelegatedAgentRun; do
             find architecture-catalog/dist -type f -path "*/docs/flows/$flow/0.1.0/index.html" | grep -q . || {
