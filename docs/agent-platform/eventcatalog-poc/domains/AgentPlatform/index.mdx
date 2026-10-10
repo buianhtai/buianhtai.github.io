@@ -66,6 +66,37 @@ diagrams:
     version: "0.1.0"
   - id: StateAndDataModel
     version: "0.1.0"
+resourceGroups:
+  - id: core-platform-services
+    title: Core platform services
+    items:
+      - id: PlatformAPI
+        type: service
+      - id: AgentRegistry
+        type: service
+      - id: RunService
+        type: service
+      - id: AgentWorker
+        type: service
+      - id: ToolGateway
+        type: service
+      - id: EventStreamAPI
+        type: service
+  - id: execution-workflows
+    title: End-to-end execution flows
+    items:
+      - id: AgentConfigurationLifecycle
+        type: flow
+      - id: ExplicitAgentRun
+        type: flow
+      - id: ToolExecution
+        type: flow
+      - id: SupportEmailIntake
+        type: flow
+      - id: ApprovalGatedExternalJob
+        type: flow
+      - id: DelegatedAgentRun
+        type: flow
 entities:
   - id: AgentVersion
     version: "0.1.0"
@@ -88,6 +119,22 @@ entities:
 **Status: proposed, generic reference architecture.** No catalog resource by itself proves a running service, deployed agent, production event, or executable workflow. All examples use fictional SaaS data without private customer or product details.
 
 This catalog explains **what happens between incoming input and a completed response**: how an agent is configured, selected, admitted, scheduled, executed with controlled tools, reviewed for side effects, and returned to the caller.
+
+## Native EventCatalog exploration
+
+<ArchitectureGraph id="AgentPlatform" type="domain" depth="3" lensPicker={true} />
+
+This catalog-wide graph is generated from domains, systems, dependencies, messages, agents and owners. Use the native lens picker and node search to drill into a service. Unlike hand-authored C4, its edges are maintained from resource frontmatter.
+
+### Searchable services and workflows
+
+<ResourceGroupTable id="core-platform-services" title="Core platform services" description="Native resources with contract and ownership links" showOwners={true} limit={6} />
+
+<ResourceGroupTable id="execution-workflows" title="End-to-end workflows" description="Versioned, interactive native EventCatalog flows" limit={6} />
+
+### Interactive workflow
+
+<Flow id="ExplicitAgentRun" version="0.1.0" walkthrough={true} legend={false} />
 
 ## Architecture diagrams — start with the overview
 
