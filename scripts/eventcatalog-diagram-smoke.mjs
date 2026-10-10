@@ -24,6 +24,17 @@ try{
   browser=await chromium.launch({headless:true});
   const context=await browser.newContext({viewport:{width:1400,height:900}, deviceScaleFactor:1, reducedMotion:'reduce'});
   const page=await context.newPage();
+  const homeResponse=await page.goto(host+'/architecture/',{waitUntil:'domcontentloaded',timeout:20000});
+  assert.equal(homeResponse?.status(),200,'Architecture homepage missing');
+  const contextPlaceholder=page.locator('#system-context-map-portal');
+  const graphPlaceholder=page.locator('[data-architecture-graph-portal]').first();
+  assert.equal(await contextPlaceholder.count(),1,'Missing native SystemContextMap placeholder');
+  assert.equal(await graphPlaceholder.count(),1,'Missing native ArchitectureGraph placeholder');
+  await graphPlaceholder.locator('canvas').first().waitFor({state:'visible',timeout:25000});
+  // Native context maps use the EventCatalog React Flow visualizer.
+  await contextPlaceholder.locator('.react-flow').first().waitFor({state:'visible',timeout:25000});
+  console.log('Native SystemContextMap and ArchitectureGraph mounted successfully');
+  await page.screenshot({path:output+'/NativeArchitectureHomepage.png',fullPage:false,timeout:15000});
   const ids=['ArchitectureOverview','C4SystemContext','C4Containers','C4ControlPlane','C4ExecutionPlane','C4Deployment','TrustBoundaries'];
   for(const id of ids){
     const url=host+'/architecture/diagrams/'+id+'/0.1.0/embed/';
