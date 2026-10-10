@@ -151,7 +151,7 @@ jobs:
           test -s architecture-catalog/systems/AgentExecutionPlatform/index.mdx
           test -s architecture-catalog/domains/AgentPlatform/entities/AgentVersion/index.mdx
           test -s architecture-catalog/pages/homepage.astro
-          grep -q 'Configurable agents, explained' architecture-catalog/dist/index.html || {
+          grep -q 'Build agents by configuration' architecture-catalog/dist/index.html || {
             echo "::error::Custom EventCatalog homepage did not render"
             exit 1
           }
