@@ -127,6 +127,22 @@ jobs:
             exit 1
           }
 
+      - name: Checkout pinned Archify renderer (v3.0.1)
+        uses: actions/checkout@v4
+        with:
+          repository: tt-a1i/archify
+          ref: 2ab3cae7ac2c2a55d7386ca789d03c4fcd31816c
+          path: .vendor/archify
+          persist-credentials: false
+      - name: Install pinned Archify renderer dependencies
+        run: npm ci --prefix .vendor/archify/archify --no-audit --no-fund
+      - name: Build enterprise Archify diagram pilot
+        run: |
+          node scripts/build-archify-pilot.mjs
+          for name in agent-platform-container-map agent-run-sequence approval-swimlane; do
+            test -s "dist/architecture/showcase/${name}.html"
+          done
+
       - name: Upload combined site as one GitHub Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:

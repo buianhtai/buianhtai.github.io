@@ -52,6 +52,14 @@ try{
       await page.screenshot({path:output+'/'+id+'.png',fullPage:true,timeout:15000});
     }
   }
+  for(const slug of ['agent-platform-container-map','agent-run-sequence','approval-swimlane']){
+    const response=await page.goto(host+'/architecture/showcase/'+slug+'.html',{waitUntil:'domcontentloaded',timeout:25000});
+    assert.equal(response?.status(),200,'Archify pilot route missing: '+slug);
+    await page.locator('svg').first().waitFor({state:'visible',timeout:20000});
+    assert((await page.locator('svg').count())>=1,'Archify pilot has no SVG visualization: '+slug);
+    console.log('Archify pilot rendered: '+slug);
+    if(slug==='agent-platform-container-map')await page.screenshot({path:output+'/ArchifyContainerPilot.png',fullPage:false});
+  }
   await context.close();
 }finally{
   await browser?.close().catch(()=>{});

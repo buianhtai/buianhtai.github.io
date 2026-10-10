@@ -1,0 +1,250 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Agent Platform - Logical Containers",
+    "subtitle": "Proposed C4-inspired container view, not a formal C4 specification",
+    "output": "dist/architecture/showcase/agent-platform-container-map.html",
+    "quality_profile": "standard",
+    "viewBox": [
+      1410,
+      760
+    ]
+  },
+  "components": [
+    {
+      "id": "user",
+      "type": "external",
+      "label": "Application User",
+      "sublabel": "Authenticated client",
+      "pos": [
+        30,
+        325
+      ],
+      "size": [
+        154,
+        70
+      ]
+    },
+    {
+      "id": "api",
+      "type": "frontend",
+      "label": "Platform API",
+      "sublabel": "REST / SSE",
+      "pos": [
+        245,
+        325
+      ],
+      "size": [
+        158,
+        70
+      ]
+    },
+    {
+      "id": "registry",
+      "type": "backend",
+      "label": "Agent Registry",
+      "sublabel": "Versioned manifests",
+      "pos": [
+        470,
+        135
+      ],
+      "size": [
+        170,
+        74
+      ]
+    },
+    {
+      "id": "runs",
+      "type": "backend",
+      "label": "Run Service",
+      "sublabel": "Admit + status",
+      "pos": [
+        470,
+        325
+      ],
+      "size": [
+        170,
+        74
+      ]
+    },
+    {
+      "id": "events",
+      "type": "database",
+      "label": "Run Event Store",
+      "sublabel": "Outbox + replay",
+      "pos": [
+        470,
+        515
+      ],
+      "size": [
+        170,
+        74
+      ]
+    },
+    {
+      "id": "queue",
+      "type": "messagebus",
+      "label": "Dispatcher",
+      "sublabel": "Durable leases",
+      "pos": [
+        705,
+        325
+      ],
+      "size": [
+        155,
+        74
+      ]
+    },
+    {
+      "id": "worker",
+      "type": "backend",
+      "label": "Agent Worker",
+      "sublabel": "Pinned RuntimeAdapter",
+      "pos": [
+        925,
+        325
+      ],
+      "size": [
+        180,
+        74
+      ]
+    },
+    {
+      "id": "model",
+      "type": "cloud",
+      "label": "Model Gateway",
+      "sublabel": "Approved profiles",
+      "pos": [
+        925,
+        130
+      ],
+      "size": [
+        180,
+        74
+      ]
+    },
+    {
+      "id": "tools",
+      "type": "security",
+      "label": "Tool Gateway",
+      "sublabel": "Policy + approval",
+      "pos": [
+        925,
+        520
+      ],
+      "size": [
+        180,
+        74
+      ]
+    },
+    {
+      "id": "providers",
+      "type": "external",
+      "label": "Approved Providers",
+      "sublabel": "Models / MCP / jobs",
+      "pos": [
+        1200,
+        335
+      ],
+      "size": [
+        170,
+        74
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "from": "user",
+      "to": "api",
+      "label": "HTTPS",
+      "variant": "emphasis"
+    },
+    {
+      "from": "api",
+      "to": "registry",
+      "label": "resolve version"
+    },
+    {
+      "from": "api",
+      "to": "runs",
+      "label": "admit",
+      "variant": "emphasis"
+    },
+    {
+      "from": "runs",
+      "to": "events",
+      "label": "commit outbox",
+      "variant": "emphasis",
+      "labelAt": [
+        547,
+        413
+      ]
+    },
+    {
+      "from": "runs",
+      "to": "queue",
+      "label": "dispatch intent",
+      "labelAt": [
+        673,
+        413
+      ]
+    },
+    {
+      "from": "queue",
+      "to": "worker",
+      "label": "fenced lease",
+      "variant": "emphasis"
+    },
+    {
+      "from": "worker",
+      "to": "model",
+      "label": "inference"
+    },
+    {
+      "from": "worker",
+      "to": "tools",
+      "label": "propose tool",
+      "variant": "security",
+      "labelAt": [
+        1022,
+        413
+      ]
+    },
+    {
+      "from": "model",
+      "to": "providers",
+      "label": "approved model"
+    },
+    {
+      "from": "tools",
+      "to": "providers",
+      "label": "reviewed operation",
+      "variant": "security"
+    },
+    {
+      "from": "worker",
+      "to": "events",
+      "label": "events + results",
+      "variant": "dashed"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Separation",
+      "items": [
+        "Public API and worker pools scale independently",
+        "Run Service owns user-visible durable status"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Governance",
+      "items": [
+        "Tool Gateway rechecks permission on every call",
+        "External providers are outside platform trust boundary"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,184 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "Agent Run - Request-to-Result Sequence",
+    "subtitle": "Proposed runtime interaction, independent of provider or workflow engine",
+    "output": "dist/architecture/showcase/agent-run-sequence.html",
+    "quality_profile": "standard",
+    "column_fit": "spread",
+    "viewBox": [
+      1370,
+      680
+    ]
+  },
+  "participants": [
+    {
+      "id": "user",
+      "type": "external",
+      "label": "User"
+    },
+    {
+      "id": "api",
+      "type": "frontend",
+      "label": "Platform API"
+    },
+    {
+      "id": "run",
+      "type": "backend",
+      "label": "Run Service"
+    },
+    {
+      "id": "dispatcher",
+      "type": "messagebus",
+      "label": "Dispatcher"
+    },
+    {
+      "id": "worker",
+      "type": "backend",
+      "label": "Worker"
+    },
+    {
+      "id": "model",
+      "type": "cloud",
+      "label": "Model Gateway"
+    },
+    {
+      "id": "tool",
+      "type": "security",
+      "label": "Tool Gateway"
+    }
+  ],
+  "segments": [
+    {
+      "from": 155,
+      "to": 260,
+      "label": "Authenticate and admit"
+    },
+    {
+      "from": 270,
+      "to": 425,
+      "label": "Durable execution"
+    },
+    {
+      "from": 435,
+      "to": 610,
+      "label": "Evidence and delivery"
+    }
+  ],
+  "messages": [
+    {
+      "from": "user",
+      "to": "api",
+      "y": 165,
+      "label": "POST /v1/runs",
+      "variant": "emphasis"
+    },
+    {
+      "from": "api",
+      "to": "run",
+      "y": 192,
+      "label": "authorize and admit",
+      "variant": "security"
+    },
+    {
+      "from": "run",
+      "to": "api",
+      "y": 220,
+      "label": "202 + runId",
+      "variant": "return"
+    },
+    {
+      "from": "run",
+      "to": "dispatcher",
+      "y": 251,
+      "label": "commit outbox",
+      "variant": "dashed"
+    },
+    {
+      "from": "dispatcher",
+      "to": "worker",
+      "y": 287,
+      "label": "claim fenced attempt"
+    },
+    {
+      "from": "worker",
+      "to": "model",
+      "y": 319,
+      "label": "generate next step"
+    },
+    {
+      "from": "model",
+      "to": "worker",
+      "y": 350,
+      "label": "tool proposal",
+      "variant": "return"
+    },
+    {
+      "from": "worker",
+      "to": "tool",
+      "y": 386,
+      "label": "invoke approved capability",
+      "variant": "security"
+    },
+    {
+      "from": "tool",
+      "to": "worker",
+      "y": 416,
+      "label": "scoped evidence",
+      "variant": "return"
+    },
+    {
+      "from": "worker",
+      "to": "model",
+      "y": 456,
+      "label": "compose grounded answer"
+    },
+    {
+      "from": "model",
+      "to": "worker",
+      "y": 488,
+      "label": "final result",
+      "variant": "return"
+    },
+    {
+      "from": "worker",
+      "to": "run",
+      "y": 527,
+      "label": "persist status + result",
+      "variant": "emphasis"
+    },
+    {
+      "from": "run",
+      "to": "api",
+      "y": 560,
+      "label": "replay committed event",
+      "variant": "dashed"
+    },
+    {
+      "from": "api",
+      "to": "user",
+      "y": 593,
+      "label": "SSE final answer",
+      "variant": "return"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Run ownership",
+      "items": [
+        "API returns 202 after durable admission",
+        "Worker never streams directly to browser"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Tool boundary",
+      "items": [
+        "Model proposes arguments, gateway authorizes",
+        "SSE reconnect does not restart the run"
+      ]
+    }
+  ]
+}
