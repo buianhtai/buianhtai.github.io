@@ -6,7 +6,7 @@ EventCatalog owns the resource IDs, services, systems, diagrams, versions, decis
 
 | Enterprise view | Archify source | Published view | Scope caveat |
 | --- | --- | --- | --- |
-| Container architecture | `agent-platform-container-map.architecture.json` | `/architecture/showcase/agent-platform-container-map.html` | C4-*inspired*, not a normative C4 model |
+| Container architecture | `agent-platform-container-map.architecture.json` | `/architecture/showcase/agent-platform-container-map.html` | C4-*inspired* with explicit frontend, backend control plane, isolated execution, integration, persistence and external provider boundaries; not a normative C4 model |
 | Request-to-result | `agent-run-sequence.sequence.json` | `/architecture/showcase/agent-run-sequence.html` | UML-sequence-*inspired* illustration |
 | Human approval | `approval-swimlane.workflow.json` | `/architecture/showcase/approval-swimlane.html` | BPMN-*inspired* swimlanes, not BPMN XML/executable BPMN |
 
@@ -23,6 +23,12 @@ node scripts/build-archify-pilot.mjs
 ~~~
 
 The build validates each source against Archify's runtime constraints and checks the generated HTML. Each view lists the EventCatalog service IDs that must exist. The accompanying EventCatalog native graphs remain the **canonical navigation and ownership model**.
+
+## Explicit container and trust boundaries
+
+The revised overview is no longer a flat service graph. It wraps the **Chat UI / Agent Studio** inside a Frontend boundary, the **Platform API and control services** inside Backend, the **Dispatcher and Agent Worker** inside Execution, the **Model and Tool Gateway** inside Integration, and configuration/event/artifact storage inside Data. Third-party model and tool providers are outside the application boundary. The browser is never the Platform API and model calls must go through policy-controlled gateways.
+
+The native [C4 Level 2 view](/architecture/diagrams/C4Containers/0.1.0/) mirrors those logical boundaries using `Container_Boundary` elements, so an architect can compare the descriptive C4 view with Archify’s interactive presentation.
 
 ## Review criteria
 
