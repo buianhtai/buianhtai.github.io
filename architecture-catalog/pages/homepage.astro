@@ -41,7 +41,16 @@ const journeys = [
         </div>
         <a href={base + '/diagrams/ExecutiveOverview/0.1.0/'} class="text-sm font-semibold text-sky-700 dark:text-sky-300">View full diagram and explanation →</a>
       </div>
-      <iframe title="Simple agent platform architecture overview" loading="lazy" src={base + '/diagrams/ExecutiveOverview/0.1.0/embed/'} class="block h-[320px] w-full border-0 sm:h-[400px]"></iframe>
+      <a data-editorial-overview href={base + '/showcase/editorial-executive.svg'} title="Open full-resolution editorial executive diagram" class="block bg-slate-50">
+        <img src={base + '/showcase/editorial-executive.svg'} width="1800" height="855" decoding="async" loading="eager" alt="Professional agent platform overview showing frontend, backend control, worker execution, integration policy, external providers and durable state" class="block h-auto w-full" />
+      </a>
+      <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-4 py-3 text-sm dark:border-slate-700">
+        <p class="text-slate-600 dark:text-slate-300">Clean editorial view for presentations; native EventCatalog remains the architecture source of truth.</p>
+        <div class="flex gap-4">
+          <a href={base + '/showcase/editorial-executive.svg'} class="font-semibold text-sky-700 dark:text-sky-300">Full-resolution SVG ↗</a>
+          <a href={base + '/showcase/editorial-executive.drawio'} download="agent-platform-overview.drawio" class="font-semibold text-sky-700 dark:text-sky-300">Edit in draw.io ↗</a>
+        </div>
+      </div>
     </div>
     <div class="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       {[
@@ -57,6 +66,19 @@ const journeys = [
         </a>
       ))}
     </div>
+    <details id="editorial-container-details" class="mt-5 overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+      <summary class="cursor-pointer select-none px-5 py-4 font-semibold text-slate-900 dark:text-white">L2 · Open the detailed frontend / backend / worker container boundaries <span class="text-sm font-normal text-slate-600 dark:text-slate-300">(expand only when needed)</span></summary>
+      <a href={base + '/showcase/editorial-containers.svg'} title="View full-size L2 container architecture">
+        <img src={base + '/showcase/editorial-containers.svg'} loading="lazy" decoding="async" width="1980" height="1240" alt="Container architecture with explicit frontend, backend services, isolated worker pool, integration services, data plane and external trust boundary" class="block h-auto w-full bg-slate-50" />
+      </a>
+      <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-5 py-4 text-sm dark:border-slate-700">
+        <p class="text-slate-600 dark:text-slate-300">Logical container boundaries. Deployment/pod topology is documented separately.</p>
+        <div class="flex gap-4">
+          <a href={base + '/showcase/editorial-containers.svg'} class="font-semibold text-sky-700 dark:text-sky-300">Full-size SVG ↗</a>
+          <a href={base + '/showcase/editorial-containers.drawio'} download="agent-platform-containers.drawio" class="font-semibold text-sky-700 dark:text-sky-300">Editable draw.io ↗</a>
+        </div>
+      </div>
+    </details>
   </section>
 
   <section class="py-10" aria-labelledby="visual-architecture-title">
