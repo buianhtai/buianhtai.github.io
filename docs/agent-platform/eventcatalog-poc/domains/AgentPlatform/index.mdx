@@ -44,6 +44,10 @@ services:
   - id: DelegationGateway
     version: "0.1.0"
 diagrams:
+  - id: PlugAndPlayBlueprint
+    version: "0.1.0"
+  - id: ExtensionLifecycle
+    version: "0.1.0"
   - id: ExecutiveOverview
     version: "0.1.0"
   - id: C4FrontendComponents
@@ -127,6 +131,20 @@ entities:
 ---
 
 # Agent Platform — living architecture reference
+
+## Plug-and-play is the product architecture
+
+The point is **not** to hardcode an agent or a specific workflow. An authorized author assembles agents from eligible model profiles, tools, skills, scoped knowledge, triggers and subagents. A reviewed adapter package is configured as a scoped instance, exposes a published capability, and becomes usable only through an agent-specific binding. A logical **Agent Compiler** validates and pins an immutable AgentVersion before any run.
+
+![Brand-neutral illustrated platform blueprint](/architecture/illustrations/agent-platform-plug-and-play.svg)
+
+[Explore the L0 illustrated blueprint](/architecture/illustrations/agent-platform-plug-and-play.svg) · [Native plug-and-play diagram](/architecture/diagrams/PlugAndPlayBlueprint/0.1.0/) · [Reviewed adapter lifecycle](/architecture/diagrams/ExtensionLifecycle/0.1.0/)
+
+![Four-part adapter package to agent binding lifecycle](/architecture/illustrations/extension-lifecycle.svg)
+
+The illustrations are **proposals**, not production screenshots. Installing a reviewed adapter does not automatically authorize its capabilities; adding a new typed port can still require core engineering. The runtime, Tool Gateway, security and durable result path remain common regardless of which approved adapter is installed.
+
+
 
 **Status: proposed, generic reference architecture.** No catalog resource by itself proves a running service, deployed agent, production event, or executable workflow. All examples use fictional SaaS data without private customer or product details.
 
