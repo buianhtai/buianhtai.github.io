@@ -2,13 +2,13 @@
   "schema_version": 1,
   "diagram_type": "architecture",
   "meta": {
-    "title": "Agent Platform - Logical Containers",
-    "subtitle": "Proposed C4-inspired container view, not a formal C4 specification",
+    "title": "Agent Platform - Logical FE, BE and Service Boundaries",
+    "subtitle": "C4-inspired logical container map: separate client, control, workers, integration, data and external systems",
     "output": "dist/architecture/showcase/agent-platform-container-map.html",
     "quality_profile": "standard",
     "viewBox": [
-      1410,
-      760
+      2130,
+      1070
     ]
   },
   "components": [
@@ -16,154 +16,287 @@
       "id": "user",
       "type": "external",
       "label": "Application User",
-      "sublabel": "Authenticated client",
+      "sublabel": "Authenticated user",
       "pos": [
-        30,
-        325
+        45,
+        397
       ],
       "size": [
-        154,
-        70
+        150,
+        72
+      ]
+    },
+    {
+      "id": "web",
+      "type": "frontend",
+      "label": "Chat UI / Agent Studio",
+      "sublabel": "Frontend web application",
+      "pos": [
+        280,
+        397
+      ],
+      "size": [
+        175,
+        76
       ]
     },
     {
       "id": "api",
-      "type": "frontend",
+      "type": "backend",
       "label": "Platform API",
-      "sublabel": "REST / SSE",
+      "sublabel": "Backend REST + SSE",
       "pos": [
-        245,
-        325
+        565,
+        397
       ],
       "size": [
-        158,
-        70
+        176,
+        76
       ]
     },
     {
       "id": "registry",
       "type": "backend",
       "label": "Agent Registry",
-      "sublabel": "Versioned manifests",
+      "sublabel": "Versioned configuration",
       "pos": [
-        470,
-        135
+        805,
+        170
       ],
       "size": [
-        170,
-        74
+        178,
+        76
       ]
     },
     {
       "id": "runs",
       "type": "backend",
       "label": "Run Service",
-      "sublabel": "Admit + status",
+      "sublabel": "Admission and durable status",
       "pos": [
-        470,
-        325
+        805,
+        397
       ],
       "size": [
-        170,
-        74
+        178,
+        76
       ]
     },
     {
-      "id": "events",
-      "type": "database",
-      "label": "Run Event Store",
-      "sublabel": "Outbox + replay",
+      "id": "approval",
+      "type": "security",
+      "label": "Approval Service",
+      "sublabel": "Human decision records",
       "pos": [
-        470,
-        515
+        565,
+        580
       ],
       "size": [
-        170,
-        74
+        176,
+        76
       ]
     },
     {
       "id": "queue",
       "type": "messagebus",
       "label": "Dispatcher",
-      "sublabel": "Durable leases",
+      "sublabel": "Durable lease / queue",
       "pos": [
-        705,
-        325
+        1070,
+        397
       ],
       "size": [
-        155,
-        74
+        166,
+        76
       ]
     },
     {
       "id": "worker",
       "type": "backend",
       "label": "Agent Worker",
-      "sublabel": "Pinned RuntimeAdapter",
+      "sublabel": "Isolated RuntimeAdapter",
       "pos": [
-        925,
-        325
+        1280,
+        397
       ],
       "size": [
         180,
-        74
+        76
       ]
     },
     {
       "id": "model",
       "type": "cloud",
       "label": "Model Gateway",
-      "sublabel": "Approved profiles",
+      "sublabel": "Approved model profiles",
       "pos": [
-        925,
-        130
+        1545,
+        170
       ],
       "size": [
         180,
-        74
+        76
       ]
     },
     {
       "id": "tools",
       "type": "security",
       "label": "Tool Gateway",
-      "sublabel": "Policy + approval",
+      "sublabel": "Scoped tool authorization",
       "pos": [
-        925,
-        520
+        1545,
+        595
       ],
       "size": [
         180,
-        74
+        76
       ]
     },
     {
-      "id": "providers",
-      "type": "external",
-      "label": "Approved Providers",
-      "sublabel": "Models / MCP / jobs",
+      "id": "configdb",
+      "type": "database",
+      "label": "Configuration Store",
+      "sublabel": "Manifests and bindings",
       "pos": [
-        1200,
-        335
+        565,
+        850
       ],
       "size": [
-        170,
-        74
+        176,
+        76
       ]
+    },
+    {
+      "id": "events",
+      "type": "database",
+      "label": "Run and Event Store",
+      "sublabel": "Outbox, replay, attempts",
+      "pos": [
+        805,
+        850
+      ],
+      "size": [
+        178,
+        76
+      ]
+    },
+    {
+      "id": "artifacts",
+      "type": "database",
+      "label": "Artifact Store",
+      "sublabel": "Scoped results and evidence",
+      "pos": [
+        1070,
+        850
+      ],
+      "size": [
+        180,
+        76
+      ]
+    },
+    {
+      "id": "modelprovider",
+      "type": "external",
+      "label": "Model Provider",
+      "sublabel": "External inference API",
+      "pos": [
+        1845,
+        170
+      ],
+      "size": [
+        192,
+        76
+      ]
+    },
+    {
+      "id": "toolprovider",
+      "type": "external",
+      "label": "Tool / Job Provider",
+      "sublabel": "MCP, HTTP, remote jobs",
+      "pos": [
+        1845,
+        595
+      ],
+      "size": [
+        192,
+        76
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "FRONTEND | User experience",
+      "wraps": [
+        "web"
+      ],
+      "pad": 22
+    },
+    {
+      "kind": "region",
+      "label": "BACKEND | Control-plane services",
+      "wraps": [
+        "api",
+        "registry",
+        "runs",
+        "approval"
+      ],
+      "pad": 22
+    },
+    {
+      "kind": "region",
+      "label": "EXECUTION | Isolated worker pool",
+      "wraps": [
+        "queue",
+        "worker"
+      ],
+      "pad": 22
+    },
+    {
+      "kind": "security-group",
+      "label": "INTEGRATION | Policy-enforced gateways",
+      "wraps": [
+        "model",
+        "tools"
+      ],
+      "pad": 22
+    },
+    {
+      "kind": "region",
+      "label": "DATA | Durable persistence",
+      "wraps": [
+        "configdb",
+        "events",
+        "artifacts"
+      ],
+      "pad": 22
+    },
+    {
+      "kind": "region",
+      "label": "EXTERNAL | Third-party systems",
+      "wraps": [
+        "modelprovider",
+        "toolprovider"
+      ],
+      "pad": 22
     }
   ],
   "connections": [
     {
       "from": "user",
-      "to": "api",
+      "to": "web",
       "label": "HTTPS",
       "variant": "emphasis"
     },
     {
+      "from": "web",
+      "to": "api",
+      "label": "REST / SSE",
+      "variant": "emphasis"
+    },
+    {
       "from": "api",
-      "to": "registry",
-      "label": "resolve version"
+      "to": "registry"
     },
     {
       "from": "api",
@@ -173,77 +306,68 @@
     },
     {
       "from": "runs",
-      "to": "events",
-      "label": "commit outbox",
-      "variant": "emphasis",
-      "labelAt": [
-        547,
-        413
-      ]
-    },
-    {
-      "from": "runs",
       "to": "queue",
-      "label": "dispatch intent",
-      "labelAt": [
-        673,
-        413
-      ]
+      "variant": "emphasis"
     },
     {
       "from": "queue",
       "to": "worker",
-      "label": "fenced lease",
       "variant": "emphasis"
     },
     {
       "from": "worker",
-      "to": "model",
-      "label": "inference"
+      "to": "model"
     },
     {
       "from": "worker",
       "to": "tools",
-      "label": "propose tool",
-      "variant": "security",
-      "labelAt": [
-        1022,
-        413
-      ]
-    },
-    {
-      "from": "model",
-      "to": "providers",
-      "label": "approved model"
-    },
-    {
-      "from": "tools",
-      "to": "providers",
-      "label": "reviewed operation",
       "variant": "security"
     },
     {
-      "from": "worker",
+      "from": "model",
+      "to": "modelprovider"
+    },
+    {
+      "from": "tools",
+      "to": "toolprovider",
+      "variant": "security"
+    },
+    {
+      "from": "runs",
       "to": "events",
-      "label": "events + results",
       "variant": "dashed"
+    },
+    {
+      "from": "registry",
+      "to": "configdb",
+      "variant": "dashed"
+    },
+    {
+      "from": "worker",
+      "to": "artifacts",
+      "variant": "dashed"
+    },
+    {
+      "from": "approval",
+      "to": "tools",
+      "variant": "security"
     }
   ],
   "cards": [
     {
       "dot": "cyan",
-      "title": "Separation",
+      "title": "Boundary model",
       "items": [
-        "Public API and worker pools scale independently",
-        "Run Service owns user-visible durable status"
+        "Frontend is a separate client application; Platform API is backend",
+        "Control services and worker pools have separate deployment and scaling boundaries"
       ]
     },
     {
       "dot": "rose",
-      "title": "Governance",
+      "title": "Trust and execution",
       "items": [
-        "Tool Gateway rechecks permission on every call",
-        "External providers are outside platform trust boundary"
+        "Model and Tool Gateways validate outgoing provider calls",
+        "External providers are outside the application trust boundary; risky effects require independent human approval"
       ]
     }
   ]
