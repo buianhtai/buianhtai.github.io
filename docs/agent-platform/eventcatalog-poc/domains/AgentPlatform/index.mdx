@@ -136,6 +136,18 @@ This catalog-wide graph is generated from domains, systems, dependencies, messag
 
 <Flow id="ExplicitAgentRun" version="0.1.0" walkthrough={true} legend={false} />
 
+## Enterprise notation and interactive presentation lab
+
+This architecture reference uses **C4** for structural zoom, **UML-like sequence views** for runtime interactions, and **BPMN-inspired swimlanes** for human workflows, plus domain ERD, data flow, trust boundaries and deployment. When a standards-compliant/executable diagram is needed, use the actual modeling format rather than treating a visual illustration as conformant.
+
+Three optional [Archify interactive presentations](/architecture/#archify-lab-title) compare the existing native EventCatalog navigation with curated, standalone, source-controlled HTML:
+
+- [C4-inspired logical container map](/architecture/showcase/agent-platform-container-map.html): API, registry, durable state, queues and workers
+- [Request-to-result sequence](/architecture/showcase/agent-run-sequence.html): submission, persisted acceptance, tool access and answer delivery
+- [Human approval swimlane](/architecture/showcase/approval-swimlane.html): proposed action, policy review, authorized effect and reconciliation
+
+The source candidates live at [docs/agent-platform/archify-pilot](https://github.com/buianhtai/buianhtai.github.io/tree/main/docs/agent-platform/archify-pilot) and reuse Archify's blog publishing pattern. **Native EventCatalog remains the authoritative repository for resources, services, relationships and contracts.**
+
 ## Architecture diagrams — start with the overview
 
 The existing native relationship map is useful for navigating resources but it does **not** show system boundaries, deployment topology or failure modes. These first-class visual diagrams are editable, versioned and linked to system/service pages.
