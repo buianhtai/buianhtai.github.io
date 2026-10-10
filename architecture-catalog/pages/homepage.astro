@@ -142,6 +142,38 @@ const journeys = [
     <p class="mt-5 text-sm text-slate-600 dark:text-slate-300">The <a href={base + '/docs/services/PlatformAPI/0.1.0/'} class="font-semibold text-sky-700 dark:text-sky-300">Platform API</a> links to proposed OpenAPI 3.1 documentation; the <a href={base + '/docs/services/RunService/0.1.0/'} class="font-semibold text-sky-700 dark:text-sky-300">Run Service</a> links to proposed AsyncAPI 3 event contracts. Service owners are provisional, and an accepted architecture decision is not the same as an implemented service.</p>
   </section>
 
+  <section class="my-10 rounded-xl border border-slate-200 p-5 dark:border-slate-700 sm:p-7" aria-labelledby="archify-lab-title">
+    <p class="text-xs font-semibold uppercase tracking-widest text-sky-700 dark:text-sky-300">Experimental · Enterprise diagram showcase</p>
+    <h2 id="archify-lab-title" class="mt-2 text-2xl font-bold text-slate-900 dark:text-white">Compare Archify with native EventCatalog views</h2>
+    <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-600 dark:text-slate-300">Three source-controlled, interactive diagrams illustrate recognized enterprise patterns: a C4-inspired container map, a UML-style request sequence, and a BPMN-inspired approval swimlane. These are explanatory views of a proposed platform—not strict notation exports or live telemetry.</p>
+    <div class="mt-5 hidden overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700 sm:block">
+      <iframe
+        title="Archify proposed container architecture demo"
+        loading="lazy"
+        sandbox="allow-scripts allow-downloads"
+        referrerpolicy="no-referrer"
+        src={base + '/showcase/agent-platform-container-map.html?embed=1'}
+        class="block h-[520px] w-full border-0"
+      ></iframe>
+    </div>
+    <div class="mt-4 grid gap-3 sm:grid-cols-3">
+      {[
+        { name: 'Container map', path: 'agent-platform-container-map', note: 'Logical API, queue, worker, stores and trust boundaries' },
+        { name: 'Request sequence', path: 'agent-run-sequence', note: 'Durable admission, model/tool calls and SSE response' },
+        { name: 'Approval swimlane', path: 'approval-swimlane', note: 'Policy validation, human review and safe execution' }
+      ].map((diagram) => (
+        <a
+          href={base + '/showcase/' + diagram.path + '.html'}
+          class="rounded-lg border border-slate-200 p-4 transition hover:border-sky-400 dark:border-slate-700"
+        >
+          <h3 class="font-semibold text-slate-900 dark:text-white">{diagram.name} ↗</h3>
+          <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">{diagram.note}</p>
+        </a>
+      ))}
+    </div>
+    <p class="mt-3 text-xs text-slate-500 dark:text-slate-400">Native EventCatalog remains the authoritative catalog; the interactive Archify HTML files are optional, curated presentation artifacts.</p>
+  </section>
+
   <section class="my-10 border-t border-slate-200 pt-8 dark:border-slate-700">
     <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Design rules you can verify</h2>
     <div class="mt-5 grid gap-5 md:grid-cols-3">
