@@ -1,0 +1,69 @@
+---
+id: C4APIComponents
+name: "L3 — Backend API and Admission Components"
+version: "0.1.0"
+summary: Server-side identity, routing, pinning, idempotency, run admission and status delivery.
+owners:
+  - architecture-stewards
+x-implementation-status: proposed
+x-diagram-class: C4
+---
+# L3 — Backend API and Admission Components
+
+**Status: proposed, generic reference architecture.** Not proof of a deployed service or accepted technology choice.
+
+## Diagram
+
+~~~mermaid
+C4Component
+  title Proposed Backend API — Internal Component Responsibilities
+  Container_Boundary(api, "Backend: Platform API") {
+    Component(identity, "Auth and Tenant Context", "Security middleware", "Verify token and source principal")
+    Component(policy, "Eligibility and Scope Policy", "Authorization port", "Resolve allowed tenant/workspace actions")
+    Component(routing, "Agent Selection", "Optional router", "Explicit target or eligible candidate ranking")
+    Component(commands, "Run Admission Controller", "Application API", "Idempotency, deadline and budget envelope")
+    Component(admin, "Agent Admin API", "Configuration API", "Draft, validation and publication commands")
+    Component(status, "Run Status / Event Facade", "Read API", "Scoped projection and SSE replay")
+  }
+  Container_Ext(web, "Frontend", "Browser client", "Chat, Agent Studio and approval UI")
+  Container_Ext(registry, "Agent Registry", "Control service", "Published immutable manifest")
+  Container_Ext(run, "Run Service", "Control service", "Durable admission, outbox, terminal status")
+  Container_Ext(stream, "Event Stream API", "Read-side service", "Authorized event cursor")
+  Rel(web, identity, "Authenticated calls")
+  Rel(identity, policy, "Verified scoped principal")
+  Rel(policy, routing, "Eligible agent list")
+  Rel(policy, commands, "Granted invocation scope")
+  Rel(routing, commands, "Exactly one published target")
+  Rel(commands, registry, "Resolve pinned digest")
+  Rel(commands, run, "Atomic run admission")
+  Rel(admin, registry, "Publish approved revision")
+  Rel(status, stream, "Stream or replay scoped status")
+  Rel(status, run, "Read authoritative run")
+  Rel(web, status, "REST and SSE")
+~~~
+
+## Interpretation
+
+Public HTTP handlers are **not the place to execute LLM loops**. They establish authenticated scope, resolve one authorized agent, admit work idempotently and expose a durable read projection. The registry resolves a pinned version; Run Service owns acceptance. Separate logical responsibilities may share a process in the MVP.
+
+## Proposed interface boundaries
+
+| Port | Request | Authority | Idempotency/trace |
+| --- | --- | --- | --- |
+| Run admission | POST /v1/runs | Principal, tenant and deployment ACL | Idempotency-Key + body hash; 202 only after commit |
+| Current state | GET /v1/runs/:runId | Per-run authorization | Correlated trace and safe result refs |
+| Events | GET /v1/runs/:runId/events | Subscription is reauthorized | Ordered cursor; stale cursor -> snapshot |
+| Publish | POST /v1/agents/:agentId/publish | Publisher role and grants | Immutable version digest and audit event |
+
+## Routing rule
+
+Explicit agent selection bypasses ranking. Automatic routing filters eligible published deployments first; uncertainty asks for selection instead of invoking multiple agents without permission. Documentation contracts are proposed and require real implementation evidence before marking Implemented.
+
+## Explore the next level
+
+- [Frontend caller](/architecture/diagrams/C4FrontendComponents/0.1.0/)
+- [Parent control-plane view](/architecture/diagrams/C4ControlPlane/0.1.0/)
+- [Runtime interaction](/architecture/diagrams/RunLifecycleSequence/0.1.0/)
+- [Durable admission](/architecture/diagrams/EventDataFlow/0.1.0/)
+
+[Agent Platform domain](/architecture/domains/AgentPlatform/0.1.0/) · [Agent Execution Platform system](/architecture/systems/AgentExecutionPlatform/0.1.0/)
