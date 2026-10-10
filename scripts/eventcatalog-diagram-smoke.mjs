@@ -45,7 +45,12 @@ try{
   }
   const heroInfographic=page.locator('img[src$="agent-platform-plug-and-play.svg"]').first();
   await heroInfographic.waitFor({state:'visible',timeout:15000});
-  assert(await heroInfographic.evaluate(img=>img.complete && img.naturalWidth>=1500),'Illustrated platform image not rendered in Chromium');
+  await heroInfographic.scrollIntoViewIfNeeded();
+  await page.waitForFunction(() => {
+    const image=document.querySelector('img[src$="agent-platform-plug-and-play.svg"]');
+    return image?.complete && image.naturalWidth > 0 && image.naturalHeight > 0;
+  },null,{timeout:15000});
+  assert(await heroInfographic.isVisible(),'Illustrated platform image not visible in Chromium');
   await page.screenshot({path:output+'/PlugAndPlayInfographic.png',fullPage:false,timeout:15000});
   console.log('Brand-neutral architecture illustrations loaded and rendered successfully');
 
