@@ -33,8 +33,9 @@ flowchart LR
   KB --> MERGE["Normalize, authorize, deduplicate<br/>rank + evidence cap"]
   LIVE --> MERGE
   HYB --> MERGE
-  ACL -. "before source + each record" .-> READ
-  BUD -. "reservation + enforcement" .-> READ
+  ACL -. "filter eligible sources" .-> PLAN
+  ACL -. "authorize results" .-> MERGE
+  BUD -. "fan-out limits" .-> PLAN
   FRESH -. "source/version proof" .-> MERGE
   MERGE --> BR{"Deterministic evidence sufficient?"}
   BR -->|"yes"| ANSWER["Cited response + uncertainty"]
