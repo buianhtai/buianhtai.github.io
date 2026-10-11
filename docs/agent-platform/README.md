@@ -1,7 +1,7 @@
 # Agent Platform Architecture
 
 **Status:** Proposed / design documentation, not a record of implemented services  
-**Last updated:** 2026-10-10  
+**Last updated:** 2026-10-11  
 **Scope:** Domain-neutral reference architecture for a configurable agent platform
 
 This documentation lives in `docs/` and is **not a blog article or a production implementation**. It explains the missing components between an incoming request and existing MCP/REST tools: triggering, agent selection, run admission, runtime execution, tool invocation, worker coordination, and UI event delivery.
@@ -29,7 +29,15 @@ The [brand-neutral infographic](/architecture/illustrations/agent-platform-plug-
 
 13. **[13 — Plug-and-play product blueprint and infographic guide](./13-plug-and-play-platform-blueprint.md)**: agent-building UI, adapter onboarding and authorization, logical compiler, three independent lifecycles, illustrated high-level views, proof-of-concept checks.
 
+14. **[14 — Federated Retrieval, Cost Governance and Performance](./14-federated-retrieval-cost-performance.md)**: source planning, indexed/live/hybrid reads, bounded parallelism, access enforcement, cost reservations and actual ledger, performance and quality evaluation.
+
 See also [RFC-001: Configuration-Driven Agent Platform](https://github.com/buianhtai/buianhtai.github.io/pull/6), a separate, **currently proposed** RFC about the control-plane registry, policy model, declarative configuration schema, tool/skill catalog, and framework adapters. These documents intentionally complement that RFC but are reviewable independently.
+
+## Multi-source intelligence, cost and performance
+
+The platform reuses one controlled **Federated Retrieval** capability to consult multiple authorized sources—indexed knowledge, live typed APIs and hybrid keyword/vector search—without launching one separate reasoning agent per source. Retrieval is budgeted by source, token, deadline and connector limits; evidence is deduplicated, attributed and freshness-checked before synthesis. The shared Run Service and Model/Tool Gateways own durable state, per-call authorization, spend and telemetry.
+
+Read **[14 — Federated Retrieval, Cost Governance and Performance](./14-federated-retrieval-cost-performance.md)** for the three retrieval modes, cost model, fan-out/deadline controls, authorization-safe caching, observability, workload evaluation and implementation stages.
 
 ## Architecture visualizations and living catalog
 
