@@ -1,0 +1,62 @@
+---
+id: FederatedRetrieval
+name: "Federated Retrieval — Multiple Sources, One Governed Answer"
+version: "0.1.0"
+summary: Source-eligible planning, bounded live/indexed/hybrid fan-out, authorization-aware evidence fusion and cited result delivery.
+owners:
+  - architecture-stewards
+x-implementation-status: proposed
+x-diagram-class: architecture-flow
+---
+# Federated Retrieval — Multiple Sources, One Governed Answer
+
+**Status: proposed.** These are logical platform responsibilities, not a claim of deployed search services, model profiles, measured performance or cost reductions.
+
+## Architecture view
+
+~~~mermaid
+flowchart LR
+  subgraph ENTRY["Authorized agent execution"]
+    UI["User / verified trigger"] --> API["Platform API / Run Service"]
+    API --> PLAN["Eligibility + source planner<br/>pinned approved bindings"]
+  end
+  subgraph READ["Retrieval coordinator: bounded concurrency + deadline"]
+    PLAN -->|"index allowed + fresh"| KB["Indexed KB search"]
+    PLAN -->|"source-of-truth required"| LIVE["Typed live API reads"]
+    PLAN -->|"semantic + exact match"| HYB["Hybrid keyword / vector search"]
+  end
+  subgraph CONTROL["Independent controls"]
+    ACL["Tenant + resource ACL<br/>connector enforcement"]
+    BUD["Budget ledger<br/>source calls + tokens"]
+    FRESH["Freshness + ACL revision<br/>index/cache invalidation"]
+  end
+  KB --> MERGE["Normalize, authorize, deduplicate<br/>rank + evidence cap"]
+  LIVE --> MERGE
+  HYB --> MERGE
+  ACL -. "before source + each record" .-> READ
+  BUD -. "reservation + enforcement" .-> READ
+  FRESH -. "source/version proof" .-> MERGE
+  MERGE --> BR{"Deterministic evidence sufficient?"}
+  BR -->|"yes"| ANSWER["Cited response + uncertainty"]
+  BR -->|"no"| LLM["Approved model gateway<br/>budgeted synthesis"]
+  LLM --> ANSWER
+  ANSWER --> EVENTS[("Committed run/event/cost evidence")]
+  EVENTS --> API
+  API -->|"REST / SSE replay"| UI
+~~~
+
+## Retrieval policy and failure behavior
+
+A selected or routed agent has a **published version binding** to a set of **approved source capabilities**, not unrestricted access to every catalog connector. The coordinator plans a **subset** of eligible sources; each connector and individual result still respects tenant/workspace permissions. Indexed results must carry ACL, source revision and ingest watermark.
+
+Use live API reads for fresh authoritative records, indexed retrieval for stable knowledge, and hybrid keyword/vector search where both exact identifiers and semantic meaning matter. Merge rankings carefully (e.g. reciprocal rank fusion) rather than average heterogeneous search scores. Evidence must fit a bounded context with timestamps and source citations.
+
+Independent sources can run concurrently behind a fan-out limit, global deadline, per-provider rate limits and circuit breakers. A source timeout becomes an explicit partial-source status where policy permits—not an invented or silently complete answer.
+
+### Native architecture links
+
+[Plug-and-play product blueprint](/architecture/diagrams/PlugAndPlayBlueprint/0.1.0/) · [Cost and performance gates](/architecture/diagrams/CostPerformanceControl/0.1.0/) · [Tool policy and adapters](/architecture/diagrams/C4IntegrationComponents/0.1.0/) · [Run status](/architecture/diagrams/AgentRunStateMachine/0.1.0/)
+
+## Full design and acceptance matrix
+
+[Chapter 14: Federated Retrieval, Cost Governance and Performance](https://github.com/buianhtai/buianhtai.github.io/blob/main/docs/agent-platform/14-federated-retrieval-cost-performance.md) · [Agent Platform domain](/architecture/domains/AgentPlatform/0.1.0/) · [System](/architecture/systems/AgentExecutionPlatform/0.1.0/)
