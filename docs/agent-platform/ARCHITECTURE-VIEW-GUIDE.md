@@ -33,6 +33,12 @@ Don't put every agent, API, connector, queue and metric in the same drawing. Arc
 
 **SRE:** [Deployment View](./eventcatalog-poc/diagrams/C4Deployment/index.mdx) → [Event and Data Flow](./eventcatalog-poc/diagrams/EventDataFlow/index.mdx) → [Run State Machine](./eventcatalog-poc/diagrams/AgentRunStateMachine/index.mdx) → [Reliability and Scaling](./eventcatalog-poc/diagrams/ResilienceOverview/index.mdx).
 
+## Cross-source retrieval and unit economics views
+
+A high-level architecture proposal should also answer **why a shared agent platform is valuable**. [Federated Retrieval](/architecture/diagrams/FederatedRetrieval/0.1.0/) shows source choice, authorization and evidence fusion; [Cost and Performance Controls](/architecture/diagrams/CostPerformanceControl/0.1.0/) shows per-run reservations, external API quotas, model escalation, deadlines and actual cost attribution. Neither chart is a benchmark, deployed topology or reason to create one dedicated agent per source.
+
+Measure cost per correctly resolved, access-compliant answer, p95 under representative load, evidence citation quality and leakage failures—not vendor marketing performance claims.
+
 ## Relationship to Archify
 
 EventCatalog is the canonical source for systems, services, message contracts, logical resources and native navigation. Purpose-built C4/sequence diagrams add explanatory design views. Archify publishes curated interactive presentations of selected structural and workflow scenarios, with source JSON, validation and stable links. Do **not** silently overwrite EventCatalog ownership or imply an Archify diagram is a standards-conformant BPMN/UML interchange file.

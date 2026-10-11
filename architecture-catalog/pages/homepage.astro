@@ -55,6 +55,31 @@ const journeys = [
     </details>
   </section>
 
+  <section class="py-10" aria-labelledby="multi-source-value">
+    <div class="mb-5 flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-widest text-sky-700 dark:text-sky-300">Value and unit economics · proposed</p>
+        <h2 id="multi-source-value" class="mt-2 text-3xl font-bold text-slate-900 dark:text-white">One agent. Multiple sources. Governed cost.</h2>
+        <p class="mt-2 max-w-3xl text-slate-600 dark:text-slate-300">Combine only the relevant authorized evidence from indexed knowledge, live business APIs and hybrid search. Don't launch an expensive reasoning agent for every source.</p>
+      </div>
+      <a href={base + '/diagrams/FederatedRetrieval/0.1.0/'} class="text-sm font-semibold text-sky-700 dark:text-sky-300">Explore federated retrieval →</a>
+    </div>
+    <div class="grid gap-3 md:grid-cols-3">
+      {[
+        { name:'Relevant evidence', description:'Choose eligible sources, query in parallel with deadlines, deduplicate and cite each result.', link:'/diagrams/FederatedRetrieval/0.1.0/', action:'Read retrieval flow' },
+        { name:'Predictable spending', description:'Reserve budgets, cap fan-out and evidence tokens; use the least costly suitable model.', link:'/diagrams/CostPerformanceControl/0.1.0/', action:'Review cost controls' },
+        { name:'Measured performance', description:'Track p95 latency, connector fees, index freshness, source failures and cost per correct answer.', link:'/diagrams/ResilienceOverview/0.1.0/', action:'Review reliability' }
+      ].map((item)=>(
+        <div class="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-900">
+          <h3 class="text-lg font-semibold text-slate-900 dark:text-white">{item.name}</h3>
+          <p class="mt-2 min-h-20 text-sm leading-relaxed text-slate-600 dark:text-slate-300">{item.description}</p>
+          <a class="mt-4 inline-block text-sm font-semibold text-sky-700 dark:text-sky-300" href={base+item.link}>{item.action} →</a>
+        </div>
+      ))}
+    </div>
+    <p class="mt-3 text-xs text-slate-500 dark:text-slate-400">No claimed cost reduction or response-time benchmark until representative load and accuracy evaluation is completed.</p>
+  </section>
+
   <section class="py-10" aria-labelledby="arch-levels-title">
     <div class="mb-5">
       <p class="text-xs font-semibold uppercase tracking-widest text-sky-700 dark:text-sky-300">Start simple · Drill down when needed</p>

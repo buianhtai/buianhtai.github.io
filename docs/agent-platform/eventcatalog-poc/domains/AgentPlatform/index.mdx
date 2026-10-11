@@ -44,6 +44,10 @@ services:
   - id: DelegationGateway
     version: "0.1.0"
 diagrams:
+  - id: FederatedRetrieval
+    version: "0.1.0"
+  - id: CostPerformanceControl
+    version: "0.1.0"
   - id: PlugAndPlayBlueprint
     version: "0.1.0"
   - id: ExtensionLifecycle
@@ -149,6 +153,14 @@ The illustrations are **proposals**, not production screenshots. Installing a re
 **Status: proposed, generic reference architecture.** No catalog resource by itself proves a running service, deployed agent, production event, or executable workflow. All examples use fictional SaaS data without private customer or product details.
 
 This catalog explains **what happens between incoming input and a completed response**: how an agent is configured, selected, admitted, scheduled, executed with controlled tools, reviewed for side effects, and returned to the caller.
+
+## Multiple sources, one accountable agent
+
+A platform advantage is **shared, policy-governed data retrieval**, not spawning a new LLM agent for each connector. One authorized agent can combine indexed knowledge, live typed API records and hybrid keyword/vector search, with source selection, bounded fan-out, ACL and provenance enforcement, optional low-cost synthesis, and explicit partial-source failures.
+
+[Multi-source retrieval architecture](/architecture/diagrams/FederatedRetrieval/0.1.0/) · [Cost and latency control points](/architecture/diagrams/CostPerformanceControl/0.1.0/) · [Chapter 14: evaluation and economics](https://github.com/buianhtai/buianhtai.github.io/blob/main/docs/agent-platform/14-federated-retrieval-cost-performance.md)
+
+The proposed Retrieval Coordinator is a **logical read capability** that can initially live behind the Tool/Knowledge Gateway. It does not supersede Tool Gateway permission checks, immutable run manifests, or the authoritative per-run cost ledger. No performance or cost saving is asserted without benchmark results.
 
 ## Architecture reading guide: start high level, then drill down
 

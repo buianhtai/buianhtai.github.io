@@ -43,6 +43,10 @@ containers:
   - id: ArtifactStore
     version: "0.1.0"
 diagrams:
+  - id: FederatedRetrieval
+    version: "0.1.0"
+  - id: CostPerformanceControl
+    version: "0.1.0"
   - id: PlugAndPlayBlueprint
     version: "0.1.0"
   - id: ExtensionLifecycle
@@ -120,6 +124,14 @@ An authenticated caller, verified integration, or schedule can request a run of 
 Start with the [illustrated product blueprint](/architecture/illustrations/agent-platform-plug-and-play.svg) and [Plug-and-Play Blueprint](/architecture/diagrams/PlugAndPlayBlueprint/0.1.0/) to see agent assembly, configuration publication and shared execution. The [Extension Lifecycle](/architecture/diagrams/ExtensionLifecycle/0.1.0/) shows how operator-reviewed packages become scoped agent capabilities; the [Agent Configuration Flow](/architecture/docs/flows/AgentConfigurationLifecycle/0.1.0/) explains validation and immutable version pinning.
 
 The **Agent Compiler** is a proposed logical responsibility of Registry in the MVP, not a mandatory new deployed service. A versioned skill is data/instructions, not an executable tool grant.
+
+## Multiple sources, one accountable agent
+
+A platform advantage is **shared, policy-governed data retrieval**, not spawning a new LLM agent for each connector. One authorized agent can combine indexed knowledge, live typed API records and hybrid keyword/vector search, with source selection, bounded fan-out, ACL and provenance enforcement, optional low-cost synthesis, and explicit partial-source failures.
+
+[Multi-source retrieval architecture](/architecture/diagrams/FederatedRetrieval/0.1.0/) · [Cost and latency control points](/architecture/diagrams/CostPerformanceControl/0.1.0/) · [Chapter 14: evaluation and economics](https://github.com/buianhtai/buianhtai.github.io/blob/main/docs/agent-platform/14-federated-retrieval-cost-performance.md)
+
+The proposed Retrieval Coordinator is a **logical read capability** that can initially live behind the Tool/Knowledge Gateway. It does not supersede Tool Gateway permission checks, immutable run manifests, or the authoritative per-run cost ledger. No performance or cost saving is asserted without benchmark results.
 
 ## Visual architecture: C4 overview
 

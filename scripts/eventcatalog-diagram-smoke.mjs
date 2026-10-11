@@ -75,7 +75,7 @@ try{
   console.log('Professional L0/L2 vector previews and editable diagrams.net downloads passed');
   await page.screenshot({path:output+'/EditorialContainerBoundaries.png',fullPage:false,timeout:15000});
 
-  const ids=['PlugAndPlayBlueprint','ExtensionLifecycle','ExecutiveOverview','ArchitectureOverview','C4SystemContext','C4Containers','C4ControlPlane','C4ExecutionPlane','C4FrontendComponents','C4APIComponents','C4IntegrationComponents','C4Deployment','AgentRunStateMachine','ToolInvocationSequence','TrustBoundaries'];
+  const ids=['FederatedRetrieval','CostPerformanceControl','PlugAndPlayBlueprint','ExtensionLifecycle','ExecutiveOverview','ArchitectureOverview','C4SystemContext','C4Containers','C4ControlPlane','C4ExecutionPlane','C4FrontendComponents','C4APIComponents','C4IntegrationComponents','C4Deployment','AgentRunStateMachine','ToolInvocationSequence','TrustBoundaries'];
   for(const id of ids){
     const url=host+'/architecture/diagrams/'+id+'/0.1.0/embed/';
     const response=await page.goto(url,{waitUntil:'domcontentloaded',timeout:20000});
