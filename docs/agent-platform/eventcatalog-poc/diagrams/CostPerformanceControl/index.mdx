@@ -1,0 +1,61 @@
+---
+id: CostPerformanceControl
+name: "Cost and Performance Controls — Budget Every Run"
+version: "0.1.0"
+summary: Logical budget reservation and policy enforcement at admission, retrieval, inference, runtime and event accounting.
+owners:
+  - architecture-stewards
+x-implementation-status: proposed
+x-diagram-class: operations
+---
+# Cost and Performance Controls — Budget Every Run
+
+**Status: proposed.** These are logical platform responsibilities, not a claim of deployed search services, model profiles, measured performance or cost reductions.
+
+## Architecture view
+
+~~~mermaid
+flowchart TB
+  API["Run admission<br/>tenant + workspace + agent quotas"] --> RES["Reserve run budget<br/>cost, deadline, concurrency"]
+  RES --> PLAN["Source planning<br/>max source fan-out + freshness"]
+  PLAN --> R["Concurrent retrieval<br/>per-source timeouts + quotas"]
+  R --> EV["Evidence packing<br/>dedup + token cap + citations"]
+  EV --> CHOOSE{"Need an LLM synthesis?"}
+  CHOOSE -->|"no"| RESULT["Verified structured or sourced response"]
+  CHOOSE -->|"yes"| MODEL["Model Gateway<br/>economical model / approved escalation"]
+  MODEL --> RESULT
+  RESULT --> LEDGER[("Usage/cost ledger<br/>provider rates + metered calls")]
+  LEDGER --> OBS["Per-run trace / quality / p95 metrics"]
+  LEDGER --> RECON["Reconcile reservation, release unused budget"]
+  GUARD["Security + revocations<br/>per-source/per-tool authorization"] -. "enforce" .-> R
+  GUARD -. "enforce" .-> MODEL
+  LIMIT["Hard run limits<br/>time, tokens, steps, retries, child runs"] -. "terminate/fail safely" .-> R
+  LIMIT -. "terminate/fail safely" .-> MODEL
+~~~
+
+## No fictitious cost saving claims
+
+The budget manager reconciles **model tokens, embeddings, reranking, metered connector/tool calls and shared infra costs**. Ingestion/indexing and idle workers create a fixed-cost component that does not disappear when LLM prompts get shorter.
+
+### Levers and trade-offs
+
+| Control | Expected benefit | Potential trade-off |
+| --- | --- | --- |
+| Source selection | Fewer unnecessary connector calls | Misrouting can miss relevant evidence |
+| Parallel reads | Shorter critical path | More simultaneous API calls and rate-limit pressure |
+| Cached authorized records | Lower repeat cost | ACL, staleness, residency and invalidation complexity |
+| Evidence and context caps | Lower prompt cost / faster synthesis | Truncation may lose important facts |
+| Small model or deterministic logic | Lower inference cost | Hard cases need escalation, quality evaluation |
+| Source freshness policy | More trustworthy answer | Live reads can be slower or charged |
+| Bounded retries and deadline | Prevent runaway costs | Some tasks need asynchronous completion instead |
+| Per-tenant fairness | Better predictable tail latency | More queue wait under load |
+
+Measure **cost per correctly resolved authorized answer**, supported citation rate, per-source p95, end-to-end p95, fallback rate and spend over time. This diagram is proposed—no numeric benchmark or deployment proof is implied.
+
+### Cross-reference
+
+[Retrieval architecture](/architecture/diagrams/FederatedRetrieval/0.1.0/) · [Reliability](/architecture/diagrams/ResilienceOverview/0.1.0/) · [Run lifecycle](/architecture/diagrams/AgentRunStateMachine/0.1.0/)
+
+## Full design and acceptance matrix
+
+[Chapter 14: Federated Retrieval, Cost Governance and Performance](https://github.com/buianhtai/buianhtai.github.io/blob/main/docs/agent-platform/14-federated-retrieval-cost-performance.md) · [Agent Platform domain](/architecture/domains/AgentPlatform/0.1.0/) · [System](/architecture/systems/AgentExecutionPlatform/0.1.0/)
