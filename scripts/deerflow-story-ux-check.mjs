@@ -28,6 +28,7 @@ try {
     for (const width of [320,390,768,1440]) {
       const context = await browser.newContext({ viewport: { width, height: 900 }, reducedMotion:'reduce' });
       await context.addInitScript((mode) => localStorage.setItem('theme', mode), theme);
+      await context.route('**/*', (route) => route.request().url().startsWith(host) ? route.continue() : route.abort());
       const page = await context.newPage();
       const errors = [];
       page.on('pageerror', error => errors.push(error.message));
