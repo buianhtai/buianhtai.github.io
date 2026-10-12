@@ -63,6 +63,27 @@ async function inspect(width, theme) {
       return image && image.complete && image.naturalWidth > 0;
     }, i, { timeout: 15_000 });
   }
+  const infographic = page.locator('figure.dfi');
+  assert.equal(await infographic.count(), 1, 'One architecture infographic should precede the technical diagrams');
+  assert.equal(await infographic.locator('.dfi-stage').count(), 5, 'The infographic should show five boundary stages');
+  assert((await infographic.locator('svg').count()) >= 18, 'Expect semantic icons and flow signals');
+  await infographic.screenshot({ path: output + '/system-map-' + theme + '-' + width + '.png' });
+
+  const mermaidFigure = page.locator('figure.mermaid-figure--editorial').first();
+  const mermaidScroll = mermaidFigure.locator('.mermaid-scroll');
+  await mermaidFigure.scrollIntoViewIfNeeded();
+  await mermaidFigure.locator('[data-mermaid-zoom="in"]').click();
+  assert.equal(await mermaidFigure.locator('[data-mermaid-scale]').innerText(), '160%');
+  const mermaidExpanded = await mermaidScroll.evaluate((el) => ({
+    client: el.clientWidth, scroll: el.scrollWidth,
+  }));
+  assert(mermaidExpanded.scroll > mermaidExpanded.client,
+    'Mermaid diagram must pan inside its scroll viewport when zoomed: ' + JSON.stringify(mermaidExpanded));
+  await mermaidFigure.locator('[data-mermaid-zoom="fit"]').click();
+  assert.equal(await mermaidFigure.locator('[data-mermaid-scale]').innerText(), 'Fit');
+  assert((await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)) <= 2,
+    'Neither Mermaid nor the infographic may overflow the page');
+
   const measurements = await page.evaluate(() => {
     const charts = [...document.querySelectorAll('figure.mermaid-figure--editorial')];
     const drawings = [...document.querySelectorAll('figure.de-drawing')];
@@ -113,6 +134,9 @@ async function inspect(width, theme) {
   const label = theme + '-' + width;
   await page.locator('figure.de-drawing').first().screenshot({ path: output + '/topology-' + label + '.png' });
   await page.locator('figure.mermaid-figure--editorial').nth(2).screenshot({ path: output + '/delegation-' + label + '.png' });
+  const infographicBox = await infographic.boundingBox();
+  assert(infographicBox && infographicBox.width <= width + 2,
+    'Infographic should be contained at ' + width + 'px');
   const assetChecks = await page.locator('figure.de-drawing img').evaluateAll((imgs) => imgs.map((img) => ({ ok: img.complete && img.naturalWidth > 0, src: img.getAttribute('src') })));
   assert(assetChecks.every((asset) => asset.ok), 'All D2 SVG assets must load: ' + JSON.stringify(assetChecks));
   console.log('PASS: ' + label + ' ' + JSON.stringify(measurements));
