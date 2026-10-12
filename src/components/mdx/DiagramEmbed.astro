@@ -252,7 +252,8 @@ const embedSrc = src ? src + (src.includes('?') ? '&' : '?') + 'embed=1' : '';
       const oldCenter = viewport.scrollLeft + viewport.clientWidth / 2;
       const factor = next / scale;
       scale = next;
-      image.style.width = (scale * 100) + '%';
+      // Use explicit pixels: percentage widths can fail to expand a scroll container.
+      image.style.width = Math.max(1, Math.round((viewport.clientWidth - 2) * scale)) + 'px';
       status.textContent = Math.round(scale * 100) + '%';
       zoomOut.disabled = scale <= 1;
       zoomIn.disabled = scale >= 5;
@@ -263,5 +264,7 @@ const embedSrc = src ? src + (src.includes('?') ? '&' : '?') + 'embed=1' : '';
     zoomIn.addEventListener('click', () => setZoom(scale * 1.6));
     zoomOut.addEventListener('click', () => setZoom(scale / 1.6));
     fit.addEventListener('click', () => setZoom(1));
+    const watcher = new ResizeObserver(() => setZoom(scale));
+    watcher.observe(viewport);
   }
 </script>
