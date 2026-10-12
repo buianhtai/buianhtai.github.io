@@ -150,5 +150,14 @@ for (const name of names) {
     throw new Error('D2 build failed for ' + name + ':\n' + (result.stderr || result.error?.message || 'unknown error'));
   }
   if (!fs.existsSync(svg) || fs.statSync(svg).size < 1000) throw new Error('No SVG generated for ' + name);
+  // Ensure labels are rendered cleanly, not as visible backslash-n escapes.
+  const svgText = fs.readFileSync(svg, 'utf8');
+  if (svgText.includes('\\\\n')) {
+    throw new Error('Literal backslash-n found in rendered SVG for ' + name);
+  }
+  if (drawioSource.includes('&amp;lt;br')) {
+    throw new Error('HTML line breaks are double-escaped in diagrams.net XML for ' + name);
+  }
+
   console.log('Built D2 SVG + editable diagrams.net drawing: ' + name);
 }
