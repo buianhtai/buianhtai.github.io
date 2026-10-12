@@ -19,6 +19,7 @@ import FlowStep from '../../../components/mdx/FlowStep.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
 import Mermaid from '../../../components/mdx/Mermaid.astro';
 import DiagramEmbed from '../../../components/mdx/DiagramEmbed.astro';
+import DeerFlowSystemInfographic from '../../../components/mdx/DeerFlowSystemInfographic.astro';
 
 **How do you actually build an AI agent?** Not a prompt that calls a search tool once, but an agent that plans a multi-hour task, explores a codebase, delegates independent subtasks, executes commands safely, remembers useful facts, and streams its work to a browser.
 
@@ -31,6 +32,8 @@ This article examines **DeerFlow 2.0**, not the older 1.x Deep Research implemen
 </Callout>
 
 ## <Label color="teal">01</Label> Architecture at a glance
+
+<DeerFlowSystemInfographic />
 
 The deployed system has four main runtime pieces. Nginx is its public entry point. Next.js renders the workspace. The FastAPI Gateway hosts the actual agent runtime. An optional provisioner creates remote sandboxes when that deployment mode is selected.
 
