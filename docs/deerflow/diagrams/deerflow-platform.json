@@ -1,0 +1,331 @@
+{
+  "slug": "deerflow-platform",
+  "width": 1830,
+  "height": 1060,
+  "kicker": "PROPOSED / PLUG-AND-PLAY PLATFORM",
+  "title": "From harness to governed agents",
+  "subtitle": "A reusable agent runtime is the execution layer; configuration and permissioning are platform responsibilities.",
+  "footer": "PROPOSAL INSPIRED BY DEERFLOW • NOT A CLAIM ABOUT BYTE DANCE'S IMPLEMENTATION",
+  "boxes": [
+    {
+      "id": "control",
+      "kind": "boundary",
+      "parent": null,
+      "x": 50,
+      "y": 250,
+      "w": 540,
+      "h": 595,
+      "title": "CONTROL PLANE",
+      "desc": "Publish versioned, approved agents",
+      "accent": "blue"
+    },
+    {
+      "id": "runtime",
+      "kind": "boundary",
+      "parent": null,
+      "x": 635,
+      "y": 250,
+      "w": 535,
+      "h": 595,
+      "title": "RUNTIME PLANE",
+      "desc": "Admit, execute and recover",
+      "accent": "violet"
+    },
+    {
+      "id": "integrations",
+      "kind": "boundary",
+      "parent": null,
+      "x": 1215,
+      "y": 250,
+      "w": 565,
+      "h": 595,
+      "title": "INTEGRATION PLANE",
+      "desc": "Connect without bypassing policy",
+      "accent": "amber"
+    },
+    {
+      "id": "builder",
+      "kind": "card",
+      "parent": "control",
+      "x": 85,
+      "y": 335,
+      "w": 225,
+      "h": 110,
+      "title": "Agent Builder UI",
+      "desc": "Models, skills, tools",
+      "accent": "blue"
+    },
+    {
+      "id": "definitions",
+      "kind": "card",
+      "parent": "control",
+      "x": 330,
+      "y": 335,
+      "w": 225,
+      "h": 110,
+      "title": "Versioned manifest",
+      "desc": "Pinned agent revision",
+      "accent": "blue"
+    },
+    {
+      "id": "compiler",
+      "kind": "card",
+      "parent": "control",
+      "x": 85,
+      "y": 520,
+      "w": 470,
+      "h": 100,
+      "title": "Manifest / policy compiler",
+      "desc": "Validates bindings and scopes",
+      "accent": "blue"
+    },
+    {
+      "id": "iam",
+      "kind": "card",
+      "parent": "control",
+      "x": 85,
+      "y": 665,
+      "w": 470,
+      "h": 100,
+      "title": "Identity + model/tool policy",
+      "desc": "Least privilege + approvals",
+      "accent": "blue"
+    },
+    {
+      "id": "router",
+      "kind": "card",
+      "parent": "runtime",
+      "x": 675,
+      "y": 335,
+      "w": 460,
+      "h": 105,
+      "title": "Agent routing + admission",
+      "desc": "Eligibility, rate limits, budget",
+      "accent": "violet"
+    },
+    {
+      "id": "engine",
+      "kind": "card",
+      "parent": "runtime",
+      "x": 675,
+      "y": 520,
+      "w": 460,
+      "h": 105,
+      "title": "Agent Harness + LangGraph",
+      "desc": "Tool loop, middleware, delegation",
+      "accent": "violet"
+    },
+    {
+      "id": "state",
+      "kind": "data",
+      "parent": "runtime",
+      "x": 675,
+      "y": 665,
+      "w": 460,
+      "h": 100,
+      "title": "Run events + checkpoints",
+      "desc": "Recoverable thread state",
+      "accent": "teal"
+    },
+    {
+      "id": "toolgate",
+      "kind": "card",
+      "parent": "integrations",
+      "x": 1255,
+      "y": 335,
+      "w": 485,
+      "h": 105,
+      "title": "Authorized Tool Gateway",
+      "desc": "Schema, budget, runtime scope",
+      "accent": "amber"
+    },
+    {
+      "id": "adapters",
+      "kind": "card",
+      "parent": "integrations",
+      "x": 1255,
+      "y": 520,
+      "w": 485,
+      "h": 105,
+      "title": "Tool adapters",
+      "desc": "MCP, HTTP, RAG, workflow",
+      "accent": "amber"
+    },
+    {
+      "id": "external",
+      "kind": "card",
+      "parent": "integrations",
+      "x": 1255,
+      "y": 665,
+      "w": 485,
+      "h": 100,
+      "title": "External systems",
+      "desc": "Controlled side effects",
+      "accent": "slate"
+    }
+  ],
+  "edges": [
+    {
+      "id": "p1",
+      "from": "builder",
+      "to": "definitions",
+      "points": [
+        [
+          310,
+          390
+        ],
+        [
+          330,
+          390
+        ]
+      ],
+      "accent": "blue",
+      "label": "",
+      "dashed": false
+    },
+    {
+      "id": "p2",
+      "from": "definitions",
+      "to": "compiler",
+      "points": [
+        [
+          440,
+          445
+        ],
+        [
+          330,
+          520
+        ]
+      ],
+      "accent": "blue",
+      "label": "",
+      "dashed": false
+    },
+    {
+      "id": "p3",
+      "from": "iam",
+      "to": "compiler",
+      "points": [
+        [
+          300,
+          665
+        ],
+        [
+          300,
+          620
+        ]
+      ],
+      "accent": "blue",
+      "label": "",
+      "dashed": false
+    },
+    {
+      "id": "p4",
+      "from": "compiler",
+      "to": "router",
+      "points": [
+        [
+          555,
+          575
+        ],
+        [
+          675,
+          390
+        ]
+      ],
+      "accent": "violet",
+      "label": "publish",
+      "dashed": false
+    },
+    {
+      "id": "p5",
+      "from": "router",
+      "to": "engine",
+      "points": [
+        [
+          905,
+          440
+        ],
+        [
+          905,
+          520
+        ]
+      ],
+      "accent": "violet",
+      "label": "",
+      "dashed": false
+    },
+    {
+      "id": "p6",
+      "from": "engine",
+      "to": "state",
+      "points": [
+        [
+          905,
+          625
+        ],
+        [
+          905,
+          665
+        ]
+      ],
+      "accent": "teal",
+      "label": "",
+      "dashed": false
+    },
+    {
+      "id": "p7",
+      "from": "engine",
+      "to": "toolgate",
+      "points": [
+        [
+          1135,
+          575
+        ],
+        [
+          1255,
+          395
+        ]
+      ],
+      "accent": "amber",
+      "label": "scoped calls",
+      "dashed": false
+    },
+    {
+      "id": "p8",
+      "from": "toolgate",
+      "to": "adapters",
+      "points": [
+        [
+          1490,
+          440
+        ],
+        [
+          1490,
+          520
+        ]
+      ],
+      "accent": "amber",
+      "label": "",
+      "dashed": false
+    },
+    {
+      "id": "p9",
+      "from": "adapters",
+      "to": "external",
+      "points": [
+        [
+          1490,
+          625
+        ],
+        [
+          1490,
+          665
+        ]
+      ],
+      "accent": "amber",
+      "label": "",
+      "dashed": false
+    }
+  ]
+}

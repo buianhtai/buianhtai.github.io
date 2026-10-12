@@ -13,14 +13,44 @@
  *   />
  */
 interface Props {
-  src: string;
+  src?: string;
+  svg?: string;
+  drawio?: string;
+  d2?: string;
   title: string;
+  eyebrow?: string;
+  description?: string;
+  caption?: string;
   height?: number;
 }
-const { src, title, height = 500 } = Astro.props;
-const embedSrc = src + (src.includes('?') ? '&' : '?') + 'embed=1';
+const { src, svg, drawio, d2, title, eyebrow, description, caption, height = 500 } = Astro.props;
+const embedSrc = src ? src + (src.includes('?') ? '&' : '?') + 'embed=1' : '';
 ---
 
+{svg ? (
+  <figure class="de-drawing not-prose" aria-label={title}>
+    <header class="de-drawing-head">
+      {eyebrow && <div class="de-drawing-kicker">{eyebrow}</div>}
+      <h3>{title}</h3>
+      {description && <p>{description}</p>}
+    </header>
+    <div class="de-drawing-toolbar">
+      <span class="de-drawing-mode">D2 / VECTOR</span>
+      <div class="de-drawing-actions">
+        <a href={svg} target="_blank" rel="noopener">Open full-size SVG ↗</a>
+        {d2 && <a href={d2} download>D2 source ↓</a>}
+        {drawio && <a href={drawio} download>Editable .drawio ↓</a>}
+      </div>
+    </div>
+    <div class="de-drawing-viewport" tabindex="0" role="region" aria-label={'Scrollable diagram: ' + title}>
+      <img src={svg} alt={description || title} loading="lazy" decoding="async" />
+    </div>
+    {(caption || drawio) && <figcaption class="de-drawing-caption">
+      {caption && <span>{caption}</span>}
+      {drawio && <span>Open the downloaded file in <a href="https://app.diagrams.net/" target="_blank" rel="noopener noreferrer">diagrams.net ↗</a> to edit individual shapes.</span>}
+    </figcaption>}
+  </figure>
+) : (
 <div class="de-wrap">
   <!-- Desktop: interactive iframe -->
   <div class="de-iframe-wrap">
@@ -45,6 +75,7 @@ const embedSrc = src + (src.includes('?') ? '&' : '?') + 'embed=1';
     <a href={src} target="_blank" rel="noopener">Open full diagram ↗</a>
   </p>
 </div>
+)}
 
 <style>
   .de-wrap { margin: 1.25rem 0; }
@@ -107,5 +138,59 @@ const embedSrc = src + (src.includes('?') ? '&' : '?') + 'embed=1';
 
     /* Hide the text link on mobile — card is the CTA */
     .de-open-link { display: none; }
+  }
+</style>
+
+<style>
+  .de-drawing {
+    margin: 1.9rem 0;
+    border: 1px solid var(--color-border);
+    border-radius: 14px;
+    overflow: hidden;
+    background: var(--color-surface);
+    box-shadow: 0 16px 36px rgba(6, 22, 42, 0.08);
+  }
+  .de-drawing-head {
+    padding: 1.15rem 1.35rem 1rem;
+    background: linear-gradient(110deg, color-mix(in srgb, var(--color-accent) 7%, var(--color-surface)), var(--color-surface) 65%);
+    border-bottom: 1px solid var(--color-border);
+  }
+  .de-drawing-kicker {
+    font: 700 0.67rem/1.4 var(--font-mono, monospace);
+    color: var(--color-accent);
+    letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 0.4rem;
+  }
+  .de-drawing-head h3 { color: var(--color-text); font-size: 1.14rem; line-height: 1.4; margin: 0; font-weight: 730; }
+  .de-drawing-head p { color: var(--color-text-dim); font-size: 0.82rem; line-height: 1.6; margin: 0.4rem 0 0; }
+  .de-drawing-toolbar {
+    display: flex; justify-content: space-between; align-items: center;
+    flex-wrap: wrap; gap: 0.55rem 1rem;
+    padding: 0.65rem 1.35rem;
+    background: var(--color-surface-2);
+    border-bottom: 1px solid var(--color-border);
+  }
+  .de-drawing-mode { font: 700 0.65rem/1.4 var(--font-mono, monospace); color: var(--color-text-muted); letter-spacing: 0.09em; }
+  .de-drawing-actions { display: flex; gap: 0.5rem 1rem; flex-wrap: wrap; }
+  .de-drawing-actions a { font: 600 0.71rem/1.4 var(--font-mono, monospace); color: var(--color-accent); text-decoration: none; }
+  .de-drawing-actions a:hover { text-decoration: underline; }
+  .de-drawing-actions a:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 4px; }
+  .de-drawing-viewport {
+    overflow-x: auto; overflow-y: hidden; max-width: 100%;
+    padding: 1.1rem; background: #f8fafc;
+    -webkit-overflow-scrolling: touch;
+  }
+  .de-drawing-viewport img { display: block; width: 100%; min-width: 900px; max-width: none; height: auto; margin: 0 auto; }
+  .de-drawing-caption {
+    display: flex; flex-direction: column; gap: 0.35rem;
+    padding: 0.75rem 1.35rem;
+    border-top: 1px solid var(--color-border);
+    color: var(--color-text-dim);
+    font: 400 0.71rem/1.55 var(--font-mono, monospace);
+  }
+  .de-drawing-caption a { color: var(--color-accent); text-decoration: underline; }
+  @media (max-width: 640px) {
+    .de-drawing-head, .de-drawing-caption { padding: 0.95rem; }
+    .de-drawing-toolbar { padding: 0.8rem 0.95rem; }
+    .de-drawing-viewport { padding: 0.6rem; }
   }
 </style>

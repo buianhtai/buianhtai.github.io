@@ -1,0 +1,373 @@
+{
+  "slug": "deerflow-containers",
+  "width": 1800,
+  "height": 1050,
+  "kicker": "DEERFLOW 2.0 / C4 CONTAINER VIEW",
+  "title": "Real execution boundaries",
+  "subtitle": "Gateway and harness are distinct code boundaries; tools execute outside the model loop.",
+  "footer": "SOURCE-BASED LOGICAL ARCHITECTURE • NOT ONE CONTAINER OR POD PER BOX",
+  "boxes": [
+    {
+      "id": "channels",
+      "kind": "boundary",
+      "parent": null,
+      "x": 45,
+      "y": 250,
+      "w": 280,
+      "h": 580,
+      "title": "CLIENT SURFACES",
+      "desc": "Outside server authority",
+      "accent": "slate"
+    },
+    {
+      "id": "app",
+      "kind": "boundary",
+      "parent": null,
+      "x": 370,
+      "y": 250,
+      "w": 390,
+      "h": 580,
+      "title": "APPLICATION",
+      "desc": "Gateway + web experience",
+      "accent": "blue"
+    },
+    {
+      "id": "harness",
+      "kind": "boundary",
+      "parent": null,
+      "x": 805,
+      "y": 250,
+      "w": 455,
+      "h": 580,
+      "title": "AGENT HARNESS",
+      "desc": "LangGraph + middleware",
+      "accent": "violet"
+    },
+    {
+      "id": "deps",
+      "kind": "boundary",
+      "parent": null,
+      "x": 1305,
+      "y": 250,
+      "w": 440,
+      "h": 580,
+      "title": "EXTERNAL DEPENDENCIES",
+      "desc": "Execution + durable state",
+      "accent": "amber"
+    },
+    {
+      "id": "web",
+      "kind": "card",
+      "parent": "channels",
+      "x": 80,
+      "y": 355,
+      "w": 210,
+      "h": 95,
+      "title": "Browser / chat UI",
+      "desc": "User-initiated thread",
+      "accent": "slate"
+    },
+    {
+      "id": "channel",
+      "kind": "card",
+      "parent": "channels",
+      "x": 80,
+      "y": 495,
+      "w": 210,
+      "h": 95,
+      "title": "IM / scheduler",
+      "desc": "Trusted entry adapters",
+      "accent": "slate"
+    },
+    {
+      "id": "nginx",
+      "kind": "card",
+      "parent": "app",
+      "x": 405,
+      "y": 325,
+      "w": 320,
+      "h": 90,
+      "title": "Nginx / Next.js",
+      "desc": "Ingress + presentation",
+      "accent": "blue"
+    },
+    {
+      "id": "gateway",
+      "kind": "card",
+      "parent": "app",
+      "x": 405,
+      "y": 470,
+      "w": 320,
+      "h": 95,
+      "title": "FastAPI Gateway",
+      "desc": "Auth, thread and run APIs",
+      "accent": "blue"
+    },
+    {
+      "id": "run",
+      "kind": "card",
+      "parent": "app",
+      "x": 405,
+      "y": 625,
+      "w": 320,
+      "h": 110,
+      "title": "RunManager + SSE",
+      "desc": "Run ownership, StreamBridge",
+      "accent": "blue"
+    },
+    {
+      "id": "lead",
+      "kind": "card",
+      "parent": "harness",
+      "x": 840,
+      "y": 325,
+      "w": 385,
+      "h": 100,
+      "title": "Lead Agent / LangGraph",
+      "desc": "Model + tool decision loop",
+      "accent": "violet"
+    },
+    {
+      "id": "middleware",
+      "kind": "card",
+      "parent": "harness",
+      "x": 840,
+      "y": 485,
+      "w": 385,
+      "h": 95,
+      "title": "Middleware + Policy",
+      "desc": "Scoped tools, costs, loops",
+      "accent": "violet"
+    },
+    {
+      "id": "registry",
+      "kind": "card",
+      "parent": "harness",
+      "x": 840,
+      "y": 645,
+      "w": 385,
+      "h": 100,
+      "title": "Tools / Skills / MCP catalog",
+      "desc": "Authorization and discovery",
+      "accent": "violet"
+    },
+    {
+      "id": "sandbox",
+      "kind": "card",
+      "parent": "deps",
+      "x": 1340,
+      "y": 325,
+      "w": 365,
+      "h": 105,
+      "title": "Sandbox provider",
+      "desc": "Isolated execution / files",
+      "accent": "amber"
+    },
+    {
+      "id": "remote",
+      "kind": "card",
+      "parent": "deps",
+      "x": 1340,
+      "y": 500,
+      "w": 365,
+      "h": 100,
+      "title": "External tools / MCP",
+      "desc": "Reviewed actions and APIs",
+      "accent": "amber"
+    },
+    {
+      "id": "checkpoint",
+      "kind": "data",
+      "parent": "deps",
+      "x": 1340,
+      "y": 665,
+      "w": 365,
+      "h": 100,
+      "title": "State + checkpoints",
+      "desc": "Threads, memory, artifacts",
+      "accent": "teal"
+    }
+  ],
+  "edges": [
+    {
+      "id": "c1",
+      "from": "web",
+      "to": "nginx",
+      "points": [
+        [
+          290,
+          402
+        ],
+        [
+          405,
+          370
+        ]
+      ],
+      "accent": "blue",
+      "label": "HTTPS",
+      "dashed": false
+    },
+    {
+      "id": "c2",
+      "from": "nginx",
+      "to": "gateway",
+      "points": [
+        [
+          565,
+          415
+        ],
+        [
+          565,
+          470
+        ]
+      ],
+      "accent": "blue",
+      "label": "API",
+      "dashed": false
+    },
+    {
+      "id": "c3",
+      "from": "channel",
+      "to": "gateway",
+      "points": [
+        [
+          290,
+          545
+        ],
+        [
+          405,
+          520
+        ]
+      ],
+      "accent": "blue",
+      "label": "",
+      "dashed": false
+    },
+    {
+      "id": "c4",
+      "from": "gateway",
+      "to": "run",
+      "points": [
+        [
+          565,
+          565
+        ],
+        [
+          565,
+          625
+        ]
+      ],
+      "accent": "blue",
+      "label": "",
+      "dashed": false
+    },
+    {
+      "id": "c5",
+      "from": "run",
+      "to": "lead",
+      "points": [
+        [
+          725,
+          665
+        ],
+        [
+          840,
+          375
+        ]
+      ],
+      "accent": "violet",
+      "label": "run",
+      "dashed": false
+    },
+    {
+      "id": "c6",
+      "from": "lead",
+      "to": "middleware",
+      "points": [
+        [
+          1035,
+          425
+        ],
+        [
+          1035,
+          485
+        ]
+      ],
+      "accent": "violet",
+      "label": "",
+      "dashed": false
+    },
+    {
+      "id": "c7",
+      "from": "middleware",
+      "to": "registry",
+      "points": [
+        [
+          1035,
+          580
+        ],
+        [
+          1035,
+          645
+        ]
+      ],
+      "accent": "violet",
+      "label": "",
+      "dashed": false
+    },
+    {
+      "id": "c8",
+      "from": "registry",
+      "to": "sandbox",
+      "points": [
+        [
+          1225,
+          700
+        ],
+        [
+          1340,
+          375
+        ]
+      ],
+      "accent": "amber",
+      "label": "",
+      "dashed": false
+    },
+    {
+      "id": "c9",
+      "from": "registry",
+      "to": "remote",
+      "points": [
+        [
+          1225,
+          700
+        ],
+        [
+          1340,
+          550
+        ]
+      ],
+      "accent": "amber",
+      "label": "",
+      "dashed": false
+    },
+    {
+      "id": "c10",
+      "from": "run",
+      "to": "checkpoint",
+      "points": [
+        [
+          725,
+          680
+        ],
+        [
+          1340,
+          715
+        ]
+      ],
+      "accent": "teal",
+      "label": "checkpoint",
+      "dashed": true
+    }
+  ]
+}

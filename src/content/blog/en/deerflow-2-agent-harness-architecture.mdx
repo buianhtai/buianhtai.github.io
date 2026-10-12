@@ -18,6 +18,7 @@ import Callout from '../../../components/mdx/Callout.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
 import Mermaid from '../../../components/mdx/Mermaid.astro';
+import DiagramEmbed from '../../../components/mdx/DiagramEmbed.astro';
 
 **How do you actually build an AI agent?** Not a prompt that calls a search tool once, but an agent that plans a multi-hour task, explores a codebase, delegates independent subtasks, executes commands safely, remembers useful facts, and streams its work to a browser.
 
@@ -33,62 +34,14 @@ This article examines **DeerFlow 2.0**, not the older 1.x Deep Research implemen
 
 The deployed system has four main runtime pieces. Nginx is its public entry point. Next.js renders the workspace. The FastAPI Gateway hosts the actual agent runtime. An optional provisioner creates remote sandboxes when that deployment mode is selected.
 
-<Mermaid
-  eyebrow="01 / System context and container boundaries"
-  title="DeerFlow deployment and execution ownership"
-  description="Real application services are separated from the reusable harness, external callers, and execution/data dependencies."
-  minWidth={1110}
-  legend={[{"label":"Ingress / channel","tone":"teal"},{"label":"Gateway & runtime","tone":"blue"},{"label":"Agent reasoning","tone":"violet"},{"label":"Tool execution","tone":"amber"},{"label":"Durable data","tone":"green"}]}
-  chart={`%%{init: {"theme":"base","themeVariables":{"background":"#102032","primaryColor":"#183449","primaryTextColor":"#eef6fc","primaryBorderColor":"#638ba2","textColor":"#eef6fc","edgeLabelBackground":"#14263a","lineColor":"#93b1c2","fontFamily":"Inter, Arial, sans-serif","clusterBkg":"#111f2f","clusterBorder":"#668397","secondaryColor":"#1c3a4f","tertiaryColor":"#24384b"},"flowchart":{"curve":"linear","nodeSpacing":36,"rankSpacing":52,"padding":18}}}%%
-flowchart TB
-  subgraph INPUT["01 / CALLER SURFACES · OUTSIDE SERVER TRUST"]
-    direction LR
-    WEB["Web browser"]:::edge
-    CHAT["IM channel adapters"]:::edge
-    SCHED["Internal scheduler / client"]:::edge
-  end
-  subgraph APP["02 / DEERFLOW APPLICATION · APP PACKAGE"]
-    direction LR
-    NGINX["Nginx :2026<br/>Public HTTP ingress"]:::edge
-    FE["Next.js :3000<br/>UI & LangGraph SDK"]:::edge
-    GATEWAY["FastAPI Gateway :8001<br/>Auth, threads, APIs"]:::runtime
-    RUN["RunManager + StreamBridge<br/>Run lifecycle & SSE"]:::runtime
-  end
-  subgraph HARNESS["03 / DEERFLOW HARNESS · PYTHON PACKAGE"]
-    direction LR
-    AGENT["Lead Agent<br/>LangGraph state + model loop"]:::logic
-    POLICY["Middleware + tool catalog<br/>Authorization & budgets"]:::logic
-  end
-  subgraph DEPS["04 / EXECUTION AND PERSISTENCE"]
-    direction LR
-    TOOLS["Sandbox provider<br/>Isolated files & bash"]:::exec
-    MCP["MCP / Web / external tools"]:::exec
-    STATE[("Checkpoints, thread metadata<br/>memory & artifacts")]:::data
-  end
-  WEB -->|"HTTPS"| NGINX
-  NGINX -->|"HTML/assets"| FE
-  NGINX -->|"/api/*"| GATEWAY
-  CHAT -->|"Channel policy"| GATEWAY
-  SCHED -->|"Internal call"| GATEWAY
-  GATEWAY --> RUN --> AGENT
-  AGENT <--> POLICY
-  POLICY --> TOOLS
-  POLICY --> MCP
-  RUN <--> STATE
-  AGENT <--> STATE
-  
-classDef edge fill:#214957,stroke:#37b0bb,color:#f4fbff,stroke-width:1.8px
-classDef runtime fill:#213650,stroke:#74a1da,color:#f4fbff,stroke-width:1.8px
-classDef logic fill:#352d51,stroke:#a897e0,color:#f8f7ff,stroke-width:1.8px
-classDef exec fill:#49382b,stroke:#d6a05d,color:#fff6e8,stroke-width:1.8px
-classDef data fill:#203d36,stroke:#61b78a,color:#effdf4,stroke-width:1.8px
-classDef gate fill:#483445,stroke:#d78eac,color:#fff2f7,stroke-width:1.8px
-classDef quiet fill:#203040,stroke:#829cae,color:#e9f5fc,stroke-width:1.4px
-  style INPUT fill:#172535,stroke:#668397,stroke-width:1.5px,stroke-dasharray:5 5,color:#e1edf6
-  style APP fill:#14273a,stroke:#60adba,stroke-width:2px,color:#eaf8fc
-  style HARNESS fill:#1c263c,stroke:#9786ca,stroke-width:2px,color:#f1eafe
-  style DEPS fill:#1c292c,stroke:#6ba18a,stroke-width:2px,color:#ebfff1`}
-  caption="Logical C4-style container view. Only Nginx is the normal public web ingress; IM integrations reach the Gateway through channel policies. Optional sandbox provisioner omitted for clarity."
+<DiagramEmbed
+  svg="/diagrams/deerflow/deerflow-containers.svg"
+  d2="/diagrams/deerflow/deerflow-containers.d2"
+  drawio="/diagrams/deerflow/deerflow-containers.drawio"
+  eyebrow="C4 / CONTAINER VIEW"
+  title="DeerFlow deployment and execution boundaries"
+  description="Clients, FastAPI application, reusable LangGraph harness, and external tool/state dependencies."
+  caption="Source-based logical boundaries; not every box is a separately deployed service."
 />
 
 | Component | Responsibility | Important boundary |
@@ -272,49 +225,14 @@ A skill is closer to a **capability package or runbook** than a new execution en
 
 MCP is different: it exposes tools from another process or service. The external server does not need to know about DeerFlow's UI or chat messages. DeerFlow's adapter provides the model-facing schema and execution bridge.
 
-<Mermaid
-  eyebrow="Extension contract / Tool chain"
+<DiagramEmbed
+  svg="/diagrams/deerflow/deerflow-tool-boundary.svg"
+  d2="/diagrams/deerflow/deerflow-tool-boundary.d2"
+  drawio="/diagrams/deerflow/deerflow-tool-boundary.drawio"
+  eyebrow="TOOL CONTRACT / AUTHORIZATION"
   title="Instructions are not permissions"
-  description="Skills influence model behavior; tool schemas enable selection; execution adapters and policy make the final authorization decision."
-  minWidth={1060}
-  legend={[{"label":"Capability definition","tone":"blue"},{"label":"LLM instruction","tone":"violet","dashed":true},{"label":"Controlled execution","tone":"amber"}]}
-  chart={`%%{init: {"theme":"base","themeVariables":{"background":"#102032","primaryColor":"#183449","primaryTextColor":"#eef6fc","primaryBorderColor":"#638ba2","textColor":"#eef6fc","edgeLabelBackground":"#14263a","lineColor":"#93b1c2","fontFamily":"Inter, Arial, sans-serif","clusterBkg":"#111f2f","clusterBorder":"#668397","secondaryColor":"#1c3a4f","tertiaryColor":"#24384b"},"flowchart":{"curve":"linear","nodeSpacing":36,"rankSpacing":52,"padding":18}}}%%
-flowchart LR
-  subgraph AUTHOR["CONFIGURATION / DISCOVERY"]
-    direction TB
-    SKILL["Skill package<br/>Instructions + resources"]:::logic
-    TOOL["Tool catalog<br/>Names + argument schemas"]:::runtime
-    MCP["MCP connector<br/>Remote tools and metadata"]:::exec
-  end
-  subgraph REQUEST["MODEL INPUT / SELECTION"]
-    direction TB
-    CHOICE["Eligible tool schemas<br/>Scoped by active agent"]:::runtime
-    MODEL(["LLM selects next action"]):::logic
-  end
-  subgraph ACTION["HOST-ENFORCED EXECUTION"]
-    direction TB
-    GUARD{"Authorization + limits"}:::gate
-    BACKEND["Sandbox or integration<br/>Executes typed operation"]:::exec
-    RESULT["Structured observation<br/>ToolMessage / error"]:::data
-  end
-  SKILL -.->|"Guides use"| MODEL
-  TOOL --> CHOICE
-  MCP --> CHOICE
-  CHOICE --> MODEL --> GUARD
-  GUARD -->|"Allowed"| BACKEND --> RESULT
-  GUARD -->|"Denied"| RESULT
-  
-classDef edge fill:#214957,stroke:#37b0bb,color:#f4fbff,stroke-width:1.8px
-classDef runtime fill:#213650,stroke:#74a1da,color:#f4fbff,stroke-width:1.8px
-classDef logic fill:#352d51,stroke:#a897e0,color:#f8f7ff,stroke-width:1.8px
-classDef exec fill:#49382b,stroke:#d6a05d,color:#fff6e8,stroke-width:1.8px
-classDef data fill:#203d36,stroke:#61b78a,color:#effdf4,stroke-width:1.8px
-classDef gate fill:#483445,stroke:#d78eac,color:#fff2f7,stroke-width:1.8px
-classDef quiet fill:#203040,stroke:#829cae,color:#e9f5fc,stroke-width:1.4px
-  style AUTHOR fill:#1e293a,stroke:#7f92b0,stroke-width:1.6px,color:#eef6ff
-  style REQUEST fill:#1c263c,stroke:#9786ca,stroke-width:1.6px,color:#f1eafe
-  style ACTION fill:#302b26,stroke:#d4a15e,stroke-width:1.6px,color:#fff6e9`}
-  caption="Conceptual extension lifecycle. Deferred MCP schema promotion reduces model-context size, but execution permission must still be checked by the host."
+  description="Skills and tool schemas shape model actions; host-side policy authorizes actual tool execution."
+  caption="Capability visibility and authorization are distinct runtime decisions."
 />
 
 ### Keeping large tool catalogs affordable
@@ -562,55 +480,14 @@ For external side effects—sending email, updating a record, executing an HTTP 
 
 DeerFlow shows **how to build a powerful execution harness**. A configurable multi-tenant platform needs another layer: managing who defines agents, which version is published, what data they may reach, and whether a particular run is allowed.
 
-<Mermaid
-  eyebrow="06 / Proposed reference architecture"
-  title="From agent harness to governed agent platform"
-  description="Control plane defines an approved agent; runtime owns a durable run; integration plane enforces external side effects."
-  minWidth={1120}
-  legend={[{"label":"Platform control plane","tone":"teal"},{"label":"Agent runtime","tone":"violet"},{"label":"Adapter / integration","tone":"amber"},{"label":"State & audit","tone":"green"}]}
-  chart={`%%{init: {"theme":"base","themeVariables":{"background":"#102032","primaryColor":"#183449","primaryTextColor":"#eef6fc","primaryBorderColor":"#638ba2","textColor":"#eef6fc","edgeLabelBackground":"#14263a","lineColor":"#93b1c2","fontFamily":"Inter, Arial, sans-serif","clusterBkg":"#111f2f","clusterBorder":"#668397","secondaryColor":"#1c3a4f","tertiaryColor":"#24384b"},"flowchart":{"curve":"linear","nodeSpacing":36,"rankSpacing":52,"padding":18}}}%%
-flowchart TB
-  BUILDER["Agent Builder UI"]:::edge --> DEFINITIONS["Versioned agent definitions<br/>model, skills, tools, policies"]:::edge
-  USER["User / schedule / webhook"]:::edge --> ROUTER["Auth + eligibility filter<br/>rules / optional intent router"]:::runtime
-  subgraph CONTROL["CONTROL PLANE · PROPOSED"]
-    direction LR
-    DEFINITIONS
-    COMPILER["Manifest compiler<br/>Validate + freeze versions"]:::runtime
-    POLICY["Identity / permissions<br/>Budget / revision policy"]:::runtime
-  end
-  DEFINITIONS --> COMPILER
-  POLICY --> COMPILER
-  subgraph RUNTIME["RUNTIME PLANE · PROPOSED"]
-    direction LR
-    ROUTER
-    ADMIT["Run Manager<br/>admission, run ID, ledger"]:::runtime
-    HARNESS["Agent harness<br/>model + graph + middleware"]:::logic
-    EVENTS["Event stream + checkpoints"]:::data
-  end
-  ROUTER --> ADMIT
-  COMPILER --> ADMIT
-  ADMIT --> HARNESS
-  HARNESS --> EVENTS
-  subgraph CONNECT["INTEGRATION PLANE · PROPOSED"]
-    direction LR
-    GATE["Tool policy gateway<br/>scope / approval"]:::exec
-    ADAPTERS["Reviewed adapters<br/>MCP, HTTP, KB, workflow"]:::exec
-    SOURCES["External systems"]:::quiet
-  end
-  HARNESS --> GATE --> ADAPTERS --> SOURCES
-  EVENTS --> VIEW["Run / approval / audit UI"]:::edge
-  
-classDef edge fill:#214957,stroke:#37b0bb,color:#f4fbff,stroke-width:1.8px
-classDef runtime fill:#213650,stroke:#74a1da,color:#f4fbff,stroke-width:1.8px
-classDef logic fill:#352d51,stroke:#a897e0,color:#f8f7ff,stroke-width:1.8px
-classDef exec fill:#49382b,stroke:#d6a05d,color:#fff6e8,stroke-width:1.8px
-classDef data fill:#203d36,stroke:#61b78a,color:#effdf4,stroke-width:1.8px
-classDef gate fill:#483445,stroke:#d78eac,color:#fff2f7,stroke-width:1.8px
-classDef quiet fill:#203040,stroke:#829cae,color:#e9f5fc,stroke-width:1.4px
-  style CONTROL fill:#15343a,stroke:#59afae,stroke-width:2px,color:#eaffff
-  style RUNTIME fill:#1e2c44,stroke:#8a9bd6,stroke-width:2px,color:#f3f4ff
-  style CONNECT fill:#302b26,stroke:#d4a15e,stroke-width:2px,color:#fff6e9`}
-  caption="Design proposal, not a claimed DeerFlow deployment. These are logical responsibility boundaries and may begin as modules rather than separate microservices."
+<DiagramEmbed
+  svg="/diagrams/deerflow/deerflow-platform.svg"
+  d2="/diagrams/deerflow/deerflow-platform.d2"
+  drawio="/diagrams/deerflow/deerflow-platform.drawio"
+  eyebrow="PROPOSED / REFERENCE ARCHITECTURE"
+  title="From reusable harness to configurable agent platform"
+  description="Control, execution and integration responsibilities are independently governed and extensible."
+  caption="Proposal, not a DeerFlow deployment claim; boundaries are logical, not necessarily microservices."
 />
 
 I would split responsibilities into three layers:
