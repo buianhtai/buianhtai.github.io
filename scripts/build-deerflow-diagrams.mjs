@@ -26,7 +26,9 @@ const palette = {
 const xmlEscape = (value) => String(value ?? '').replace(/[<>&"']/g, (ch) =>
   ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' })[ch],
 );
-const d2Quote = (s) => JSON.stringify(String(s ?? ''));
+// Treat intentional backslash-n from authored metadata as a line break too.
+const normalizeText = (value) => String(value ?? '').replace(/\\n/g, '\n');
+const d2Quote = (s) => JSON.stringify(normalizeText(s));
 const style = (accent, isBoundary = false) => {
   const [stroke, fill] = palette[accent];
   return [
@@ -71,7 +73,7 @@ function toD2(scene) {
   ];
   const qualified = new Map(scene.boxes.map((b) => [b.id, b.parent ? b.parent + '.' + b.id : b.id]));
   const writeNode = (b, indent = '') => {
-    const label = b.title + (b.desc ? '\\n' + b.desc : '');
+    const label = normalizeText(b.title) + (b.desc ? '\n' + normalizeText(b.desc) : '');
     const head = indent + b.id + ': ' + d2Quote(label) + ' {';
     lines.push(head);
     if (b.kind === 'data') lines.push(indent + '  shape: cylinder');
@@ -116,8 +118,11 @@ function toDrawio(scene) {
     const st = boundary
       ? 'rounded=1;arcSize=10;container=1;collapsible=0;whiteSpace=wrap;html=1;verticalAlign=top;align=left;spacingTop=18;spacingLeft=18;fillColor=' + fill + ';strokeColor=' + stroke + ';strokeWidth=2;dashed=1;dashPattern=8 5;fontColor=#18334e;fontSize=17;fontStyle=1;'
       : 'rounded=1;arcSize=12;whiteSpace=wrap;html=1;shadow=1;align=center;verticalAlign=middle;fillColor=#FFFFFF;strokeColor=' + stroke + ';strokeWidth=2;fontColor=#18334e;fontSize=16;fontStyle=1;';
-    const description = b.desc ? '<br><font color="#64748b" style="font-size:12px">' + xmlEscape(b.desc) + '</font>' : '';
-    const label = xmlEscape(b.title) + description;
+    // Escaping has two distinct layers: HTML content, then XML attribute.
+    // Avoid double-escaping the whole value or diagrams.net shows entities.
+    const asHtmlText = (value) => xmlEscape(normalizeText(value)).replaceAll('\n', '<br/>');
+    const description = b.desc ? '<br/><font color="#64748b" style="font-size:12px">' + asHtmlText(b.desc) + '</font>' : '';
+    const label = asHtmlText(b.title) + description;
     rows.push('<mxCell id="' + xmlEscape(b.id) + '" value="' + xmlEscape(label) + '" style="' + xmlEscape(st) + '" vertex="1" parent="' + xmlEscape(parent) + '"><mxGeometry x="' + x + '" y="' + y + '" width="' + b.w + '" height="' + b.h + '" as="geometry"/></mxCell>');
   }
   for (const e of scene.edges) {
@@ -135,8 +140,11 @@ for (const name of names) {
   const d2 = path.join(output, name + '.d2');
   const svg = path.join(output, name + '.svg');
   const drawio = path.join(output, name + '.drawio');
-  fs.writeFileSync(d2, toD2(scene), 'utf8');
-  fs.writeFileSync(drawio, toDrawio(scene), 'utf8');
+  const d2Source = toD2(scene);
+  const drawioSource = toDrawio(scene);
+  if (d2Source.includes('\\\\n')) throw new Error('Double-escaped newline in D2: ' + name);
+  fs.writeFileSync(d2, d2Source, 'utf8');
+  fs.writeFileSync(drawio, drawioSource, 'utf8');
   const result = spawnSync('d2', [d2, svg], { encoding: 'utf8' });
   if (result.error || result.status !== 0) {
     throw new Error('D2 build failed for ' + name + ':\n' + (result.stderr || result.error?.message || 'unknown error'));
