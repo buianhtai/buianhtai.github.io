@@ -218,9 +218,21 @@ jobs:
         timeout-minutes: 3
         run: node scripts/deerflow-diagram-visual-check.mjs
 
+      - name: Validate DeerFlow guided story (desktop, mobile, light and dark)
+        timeout-minutes: 3
+        run: node scripts/deerflow-story-ux-check.mjs
+
       - name: Render C4 architecture diagrams in Chromium
         timeout-minutes: 5
         run: node scripts/eventcatalog-diagram-smoke.mjs
+
+      - name: Upload unpublished DeerFlow story prototype screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deerflow-guided-story-design
+          path: artifacts/deerflow-story/
+          if-no-files-found: warn
 
       - name: Upload architecture diagram screenshots
         if: always()
