@@ -53,6 +53,16 @@ async function inspect(width, theme) {
     document.querySelectorAll('figure.mermaid-figure--editorial pre.mermaid svg').length === 5,
     null, { timeout: 50_000 },
   );
+  // D2 SVG previews use native image lazy loading. Scroll to each drawing
+  // before checking naturalWidth so the test measures rendered assets.
+  const d2Images = page.locator('figure.de-drawing img');
+  for (let i = 0; i < await d2Images.count(); i++) {
+    await d2Images.nth(i).scrollIntoViewIfNeeded();
+    await page.waitForFunction((index) => {
+      const image = document.querySelectorAll('figure.de-drawing img')[index];
+      return image && image.complete && image.naturalWidth > 0;
+    }, i, { timeout: 15_000 });
+  }
   const measurements = await page.evaluate(() => {
     const charts = [...document.querySelectorAll('figure.mermaid-figure--editorial')];
     const drawings = [...document.querySelectorAll('figure.de-drawing')];
