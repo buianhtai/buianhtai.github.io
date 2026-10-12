@@ -1,0 +1,98 @@
+---
+/**
+ * Three source-informed editorial illustrations. These are conceptual,
+ * not a packet capture. All cards are readable in reduced-motion and mobile.
+ */
+---
+<div class="story-illustrations" data-illustrations>
+  <section class="vignette vignette-tools" data-vignette="3" hidden aria-label="Illustration: model and authorized tools">
+    <div class="v-top"><span class="v-eyebrow">04 · AGENT EXECUTION</span><span class="v-label">One loop, several decisions</span></div>
+    <div class="v-title">The agent doesn't just “call an LLM”.</div>
+    <div class="v-tool-flow">
+      <div class="v-tile v-tool-worker"><span class="v-ordinal">01 / ORCHESTRATE</span><div class="v-emblem">◇</div><strong>LangGraph</strong><small>Run worker drives the loop</small></div>
+      <div class="v-direction"><span>MODEL INPUT</span><i>→</i><span>MODEL OUTPUT</span></div>
+      <div class="v-tile v-tool-model"><span class="v-ordinal">02 / REASON</span><div class="v-emblem">✳</div><strong>Model</strong><small>Respond or request a tool</small></div>
+      <div class="v-direction"><span>TOOL CALL</span><i>→</i><span>RESULT</span></div>
+      <div class="v-tile v-tool-auth"><span class="v-ordinal">03 / AUTHORIZE</span><div class="v-emblem">◇</div><strong>Permission gate</strong><small>Validate access at execution</small></div>
+      <div class="v-direction"><span>APPROVED</span><i>→</i><span>DENIED?</span></div>
+      <div class="v-tile v-tool-adapter"><span class="v-ordinal">04 / EXECUTE</span><div class="v-emblem">↗</div><strong>MCP / Tool</strong><small>External effect or data</small></div>
+    </div>
+    <div class="v-caption"><span class="v-tag">IMPORTANT BOUNDARY</span> A model suggestion is not tool authorization. A permitted tool's response returns to the graph for the next step.</div>
+    <div class="v-return"><span class="v-return-dot"></span><span>TOOL RESULT RETURNS TO LANGGRAPH</span><span class="v-return-arrow">↶</span></div>
+  </section>
+  <section class="vignette vignette-storage" data-vignette="4" hidden aria-label="Illustration: separate stores for run metadata, graph checkpoints and streamed events">
+    <div class="v-top"><span class="v-eyebrow">05 · THREE TYPES OF STATE</span><span class="v-label">Different jobs, different lifetimes</span></div>
+    <div class="v-title">Three stores. Three questions.</div>
+    <div class="v-state-grid">
+      <div class="v-state-col"><span class="v-state-icon">▤</span><span class="v-state-index">01 / LIFECYCLE</span><strong>RunStore</strong><p>“Is the run still active?”</p><div class="v-state-bullets"><span>Run ID</span><span>Status and owner</span><span>Event journal</span></div><small>Persistent when configured</small></div>
+      <div class="v-state-col v-state-emphasis"><span class="v-state-icon">⛁</span><span class="v-state-index">02 / RESUME</span><strong>Graph checkpoint</strong><p>“What did the agent know?”</p><div class="v-state-bullets"><span>Graph state</span><span>Message history</span><span>Resumption context</span></div><small>Configured LangGraph checkpointer</small></div>
+      <div class="v-state-col"><span class="v-state-icon">≋</span><span class="v-state-index">03 / DELIVER</span><strong>StreamBridge</strong><p>“Which events can be replayed?”</p><div class="v-state-bullets"><span>Event cursor</span><span>Live subscribers</span><span>Buffered SSE events</span></div><small>In-memory or Redis streams</small></div>
+    </div>
+    <div class="v-caption"><span class="v-tag">DO NOT CONFLATE</span> SQL tables can share a physical database. StreamBridge is not the authoritative graph checkpoint or a job queue.</div>
+  </section>
+  <section class="vignette vignette-recovery" data-vignette="6" hidden aria-label="Illustration: recovery decision after worker interruption">
+    <div class="v-top"><span class="v-eyebrow">07 · FAILURE BOUNDARY</span><span class="v-label">A timeout is not proof of failure</span></div>
+    <div class="v-title">The dangerous moment is after an external side effect.</div>
+    <div class="v-recovery-flow">
+      <div class="v-recovery-node"><span class="v-state-index">01 / EXECUTE</span><strong>Worker calls a tool</strong><small>External system may mutate state</small></div>
+      <div class="v-recovery-link">↓</div>
+      <div class="v-recovery-node v-recovery-alert"><span class="v-state-index">02 / INTERRUPT</span><strong>Process loses contact</strong><small>Response/ack may never arrive</small></div>
+      <div class="v-recovery-link">↓</div>
+      <div class="v-recovery-question"><span>?</span><div><strong>Did the side effect actually happen?</strong><small>Outcome may be unknown; lease expiry alone cannot answer</small></div></div>
+      <div class="v-fork"><div><span class="v-fork-title">CONFIRMED / RECONCILED</span><strong>Record result</strong><small>Continue from durable state</small></div><div><span class="v-fork-title">UNKNOWN / UNSAFE</span><strong>Do not blindly retry</strong><small>Reconcile first; use idempotency when supported</small></div></div>
+    </div>
+    <div class="v-caption"><span class="v-tag">RELIABILITY LESSON</span> A lease can identify abandoned ownership. Exactly-once effects need an explicit application-level strategy.</div>
+  </section>
+</div>
+<style>
+.story-illustrations{font-family:Inter,system-ui,sans-serif}
+.story-illustrations [hidden]{display:none!important}
+.vignette{--v-ink:var(--ink,#eaf3f4);--v-dim:var(--dim,#a8bdc5);--v-line:var(--line,#344d5a);--v-accent:var(--accent,#83dfd1);margin:2px 22px 20px;padding:25px;background:color-mix(in srgb,var(--card,#142431) 80%,var(--stage,#192c39));border:1px solid var(--v-line);border-radius:13px;color:var(--v-ink);overflow:hidden}
+.v-top{display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;align-items:center}
+.v-eyebrow{font:700 .65rem/1.5 var(--font-mono,monospace);letter-spacing:.09em;color:var(--v-accent)}
+.v-label{font:550 .69rem/1.5 var(--font-mono,monospace);color:var(--v-dim)}
+.v-title{font-size:clamp(1.15rem,2.3vw,1.6rem);letter-spacing:-.045em;line-height:1.3;font-weight:760;margin:11px 0 23px}
+.v-tool-flow{display:grid;grid-template-columns:minmax(0,1fr) 48px minmax(0,1fr) 48px minmax(0,1fr) 48px minmax(0,1fr);gap:4px;align-items:center}
+.v-tile,.v-state-col,.v-recovery-node,.v-recovery-question,.v-fork>div{background:var(--card,#142431);border:1px solid var(--v-line);border-radius:10px;padding:16px;min-width:0}
+.v-tile{min-height:156px;display:flex;flex-direction:column;align-items:flex-start}
+.v-ordinal,.v-state-index{font:700 .58rem/1.45 var(--font-mono,monospace);letter-spacing:.045em;color:var(--v-accent)}
+.v-emblem{font-size:2rem;line-height:1.3;color:var(--v-accent);margin:9px 0 6px}
+.v-tile strong,.v-state-col strong,.v-recovery-node strong,.v-recovery-question strong,.v-fork strong{display:block;font-weight:750;font-size:.94rem;line-height:1.35}
+.v-tile small,.v-state-col small,.v-recovery-node small,.v-recovery-question small,.v-fork small{font-size:.67rem;line-height:1.5;color:var(--v-dim);margin-top:7px}
+.v-direction{display:flex;flex-direction:column;gap:7px;text-align:center;color:var(--v-accent);align-items:center}
+.v-direction i{font:750 1.35rem Inter,system-ui,sans-serif;font-style:normal}
+.v-direction span{font:650 .47rem/1.3 var(--font-mono,monospace);color:var(--v-dim)}
+.v-tool-auth{border-color:var(--v-accent);box-shadow:0 0 0 1px color-mix(in srgb,var(--v-accent) 18%,transparent)}
+.v-return{display:flex;align-items:center;gap:8px;color:var(--v-accent);font:650 .56rem/1.5 var(--font-mono,monospace);letter-spacing:.08em;margin:14px 0 -1px}
+.v-return-dot{height:2px;width:42px;background:var(--v-accent)}
+.v-return-arrow{font-size:1.2rem;margin-left:3px}
+.v-caption{display:flex;align-items:baseline;gap:12px;margin-top:19px;padding-top:16px;border-top:1px solid var(--v-line);color:var(--v-dim);font-size:.77rem;line-height:1.65}
+.v-tag{flex-shrink:0;font:700 .55rem/1.5 var(--font-mono,monospace);letter-spacing:.07em;color:var(--v-accent)}
+.v-state-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:15px}
+.v-state-col{display:flex;flex-direction:column;min-height:265px;padding:19px}
+.v-state-emphasis{border-color:var(--v-accent)}
+.v-state-icon{font-size:2.3rem;line-height:1.1;color:var(--v-accent);margin-bottom:17px}
+.v-state-col strong{font-size:1.1rem;margin-top:7px}
+.v-state-col p{font-size:.78rem;color:var(--v-dim);margin:9px 0 15px;line-height:1.5}
+.v-state-bullets{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+.v-state-bullets span{font:550 .65rem/1.4 var(--font-mono,monospace);border:1px solid var(--v-line);border-radius:5px;padding:4px 7px}
+.v-state-col small{margin-top:auto}
+.v-recovery-flow{max-width:800px;margin:auto}
+.v-recovery-node{text-align:center;padding:14px 18px}
+.v-recovery-node strong{font-size:.88rem;margin-top:4px}
+.v-recovery-node small{display:block;margin-top:3px}
+.v-recovery-alert{border-color:#dd9f70;background:color-mix(in srgb,#dd9f70 9%,var(--card,#142431))}
+.v-recovery-alert .v-state-index{color:#e4aa7a}
+.v-recovery-link{text-align:center;color:var(--v-accent);font-size:1.3rem;line-height:1.1;padding:4px}
+.v-recovery-question{display:flex;align-items:center;gap:17px;justify-content:center;border-color:var(--v-accent);padding:16px}
+.v-recovery-question>span{font:800 2rem/1 var(--font-mono,monospace);color:var(--v-accent)}
+.v-recovery-question small{display:block;margin-top:4px}
+.v-fork{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:19px}
+.v-fork>div{min-height:94px}
+.v-fork-title{display:block;font:700 .54rem/1.5 var(--font-mono,monospace);color:var(--v-accent);margin-bottom:8px}
+.v-fork>div:last-child{border-color:#dd9f70}.v-fork>div:last-child .v-fork-title{color:#e4aa7a}
+.v-fork small{display:block}
+@media(max-width:850px){.v-tool-flow{grid-template-columns:1fr 20px 1fr;gap:9px}.v-tool-flow .v-direction:nth-of-type(4){display:none}.v-tool-flow .v-tile{min-height:135px}.v-tool-flow .v-tool-auth{grid-column:1}.v-tool-flow .v-tool-adapter{grid-column:3}.v-tool-flow .v-direction:nth-of-type(6){grid-column:2}.v-tool-flow .v-direction span{display:none}}
+@media(max-width:640px){.vignette{margin:5px 12px 14px;padding:16px}.v-title{margin-bottom:15px}.v-top{align-items:start}.v-label{font-size:.6rem}.v-tile{padding:12px}.v-tile strong{font-size:.78rem}.v-tile small{font-size:.6rem}.v-state-grid{grid-template-columns:1fr;gap:9px}.v-state-col{min-height:0;padding:14px}.v-state-icon{margin:0 0 9px}.v-state-col p{margin:5px 0 9px}.v-state-col small{margin:6px 0 0}.v-caption{display:block;font-size:.7rem}.v-tag{display:block;margin-bottom:7px}.v-recovery-question{padding:12px}.v-recovery-question strong{font-size:.8rem}.v-fork{gap:8px}.v-fork>div{padding:11px}.v-fork strong{font-size:.74rem}.v-fork small{font-size:.61rem}}
+@media(prefers-reduced-motion:reduce){.story-illustrations *{animation:none!important;transition:none!important}}
+</style>
