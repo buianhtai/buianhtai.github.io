@@ -89,8 +89,14 @@ try {
     }
   }
   console.log('Guided story UX passed: 3 scenes, keyboard-safe controls, code details, 320–1440px, dark/light.');
+} catch (error) {
+  console.error('FAIL: DeerFlow guided story UX', error);
+  process.exitCode = 1;
 } finally {
-  if (browser) await browser.close();
+  if (browser) await Promise.race([browser.close().catch(() => {}), new Promise(resolve => setTimeout(resolve, 2000))]);
   clearTimeout(watchdog);
-  server.kill('SIGTERM');
+  server.kill('SIGKILL');
+  // npm's preview child can retain stdout pipes after its wrapper is killed.
+  // An explicit exit follows the pattern used by the existing visual tests.
+  process.exit(process.exitCode || 0);
 }
