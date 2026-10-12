@@ -23,3 +23,5 @@ Presentation uses the existing Astro src/components/mdx/DiagramEmbed.astro compo
 Why keep Mermaid for five diagrams? Sequence diagrams and bounded model/tool loops are more naturally represented as executable-looking flows; D2 is used where container boundaries, systems and adapters need a visual hierarchy. All eight diagrams live inside the same article and share Astro-based framing.
 
 Review checkpoints: desktop and 390px mobile, dark/light themes, no page overflow, D2 SVG loading, source/diagram downloads and diagrams.net import. `npm run build` validates the conversion on CI because the deployment already pins D2 v0.9.0.
+
+The three D2 figures use `icon` properties on their JSON scene nodes. The generator resolves Lucide icons from the locally installed icon set, writes local SVG assets, and embeds vector icons in the D2 SVG and diagrams.net documents. The source-grounded 5-stage infographic is an Astro component at `src/components/mdx/DeerFlowSystemInfographic.astro`, not a flattened screenshot. Mermaid execution sequences retain their specialized view and now provide zoom/fit controls on phones.
