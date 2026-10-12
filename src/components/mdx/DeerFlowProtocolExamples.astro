@@ -1,0 +1,38 @@
+---
+/** Compact editorial request/state examples that accompany the guided storyboard.
+ * Representative payloads only, not a production packet trace.
+ */
+const cards=[
+ {scene:0,kicker:'01 / HTTP BOUNDARY',title:'The browser sends one run request',leftLabel:'REQUEST',left:'POST /api/langgraph/threads/{id}/runs/stream',rightLabel:'RESPONSE',right:'200 OK · Content-Type: text/event-stream',desc:'The request crosses Nginx, but the response stays open as an SSE stream. This is not a call directly to the model.',chip:'One HTTP request · streaming response'},
+ {scene:1,kicker:'02 / ADMISSION',title:'A run is created before work completes',leftLabel:'RUN METADATA',left:'run_id → pending / running',rightLabel:'PROCESS-LOCAL EXECUTION',right:'asyncio.create_task(worker)',desc:'A run record tracks ownership and status when persistence is configured. The Python task executes independently from the browser consuming events.',chip:'No default job broker'},
+ {scene:2,kicker:'03 / SSE DELIVERY',title:'Events arrive while execution continues',leftLabel:'FIRST FRAME',left:'event: <stream mode>\nid: <cursor>\ndata: <JSON>',rightLabel:'LATER FRAME',right:'event: end\ndata: null',desc:'Incremental events travel through StreamBridge and the Gateway. The final end frame is not a checkpoint or a queue acknowledgement.',chip:'Execution overlaps delivery'},
+ {scene:5,kicker:'06 / RECONNECT',title:'A missing cursor changes the recovery path',leftLabel:'REJOIN REQUEST',left:'Last-Event-ID: <cursor>',rightLabel:'IF REPLAY IS MISSING',right:'event: gap\ndata: {"recovery":"reload_durable_state"}',desc:'The frontend can reload durable thread state rather than invent missing streamed chunks. A disconnected browser does not necessarily mean an interrupted run.',chip:'Reconnect ≠ restart'}
+];
+---
+<div class="mini-examples" data-story-examples>
+ {cards.map(card=><section class="mini-example" data-story-example={card.scene} hidden>
+  <header class="mini-top"><span>{card.kicker}</span><span class="mini-tag">{card.chip}</span></header>
+  <h3>{card.title}</h3>
+  <div class="mini-pair">
+   <div><span class="mini-lbl">{card.leftLabel}</span><code>{card.left}</code></div>
+   <div class="mini-arrow" aria-hidden="true">→</div>
+   <div><span class="mini-lbl">{card.rightLabel}</span><code>{card.right}</code></div>
+  </div>
+  <p>{card.desc}</p><small>Illustrative source-based explanation · not captured traffic</small>
+ </section>)}
+</div>
+<style>
+.mini-examples [hidden]{display:none!important}
+.mini-example{background:var(--card,#142431);border:1px solid var(--line,#344d5a);border-radius:12px;margin:0 22px 18px;padding:22px;color:var(--ink,#ebf3f5)}
+.mini-top{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;font:700 .62rem/1.5 var(--font-mono,monospace);letter-spacing:.07em;color:var(--accent,#83dfd1)}
+.mini-tag{font-size:.6rem;color:var(--dim,#acc0c9);letter-spacing:0;font-weight:500}
+.mini-example h3{font-size:clamp(1.08rem,2.2vw,1.43rem);letter-spacing:-.04em;line-height:1.3;margin:12px 0 18px;font-weight:750}
+.mini-pair{display:grid;grid-template-columns:minmax(0,1fr) 20px minmax(0,1fr);gap:13px;align-items:center}
+.mini-pair>div:not(.mini-arrow){min-width:0;padding:15px;background:var(--stage,#192c39);border:1px solid var(--line,#344d5a);border-radius:9px}
+.mini-lbl{display:block;color:var(--accent,#83dfd1);font:700 .58rem/1.5 var(--font-mono,monospace);letter-spacing:.07em;margin-bottom:10px}
+.mini-pair code{font:600 .74rem/1.6 var(--font-mono,monospace);white-space:pre-wrap;overflow-wrap:anywhere;color:var(--ink,#ebf3f5);background:transparent}
+.mini-arrow{text-align:center;font-size:1.4rem;color:var(--accent,#83dfd1)}
+.mini-example p{font-size:.79rem;line-height:1.7;color:var(--dim,#acc0c9);margin:15px 0 8px}
+.mini-example>small{font:550 .61rem/1.6 var(--font-mono,monospace);color:var(--dim,#acc0c9)}
+@media(max-width:640px){.mini-example{margin:0 12px 14px;padding:15px}.mini-pair{grid-template-columns:1fr;gap:5px}.mini-arrow{transform:rotate(90deg)}.mini-pair>div:not(.mini-arrow){padding:12px}.mini-example h3{margin:9px 0 12px}}
+</style>
