@@ -65,7 +65,8 @@
       "h": 95,
       "title": "Skills",
       "desc": "Instructions / procedures",
-      "accent": "blue"
+      "accent": "blue",
+      "icon": "book-open"
     },
     {
       "id": "tools",
@@ -77,7 +78,8 @@
       "h": 95,
       "title": "Tool schemas",
       "desc": "Typed name + arguments",
-      "accent": "blue"
+      "accent": "blue",
+      "icon": "wrench"
     },
     {
       "id": "mcp",
@@ -89,7 +91,8 @@
       "h": 95,
       "title": "MCP catalog",
       "desc": "Remote tool discovery",
-      "accent": "blue"
+      "accent": "blue",
+      "icon": "plug"
     },
     {
       "id": "decision",
@@ -101,7 +104,8 @@
       "h": 125,
       "title": "LLM tool decision",
       "desc": "Action + structured args",
-      "accent": "violet"
+      "accent": "violet",
+      "icon": "brain"
     },
     {
       "id": "observation",
@@ -113,7 +117,8 @@
       "h": 100,
       "title": "ToolMessage",
       "desc": "Structured result / failure",
-      "accent": "violet"
+      "accent": "violet",
+      "icon": "file-check"
     },
     {
       "id": "authorize",
@@ -125,7 +130,8 @@
       "h": 110,
       "title": "Execution policy",
       "desc": "Identity + scopes + budget",
-      "accent": "teal"
+      "accent": "teal",
+      "icon": "shield-check"
     },
     {
       "id": "execute",
@@ -137,7 +143,8 @@
       "h": 100,
       "title": "Bounded tool invocation",
       "desc": "Timeout + audit context",
-      "accent": "teal"
+      "accent": "teal",
+      "icon": "workflow"
     },
     {
       "id": "sandbox",
@@ -149,7 +156,8 @@
       "h": 100,
       "title": "Sandbox execution",
       "desc": "Files / CLI / scripts",
-      "accent": "amber"
+      "accent": "amber",
+      "icon": "terminal"
     },
     {
       "id": "apis",
@@ -161,7 +169,8 @@
       "h": 100,
       "title": "External MCP / HTTP",
       "desc": "Connectors and services",
-      "accent": "amber"
+      "accent": "amber",
+      "icon": "cloud"
     }
   ],
   "edges": [

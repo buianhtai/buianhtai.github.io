@@ -65,7 +65,8 @@
       "h": 95,
       "title": "Browser / chat UI",
       "desc": "User-initiated thread",
-      "accent": "slate"
+      "accent": "slate",
+      "icon": "monitor"
     },
     {
       "id": "channel",
@@ -77,7 +78,8 @@
       "h": 95,
       "title": "IM / scheduler",
       "desc": "Trusted entry adapters",
-      "accent": "slate"
+      "accent": "slate",
+      "icon": "message-square"
     },
     {
       "id": "nginx",
@@ -89,7 +91,8 @@
       "h": 90,
       "title": "Nginx / Next.js",
       "desc": "Ingress + presentation",
-      "accent": "blue"
+      "accent": "blue",
+      "icon": "network"
     },
     {
       "id": "gateway",
@@ -101,7 +104,8 @@
       "h": 95,
       "title": "FastAPI Gateway",
       "desc": "Auth, thread and run APIs",
-      "accent": "blue"
+      "accent": "blue",
+      "icon": "server"
     },
     {
       "id": "run",
@@ -113,7 +117,8 @@
       "h": 110,
       "title": "RunManager + SSE",
       "desc": "Run ownership, StreamBridge",
-      "accent": "blue"
+      "accent": "blue",
+      "icon": "radio-tower"
     },
     {
       "id": "lead",
@@ -125,7 +130,8 @@
       "h": 100,
       "title": "Lead Agent / LangGraph",
       "desc": "Model + tool decision loop",
-      "accent": "violet"
+      "accent": "violet",
+      "icon": "brain-circuit"
     },
     {
       "id": "middleware",
@@ -137,7 +143,8 @@
       "h": 95,
       "title": "Middleware + Policy",
       "desc": "Scoped tools, costs, loops",
-      "accent": "violet"
+      "accent": "violet",
+      "icon": "shield-check"
     },
     {
       "id": "registry",
@@ -149,7 +156,8 @@
       "h": 100,
       "title": "Tools / Skills / MCP catalog",
       "desc": "Authorization and discovery",
-      "accent": "violet"
+      "accent": "violet",
+      "icon": "puzzle"
     },
     {
       "id": "sandbox",
@@ -161,7 +169,8 @@
       "h": 105,
       "title": "Sandbox provider",
       "desc": "Isolated execution / files",
-      "accent": "amber"
+      "accent": "amber",
+      "icon": "terminal"
     },
     {
       "id": "remote",
@@ -173,7 +182,8 @@
       "h": 100,
       "title": "External tools / MCP",
       "desc": "Reviewed actions and APIs",
-      "accent": "amber"
+      "accent": "amber",
+      "icon": "cloud"
     },
     {
       "id": "checkpoint",
@@ -185,7 +195,8 @@
       "h": 100,
       "title": "State + checkpoints",
       "desc": "Threads, memory, artifacts",
-      "accent": "teal"
+      "accent": "teal",
+      "icon": "database"
     }
   ],
   "edges": [

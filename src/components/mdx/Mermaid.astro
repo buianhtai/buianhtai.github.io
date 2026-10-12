@@ -25,9 +25,23 @@ const canvasMinWidth = Number.isFinite(minWidth) ? Math.min(1600, Math.max(0, mi
       {description && <p class="mermaid-description">{description}</p>}
     </header>
   )}
+  {editorial && (
+    <div class="mermaid-controls" role="group" aria-label={'Zoom controls for ' + title}>
+      <span class="mermaid-control-hint">DIAGRAM / VECTOR</span>
+      <div class="mermaid-control-buttons">
+        <button type="button" data-mermaid-zoom="out" aria-label="Zoom out" disabled>−</button>
+        <output data-mermaid-scale aria-live="polite">Fit</output>
+        <button type="button" data-mermaid-zoom="in" aria-label="Zoom in">+</button>
+        <button type="button" data-mermaid-zoom="fit" aria-label="Fit diagram to width">Fit</button>
+      </div>
+    </div>
+  )}
   <div class="mermaid-scroll" style={'--mermaid-min-width:' + canvasMinWidth + 'px'}>
-    <pre class="mermaid" set:html={chart}></pre>
+    <div class="mermaid-canvas">
+      <pre class="mermaid" set:html={chart}></pre>
+    </div>
   </div>
+  {editorial && <p class="mermaid-gesture">Zoom for readable labels; swipe to pan inside the diagram.</p>}
   {(caption || legend.length > 0) && (
     <figcaption class="mermaid-footer">
       {legend.length > 0 && (
@@ -54,6 +68,7 @@ const canvasMinWidth = Number.isFinite(minWidth) ? Math.min(1600, Math.max(0, mi
     background: var(--color-surface);
   }
   .mermaid-figure--editorial {
+    width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box;
     margin: 2rem 0;
     border-radius: 14px;
     box-shadow: 0 12px 38px rgba(4, 17, 28, 0.08);
@@ -74,10 +89,21 @@ const canvasMinWidth = Number.isFinite(minWidth) ? Math.min(1600, Math.max(0, mi
   .mermaid-heading { font-size: clamp(1rem, 1.7vw, 1.19rem); font-weight: 730; color: var(--color-text); line-height: 1.4; }
   .mermaid-description { color: var(--color-text-dim); font-size: 0.83rem; line-height: 1.6; margin: 0.3rem 0 0; max-width: 68ch; }
   .mermaid-scroll {
+    box-sizing: border-box; width: 100%; max-width: 100%;
     overflow-x: auto; overflow-y: hidden; padding: 1.5rem 1.1rem;
+    overscroll-behavior-inline: contain;
     -webkit-overflow-scrolling: touch;
     background-image: radial-gradient(color-mix(in srgb, var(--color-text-muted) 11%, transparent) 0.7px, transparent 0.7px);
     background-size: 16px 16px; background-position: 8px 8px;
+  }
+  /* A dedicated canvas owns the intrinsic width; SVG/pre widths alone may
+     remain capped by article typography CSS and fail to create a scroll area. */
+  .mermaid-scroll .mermaid-canvas {
+    display: block;
+    max-width: none;
+    min-width: 0;
+    width: max-content;
+    margin: 0 auto;
   }
   .mermaid-scroll pre.mermaid {
     background: transparent !important; border: none !important;
@@ -91,6 +117,26 @@ const canvasMinWidth = Number.isFinite(minWidth) ? Math.min(1600, Math.max(0, mi
   .mermaid-figure:not(.mermaid-figure--editorial) .mermaid-scroll pre.mermaid { min-width: 0; width: auto; max-width: 100%; }
   .mermaid-figure:not(.mermaid-figure--editorial) .mermaid-scroll pre.mermaid > :global(svg) { max-width: 100%; }
   .mermaid-figure--editorial .mermaid-scroll { background-color: #0b1828; }
+
+  .mermaid-controls {
+    display: flex; align-items: center; justify-content: space-between; gap: 0.6rem;
+    padding: 0.55rem 1.2rem;
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-surface-2);
+  }
+  .mermaid-control-hint { color: var(--color-text-muted); font: 600 0.66rem var(--font-mono, monospace); letter-spacing: 0.08em; }
+  .mermaid-control-buttons { display: flex; align-items: center; gap: 0.3rem; }
+  .mermaid-control-buttons button {
+    min-width: 30px; min-height: 29px; cursor: pointer; padding: 0.3rem 0.45rem;
+    border: 1px solid var(--color-border); border-radius: 5px;
+    color: var(--color-text); background: var(--color-surface);
+    font: 700 0.74rem var(--font-mono, monospace);
+  }
+  .mermaid-control-buttons button:disabled { opacity: 0.4; cursor: default; }
+  .mermaid-control-buttons button:hover:not(:disabled) { border-color: var(--color-accent); color: var(--color-accent); }
+  .mermaid-control-buttons button:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  .mermaid-control-buttons output { font: 500 0.66rem var(--font-mono, monospace); font-variant-numeric: tabular-nums; color: var(--color-text-dim); min-width: 45px; text-align: center; }
+  .mermaid-gesture { margin: 0; padding: 0.45rem 1.25rem; color: var(--color-text-muted); background: var(--color-surface); font: 400 0.68rem/1.6 var(--font-mono, monospace); }
   .mermaid-footer { padding: 0.7rem 1.4rem; border-top: 1px solid var(--color-border); background: var(--color-surface); }
   .mermaid-legend { display: flex; flex-wrap: wrap; gap: 0.55rem 1.1rem; align-items: center; margin-bottom: 0.4rem; }
   .mermaid-legend-item { display: inline-flex; align-items: center; gap: 0.4rem; color: var(--color-text-dim); font: 500 0.7rem/1.4 var(--font-mono, monospace); }
@@ -104,6 +150,11 @@ const canvasMinWidth = Number.isFinite(minWidth) ? Math.min(1600, Math.max(0, mi
   .mermaid-caption { color: var(--color-text-dim); font: 400 0.75rem/1.55 var(--font-mono, monospace); margin: 0; }
   @media (max-width: 640px) {
     .mermaid-header { padding: 1rem; }
+    .mermaid-controls { padding: 0.55rem 0.85rem; }
+    .mermaid-gesture { padding: 0.4rem 0.85rem; }
+    .mermaid-controls { flex-wrap: wrap; }
+    .mermaid-control-buttons { max-width: 100%; }
+    .mermaid-control-hint { flex-shrink: 0; }
     .mermaid-scroll { padding: 1rem; }
     .mermaid-footer { padding: 0.75rem 1rem; }
     .mermaid-legend { gap: 0.5rem 0.85rem; }
@@ -128,6 +179,59 @@ const canvasMinWidth = Number.isFinite(minWidth) ? Math.min(1600, Math.max(0, mi
         for (const node of document.querySelectorAll('pre.mermaid')) {
           try {
             await mermaid.run({ nodes: [node] });
+            const figure = node.closest('.mermaid-figure--editorial');
+            const viewport = node.closest('.mermaid-scroll');
+            const svg = node.querySelector('svg');
+            const canvas = node.parentElement;
+            if (!figure || !viewport || !svg || !canvas) continue;
+            const zoomIn = figure.querySelector('[data-mermaid-zoom="in"]');
+            const zoomOut = figure.querySelector('[data-mermaid-zoom="out"]');
+            const fit = figure.querySelector('[data-mermaid-zoom="fit"]');
+            const output = figure.querySelector('[data-mermaid-scale]');
+            if (!zoomIn || !zoomOut || !fit || !output) continue;
+            let scale = 1;
+            // Mermaid sets intrinsic diagram dimensions. Reset its max-width
+            // so a zoomed vector can widen its *own* scroller, never the page.
+            svg.style.maxWidth = 'none';
+            svg.style.minWidth = '0';
+            svg.style.height = 'auto';
+            node.style.display = 'block';
+            node.style.justifyContent = 'initial';
+            function resize(next) {
+              const oldCenter = viewport.scrollLeft + viewport.clientWidth / 2;
+              const factor = next / scale;
+              scale = Math.min(5, Math.max(1, Math.round(next * 100) / 100));
+              const computed = getComputedStyle(viewport);
+              const padding = parseFloat(computed.paddingLeft) + parseFloat(computed.paddingRight);
+              const available = Math.max(1, viewport.clientWidth - padding - 2);
+              // clientWidth includes left and right padding. Measuring the actual
+              // content box avoids a small but real horizontal overflow at 320/390px.
+              const width = Math.max(1, Math.floor(available * scale));
+              canvas.style.width = width + 'px';
+              canvas.style.minWidth = width + 'px';
+              canvas.style.margin = '0';
+              node.style.width = width + 'px';
+              node.style.minWidth = width + 'px';
+              svg.style.width = width + 'px';
+              svg.style.maxWidth = 'none';
+              output.textContent = scale === 1 ? 'Fit' : Math.round(scale * 100) + '%';
+              zoomOut.disabled = scale <= 1;
+              zoomIn.disabled = scale >= 5;
+              requestAnimationFrame(() => {
+                viewport.scrollLeft = Math.max(0, oldCenter * factor - viewport.clientWidth / 2);
+              });
+            }
+            zoomIn.addEventListener('click', () => resize(scale * 1.6));
+            zoomOut.addEventListener('click', () => resize(scale / 1.6));
+            fit.addEventListener('click', () => resize(1));
+            // Initialized after SVG is mounted; ResizeObserver keeps fit mode
+            // correct when mobile rotates or the surrounding column resizes.
+            // The viewport's scrollbar changes geometry during zoom. Observing
+            // that same element causes out-of-order fit/zoom recalculations.
+            // Only genuine window/orientation resizes should refit the canvas.
+            window.addEventListener('resize', () => resize(scale), { passive: true });
+            resize(1);
+
           } catch (error) {
             console.error('Unable to render diagram', error);
             const fallback = document.createElement('span');

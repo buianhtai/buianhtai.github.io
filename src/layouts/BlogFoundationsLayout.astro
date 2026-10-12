@@ -714,6 +714,30 @@ const jsonLd = {
     font-family: 'IBM Plex Serif', Georgia, serif;
   }
 
+  /* Small-screen editorial reading layout. The standard 2rem column inset
+     leaves just 224px of text at 320px; contain wide code/tables inside the
+     prose column instead of letting them widen the whole document. */
+  @media (max-width: 420px) {
+    .f-root { overflow-x: clip; }
+    .f-layout { padding-inline: 0.75rem; grid-template-columns: minmax(0, 1fr); }
+    .f-col-center { padding: 1.45rem 0.75rem 2.4rem; min-width: 0; max-width: 100%; }
+    .f-prose { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+    .f-prose :global(:not(pre) > code) { overflow-wrap: anywhere; word-break: break-word; }
+    .f-prose :global(table) {
+      display: block;
+      box-sizing: border-box;
+      max-width: 100%;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .f-prose :global(pre) {
+      box-sizing: border-box;
+      max-width: 100%;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+  }
+
   /* ── Post footer ── */
   .f-post-footer {
     margin-top: 3.5rem;
