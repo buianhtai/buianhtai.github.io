@@ -34,27 +34,61 @@ This article examines **DeerFlow 2.0**, not the older 1.x Deep Research implemen
 The deployed system has four main runtime pieces. Nginx is its public entry point. Next.js renders the workspace. The FastAPI Gateway hosts the actual agent runtime. An optional provisioner creates remote sandboxes when that deployment mode is selected.
 
 <Mermaid
-  chart={`flowchart TB
-    Web["Browser / Next.js :3000"]
-    IM["Slack / Telegram / Feishu / other channels"]
-    Nginx["Nginx :2026<br/>single public ingress"]
-    GW["FastAPI Gateway :8001<br/>thread and run APIs"]
-    RM["RunManager + run_agent()<br/>StreamBridge"]
-    Harness["DeerFlow harness<br/>make_lead_agent()"]
-    Tools["Tools / MCP / Skills"]
-    Store[("Checkpoints / Run state<br/>Memory / metadata")]
-    Sandbox["Sandbox provider<br/>local or isolated"]
-    Prov["Optional Provisioner :8002"]
-    Web --> Nginx
-    IM --> GW
-    Nginx -->|"/api/langgraph/* + /api/*"| GW
-    Nginx -->|"HTML / assets"| Web
-    GW --> RM --> Harness
-    Harness <--> Tools
-    Harness <--> Store
-    Tools --> Sandbox
-    Prov -.-> Sandbox`}
-  caption="Logical topology reconstructed from the DeerFlow 2.0 architecture documentation. The frontend and API are separate services, but the normal Gateway path embeds the LangGraph-compatible runtime."
+  eyebrow="01 / System context and container boundaries"
+  title="DeerFlow deployment and execution ownership"
+  description="Real application services are separated from the reusable harness, external callers, and execution/data dependencies."
+  minWidth={1110}
+  legend={[{"label":"Ingress / channel","tone":"teal"},{"label":"Gateway & runtime","tone":"blue"},{"label":"Agent reasoning","tone":"violet"},{"label":"Tool execution","tone":"amber"},{"label":"Durable data","tone":"green"}]}
+  chart={`%%{init: {"theme":"base","themeVariables":{"background":"#102032","primaryColor":"#183449","primaryTextColor":"#eef6fc","primaryBorderColor":"#638ba2","lineColor":"#7e9cac","fontFamily":"Inter, Arial, sans-serif","clusterBkg":"#111f2f","clusterBorder":"#668397","secondaryColor":"#1c3a4f","tertiaryColor":"#24384b"},"flowchart":{"curve":"linear","nodeSpacing":36,"rankSpacing":52,"padding":18}}}%%
+flowchart TB
+  subgraph INPUT["01 / CALLER SURFACES · OUTSIDE SERVER TRUST"]
+    direction LR
+    WEB["Web browser"]:::edge
+    CHAT["IM channel adapters"]:::edge
+    SCHED["Internal scheduler / client"]:::edge
+  end
+  subgraph APP["02 / DEERFLOW APPLICATION · APP PACKAGE"]
+    direction LR
+    NGINX["Nginx :2026<br/>Public HTTP ingress"]:::edge
+    FE["Next.js :3000<br/>UI & LangGraph SDK"]:::edge
+    GATEWAY["FastAPI Gateway :8001<br/>Auth, threads, APIs"]:::runtime
+    RUN["RunManager + StreamBridge<br/>Run lifecycle & SSE"]:::runtime
+  end
+  subgraph HARNESS["03 / DEERFLOW HARNESS · PYTHON PACKAGE"]
+    direction LR
+    AGENT["Lead Agent<br/>LangGraph state + model loop"]:::logic
+    POLICY["Middleware + tool catalog<br/>Authorization & budgets"]:::logic
+  end
+  subgraph DEPS["04 / EXECUTION AND PERSISTENCE"]
+    direction LR
+    TOOLS["Sandbox provider<br/>Isolated files & bash"]:::exec
+    MCP["MCP / Web / external tools"]:::exec
+    STATE[("Checkpoints, thread metadata<br/>memory & artifacts")]:::data
+  end
+  WEB -->|"HTTPS"| NGINX
+  NGINX -->|"HTML/assets"| FE
+  NGINX -->|"/api/*"| GATEWAY
+  CHAT -->|"Channel policy"| GATEWAY
+  SCHED -->|"Internal call"| GATEWAY
+  GATEWAY --> RUN --> AGENT
+  AGENT <--> POLICY
+  POLICY --> TOOLS
+  POLICY --> MCP
+  RUN <--> STATE
+  AGENT <--> STATE
+  
+classDef edge fill:#214957,stroke:#37b0bb,color:#f4fbff,stroke-width:1.8px
+classDef runtime fill:#213650,stroke:#74a1da,color:#f4fbff,stroke-width:1.8px
+classDef logic fill:#352d51,stroke:#a897e0,color:#f8f7ff,stroke-width:1.8px
+classDef exec fill:#49382b,stroke:#d6a05d,color:#fff6e8,stroke-width:1.8px
+classDef data fill:#203d36,stroke:#61b78a,color:#effdf4,stroke-width:1.8px
+classDef gate fill:#483445,stroke:#d78eac,color:#fff2f7,stroke-width:1.8px
+classDef quiet fill:#203040,stroke:#829cae,color:#e9f5fc,stroke-width:1.4px
+  style INPUT fill:#172535,stroke:#668397,stroke-width:1.5px,stroke-dasharray:5 5,color:#e1edf6
+  style APP fill:#14273a,stroke:#60adba,stroke-width:2px,color:#eaf8fc
+  style HARNESS fill:#1c263c,stroke:#9786ca,stroke-width:2px,color:#f1eafe
+  style DEPS fill:#1c292c,stroke:#6ba18a,stroke-width:2px,color:#ebfff1`}
+  caption="Logical C4-style container view. Only Nginx is the normal public web ingress; IM integrations reach the Gateway through channel policies. Optional sandbox provisioner omitted for clarity."
 />
 
 | Component | Responsibility | Important boundary |
@@ -78,30 +112,42 @@ Take a concrete request:
 That instruction is **not** hardcoded to run search, then shell, then a summary. Instead, the agent sees a set of available tool schemas, chooses the next action, receives its result, and repeats until it can answer or hits a limit.
 
 <Mermaid
-  chart={`sequenceDiagram
-    autonumber
-    participant U as Browser
-    participant G as Gateway / RunManager
-    participant A as Lead Agent
-    participant M as LLM
-    participant T as Tool Registry
-    participant S as Sandbox / External API
-    participant DB as Checkpointer
-    U->>G: Submit message in thread
-    G->>DB: Load thread state
-    G->>A: Start graph with run context
-    A->>M: Messages + system prompt + tool schemas
-    M-->>A: Tool call (name + arguments)
-    A->>T: Dispatch authorized tool
-    T->>S: Execute bounded operation
-    S-->>T: Result or error
-    T-->>A: ToolMessage
-    A->>DB: Checkpoint state
-    A->>M: Continue with observation
-    M-->>A: Final text or another tool call
-    A-->>G: Events + final output
-    G-->>U: SSE message / state / task updates`}
-  caption="An illustrative end-to-end turn. The actual run may issue multiple tool calls and middleware can intercept or stop execution."
+  eyebrow="02 / Request lifecycle"
+  title="One question, a bounded execution loop"
+  description="Shows which component admits the run, decides actions, enforces tool access, saves progress, and streams the result."
+  minWidth={1150}
+  legend={[{"label":"Run orchestration","tone":"blue"},{"label":"Model / tool loop","tone":"violet"},{"label":"Persistence","tone":"green"}]}
+  chart={`%%{init: {"theme":"base","themeVariables":{"actorBkg":"#1b3548","actorBorder":"#63a4b1","actorTextColor":"#f1f8fc","actorLineColor":"#7397a9","signalColor":"#67909f","signalTextColor":"#1e4050","noteBkgColor":"#e9f3f5","noteTextColor":"#183849","noteBorderColor":"#9dc2c9","loopTextColor":"#173b4a","labelBoxBkgColor":"#e9f3f5","labelTextColor":"#173b4a","sequenceNumberColor":"#edf7fc","fontFamily":"Inter, Arial, sans-serif"}}%%
+sequenceDiagram
+  autonumber
+  participant U as Browser
+  participant G as Gateway API
+  participant R as RunManager
+  participant A as Agent Graph
+  participant M as LLM
+  participant T as Tool Gateway
+  participant C as Checkpointer
+  U->>G: Create thread / submit message
+  Note over G,R: Validate caller and stamp server-owned run context
+  G->>R: Admit run (threadId, runId)
+  R->>C: Load latest thread checkpoint
+  C-->>R: Materialized state
+  R->>A: Start LangGraph invocation
+  loop Model / tool iterations (bounded)
+    A->>M: Prompt + authorized tool schemas
+    alt Tool call requested
+      M-->>A: tool_calls(name, args)
+      A->>T: Authorize then invoke tool
+      T-->>A: ToolMessage(result or error)
+      A->>C: Persist updated graph state
+    else No tool call
+      M-->>A: Final assistant message
+    end
+  end
+  A-->>R: Stream output / state / progress
+  R-->>G: SSE events + terminal outcome
+  G-->>U: Tokens, task state, final answer`}
+  caption="Illustrative successful run. Some checkpoints and SSE updates occur during the loop; the final terminal event is not the only streamed response."
 />
 
 <FlowStep steps={[
@@ -173,17 +219,34 @@ The source additionally produces a `LeadAgentAssembly` descriptor describing the
 A practical agent needs behavior at multiple boundaries: before the first model call, before each model call, after a tool result, and on failures. DeerFlow's middleware stack includes thread setup, uploads, sandbox acquisition, summarization, title generation, todo planning, image handling, clarification and, in current source, controls such as loop detection, token budgets, tool filtering, model compatibility and terminal-response handling.
 
 <Mermaid
-  chart={`flowchart LR
-    Input["Run request"] --> Context["Identity + thread<br/>memory + uploaded files"]
-    Context --> Guards["Middleware<br/>authorization, budget,<br/>loop and safety checks"]
-    Guards --> Model["Model decision"]
-    Model --> Decision{"Tool call?"}
-    Decision -->|Yes| Tool["Guarded tool / MCP / sandbox"]
-    Tool --> Observation["Tool result + state"]
-    Observation --> Guards
-    Decision -->|No| Output["Final answer"]
-    Output --> Save["Checkpoint + SSE"]`}
-  caption="Conceptual control loop. Middleware is not simply a one-time preprocessing stage; hooks also govern repeated model/tool boundaries."
+  eyebrow="03 / Agent internals"
+  title="The execution loop is controlled by middleware"
+  description="Model-proposed actions return through enforced tool checks and state reducers before another reasoning turn."
+  minWidth={1040}
+  legend={[{"label":"Execution control","tone":"blue"},{"label":"Model decision","tone":"violet"},{"label":"Tool boundary","tone":"amber"},{"label":"Persisted state","tone":"green"}]}
+  chart={`%%{init: {"theme":"base","themeVariables":{"background":"#102032","primaryColor":"#183449","primaryTextColor":"#eef6fc","primaryBorderColor":"#638ba2","lineColor":"#7e9cac","fontFamily":"Inter, Arial, sans-serif","clusterBkg":"#111f2f","clusterBorder":"#668397","secondaryColor":"#1c3a4f","tertiaryColor":"#24384b"},"flowchart":{"curve":"linear","nodeSpacing":36,"rankSpacing":52,"padding":18}}}%%
+flowchart LR
+  START["ThreadState<br/>messages, todos, artifacts"]:::data --> CONTEXT["Build prompt<br/>memory, skills, schema filtering"]:::runtime
+  CONTEXT --> POLICY{"Middleware gates<br/>budget, loop, safety"}:::gate
+  POLICY -->|"Stop / deny"| EXIT["Terminal state<br/>reason + status"]:::quiet
+  POLICY -->|"Allow"| MODEL(["Model invocation"]):::logic
+  MODEL --> PICK{"Requests a tool?"}:::gate
+  PICK -->|"No"| ANSWER["Final response<br/>stream to Gateway"]:::edge
+  PICK -->|"Yes"| AUTH["Authorize tool invocation<br/>scope + args + policy"]:::runtime
+  AUTH -->|"Denied"| OBS["ToolMessage<br/>result or failure"]:::data
+  AUTH -->|"Allowed"| EXEC["Tool / MCP / sandbox<br/>bounded execution"]:::exec
+  EXEC --> OBS
+  OBS --> WRITE["Reducers + checkpoint<br/>update thread state"]:::data
+  WRITE --> CONTEXT
+  
+classDef edge fill:#214957,stroke:#37b0bb,color:#f4fbff,stroke-width:1.8px
+classDef runtime fill:#213650,stroke:#74a1da,color:#f4fbff,stroke-width:1.8px
+classDef logic fill:#352d51,stroke:#a897e0,color:#f8f7ff,stroke-width:1.8px
+classDef exec fill:#49382b,stroke:#d6a05d,color:#fff6e8,stroke-width:1.8px
+classDef data fill:#203d36,stroke:#61b78a,color:#effdf4,stroke-width:1.8px
+classDef gate fill:#483445,stroke:#d78eac,color:#fff2f7,stroke-width:1.8px
+classDef quiet fill:#203040,stroke:#829cae,color:#e9f5fc,stroke-width:1.4px`}
+  caption="Logical behavior of create_agent plus DeerFlow middleware. This is not a promise that every middleware hook runs in exactly the order shown."
 />
 
 **Design lesson:** do not implement cost ceilings, permissions or dangerous-operation approvals solely as sentences inside the system prompt. The model can be instructed to comply; the host must still *enforce* the rule.
@@ -208,6 +271,51 @@ DeerFlow merges several sources into an available tool catalog: built-in tools, 
 A skill is closer to a **capability package or runbook** than a new execution engine. The harness discovers skills and loads instructions when relevant; those instructions can direct the agent to compose existing tools. It should not be interpreted as a security policy: a skill telling the agent not to run a dangerous command is weaker than blocking that command in the tool executor.
 
 MCP is different: it exposes tools from another process or service. The external server does not need to know about DeerFlow's UI or chat messages. DeerFlow's adapter provides the model-facing schema and execution bridge.
+
+<Mermaid
+  eyebrow="Extension contract / Tool chain"
+  title="Instructions are not permissions"
+  description="Skills influence model behavior; tool schemas enable selection; execution adapters and policy make the final authorization decision."
+  minWidth={1060}
+  legend={[{"label":"Capability definition","tone":"blue"},{"label":"LLM instruction","tone":"violet","dashed":true},{"label":"Controlled execution","tone":"amber"}]}
+  chart={`%%{init: {"theme":"base","themeVariables":{"background":"#102032","primaryColor":"#183449","primaryTextColor":"#eef6fc","primaryBorderColor":"#638ba2","lineColor":"#7e9cac","fontFamily":"Inter, Arial, sans-serif","clusterBkg":"#111f2f","clusterBorder":"#668397","secondaryColor":"#1c3a4f","tertiaryColor":"#24384b"},"flowchart":{"curve":"linear","nodeSpacing":36,"rankSpacing":52,"padding":18}}}%%
+flowchart LR
+  subgraph AUTHOR["CONFIGURATION / DISCOVERY"]
+    direction TB
+    SKILL["Skill package<br/>Instructions + resources"]:::logic
+    TOOL["Tool catalog<br/>Names + argument schemas"]:::runtime
+    MCP["MCP connector<br/>Remote tools and metadata"]:::exec
+  end
+  subgraph REQUEST["MODEL INPUT / SELECTION"]
+    direction TB
+    CHOICE["Eligible tool schemas<br/>Scoped by active agent"]:::runtime
+    MODEL(["LLM selects next action"]):::logic
+  end
+  subgraph ACTION["HOST-ENFORCED EXECUTION"]
+    direction TB
+    GUARD{"Authorization + limits"}:::gate
+    BACKEND["Sandbox or integration<br/>Executes typed operation"]:::exec
+    RESULT["Structured observation<br/>ToolMessage / error"]:::data
+  end
+  SKILL -.->|"Guides use"| MODEL
+  TOOL --> CHOICE
+  MCP --> CHOICE
+  CHOICE --> MODEL --> GUARD
+  GUARD -->|"Allowed"| BACKEND --> RESULT
+  GUARD -->|"Denied"| RESULT
+  
+classDef edge fill:#214957,stroke:#37b0bb,color:#f4fbff,stroke-width:1.8px
+classDef runtime fill:#213650,stroke:#74a1da,color:#f4fbff,stroke-width:1.8px
+classDef logic fill:#352d51,stroke:#a897e0,color:#f8f7ff,stroke-width:1.8px
+classDef exec fill:#49382b,stroke:#d6a05d,color:#fff6e8,stroke-width:1.8px
+classDef data fill:#203d36,stroke:#61b78a,color:#effdf4,stroke-width:1.8px
+classDef gate fill:#483445,stroke:#d78eac,color:#fff2f7,stroke-width:1.8px
+classDef quiet fill:#203040,stroke:#829cae,color:#e9f5fc,stroke-width:1.4px
+  style AUTHOR fill:#1e293a,stroke:#7f92b0,stroke-width:1.6px,color:#eef6ff
+  style REQUEST fill:#1c263c,stroke:#9786ca,stroke-width:1.6px,color:#f1eafe
+  style ACTION fill:#302b26,stroke:#d4a15e,stroke-width:1.6px,color:#fff6e9`}
+  caption="Conceptual extension lifecycle. Deferred MCP schema promotion reduces model-context size, but execution permission must still be checked by the host."
+/>
 
 ### Keeping large tool catalogs affordable
 
@@ -236,25 +344,36 @@ Source: [tools registry](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca
 Imagine a request to compare three candidate libraries. The lead agent can investigate one library itself or delegate independent investigations in parallel. The choice is a cost/latency trade-off, not an automatic requirement.
 
 <Mermaid
-  chart={`sequenceDiagram
-    autonumber
-    participant Lead as Lead Agent
-    participant Tool as task tool
-    participant Ctrl as Subagent Executor
-    participant Child as Subagent
-    participant External as Tools / Sandbox
-    Lead->>Tool: task(agent_type, scoped instruction)
-    Tool->>Ctrl: Validate policy and capacity
-    Ctrl->>Child: Create isolated execution context
-    loop Until finished or bounded stop
-      Child->>External: Authorized tool call
-      External-->>Child: Observation
+  eyebrow="04 / Multi-agent delegation"
+  title="A child agent is a bounded execution, not another chat room"
+  description="A delegated task has a scope, an execution identity, capacity limits, and a result that returns to the lead agent."
+  minWidth={1110}
+  legend={[{"label":"Parent","tone":"blue"},{"label":"Child execution","tone":"violet"},{"label":"Policy / sandbox","tone":"amber"}]}
+  chart={`%%{init: {"theme":"base","themeVariables":{"actorBkg":"#1b3548","actorBorder":"#63a4b1","actorTextColor":"#f1f8fc","actorLineColor":"#7397a9","signalColor":"#67909f","signalTextColor":"#1e4050","noteBkgColor":"#e9f3f5","noteTextColor":"#183849","noteBorderColor":"#9dc2c9","loopTextColor":"#173b4a","labelBoxBkgColor":"#e9f3f5","labelTextColor":"#173b4a","sequenceNumberColor":"#edf7fc","fontFamily":"Inter, Arial, sans-serif"}}%%
+sequenceDiagram
+  autonumber
+  participant L as Lead Agent
+  participant T as task tool
+  participant P as Subagent Runtime
+  participant C as Child Agent
+  participant X as Tools / Sandbox
+  L->>T: task(agent_type, scoped goal)
+  T->>P: Validate allowed_subagents and limits
+  alt Scope authorized and capacity available
+    P->>C: Start child with isolated state and context
+    loop Within turn / time / token limits
+      C->>X: Bounded authorized operation
+      X-->>C: Observation
     end
-    Child-->>Ctrl: Result + execution status
-    Ctrl-->>Tool: Correlated task result
-    Tool-->>Lead: ToolMessage / task event
-    Lead->>Lead: Synthesize findings`}
-  caption="Ordinary delegation, simplified. DeerFlow also has more advanced durable batch-task paths; this diagram does not represent every scheduling mode."
+    C-->>P: Completion + result + usage
+    P-->>T: Correlated execution_id / tool_call_id
+    T-->>L: ToolMessage + lifecycle event
+    L->>L: Integrate evidence into answer
+  else Denied, timed out or capacity unavailable
+    P-->>T: Explicit failure outcome
+    T-->>L: ToolMessage(error)
+  end`}
+  caption="Simplified synchronous delegation. Durable batch tasks, cancellations, and nested subagent policy introduce additional lifecycle paths."
 />
 
 Key implementation details worth studying:
@@ -312,6 +431,34 @@ A common mistake is to store every piece of agent data in one growing chat histo
   ]}
 />
 
+<Mermaid
+  eyebrow="State and persistence / Ownership"
+  title="Four kinds of persistence solve different problems"
+  description="Graph checkpoints, long-term memory, context summaries and filesystem artifacts should not be conflated into one chat history."
+  minWidth={940}
+  legend={[{"label":"Graph state","tone":"blue"},{"label":"Memory/checkpoint","tone":"green"},{"label":"Workspace files","tone":"amber"}]}
+  chart={`%%{init: {"theme":"base","themeVariables":{"background":"#102032","primaryColor":"#183449","primaryTextColor":"#eef6fc","primaryBorderColor":"#638ba2","lineColor":"#7e9cac","fontFamily":"Inter, Arial, sans-serif","clusterBkg":"#111f2f","clusterBorder":"#668397","secondaryColor":"#1c3a4f","tertiaryColor":"#24384b"},"flowchart":{"curve":"linear","nodeSpacing":36,"rankSpacing":52,"padding":18}}}%%
+flowchart TB
+  TURN["New input + active thread"]:::edge --> STATE["ThreadState<br/>messages · todos · artifacts"]:::runtime
+  STATE --> GRAPH["LangGraph agent<br/>state updates + reducers"]:::logic
+  GRAPH --> CP["Checkpointer<br/>full or delta state"]:::data
+  CP -->|"Resume / recover"| STATE
+  GRAPH --> COMPACT["Context summarization<br/>compress model input"]:::runtime
+  COMPACT -->|"Reduced context"| GRAPH
+  GRAPH --> MEMORY["Memory backend<br/>selected durable facts"]:::data
+  MEMORY -.->|"Future threads"| STATE
+  GRAPH --> FILES["Workspace / sandbox files<br/>large outputs & inputs"]:::exec
+  
+classDef edge fill:#214957,stroke:#37b0bb,color:#f4fbff,stroke-width:1.8px
+classDef runtime fill:#213650,stroke:#74a1da,color:#f4fbff,stroke-width:1.8px
+classDef logic fill:#352d51,stroke:#a897e0,color:#f8f7ff,stroke-width:1.8px
+classDef exec fill:#49382b,stroke:#d6a05d,color:#fff6e8,stroke-width:1.8px
+classDef data fill:#203d36,stroke:#61b78a,color:#effdf4,stroke-width:1.8px
+classDef gate fill:#483445,stroke:#d78eac,color:#fff2f7,stroke-width:1.8px
+classDef quiet fill:#203040,stroke:#829cae,color:#e9f5fc,stroke-width:1.4px`}
+  caption="Logical persistence relationships. Which backends persist files, facts and checkpoint data depends on configuration."
+/>
+
 The [`ThreadState` implementation](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/packages/harness/deerflow/agents/thread_state.py) extends LangGraph's `AgentState` with additional fields. It uses **reducers** to merge certain updates safely. This is not the same as adding arbitrary entries to a Python dictionary: for concurrent tool or subagent updates, merge semantics matter.
 
 For longer sessions, summarization reduces context pressure. Long-term memory has a separate backend-neutral manager and tools such as `memory_search`, `memory_get` and `memory_add`. Its default local DeerMem backend stores a user-level summary and individual agent-scoped fact files, with optional alternative backends. The memory system has different passive-middleware and explicit-tool operating modes.
@@ -337,14 +484,46 @@ The worker does not need a direct network connection to the browser. The **Gatew
 In the standard web path, the frontend uses `@langchain/langgraph-sdk` to open a thread, submit input, and subscribe to Server-Sent Events (SSE). The Gateway's `StreamBridge` adapts runtime events to the HTTP stream. The frontend reduces streamed messages, state snapshots, task progress and artifact changes into its thread UI.
 
 <Mermaid
-  chart={`flowchart LR
-    Worker["Agent graph"] -->|"messages / values / custom"| Bridge["StreamBridge"]
-    Bridge -->|SSE| Client["LangGraph SDK"]
-    Client --> Reducer["Thread state reducer"]
-    Reducer --> Chat["Chat tokens"]
-    Reducer --> Tasks["Todos / child progress"]
-    Reducer --> Art["Artifacts / files"]`}
-  caption="The browser receives projections of the run through the Gateway; it does not directly invoke the Python tool executor."
+  eyebrow="05 / UI and data flow"
+  title="Workers publish events; the Gateway serves the browser"
+  description="The UI observes authoritative run state via SSE. It never connects directly to a Python sandbox or child worker."
+  minWidth={980}
+  legend={[{"label":"State snapshot","tone":"green"},{"label":"Model output","tone":"violet"},{"label":"Runtime events","tone":"amber"},{"label":"Client stream","tone":"teal"}]}
+  chart={`%%{init: {"theme":"base","themeVariables":{"background":"#102032","primaryColor":"#183449","primaryTextColor":"#eef6fc","primaryBorderColor":"#638ba2","lineColor":"#7e9cac","fontFamily":"Inter, Arial, sans-serif","clusterBkg":"#111f2f","clusterBorder":"#668397","secondaryColor":"#1c3a4f","tertiaryColor":"#24384b"},"flowchart":{"curve":"linear","nodeSpacing":36,"rankSpacing":52,"padding":18}}}%%
+flowchart LR
+  subgraph AGENT["01 / LANGGRAPH RUNTIME"]
+    direction TB
+    V["values<br/>State snapshots"]:::data
+    MSG["messages<br/>Token/message deltas"]:::logic
+    EVT["custom<br/>Task & artifact events"]:::exec
+  end
+  subgraph GATEWAY["02 / API STREAM BOUNDARY"]
+    direction TB
+    BRIDGE["RunManager / StreamBridge<br/>Normalize & publish"]:::runtime
+    HTTP["Gateway SSE endpoint<br/>LangGraph-compatible stream"]:::edge
+  end
+  subgraph FRONTEND["03 / NEXT.JS CLIENT"]
+    direction TB
+    SDK["LangGraph SDK<br/>Subscribe to thread/run"]:::edge
+    STORE["Thread state projection<br/>TanStack Query / reducers"]:::data
+    UI["Chat, todos, child tasks<br/>artifacts, completion"]:::quiet
+  end
+  V --> BRIDGE
+  MSG --> BRIDGE
+  EVT --> BRIDGE
+  BRIDGE --> HTTP -->|"SSE"| SDK --> STORE --> UI
+  
+classDef edge fill:#214957,stroke:#37b0bb,color:#f4fbff,stroke-width:1.8px
+classDef runtime fill:#213650,stroke:#74a1da,color:#f4fbff,stroke-width:1.8px
+classDef logic fill:#352d51,stroke:#a897e0,color:#f8f7ff,stroke-width:1.8px
+classDef exec fill:#49382b,stroke:#d6a05d,color:#fff6e8,stroke-width:1.8px
+classDef data fill:#203d36,stroke:#61b78a,color:#effdf4,stroke-width:1.8px
+classDef gate fill:#483445,stroke:#d78eac,color:#fff2f7,stroke-width:1.8px
+classDef quiet fill:#203040,stroke:#829cae,color:#e9f5fc,stroke-width:1.4px
+  style AGENT fill:#1c263c,stroke:#9786ca,stroke-width:2px,color:#f1eafe
+  style GATEWAY fill:#14273a,stroke:#60adba,stroke-width:2px,color:#eaf8fc
+  style FRONTEND fill:#173039,stroke:#64ae8d,stroke-width:2px,color:#ebfff1`}
+  caption="Three LangGraph stream modes are distinct signals. The frontend combines them into a consistent thread projection, including delegated task status."
 />
 
 The implementation distinguishes several stream modes:
@@ -384,21 +563,54 @@ For external side effects—sending email, updating a record, executing an HTTP 
 DeerFlow shows **how to build a powerful execution harness**. A configurable multi-tenant platform needs another layer: managing who defines agents, which version is published, what data they may reach, and whether a particular run is allowed.
 
 <Mermaid
-  chart={`flowchart TB
-    Admin["Admin / Agent Builder UI"] --> Definition["Versioned Agent Definition<br/>model + instructions + skills + tools"]
-    Definition --> Compiler["Compiler / Policy Validator"]
-    User["User / API / Event / Schedule"] --> Router["Eligibility + Agent Router"]
-    Router --> Run["Run Manager<br/>admission + budget + audit"]
-    Compiler --> Run
-    Run --> Harness["DeerFlow-like agent harness<br/>LLM + middleware + state"]
-    Harness --> Adapters["Authorized tool adapters<br/>MCP / HTTP / workflow / sandbox"]
-    Adapters --> Apps["External systems and data"]
-    Harness --> Events["Event stream + checkpoints"]
-    Events --> UI["Chat / Tasks / Approval UI"]
-    Policy["Identity + tenant / workspace RBAC"] --> Compiler
-    Policy --> Run
-    Policy --> Adapters`}
-  caption="Proposed platform architecture inspired by DeerFlow; these extra platform services are recommendations, not claims about DeerFlow's internal topology."
+  eyebrow="06 / Proposed reference architecture"
+  title="From agent harness to governed agent platform"
+  description="Control plane defines an approved agent; runtime owns a durable run; integration plane enforces external side effects."
+  minWidth={1120}
+  legend={[{"label":"Platform control plane","tone":"teal"},{"label":"Agent runtime","tone":"violet"},{"label":"Adapter / integration","tone":"amber"},{"label":"State & audit","tone":"green"}]}
+  chart={`%%{init: {"theme":"base","themeVariables":{"background":"#102032","primaryColor":"#183449","primaryTextColor":"#eef6fc","primaryBorderColor":"#638ba2","lineColor":"#7e9cac","fontFamily":"Inter, Arial, sans-serif","clusterBkg":"#111f2f","clusterBorder":"#668397","secondaryColor":"#1c3a4f","tertiaryColor":"#24384b"},"flowchart":{"curve":"linear","nodeSpacing":36,"rankSpacing":52,"padding":18}}}%%
+flowchart TB
+  BUILDER["Agent Builder UI"]:::edge --> DEFINITIONS["Versioned agent definitions<br/>model, skills, tools, policies"]:::edge
+  USER["User / schedule / webhook"]:::edge --> ROUTER["Auth + eligibility filter<br/>rules / optional intent router"]:::runtime
+  subgraph CONTROL["CONTROL PLANE · PROPOSED"]
+    direction LR
+    DEFINITIONS
+    COMPILER["Manifest compiler<br/>Validate + freeze versions"]:::runtime
+    POLICY["Identity / permissions<br/>Budget / revision policy"]:::runtime
+  end
+  DEFINITIONS --> COMPILER
+  POLICY --> COMPILER
+  subgraph RUNTIME["RUNTIME PLANE · PROPOSED"]
+    direction LR
+    ROUTER
+    ADMIT["Run Manager<br/>admission, run ID, ledger"]:::runtime
+    HARNESS["Agent harness<br/>model + graph + middleware"]:::logic
+    EVENTS["Event stream + checkpoints"]:::data
+  end
+  ROUTER --> ADMIT
+  COMPILER --> ADMIT
+  ADMIT --> HARNESS
+  HARNESS --> EVENTS
+  subgraph CONNECT["INTEGRATION PLANE · PROPOSED"]
+    direction LR
+    GATE["Tool policy gateway<br/>scope / approval"]:::exec
+    ADAPTERS["Reviewed adapters<br/>MCP, HTTP, KB, workflow"]:::exec
+    SOURCES["External systems"]:::quiet
+  end
+  HARNESS --> GATE --> ADAPTERS --> SOURCES
+  EVENTS --> VIEW["Run / approval / audit UI"]:::edge
+  
+classDef edge fill:#214957,stroke:#37b0bb,color:#f4fbff,stroke-width:1.8px
+classDef runtime fill:#213650,stroke:#74a1da,color:#f4fbff,stroke-width:1.8px
+classDef logic fill:#352d51,stroke:#a897e0,color:#f8f7ff,stroke-width:1.8px
+classDef exec fill:#49382b,stroke:#d6a05d,color:#fff6e8,stroke-width:1.8px
+classDef data fill:#203d36,stroke:#61b78a,color:#effdf4,stroke-width:1.8px
+classDef gate fill:#483445,stroke:#d78eac,color:#fff2f7,stroke-width:1.8px
+classDef quiet fill:#203040,stroke:#829cae,color:#e9f5fc,stroke-width:1.4px
+  style CONTROL fill:#15343a,stroke:#59afae,stroke-width:2px,color:#eaffff
+  style RUNTIME fill:#1e2c44,stroke:#8a9bd6,stroke-width:2px,color:#f3f4ff
+  style CONNECT fill:#302b26,stroke:#d4a15e,stroke-width:2px,color:#fff6e9`}
+  caption="Design proposal, not a claimed DeerFlow deployment. These are logical responsibility boundaries and may begin as modules rather than separate microservices."
 />
 
 I would split responsibilities into three layers:
