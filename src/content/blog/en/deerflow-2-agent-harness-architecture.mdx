@@ -20,6 +20,7 @@ import DataTable from '../../../components/mdx/DataTable.astro';
 import Mermaid from '../../../components/mdx/Mermaid.astro';
 import DiagramEmbed from '../../../components/mdx/DiagramEmbed.astro';
 import DeerFlowSystemInfographic from '../../../components/mdx/DeerFlowSystemInfographic.astro';
+import DeerFlowExecutionTrace from '../../../components/mdx/DeerFlowExecutionTrace.astro';
 
 **How do you actually build an AI agent?** Not a prompt that calls a search tool once, but an agent that plans a multi-hour task, explores a codebase, delegates independent subtasks, executes commands safely, remembers useful facts, and streams its work to a browser.
 
@@ -66,6 +67,10 @@ Take a concrete request:
 > “Investigate why this web service became slow, inspect the recent changes, and write a short report.”
 
 That instruction is **not** hardcoded to run search, then shell, then a summary. Instead, the agent sees a set of available tool schemas, chooses the next action, receives its result, and repeats until it can answer or hits a limit.
+
+<DeerFlowExecutionTrace />
+
+**How to read the order:** steps **01–04** establish the request and agent execution context. Step **05** is the model decision point; steps **06–07** run only when the model selects a tool and can loop back to **05** multiple times. Step **08** illustrates the user-facing event stream, which begins **during** execution and ends with a terminal status—so the numbering is a guided walkthrough, *not* a claim that streaming waits for all tools to finish. The result depends on the model's next action, authorization, tool outcomes, and stopping limits.
 
 <Mermaid
   eyebrow="02 / Request lifecycle"
