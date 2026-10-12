@@ -16,6 +16,7 @@ const files = {
   proxy: 'docker/nginx/nginx.conf',
   front: 'frontend/src/core/api/api-client.ts',
   route: app + 'routers/thread_runs.py',
+  threads: app + 'routers/threads.py',
   admission: app + 'services.py',
   request: app + 'run_models.py',
   run: backend + 'runtime/runs/manager.py',
@@ -99,7 +100,11 @@ const scenarios = [
       E('edge','gateway','HTTP','Forward join request','Nginx rewrites the join route.','Gateway checks thread ownership, run state and whether its stream is reachable.','A process-local stream cannot automatically be observed from a different Gateway worker.','Run metadata may be checked in SQL.',files.route),
       E('gateway','stream','BRIDGE','subscribe(last_event_id)','The target stream exists and the client requests replay.','The bridge returns retained events from the cursor or emits a gap if retained history is insufficient.','Bounded stream retention makes replay best-effort, not complete durable history.','Memory or Redis Streams replay buffer.',files.stream),
       E('gateway','fe','SSE','Replay or gap signal','Gateway streams retained events, or detects a missing range.','A gap frame identifies stream_replay_gap and instructs the client to reload durable state.','Silently skipping lost events would give a misleading incomplete conversation.','SSE gap != missing SQL journal/checkpoint.',files.admission),
-      E('fe','checkpoint','CHECKPOINT','Reload durable state¹','If replay is unavailable.','The frontend requests server APIs that read durable thread/checkpoint history; the diagram abbreviates the FE → Gateway → Checkpointer round-trip.','Refresh from an authoritative record instead of fabricating missing events.','¹ Conceptual end-to-end read shown as a diagonal shortcut.',files.front),
+      E('fe','edge','HTTPS','GET /threads/{id}/state','The replay gap indicates durable refresh is required.','Frontend requests a fresh thread state through /api/langgraph/threads/{thread_id}/state.','Never treat a missing retained SSE frame as proof that no checkpoint exists.','GET request; separate from the existing run.',files.front),
+      E('edge','gateway','HTTP','Forward state GET','Nginx receives the thread-state URL.','The proxy rewrites the prefix and sends the GET to FastAPI.','Client access still passes through server-side authorization and routing.','No direct browser-to-database access.',files.proxy),
+      E('gateway','checkpoint','CHECKPOINT','Read durable thread state','The thread-state handler evaluates the request.','The Gateway obtains the persisted graph state using the configured checkpointer.','Durable graph history is authoritative after a replay gap.','LangGraph checkpoint/store.',files.threads),
+      E('checkpoint','gateway','CHECKPOINT','Return saved state','Checkpoint read succeeds.','The checkpoint provider returns current values to the Gateway.','Reconciliation uses saved state rather than inventing lost live events.','State snapshot, not an SSE event replay.',files.checkpoint),
+      E('gateway','fe','HTTP','Render refreshed state','The HTTP request finishes.','The client updates the React thread state from the durable response.','This is recovery by reload, not re-executing an external tool.','Thread UI state refreshed.',files.front),
     ],
   },
   {
@@ -338,6 +343,16 @@ const allSteps = scenarios.flatMap(scenario=>scenario.steps.map((step,i)=>({...s
       });
       detailPanels.forEach(panel => { panel.hidden = panel.dataset.drxDetail !== scenario+'-'+selected; });
       count.textContent = String(selected+1).padStart(2,'0')+' / '+String(arrows.length).padStart(2,'0');
+      // Keep the currently selected protocol hop visible inside the diagram
+      // scroller. Never scroll the entire blog horizontally on mobile.
+      const scroll = view.querySelector<HTMLElement>('.drx-scroll');
+      const wire = arrows[selected]?.querySelector<HTMLElement>('.drx-wire');
+      if (scroll && wire) {
+        const box = wire.getBoundingClientRect();
+        const frame = scroll.getBoundingClientRect();
+        const center = (box.left + box.width / 2) - frame.left + scroll.scrollLeft;
+        scroll.scrollLeft = Math.max(0, center - scroll.clientWidth / 2);
+      }
       prev.disabled = selected === 0;
       next.disabled = selected === arrows.length - 1;
     }
