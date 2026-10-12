@@ -223,7 +223,10 @@ const canvasMinWidth = Number.isFinite(minWidth) ? Math.min(1600, Math.max(0, mi
             fit.addEventListener('click', () => resize(1));
             // Initialized after SVG is mounted; ResizeObserver keeps fit mode
             // correct when mobile rotates or the surrounding column resizes.
-            new ResizeObserver(() => resize(scale)).observe(viewport);
+            // The viewport's scrollbar changes geometry during zoom. Observing
+            // that same element causes out-of-order fit/zoom recalculations.
+            // Only genuine window/orientation resizes should refit the canvas.
+            window.addEventListener('resize', () => resize(scale), { passive: true });
             resize(1);
 
           } catch (error) {
