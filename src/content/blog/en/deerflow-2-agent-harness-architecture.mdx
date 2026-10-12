@@ -33,6 +33,12 @@ This article examines **DeerFlow 2.0**, not the older 1.x Deep Research implemen
   **Mental model:** DeerFlow is a *harness for agents*, not a magical model and not simply a predefined LangGraph flow. It assembles a language model, tools, instructions, state schema, and middleware into a runnable agent, then surrounds it with a Gateway, sandbox, persistence, and UI.
 </Callout>
 
+## Start with the visual story
+
+New to this architecture? **[Follow the eight-chapter interactive request journey](/en/labs/deerflow-request-story/)** first. It takes one user message through HTTP routing, run admission, SSE delivery, tool execution, state, reconnect, and recovery with progressively revealed illustrations. Every chapter has an optional source-linked inspector.
+
+Prefer implementation-level detail? Continue below for the complete system diagrams and the interactive request explorer.
+
 ## <Label color="teal">01</Label> Architecture at a glance
 
 <DeerFlowSystemInfographic />
