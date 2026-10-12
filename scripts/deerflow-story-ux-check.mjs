@@ -36,7 +36,7 @@ try {
       const root = page.locator('[data-story-root]');
       assert.equal(await root.count(),1,'One and only one storytelling UI');
       assert.equal(await page.locator('meta[name="robots"]').getAttribute('content'),'noindex,follow','Prototype must not be indexed');
-      assert.equal(await root.locator('[data-scene-tab]').count(),3,'Only three reader-first scenes');
+      assert.equal(await root.locator('[data-scene-tab]').count(),8,'Eight progressive chapters');
       assert.equal(await root.locator('[data-story-panel]:visible').count(),1,'Only one scene narration is visible');
       assert.equal(await root.locator('[data-scene-tab="0"]').getAttribute('aria-pressed'),'true');
       assert.equal(await root.locator('[data-prev]').isDisabled(),true);
@@ -64,11 +64,19 @@ try {
         assert(mobileSse.includes('FastAPI Gateway'), 'Mobile SSE path must include the event-subscribing Gateway');
         assert(mobileSse.includes('SSE via Nginx'), 'Mobile SSE path must make the proxy/HTTP response explicit');
       }
-      assert.equal(await root.locator('[data-next]').isDisabled(),true,'Last scene has disabled Next');
+      assert.equal(await root.locator('[data-next]').isDisabled(),false,'SSE is no longer the last chapter');
       assert.equal(await root.locator('[data-progress]').getAttribute('aria-valuenow'),'3');
       assert.equal(await root.locator('.node.on').count(),5,'SSE scene highlights relevant components');
       assert.equal(await root.locator('.wire.on').count(),4,'SSE scene displays model/publish/subscribe/HTTP links');
       if (width === 390 || width === 1440) await root.screenshot({path:out+'/story-stream-'+theme+'-'+width+'.png', animations:'disabled'});
+      for (const i of [3,4,5,6,7]) {
+        await root.locator('[data-scene-tab="'+i+'"]').click();
+        assert.equal(await root.locator('[data-story-panel="'+i+'"]').isVisible(),true,'Additional chapter '+(i+1)+' renders');
+        assert.equal(await root.locator('[data-progress]').getAttribute('aria-valuenow'),String(i+1),'Progress tracks extra chapters');
+        assert.equal(await root.locator('[data-inspector]:visible').getAttribute('open'),null,'New chapter inspector remains optional');
+        if (width === 390 || width === 1440) await root.screenshot({path:out+'/story-chapter-'+(i+1)+'-'+theme+'-'+width+'.png',animations:'disabled'});
+      }
+      assert.equal(await root.locator('[data-next]').isDisabled(),true,'Chapter 8 ends the story');
       if (width === 1440) {
         await root.locator('[data-play]').click();
         assert.equal(await root.locator('[data-play]').getAttribute('aria-pressed'),'true','Autoplay is opt-in');
@@ -108,7 +116,7 @@ try {
       await context.close();
     }
   }
-  console.log('Guided story UX passed: 3 scenes, keyboard-safe controls, code details, 320–1440px, dark/light.');
+  console.log('Guided story UX passed: 8 scenes, keyboard-safe controls, code details, 320–1440px, dark/light.');
 } catch (error) {
   console.error('FAIL: DeerFlow guided story UX', error);
   process.exitCode = 1;
