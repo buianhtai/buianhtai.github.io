@@ -51,7 +51,7 @@ async function inspect(width, theme) {
   await page.goto(host + path, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() =>
     document.querySelectorAll('figure.mermaid-figure--editorial pre.mermaid svg').length === 8,
-    { timeout: 50_000 },
+    null, { timeout: 50_000 },
   );
   const measurements = await page.evaluate(() => {
     const charts = [...document.querySelectorAll('figure.mermaid-figure--editorial')];
