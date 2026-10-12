@@ -95,7 +95,7 @@ function toD2(scene, dark = false) {
     '# Do not edit this generated copy. Modify the semantic JSON scene instead.',
     'direction: right',
     'style: {',
-    '  fill: ' + d2Quote(dark ? '#0b1726' : '#f8fafc')
+    '  fill: ' + d2Quote(dark ? '#0b1726' : '#f8fafc'),
     '}',
     '',
   ];
