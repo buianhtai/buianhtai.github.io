@@ -589,6 +589,137 @@ These source locations are linked below at the **reviewed commit**, so future re
   - [Runtime and checkpoint invariants](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/packages/harness/deerflow/runtime/AGENTS.md)
 </Card>
 
+
+## <Label color="teal">13</Label> Under the hood: source tree, database schema, APIs and protocols
+
+The diagrams are a **logical map**. This section follows the actual Python and TypeScript contracts reviewed at commit [`1f15e0b`](https://github.com/bytedance/deer-flow/tree/1f15e0b43ca58b9601514f9f5c408fb032022833). Paths below are source references, not deployment paths. In particular, **a Python module or a boundary box is not automatically an independently deployed service**.
+
+### 13.1 Where the implementation lives
+
+| Layer | Source location | Owns |
+| --- | --- | --- |
+| Gateway application | [`app.py`](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/app/gateway/app.py) and [`thread_runs.py`](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/app/gateway/routers/thread_runs.py) | FastAPI startup, authentication/routers, LangGraph-compatible run endpoints |
+| Admission and wire protocol | [`services.py`](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/app/gateway/services.py), [`run_models.py`](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/app/gateway/run_models.py) | Create/admit runs, Pydantic validation, SSE formatting and consumer |
+| Agent assembly | [`lead_agent/agent.py`](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/packages/harness/deerflow/agents/lead_agent/agent.py) | Construct model, tools, instructions, middleware, LangGraph agent |
+| Async execution | [`runtime/runs/worker.py`](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/packages/harness/deerflow/runtime/runs/worker.py) | Run the compiled graph and stream its graph events |
+| Checkpoints, events and run metadata | [`checkpointer/provider.py`](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/packages/harness/deerflow/runtime/checkpointer/provider.py), [`events/store/db.py`](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/packages/harness/deerflow/runtime/events/store/db.py), [`run/model.py`](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/packages/harness/deerflow/persistence/run/model.py) | Resumable graph state, durable journal, lifecycle and usage statistics |
+| Tool process boundary | [`sandbox_provider.py`](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/packages/harness/deerflow/sandbox/sandbox_provider.py), [`sandbox.py`](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/packages/harness/deerflow/sandbox/sandbox.py) | Acquire/release isolated execution environments and invoke commands/files |
+| External extensions | [`plugins.py`](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/packages/extension-api/deerflow_extension_api/plugins.py), [`contracts.py`](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/packages/extension-api/deerflow_extension_api/contracts.py) | Plugin/agent extension contracts, typed model tools, lifecycle hooks |
+| Frontend adapter | [`api-client.ts`](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/frontend/src/core/api/api-client.ts), [`stream-state.ts`](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/frontend/src/core/threads/stream-state.ts) | LangGraph JS SDK, reconnection, streaming state rendered by React |
+
+The core dependency rule is **`app → deerflow harness`**. The harness is reusable Python code, while the Gateway owns HTTP and application concerns. A smaller `deerflow-extension-api` package gives plugins interfaces without making them depend on the entire harness.
+
+### 13.2 What is stored in the database—and what is not?
+
+The project has a **unified database selector** in [`DatabaseConfig`](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/packages/harness/deerflow/config/database_config.py): `memory`, `sqlite`, or `postgres`. SQLite places application tables and LangGraph checkpoint/store data in the same `{sqlite_dir}/deerflow.db` file, using WAL. PostgreSQL connects to one configured database, but the application ORM and LangGraph integrations own different connection pools. The in-memory option is not durable.
+
+| Data / authority | Storage and code | Important fields or contract |
+| --- | --- | --- |
+| **Run lifecycle** | SQLAlchemy `runs` table — [RunRow](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/packages/harness/deerflow/persistence/run/model.py) | `run_id`, `thread_id`, `assistant_id`, `status`, `model_name`, `metadata_json`, `origin_kind` |
+| **Reliability and ownership** | Same `runs` row | `idempotency_key`, `owner_worker_id`, `lease_expires_at`, cancellation request and token-usage columns |
+| **Durable run journal** | SQL `run_events` — [RunEventRow](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/packages/harness/deerflow/persistence/models/run_event.py) | `thread_id`, `run_id`, `event_type`, `category`, `content`, `seq`; unique position per thread |
+| **Graph state** | LangGraph-managed checkpoint tables, accessed via [checkpointer provider](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/packages/harness/deerflow/runtime/checkpointer/provider.py) | Thread, message state and intermediate graph progress—not a replacement for the run journal |
+| **Conversation / user metadata** | DeerFlow application persistence layer | Thread metadata, ownership, user/agent references and related application records |
+| **Custom agent definitions** | Per-user `config.yaml` + `SOUL.md` on disk by default; optional SQL `agents` rows — [AgentRow](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/packages/harness/deerflow/persistence/agents/model.py) | Unique user/name; config JSON document; distinct from conversation/checkpoint data |
+| **Files, uploaded inputs, artifacts** | Per-thread user-data workspace and selected sandbox/blob storage | Files are **not** automatically copied into SQL run rows or embedded wholesale in checkpoints |
+| **Agent memory** | Configured memory backend | Long-lived facts and recall are separate from conversation graph state |
+| **Live SSE buffer** | In-process bridge or optional Redis Streams — [StreamBridge](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/packages/harness/deerflow/runtime/stream_bridge/base.py), [RedisStreamBridge](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/packages/harness/deerflow/runtime/stream_bridge/redis.py) | Delivery, replay cursor and heartbeats—not the authority for durable run history |
+
+<Callout color="amber">
+  **Important separation:** `runs` describes *whether* an execution is pending/running/finished. `run_events` describes *what happened*. LangGraph checkpoints describe *where graph state can resume*. Redis/memory streams deliver *what viewers see now*. File/blob storage keeps *actual artifacts*. These are not interchangeable, and a missing live event does not necessarily mean the underlying run or checkpoint disappeared.
+</Callout>
+
+Schema evolution is also implemented, not hand-waved: [`bootstrap_schema`](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/packages/harness/deerflow/persistence/bootstrap.py) chooses a fresh-database baseline path or Alembic upgrade path, with versioned migrations under [`migrations/versions/0001_baseline.py`](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/packages/harness/deerflow/persistence/migrations/versions/0001_baseline.py). LangGraph owns its **own** checkpoint-table migrations; the DeerFlow Alembic baseline explicitly excludes them. The SQL event store includes sequence assignment and concurrency safeguards rather than relying on a list in one process.
+
+### 13.3 The actual HTTP and streaming contracts
+
+The browser uses the **LangGraph JS SDK**, not a custom invented WebSocket protocol. Nginx maps the public `/api/langgraph/*` prefix to the Gateway's native `/api/*` endpoints. The main run paths include:
+
+| HTTP method / path | Role |
+| --- | --- |
+| `POST /api/langgraph/threads/{thread_id}/runs` | Create a run; return run metadata immediately |
+| `POST /api/langgraph/threads/{thread_id}/runs/stream` | Create and subscribe to SSE in one request |
+| `POST /api/langgraph/threads/{thread_id}/runs/wait` | Create and wait for an outcome |
+| `POST /api/langgraph/runs/stream` | Stream a run without requiring an existing thread; Gateway can create one |
+| `GET /api/models`, `/api/agents`, `/api/mcp`, `/api/skills` | Application capability/configuration endpoints under the native `/api/*` route family |
+
+[`RunCreateRequest`](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/app/gateway/run_models.py) is the Pydantic boundary contract. The following request is a **minimal illustrative wire example**, not a substitute for the full schema:
+
+```http
+POST /api/langgraph/threads/{thread_id}/runs/stream
+Content-Type: application/json
+
+{
+  "assistant_id": "lead_agent",
+  "input": { "messages": [{ "role": "user", "content": "Investigate service latency" }] },
+  "stream_mode": ["messages", "updates"],
+  "on_disconnect": "continue",
+  "multitask_strategy": "reject"
+}
+```
+
+The real request schema also validates `command`, `config`, `context`, `checkpoint_id`, `stream_subgraphs` and other fields. **Compatibility is deliberately partial**: several LangGraph Platform options are only accepted as null/default placeholders, rather than being implemented. Inspect the Pydantic model before assuming full LangGraph Platform equivalence.
+
+A streaming response uses `Content-Type: text/event-stream`, a canonical run `Content-Location`, and frames formatted by [`format_sse`](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/app/gateway/services.py):
+
+```text
+event: <LangGraph-compatible-event-name>
+data: <JSON payload>
+id: <replay-cursor>
+
+```
+
+The bracketed tokens above are **placeholders**, not literal DeerFlow payloads. [`StreamBridge`](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/packages/harness/deerflow/runtime/stream_bridge/base.py) defines `publish()`, `subscribe(last_event_id=...)`, and `publish_end()`. It supports heartbeats and an explicit replay-gap result when the requested cursor is no longer retained. For multi-worker topologies, the Redis implementation uses Redis Streams; an in-process bridge cannot serve another worker's active stream. On the browser side, [`api-client.ts`](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/frontend/src/core/api/api-client.ts) handles rejoining/reload behavior and stream-gap recovery.
+
+### 13.4 Python interfaces, extension specifications and external protocols
+
+| Contract | Concrete implementation detail | When it is used |
+| --- | --- | --- |
+| **Agent factory** | [`make_lead_agent()`](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/packages/harness/deerflow/agents/lead_agent/agent.py) and `assemble_lead_agent()` build a LangChain `create_agent` graph with chosen model, tools, middleware and state | When a run starts or an agent graph is assembled |
+| **State schema** | [`ThreadState`](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/packages/harness/deerflow/agents/thread_state.py) extends LangChain/LangGraph agent state with sandbox, thread-data, artifacts, todos and reducers | On graph steps and checkpoints; reducers define safe concurrent updates |
+| **Sandbox interface** | [`SandboxProvider`](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/packages/harness/deerflow/sandbox/sandbox_provider.py) exposes `acquire()`, `get()`, `release()`; [`Sandbox`](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/packages/harness/deerflow/sandbox/sandbox.py) exposes command and filesystem operations | Only when execution capabilities need a sandbox |
+| **Tool extensions** | [`ModelTool`](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/packages/extension-api/deerflow_extension_api/plugins.py) has `name`, `description`, `input_schema`, async `handler` and `ToolContext`; `PluginContribution.api_version` declares a contract version | Trusted operator-installed plugin, not arbitrary end-user code |
+| **Plugin lifecycle** | [`TaskLifecycleContributor`](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/packages/extension-api/deerflow_extension_api/contracts.py) and `MiddlewareContributor` are Python `Protocol` types | Optional host-independent lifecycle and middleware contributions |
+| **MCP client** | [`build_server_params()`](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/packages/harness/deerflow/mcp/client.py) configures `stdio`, SSE or HTTP transports through `langchain-mcp-adapters` | Discover/call externally exposed model tools |
+| **Run-to-UI stream** | [`StreamBridge`](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/packages/harness/deerflow/runtime/stream_bridge/base.py) abstractions over process-local memory or Redis, consumed as SSE frames | During a run—not only after terminal completion |
+| **Configuration specification** | [`CONFIGURATION.md`](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/docs/CONFIGURATION.md), `config.yaml`, `extensions_config.json` | Deployment-level model, DB, MCP, skills, permissions and runtime settings |
+
+For example, the sandbox adapter contract is **not** equivalent to giving an LLM unrestricted shell access. A provider owns sandbox acquisition and identity-scoped retrieval; a sandbox implementation exposes the operations. Agent middleware and authorization decide whether tools should be visible and invoked. Local development execution and isolated/container-backed execution have different security properties.
+
+The extension API has its own useful compatibility rule: plugin `Protocol` methods have default implementations and optional dataclass fields have defaults. That is a conscious attempt at additive compatibility, but the package's `api_version` should still be treated as a real release boundary.
+
+### 13.5 Follow one request through named functions
+
+This is the **source-code path**, complementary to the interactive numbered runtime walkthrough above:
+
+```text
+Next.js useStream / LangGraph JS SDK
+  → Nginx: /api/langgraph/* → Gateway /api/*
+  → app.gateway.routers.thread_runs.stream_run()
+  → app.gateway.services.start_run()
+  → RunManager: admit, persist and own the run
+  → runtime.runs.worker: run graph via graph.astream(...)
+      → lead_agent assembly: model / tool / middleware
+      → LangGraph state and checkpoint provider
+      → optional tools / MCP / sandbox / subagent execution
+  → StreamBridge.publish(run_id, event, payload)
+  → Gateway sse_consumer() → text/event-stream
+  → frontend core/api + core/threads normalize events
+  → React thread UI renders progress and artifacts
+```
+
+Branches matter: a run without a tool call skips sandbox/MCP execution; a run with tool calls can iterate many times; a delegated subagent can emit namespaced events; a client disconnect follows the configured `on_disconnect` policy. The run journal and checkpoints may be written while the SSE consumer is still connected. **This is one Python Gateway with background async agent tasks by default, not proof of a distributed queue-based worker fleet.**
+
+### 13.6 What the design does *not* automatically guarantee
+
+- **Multi-tenant isolation:** user/thread scoping and auth hooks exist, but the code does not by itself establish a product-grade tenant/workspace control plane. Treat that as a separate platform design.
+- **Exactly-once tool side effects:** run admission idempotency and leases do not make arbitrary HTTP calls or shell commands exactly-once. External effects need operation keys, reconciliation and, when appropriate, approvals.
+- **Durability of all live events:** Redis Stream retention and SSE cursor gaps are separate from SQL run events and LangGraph checkpoint history.
+- **Safe plug-and-play:** arbitrary third-party tools or trusted in-process plugins should never be assumed safe solely because they implement the declared interface.
+- **One shared source of truth for everything:** memory, model context, checkpoints, run/event SQL tables, artifacts and live streams have different ownership and recovery semantics.
+
+**Implementation takeaway:** before building your own agent platform, decide which component owns run identity and admission, what the durable state contract is, how external tool effects are recorded, which interfaces customers can extend, what event protocol the UI consumes, and how revisions/permissions are enforced. DeerFlow provides strong implementation examples for several of those questions, but the source should be read as a *reference*, not copied as a complete multi-tenant platform.
+
 ## Conclusion: what DeerFlow gets right
 
 The lesson is not “every product should adopt DeerFlow.” The lesson is that **the LLM decision loop is the simplest part of a robust agent**.
