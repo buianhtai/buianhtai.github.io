@@ -98,8 +98,20 @@ async function inspect(width, theme) {
       viewport: document.documentElement.clientWidth,
       longCharts: charts.filter((f) => {
         const frame = f.querySelector('.mermaid-scroll');
-        return frame && frame.scrollWidth > frame.clientWidth;
+        return frame && frame.scrollWidth > frame.clientWidth + 2;
       }).length,
+      diagramOverflowPx: charts.map((f) => {
+        const frame = f.querySelector('.mermaid-scroll');
+        const canvas = f.querySelector('.mermaid-canvas');
+        const svg = f.querySelector('svg');
+        return {
+          overflow: frame.scrollWidth - frame.clientWidth,
+          viewport: frame.clientWidth,
+          canvas: Math.round(canvas.getBoundingClientRect().width),
+          svg: Math.round(svg.getBoundingClientRect().width),
+          zoom: f.querySelector('[data-mermaid-scale]')?.textContent,
+        };
+      }),
       broken: charts.filter((f) => f.textContent?.includes('Diagram unavailable')).length,
     };
   });
@@ -111,7 +123,8 @@ async function inspect(width, theme) {
   assert.equal(measurements.headings, 5, 'Mermaid diagrams need descriptive headings');
   assert.equal(measurements.broken, 0, 'No Mermaid render errors');
   assert(measurements.bodyWidth <= measurements.viewport + 2, 'Document overflow: ' + JSON.stringify(measurements));
-  if (width <= 390) assert.equal(measurements.longCharts, 0, 'Mermaid figures should initially fit narrow screens; zooming enables panning');
+  if (width <= 390) assert.equal(measurements.longCharts, 0,
+    'Mermaid diagrams should fit on phones (allow 2px rounding): ' + JSON.stringify(measurements.diagramOverflowPx));
   assert.deepEqual(runtimeErrors, [], 'Browser encountered script errors');
   // Regression coverage: preview must fit its panel, and zoom must be usable on phones.
   const firstDrawing = page.locator('figure.de-drawing').first();
