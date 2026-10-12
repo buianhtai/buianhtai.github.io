@@ -54,6 +54,11 @@ try {
       assert.equal(await root.locator('[data-story-panel="1"] [data-inspector]').getAttribute('open'),null,'Next scene code stays tucked away');
       await root.locator('[data-scene-tab="2"]').click();
       assert.equal(await root.locator('[data-story-panel="2"]').isVisible(),true,'Third scene explains the stream');
+      if (width <= 640) {
+        const mobileSse = await root.locator('[data-mobile="2"]').innerText();
+        assert(mobileSse.includes('FastAPI Gateway'), 'Mobile SSE path must include the event-subscribing Gateway');
+        assert(mobileSse.includes('SSE via Nginx'), 'Mobile SSE path must make the proxy/HTTP response explicit');
+      }
       assert.equal(await root.locator('[data-next]').isDisabled(),true,'Last scene has disabled Next');
       assert.equal(await root.locator('[data-progress]').getAttribute('aria-valuenow'),'3');
       assert.equal(await root.locator('.node.on').count(),5,'SSE scene highlights relevant components');
@@ -84,6 +89,16 @@ try {
         'Page must not overflow horizontally: '+JSON.stringify({width,theme,...dims}));
       assert.equal(dims.bg, theme==='light'?'rgb(247, 249, 247)':'rgb(14, 24, 33)','Prototype respects website theme');
       assert.deepEqual(errors, [], 'No browser errors');
+      const expandedInspector = root.locator('[data-story-panel="0"] [data-inspector]');
+      if (width === 390 || width === 1440) {
+        // Separate optional deep-dive artifact; the regular screenshot must show the default closed state.
+        await root.screenshot({path:out+'/story-code-inspector-'+theme+'-'+width+'.png', animations:'disabled'});
+      }
+      if (await expandedInspector.getAttribute('open') !== null) {
+        await root.locator('[data-story-panel="0"] [data-inspector] summary').click();
+      }
+      assert.equal(await expandedInspector.getAttribute('open'),null,'Default review image should present the closed inspector');
+      await page.evaluate(() => window.scrollTo(0,0));
       await root.screenshot({path:out+'/story-'+theme+'-'+width+'.png', animations:'disabled'});
       await context.close();
     }
