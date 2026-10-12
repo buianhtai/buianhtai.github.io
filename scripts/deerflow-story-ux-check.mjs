@@ -74,6 +74,9 @@ try {
         assert.equal(await root.locator('[data-story-panel="'+i+'"]').isVisible(),true,'Additional chapter '+(i+1)+' renders');
         assert.equal(await root.locator('[data-progress]').getAttribute('aria-valuenow'),String(i+1),'Progress tracks extra chapters');
         assert.equal(await root.locator('[data-inspector]:visible').getAttribute('open'),null,'New chapter inspector remains optional');
+        const illustrated = [3,4,6].includes(i);
+        assert.equal(await root.locator('[data-vignette]:visible').count(),illustrated?1:0,'Scene-specific illustration visibility for '+i);
+        if(illustrated) assert.equal(await root.locator('[data-vignette="'+i+'"]').isVisible(),true,'Correct illustration appears');
         if (width === 390 || width === 1440) await root.screenshot({path:out+'/story-chapter-'+(i+1)+'-'+theme+'-'+width+'.png',animations:'disabled'});
       }
       assert.equal(await root.locator('[data-next]').isDisabled(),true,'Chapter 8 ends the story');
