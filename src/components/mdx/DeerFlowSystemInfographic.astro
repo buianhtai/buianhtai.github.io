@@ -1,0 +1,188 @@
+---
+/**
+ * DeerFlowSystemInfographic — source-grounded, Astro-native topology poster.
+ *
+ * Deliberately HTML/CSS + build-time lucide icons instead of an opaque PNG.
+ * Semantics, icons, labels and flow remain legible and accessible at 320px.
+ * Logical boundaries, not a literal pod/process-per-card deployment manifest.
+ */
+import { Icon } from 'astro-icon/components';
+const stages = [
+  { n: '01', title: 'Entry points', role: 'TRIGGER / REQUEST', icon: 'lucide:message-square',
+    detail: 'User intent enters through a controlled channel.',
+    chips: [{ icon: 'lucide:monitor', text: 'Browser / Next.js' },{ icon: 'lucide:webhook', text: 'IM & scheduler' }], tone: 'mint' },
+  { n: '02', title: 'Application', role: 'HTTP BOUNDARY', icon: 'lucide:network',
+    detail: 'Handles connections and keeps run ownership server-side.',
+    chips: [{ icon: 'lucide:route', text: 'Nginx ingress' },{ icon: 'lucide:server', text: 'FastAPI Gateway' }], tone: 'sky' },
+  { n: '03', title: 'Agent harness', role: 'REASONING / ROUTING', icon: 'lucide:brain-circuit',
+    detail: 'Turns a request into bounded reasoning and actions.',
+    chips: [{ icon: 'lucide:git-branch', text: 'LangGraph lead agent' },{ icon: 'lucide:shield-check', text: 'Middleware / policies' }], tone: 'purple' },
+  { n: '04', title: 'Extensions', role: 'CAPABILITIES', icon: 'lucide:puzzle',
+    detail: 'Selected tools execute through their controlled adapters.',
+    chips: [{ icon: 'lucide:book-open', text: 'Skills & tool catalog' },{ icon: 'lucide:workflow', text: 'MCP / subagents' }], tone: 'amber' },
+  { n: '05', title: 'Execution', role: 'CONTROLLED EFFECTS', icon: 'lucide:terminal',
+    detail: 'Reads data, runs commands or calls external services.',
+    chips: [{ icon: 'lucide:box', text: 'Sandbox + files' },{ icon: 'lucide:cloud', text: 'Remote services' }], tone: 'mint' },
+];
+const cycle = [
+  { icon:'lucide:brain',title:'Model decides',small:'Next token / tool call',tone:'purple'},
+  { icon:'lucide:shield',title:'Policy checks',small:'Budget · permissions',tone:'sky'},
+  { icon:'lucide:terminal-square',title:'Tool executes',small:'Sandbox / MCP',tone:'amber'},
+  { icon:'lucide:clipboard-check',title:'State updates',small:'ToolMessage / result',tone:'mint'},
+];
+---
+
+<figure class="dfi not-prose" aria-label="DeerFlow 2.0 technical components and end-to-end agent execution">
+  <header class="dfi-header">
+    <div class="dfi-overline"><span class="dfi-light"></span> SYSTEM MAP / DEERFLOW 2.0</div>
+    <div class="dfi-topline">
+      <div>
+        <h2>From one question to governed execution.</h2>
+        <p>A source-grounded map of DeerFlow's request path, lead-agent runtime, tool extensions, delegated work, and event delivery.</p>
+      </div>
+      <div class="dfi-mark" aria-hidden="true"><Icon name="lucide:network" size={29} /></div>
+    </div>
+    <div class="dfi-meta">
+      <span><Icon name="lucide:layers-3" size={13}/> Logical architecture</span>
+      <span><Icon name="lucide:arrow-left-right" size={13}/> Bidirectional runtime events</span>
+      <span><Icon name="lucide:shield-check" size={13}/> Bounded execution</span>
+    </div>
+  </header>
+
+  <div class="dfi-core">
+    <p class="dfi-rail-label">01 — Request path · read left to right on wide screens</p>
+    <div class="dfi-stages">
+      {stages.map((stage) => (
+        <section class:list={['dfi-stage','dfi-'+stage.tone]}>
+          <div class="dfi-stage-head">
+            <span class="dfi-step">{stage.n}</span>
+            <span class="dfi-stage-icon"><Icon name={stage.icon} size={22}/></span>
+          </div>
+          <p class="dfi-role">{stage.role}</p>
+          <h3>{stage.title}</h3>
+          <p class="dfi-stage-detail">{stage.detail}</p>
+          <div class="dfi-chips">
+            {stage.chips.map((chip) => (
+              <div class="dfi-chip"><Icon name={chip.icon} size={13}/><span>{chip.text}</span></div>
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+
+    <div class="dfi-return">
+      <span class="dfi-return-arrow"><Icon name="lucide:arrow-left" size={17}/></span>
+      <strong>Response stream</strong>
+      <span>RunManager / StreamBridge <span class="dfi-splitter">→</span> Gateway SSE <span class="dfi-splitter">→</span> thread UI, progress, artifacts</span>
+    </div>
+
+    <div class="dfi-deep">
+      <section class="dfi-loop">
+        <div class="dfi-subtitle"><span><Icon name="lucide:repeat-2" size={17}/></span><div><small>02 — WITHIN THE HARNESS</small><h3>Agent control loop</h3></div></div>
+        <div class="dfi-cycle">
+          {cycle.map((step, i) => (
+            <div class:list={['dfi-cycle-step','dfi-'+step.tone]}>
+              <div class="dfi-cycle-icon"><Icon name={step.icon} size={19}/></div>
+              <strong>{step.title}</strong>
+              <span>{step.small}</span>
+              {i < cycle.length-1 && <span class="dfi-cycle-arrow" aria-hidden="true">→</span>}
+            </div>
+          ))}
+        </div>
+        <p class="dfi-loop-note"><Icon name="lucide:corner-up-left" size={13}/> Observe a tool result, update graph state, then invoke the model again—until an answer or stopping condition.</p>
+      </section>
+      <section class="dfi-state">
+        <div class="dfi-subtitle"><span><Icon name="lucide:database-zap" size={17}/></span><div><small>03 — REPLAY / MEMORY</small><h3>State & side work</h3></div></div>
+        <div class="dfi-state-row"><Icon name="lucide:database" size={18}/><div><strong>Checkpoints</strong><small>Thread state, resume points</small></div></div>
+        <div class="dfi-state-row"><Icon name="lucide:files" size={18}/><div><strong>Workspace & artifacts</strong><small>Files and generated results</small></div></div>
+        <div class="dfi-state-row"><Icon name="lucide:git-fork" size={18}/><div><strong>Delegated subagents</strong><small>Scoped child task → result</small></div></div>
+      </section>
+    </div>
+  </div>
+  <figcaption class="dfi-foot">
+    <Icon name="lucide:info" size={14}/>
+    This is a logical explanatory view, not a claim that every block is a separate microservice. The Gateway hosts the normal agent invocation; additional sandbox provisioning depends on deployment configuration.
+  </figcaption>
+</figure>
+
+<style>
+.dfi{--dfi-bg:#0b1422;--dfi-outline:#2a3e54;--dfi-muted:#afc0d3;--dfi-ink:#ecf5ff;--dfi-accent:#79d9d2;position:relative;overflow:hidden;isolation:isolate;margin:2rem 0 2.5rem;max-width:100%;width:100%;border:1px solid var(--color-border);border-radius:16px;background:var(--dfi-bg);color:var(--dfi-ink);font-family:Inter,system-ui,sans-serif;box-shadow:0 20px 70px rgba(0,0,0,.15)}
+.dfi:before{content:"";pointer-events:none;position:absolute;inset:0;z-index:-1;background-image:radial-gradient(#7895af24 .65px,transparent .65px);background-size:19px 19px;opacity:.8}
+.dfi-header{position:relative;padding:clamp(1.1rem,2.5vw,2rem);border-bottom:1px solid var(--dfi-outline);background:linear-gradient(105deg,#13293a,#0b1422 75%)}
+.dfi-overline{display:flex;align-items:center;gap:.55rem;color:var(--dfi-accent);font:700 .67rem/1.5 "JetBrains Mono",monospace;letter-spacing:.13em}
+.dfi-light{width:7px;height:7px;border-radius:50%;box-shadow:0 0 11px #7de5ddaa;background:var(--dfi-accent)}
+.dfi-topline{display:flex;align-items:flex-start;justify-content:space-between;gap:1.25rem;margin:.9rem 0 .95rem}
+.dfi-topline h2{color:#f7fbff!important;font-size:clamp(1.32rem,2.5vw,2rem)!important;line-height:1.25!important;letter-spacing:-.04em!important;font-weight:760!important;margin:0 0 .6rem!important}
+.dfi-topline p{color:var(--dfi-muted);font-size:.85rem;line-height:1.7;margin:0;max-width:57ch}
+.dfi-mark{display:grid;place-items:center;flex-shrink:0;width:58px;height:58px;color:#9aede5;border:1px solid #53a5ac66;border-radius:14px;background:#28566247}
+.dfi-meta{display:flex;flex-wrap:wrap;gap:.55rem .9rem}
+.dfi-meta span{display:inline-flex;align-items:center;gap:.3rem;font:500 .61rem/1.5 "JetBrains Mono",monospace;color:#a7bace}
+.dfi-meta svg{color:#7cd6ce}
+.dfi-core{padding:clamp(.9rem,2vw,1.5rem)}
+.dfi-rail-label{margin:0 0 .8rem;font:700 .66rem/1.5 "JetBrains Mono",monospace;letter-spacing:.08em;color:#8ea9c4;text-transform:uppercase}
+.dfi-stages{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:clamp(.4rem,1vw,.75rem)}
+.dfi-stage{position:relative;display:flex;flex-direction:column;min-width:0;min-height:245px;border:1px solid #34495c;border-radius:11px;padding:.9rem;background:linear-gradient(155deg,#1b2c3e,#101d2c 78%);box-shadow:inset 0 1px 0 #ffffff12}
+.dfi-stage:not(:last-child):after{content:"›";z-index:2;position:absolute;right:-.72rem;top:40%;font-size:1.4rem;line-height:1;color:#8ddbd4;text-shadow:0 0 7px #071220;font-weight:800}
+.dfi-stage-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:.95rem}
+.dfi-step{font:700 .65rem "JetBrains Mono",monospace;letter-spacing:.08em;color:#96b0cb}
+.dfi-stage-icon{display:grid;place-items:center;width:39px;height:39px;border-radius:11px;border:1px solid var(--tone-edge);background:var(--tone-bg);color:var(--tone)}
+.dfi-mint{--tone:#70d6bd;--tone-edge:#3a9a8066;--tone-bg:#29927c20}
+.dfi-sky{--tone:#82b9fb;--tone-edge:#4a86ce66;--tone-bg:#3271a620}
+.dfi-purple{--tone:#b2a1fe;--tone-edge:#8972d266;--tone-bg:#7b60b720}
+.dfi-amber{--tone:#f0b779;--tone-edge:#c58c4a66;--tone-bg:#9e662620}
+.dfi-role{margin:0 0 .4rem!important;color:var(--tone);font:600 .58rem/1.4 "JetBrains Mono",monospace!important;letter-spacing:.07em;overflow-wrap:anywhere}
+.dfi-stage h3{font-size:.96rem!important;line-height:1.3!important;letter-spacing:-.02em!important;color:#f3f7ff!important;margin:0 0 .55rem!important}
+.dfi-stage-detail{font-size:.72rem;line-height:1.55;color:#acbfd0;margin:0 0 1rem;min-height:3.3em}
+.dfi-chips{display:flex;flex-direction:column;gap:.35rem;margin-top:auto}
+.dfi-chip{display:flex;gap:.38rem;align-items:flex-start;border:1px solid #38516b88;padding:.38rem .45rem;border-radius:6px;background:#22364a88;color:#e5eff8;font:500 .62rem/1.45 "JetBrains Mono",monospace}
+.dfi-chip svg{flex-shrink:0;color:var(--tone);margin-top:.07rem}
+.dfi-return{display:flex;align-items:center;flex-wrap:wrap;gap:.55rem .8rem;min-width:0;margin:.9rem 0 1.1rem;padding:.78rem 1rem;border:1px dashed #65afa1aa;border-radius:9px;background:linear-gradient(90deg,#113b3fbc,#16394c38);color:#cde6e8;font:.7rem/1.6 "JetBrains Mono",monospace}
+.dfi-return-arrow{display:grid;place-items:center;color:#87eadd}
+.dfi-return strong{color:#b4f0e6;font-weight:700}
+.dfi-return .dfi-splitter{color:#7fd4bf}
+.dfi-deep{display:grid;grid-template-columns:minmax(0,2.1fr) minmax(210px,1fr);gap:.8rem}
+.dfi-loop,.dfi-state{min-width:0;border:1px solid #30485e;border-radius:11px;background:#132337dd;padding:1rem}
+.dfi-subtitle{display:flex;align-items:center;gap:.65rem;margin:0 0 1rem}
+.dfi-subtitle>span{display:grid;place-items:center;color:#75d9cf;flex-shrink:0;width:32px;height:32px;border:1px solid #488f9480;border-radius:8px;background:#1a50575e}
+.dfi-subtitle small{display:block;font:700 .59rem/1.4 "JetBrains Mono",monospace;color:#94b1c6;letter-spacing:.05em}
+.dfi-subtitle h3{font-size:.9rem!important;line-height:1.25!important;margin:.15rem 0 0!important;color:#f4faff!important}
+.dfi-cycle{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.4rem}
+.dfi-cycle-step{position:relative;display:flex;flex-direction:column;gap:.32rem;min-width:0;padding:.65rem .4rem;text-align:center;border:1px solid var(--tone-edge);border-radius:8px;background:var(--tone-bg)}
+.dfi-cycle-icon{color:var(--tone);display:flex;justify-content:center}
+.dfi-cycle-step strong{color:#eef7ff;font-size:.67rem;line-height:1.4;overflow-wrap:anywhere}
+.dfi-cycle-step>span:not(.dfi-cycle-arrow){color:#adbdcd;font-size:.59rem;line-height:1.45;overflow-wrap:anywhere}
+.dfi-cycle-arrow{position:absolute;right:-.52rem;top:35%;z-index:2;color:#e1f8ff;text-shadow:0 0 3px #102031;font-size:1.12rem;font-weight:800}
+.dfi-loop-note{display:flex;align-items:flex-start;gap:.45rem;color:#afc2d1;font:.65rem/1.6 "JetBrains Mono",monospace;margin:.85rem 0 0!important}
+.dfi-loop-note svg{flex-shrink:0;color:#91d5cc;margin-top:.15rem}
+.dfi-state-row{display:flex;align-items:center;gap:.7rem;padding:.57rem .1rem;border-top:1px solid #34475c}
+.dfi-state-row>svg{flex-shrink:0;color:#8cb6e1}
+.dfi-state-row strong{display:block;font-size:.72rem;font-weight:650;color:#f4faff}
+.dfi-state-row small{display:block;font-size:.61rem;line-height:1.55;color:#adbed1}
+.dfi-foot{display:flex;align-items:flex-start;gap:.55rem;border-top:1px solid var(--dfi-outline);padding:.8rem clamp(.9rem,2vw,1.5rem);font:.63rem/1.6 "JetBrains Mono",monospace;color:#a3bbce}
+.dfi-foot svg{color:#80ccc5;flex-shrink:0;margin-top:.1rem}
+@media(max-width:1070px){
+.dfi-stages{grid-template-columns:repeat(3,minmax(0,1fr))}
+.dfi-stage:not(:last-child):after{display:none}
+.dfi-stage{min-height:208px}
+}
+@media(max-width:680px){
+.dfi-topline{gap:.5rem}
+.dfi-mark{width:41px;height:41px;border-radius:10px}
+.dfi-stages{grid-template-columns:repeat(2,minmax(0,1fr))}
+.dfi-stage{padding:.7rem;min-height:230px}
+.dfi-stage-detail{font-size:.71rem}
+.dfi-deep{grid-template-columns:minmax(0,1fr)}
+.dfi-cycle{grid-template-columns:repeat(2,minmax(0,1fr))}
+.dfi-cycle-arrow{display:none}
+}
+@media(max-width:400px){
+.dfi-stages{grid-template-columns:minmax(0,1fr)}
+.dfi-stage{min-height:0}
+.dfi-stage-detail{min-height:0}
+.dfi-topline h2{font-size:1.2rem!important}
+.dfi-topline p{font-size:.78rem}
+.dfi-meta{gap:.35rem}
+.dfi-return{font-size:.63rem;padding:.7rem}
+}
+@media(prefers-reduced-motion:reduce){.dfi *{transition:none!important}}
+</style>
