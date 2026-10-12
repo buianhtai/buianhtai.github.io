@@ -37,6 +37,7 @@ try {
       assert.equal(await root.count(),1,'One and only one storytelling UI');
       assert.equal(await page.locator('meta[name="robots"]').getAttribute('content'),'noindex,follow','Prototype must not be indexed');
       assert.equal(await root.locator('[data-scene-tab]').count(),8,'Eight progressive chapters');
+      assert.equal(await root.locator('[data-story-example]:visible').count(),1,'Intro has one readable request/response example');
       assert.equal(await root.locator('[data-story-panel]:visible').count(),1,'Only one scene narration is visible');
       assert.equal(await root.locator('[data-scene-tab="0"]').getAttribute('aria-pressed'),'true');
       assert.equal(await root.locator('[data-prev]').isDisabled(),true);
@@ -74,6 +75,8 @@ try {
         assert.equal(await root.locator('[data-story-panel="'+i+'"]').isVisible(),true,'Additional chapter '+(i+1)+' renders');
         assert.equal(await root.locator('[data-progress]').getAttribute('aria-valuenow'),String(i+1),'Progress tracks extra chapters');
         assert.equal(await root.locator('[data-inspector]:visible').getAttribute('open'),null,'New chapter inspector remains optional');
+        const exampleVisible=[0,1,2,5].includes(i);
+        assert.equal(await root.locator('[data-story-example]:visible').count(),exampleVisible?1:0,'Only matching request/response example is shown');
         const illustrated = [3,4,6].includes(i);
         assert.equal(await root.locator('[data-vignette]:visible').count(),illustrated?1:0,'Scene-specific illustration visibility for '+i);
         if(illustrated) assert.equal(await root.locator('[data-vignette="'+i+'"]').isVisible(),true,'Correct illustration appears');
