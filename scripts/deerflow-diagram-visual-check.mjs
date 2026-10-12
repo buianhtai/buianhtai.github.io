@@ -92,6 +92,24 @@ async function inspect(width, theme) {
   assert(measurements.bodyWidth <= measurements.viewport + 2, 'Document overflow: ' + JSON.stringify(measurements));
   if (width <= 390) assert(measurements.longCharts >= 1, 'Wide diagrams should scroll inside their own frame');
   assert.deepEqual(runtimeErrors, [], 'Browser encountered script errors');
+  // Regression coverage: preview must fit its panel, and zoom must be usable on phones.
+  const firstDrawing = page.locator('figure.de-drawing').first();
+  const viewer = firstDrawing.locator('.de-drawing-viewport');
+  await firstDrawing.scrollIntoViewIfNeeded();
+  const initial = await viewer.evaluate((el) => ({
+    visible: el.clientWidth, content: el.scrollWidth,
+    image: el.querySelector('img')?.getBoundingClientRect().width,
+  }));
+  assert(initial.image <= initial.visible + 2, 'Diagram should fit the available panel by default: ' + JSON.stringify(initial));
+  await firstDrawing.locator('[data-diagram-zoom="in"]').click();
+  assert.equal(await firstDrawing.locator('.de-drawing-zoom-level').innerText(), '160%');
+  const expanded = await viewer.evaluate((el) => ({ visible: el.clientWidth, content: el.scrollWidth }));
+  assert(expanded.content > expanded.visible, 'Zoomed diagram must be pannable within its own panel');
+  assert((await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)) <= 2, 'Zoom must not overflow the page');
+  await firstDrawing.locator('[data-diagram-zoom="fit"]').click();
+  assert.equal(await firstDrawing.locator('.de-drawing-zoom-level').innerText(), '100%');
+  await firstDrawing.locator('[data-diagram-zoom="out"]').isDisabled().then((disabled) => assert(disabled, 'Fit should disable zoom out'));
+  
   const label = theme + '-' + width;
   await page.locator('figure.de-drawing').first().screenshot({ path: output + '/topology-' + label + '.png' });
   await page.locator('figure.mermaid-figure--editorial').nth(2).screenshot({ path: output + '/delegation-' + label + '.png' });
@@ -106,7 +124,7 @@ try {
   phase = 'opening Chromium';
   browser = await chromium.launch({ headless: true });
   for (const theme of ['terminal', 'light']) {
-    for (const width of [1440, 390]) {
+    for (const width of [1440, 768, 390, 320]) {
       phase = 'rendering DeerFlow at ' + theme + ' ' + width;
       await inspect(width, theme);
     }
