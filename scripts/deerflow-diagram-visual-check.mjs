@@ -50,13 +50,17 @@ async function inspect(width, theme) {
   page.on('pageerror', (error) => runtimeErrors.push(error.message));
   await page.goto(host + path, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() =>
-    document.querySelectorAll('figure.mermaid-figure--editorial pre.mermaid svg').length === 8,
+    document.querySelectorAll('figure.mermaid-figure--editorial pre.mermaid svg').length === 5,
     null, { timeout: 50_000 },
   );
   const measurements = await page.evaluate(() => {
     const charts = [...document.querySelectorAll('figure.mermaid-figure--editorial')];
+    const drawings = [...document.querySelectorAll('figure.de-drawing')];
     return {
       figures: charts.length,
+      drawings: drawings.length,
+      drawingImages: drawings.filter((f) => f.querySelector('img')).length,
+      editLinks: drawings.filter((f) => f.querySelector('a[download][href$=".drawio"]')).length,
       svgs: charts.filter((f) => f.querySelector('pre.mermaid svg')).length,
       headings: charts.filter((f) => f.querySelector('.mermaid-heading')).length,
       bodyWidth: document.documentElement.scrollWidth,
@@ -68,16 +72,21 @@ async function inspect(width, theme) {
       broken: charts.filter((f) => f.textContent?.includes('Diagram unavailable')).length,
     };
   });
-  assert.equal(measurements.figures, 8, 'Expected eight architecture diagrams');
-  assert.equal(measurements.svgs, 8, 'All diagrams must render into SVG');
-  assert.equal(measurements.headings, 8, 'Diagrams need descriptive headings');
+  assert.equal(measurements.figures, 5, 'Expected five procedural Mermaid diagrams');
+  assert.equal(measurements.drawings, 3, 'Expected three D2 architecture drawings');
+  assert.equal(measurements.drawingImages, 3, 'Every D2 drawing must have an image');
+  assert.equal(measurements.editLinks, 3, 'Every D2 drawing must have an editable diagrams.net link');
+  assert.equal(measurements.svgs, 5, 'All Mermaid diagrams must render into SVG');
+  assert.equal(measurements.headings, 5, 'Mermaid diagrams need descriptive headings');
   assert.equal(measurements.broken, 0, 'No Mermaid render errors');
   assert(measurements.bodyWidth <= measurements.viewport + 2, 'Document overflow: ' + JSON.stringify(measurements));
   if (width <= 390) assert(measurements.longCharts >= 1, 'Wide diagrams should scroll inside their own frame');
   assert.deepEqual(runtimeErrors, [], 'Browser encountered script errors');
   const label = theme + '-' + width;
-  await page.locator('figure.mermaid-figure--editorial').first().screenshot({ path: output + '/topology-' + label + '.png' });
-  await page.locator('figure.mermaid-figure--editorial').nth(4).screenshot({ path: output + '/delegation-' + label + '.png' });
+  await page.locator('figure.de-drawing').first().screenshot({ path: output + '/topology-' + label + '.png' });
+  await page.locator('figure.mermaid-figure--editorial').nth(2).screenshot({ path: output + '/delegation-' + label + '.png' });
+  const assetChecks = await page.locator('figure.de-drawing img').evaluateAll((imgs) => imgs.map((img) => ({ ok: img.complete && img.naturalWidth > 0, src: img.getAttribute('src') })));
+  assert(assetChecks.every((asset) => asset.ok), 'All D2 SVG assets must load: ' + JSON.stringify(assetChecks));
   console.log('PASS: ' + label + ' ' + JSON.stringify(measurements));
   await context.close();
 }
