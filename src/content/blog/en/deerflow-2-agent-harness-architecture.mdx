@@ -21,6 +21,7 @@ import Mermaid from '../../../components/mdx/Mermaid.astro';
 import DiagramEmbed from '../../../components/mdx/DiagramEmbed.astro';
 import DeerFlowSystemInfographic from '../../../components/mdx/DeerFlowSystemInfographic.astro';
 import DeerFlowExecutionTrace from '../../../components/mdx/DeerFlowExecutionTrace.astro';
+import DeerFlowRequestExplorer from '../../../components/mdx/DeerFlowRequestExplorer.astro';
 
 **How do you actually build an AI agent?** Not a prompt that calls a search tool once, but an agent that plans a multi-hour task, explores a codebase, delegates independent subtasks, executes commands safely, remembers useful facts, and streams its work to a browser.
 
@@ -67,6 +68,14 @@ Take a concrete request:
 > “Investigate why this web service became slow, inspect the recent changes, and write a short report.”
 
 That instruction is **not** hardcoded to run search, then shell, then a summary. Instead, the agent sees a set of available tool schemas, chooses the next action, receives its result, and repeats until it can answer or hits a limit.
+
+### Follow the physical request and event paths
+
+<DeerFlowRequestExplorer />
+
+**Use the explorer first.** It separates the frontend's **HTTP request** from the Gateway's **asynchronous graph execution**, and the worker's **SSE event-delivery** path. The lanes marked **APP DB** and **GRAPH DB** represent separate logical schemas/owners, although they can share one underlying SQLite file or PostgreSQL database. Select *LLM → MCP tool* to watch the model decide on a tool and the adapter invoke an external service; select *SSE reconnect* or *Worker fails* to explore replay and durable recovery. The sequence is a **source-grounded walkthrough, not live packet captures**; some writes and event deliveries overlap.
+
+
 
 <DeerFlowExecutionTrace />
 
