@@ -48,6 +48,11 @@ try {
       assert.equal(await root.locator('[data-story-panel="0"] .source').count(),3,'Source links are available');
       await root.locator('[data-next]').click();
       assert.equal(await root.locator('[data-story-panel="1"]').isVisible(),true,'Next shows admission');
+      // "Next" lives below the diagram; the scene change must restore the
+      // actual diagram/chapter to the viewport, not update it off-screen.
+      const chapterTop = await root.locator('.chapters').evaluate(el=>el.getBoundingClientRect().top);
+      assert(chapterTop >= -8 && chapterTop <= 160,
+        'Next must reveal scene visualization above fold: '+JSON.stringify({theme,width,chapterTop}));
       assert.equal(await root.locator('[data-scene-tab="1"]').getAttribute('aria-pressed'),'true');
       assert.equal(await root.locator('[data-progress]').getAttribute('aria-valuenow'),'2');
       if (width === 390 || width === 1440) await root.screenshot({path:out+'/story-admission-'+theme+'-'+width+'.png', animations:'disabled'});
