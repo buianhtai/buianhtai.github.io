@@ -569,20 +569,3 @@ html body::before { display: none; }
 }
 
 
-/* Extremely narrow long-form articles: keep tables/code scrollable in their own
-   boxes rather than letting a wide grid cell move the document viewport. */
-@media (max-width: 400px) {
-  .ed-article { overflow-x: clip; }
-  .ed-article-layout,
-  .ed-article-content,
-  .ed-article-content.prose { min-width: 0; max-width: 100%; }
-  .ed-article-content.prose :is(p, li, blockquote) { overflow-wrap: anywhere; }
-  .ed-article-content.prose :not(pre) > code { overflow-wrap: anywhere; word-break: break-word; }
-  .ed-article-content.prose :is(table, pre) {
-    display: block;
-    box-sizing: border-box;
-    max-width: 100%;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-}
