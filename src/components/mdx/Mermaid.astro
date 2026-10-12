@@ -86,10 +86,11 @@ const canvasMinWidth = Number.isFinite(minWidth) ? Math.min(1600, Math.max(0, mi
     min-width: var(--mermaid-min-width, 0px);
     width: max-content; max-width: none;
   }
-  .mermaid-scroll pre.mermaid > svg { display: block; max-width: none; height: auto !important; }
+  .mermaid-scroll pre.mermaid > :global(svg) { display: block; max-width: none; height: auto !important; }
   /* Legacy diagrams preserve fit-to-width behavior. */
   .mermaid-figure:not(.mermaid-figure--editorial) .mermaid-scroll pre.mermaid { min-width: 0; width: auto; max-width: 100%; }
-  .mermaid-figure:not(.mermaid-figure--editorial) .mermaid-scroll pre.mermaid > svg { max-width: 100%; }
+  .mermaid-figure:not(.mermaid-figure--editorial) .mermaid-scroll pre.mermaid > :global(svg) { max-width: 100%; }
+  .mermaid-figure--editorial .mermaid-scroll { background-color: #0b1828; }
   .mermaid-footer { padding: 0.7rem 1.4rem; border-top: 1px solid var(--color-border); background: var(--color-surface); }
   .mermaid-legend { display: flex; flex-wrap: wrap; gap: 0.55rem 1.1rem; align-items: center; margin-bottom: 0.4rem; }
   .mermaid-legend-item { display: inline-flex; align-items: center; gap: 0.4rem; color: var(--color-text-dim); font: 500 0.7rem/1.4 var(--font-mono, monospace); }
@@ -107,4 +108,41 @@ const canvasMinWidth = Number.isFinite(minWidth) ? Math.min(1600, Math.max(0, mi
     .mermaid-footer { padding: 0.75rem 1rem; }
     .mermaid-legend { gap: 0.5rem 0.85rem; }
   }
+</style>
+
+<!-- The component itself must load Mermaid: without an initializer, pre.mermaid
+     is displayed as source code. A single page-wide promise avoids repeated
+     imports when a post contains several figures. -->
+<script is:inline type="module">
+  if (!window.__blogMermaidRenderer) {
+    window.__blogMermaidRenderer = (async () => {
+      try {
+        const { default: mermaid } = await import('https://cdn.jsdelivr.net/npm/mermaid@11.12.0/dist/mermaid.esm.min.mjs');
+        mermaid.initialize({
+          startOnLoad: false,
+          securityLevel: 'strict',
+          suppressErrorRendering: true,
+          maxTextSize: 100000,
+          theme: 'base',
+        });
+        for (const node of document.querySelectorAll('pre.mermaid')) {
+          try {
+            await mermaid.run({ nodes: [node] });
+          } catch (error) {
+            console.error('Unable to render diagram', error);
+            const fallback = document.createElement('span');
+            fallback.className = 'mermaid-error';
+            fallback.textContent = 'Diagram unavailable. View the editable source in the article repository.';
+            node.replaceChildren(fallback);
+          }
+        }
+      } catch (error) {
+        console.error('Unable to load Mermaid renderer', error);
+      }
+    })();
+  }
+</script>
+
+<style>
+  :global(.mermaid-error) { display: inline-block; color: var(--color-amber); font-size: 0.85rem; padding: 1rem; }
 </style>
