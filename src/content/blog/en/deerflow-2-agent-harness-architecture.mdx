@@ -18,6 +18,7 @@ import Callout from '../../../components/mdx/Callout.astro';
 import FlowStep from '../../../components/mdx/FlowStep.astro';
 import DataTable from '../../../components/mdx/DataTable.astro';
 import Mermaid from '../../../components/mdx/Mermaid.astro';
+import DiagramEmbed from '../../../components/mdx/DiagramEmbed.astro';
 
 **How do you actually build an AI agent?** Not a prompt that calls a search tool once, but an agent that plans a multi-hour task, explores a codebase, delegates independent subtasks, executes commands safely, remembers useful facts, and streams its work to a browser.
 
@@ -33,23 +34,15 @@ This article examines **DeerFlow 2.0**, not the older 1.x Deep Research implemen
 
 The deployed system has four main runtime pieces. Nginx is its public entry point. Next.js renders the workspace. The FastAPI Gateway hosts the actual agent runtime. An optional provisioner creates remote sandboxes when that deployment mode is selected.
 
-<Mermaid
-  eyebrow="01 / System context and container boundaries"
-  title="DeerFlow deployment and execution ownership"
-  description="Real application services are separated from the reusable harness, external callers, and execution/data dependencies."
-  minWidth={1110}
-  legend={[{"label":"Ingress / channel","tone":"teal"},{"label":"Gateway & runtime","tone":"blue"},{"label":"Agent reasoning","tone":"violet"},{"label":"Tool execution","tone":"amber"},{"label":"Durable data","tone":"green"}]}
-  chart={`%%{init: {"theme":"base","themeVariables":{"background":"#102032","primaryColor":"#183449","primaryTextColor":"#eef6fc","primaryBorderColor":"#638ba2","textColor":"#eef6fc","edgeLabelBackground":"#14263a","lineColor":"#93b1c2","fontFamily":"Inter, Arial, sans-serif","clusterBkg":"#111f2f","clusterBorder":"#668397","secondaryColor":"#1c3a4f","tertiaryColor":"#24384b"},"flowchart":{"curve":"linear","nodeSpacing":36,"rankSpacing":52,"padding":18}}}%%
-flowchart TB
-  subgraph INPUT["01 / CALLER SURFACES · OUTSIDE SERVER TRUST"]
-    direction LR
-    WEB["Web browser"]:::edge
-    CHAT["IM channel adapters"]:::edge
-    SCHED["Internal scheduler / client"]:::edge
-  end
-  subgraph APP["02 / DEERFLOW APPLICATION · APP PACKAGE"]
-    direction LR
-    NGINX["Nginx :2026<br/>Public HTTP ingress"]:::edge
+<DiagramEmbed
+  svg="/diagrams/deerflow/deerflow-containers.svg"
+  d2="/diagrams/deerflow/deerflow-containers.d2"
+  drawio="/diagrams/deerflow/deerflow-containers.drawio"
+  eyebrow="C4 / CONTAINER VIEW"
+  title="DeerFlow deployment and execution boundaries"
+  description="Client channels, the FastAPI application, the reusable LangGraph harness, and execution/state dependencies."
+  caption="Source-based logical boundaries; not every box represents a separately deployed service."
+/>Public HTTP ingress"]:::edge
     FE["Next.js :3000<br/>UI & LangGraph SDK"]:::edge
     GATEWAY["FastAPI Gateway :8001<br/>Auth, threads, APIs"]:::runtime
     RUN["RunManager + StreamBridge<br/>Run lifecycle & SSE"]:::runtime
@@ -272,17 +265,15 @@ A skill is closer to a **capability package or runbook** than a new execution en
 
 MCP is different: it exposes tools from another process or service. The external server does not need to know about DeerFlow's UI or chat messages. DeerFlow's adapter provides the model-facing schema and execution bridge.
 
-<Mermaid
-  eyebrow="Extension contract / Tool chain"
+<DiagramEmbed
+  svg="/diagrams/deerflow/deerflow-tool-boundary.svg"
+  d2="/diagrams/deerflow/deerflow-tool-boundary.d2"
+  drawio="/diagrams/deerflow/deerflow-tool-boundary.drawio"
+  eyebrow="TOOL CONTRACT / AUTHORIZATION"
   title="Instructions are not permissions"
-  description="Skills influence model behavior; tool schemas enable selection; execution adapters and policy make the final authorization decision."
-  minWidth={1060}
-  legend={[{"label":"Capability definition","tone":"blue"},{"label":"LLM instruction","tone":"violet","dashed":true},{"label":"Controlled execution","tone":"amber"}]}
-  chart={`%%{init: {"theme":"base","themeVariables":{"background":"#102032","primaryColor":"#183449","primaryTextColor":"#eef6fc","primaryBorderColor":"#638ba2","textColor":"#eef6fc","edgeLabelBackground":"#14263a","lineColor":"#93b1c2","fontFamily":"Inter, Arial, sans-serif","clusterBkg":"#111f2f","clusterBorder":"#668397","secondaryColor":"#1c3a4f","tertiaryColor":"#24384b"},"flowchart":{"curve":"linear","nodeSpacing":36,"rankSpacing":52,"padding":18}}}%%
-flowchart LR
-  subgraph AUTHOR["CONFIGURATION / DISCOVERY"]
-    direction TB
-    SKILL["Skill package<br/>Instructions + resources"]:::logic
+  description="Skills and catalogs shape the model's choices; execution policy authorizes and controls the actual operations."
+  caption="Capability visibility and tool authorization are separate decisions."
+/>Instructions + resources"]:::logic
     TOOL["Tool catalog<br/>Names + argument schemas"]:::runtime
     MCP["MCP connector<br/>Remote tools and metadata"]:::exec
   end
@@ -562,15 +553,15 @@ For external side effects—sending email, updating a record, executing an HTTP 
 
 DeerFlow shows **how to build a powerful execution harness**. A configurable multi-tenant platform needs another layer: managing who defines agents, which version is published, what data they may reach, and whether a particular run is allowed.
 
-<Mermaid
-  eyebrow="06 / Proposed reference architecture"
-  title="From agent harness to governed agent platform"
-  description="Control plane defines an approved agent; runtime owns a durable run; integration plane enforces external side effects."
-  minWidth={1120}
-  legend={[{"label":"Platform control plane","tone":"teal"},{"label":"Agent runtime","tone":"violet"},{"label":"Adapter / integration","tone":"amber"},{"label":"State & audit","tone":"green"}]}
-  chart={`%%{init: {"theme":"base","themeVariables":{"background":"#102032","primaryColor":"#183449","primaryTextColor":"#eef6fc","primaryBorderColor":"#638ba2","textColor":"#eef6fc","edgeLabelBackground":"#14263a","lineColor":"#93b1c2","fontFamily":"Inter, Arial, sans-serif","clusterBkg":"#111f2f","clusterBorder":"#668397","secondaryColor":"#1c3a4f","tertiaryColor":"#24384b"},"flowchart":{"curve":"linear","nodeSpacing":36,"rankSpacing":52,"padding":18}}}%%
-flowchart TB
-  BUILDER["Agent Builder UI"]:::edge --> DEFINITIONS["Versioned agent definitions<br/>model, skills, tools, policies"]:::edge
+<DiagramEmbed
+  svg="/diagrams/deerflow/deerflow-platform.svg"
+  d2="/diagrams/deerflow/deerflow-platform.d2"
+  drawio="/diagrams/deerflow/deerflow-platform.drawio"
+  eyebrow="PROPOSED / REFERENCE ARCHITECTURE"
+  title="From reusable agent harness to configurable platform"
+  description="The agent control plane, runtime plane and tool integration plane have distinct owners and security responsibilities."
+  caption="Proposed architecture, not an implementation claim about DeerFlow. Layers are logical modules and need not be microservices."
+/>model, skills, tools, policies"]:::edge
   USER["User / schedule / webhook"]:::edge --> ROUTER["Auth + eligibility filter<br/>rules / optional intent router"]:::runtime
   subgraph CONTROL["CONTROL PLANE · PROPOSED"]
     direction LR
