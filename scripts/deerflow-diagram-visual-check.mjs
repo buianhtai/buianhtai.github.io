@@ -89,8 +89,21 @@ async function inspect(width, theme) {
     const el = document.querySelector('figure.mermaid-figure--editorial .mermaid-scroll');
     return el && el.scrollWidth <= el.clientWidth + 2;
   }, null, { timeout: 5_000 });
-  assert((await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)) <= 2,
-    'Neither Mermaid nor the infographic may overflow the page');
+  const overflowReport = await page.evaluate(() => {
+    const html = document.documentElement;
+    const viewportWidth = html.clientWidth;
+    const elements = [...document.querySelectorAll('body *')].map((el) => {
+      const rect = el.getBoundingClientRect();
+      const cls = typeof el.className === 'string' ? el.className : '';
+      return { tag: el.tagName, cls: cls.slice(0, 95), right: Math.round(rect.right),
+        left: Math.round(rect.left), width: Math.round(rect.width), scroll: el.scrollWidth };
+    });
+    return { overflow: html.scrollWidth - viewportWidth, viewportWidth,
+      offenders: elements.filter((el) => el.right > viewportWidth + 2 || el.left < -2)
+        .sort((a, b) => b.right - a.right).slice(0, 14) };
+  });
+  assert(overflowReport.overflow <= 2,
+    'Neither Mermaid nor the infographic may overflow the page: ' + JSON.stringify(overflowReport));
 
   const measurements = await page.evaluate(() => {
     const charts = [...document.querySelectorAll('figure.mermaid-figure--editorial')];
