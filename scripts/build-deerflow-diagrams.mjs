@@ -64,7 +64,7 @@ const style = (accent, isBoundary = false, dark = false) => {
     'fill: ' + d2Quote(isBoundary ? fill : (dark ? '#203147' : '#ffffff')),
     'stroke: ' + d2Quote(stroke),
     'stroke-width: 2',
-    'font-color: ' + d2Quote(dark ? '#edf6ff' : '#1e3045')
+    'font-color: ' + d2Quote(dark ? '#edf6ff' : '#1e3045'),
     'font-size: 17',
     'border-radius: 10',
     ...(isBoundary ? ['stroke-dash: 3'] : ['shadow: true']),
