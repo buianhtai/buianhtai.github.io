@@ -25,6 +25,7 @@ interface Props {
 }
 const { src, svg, drawio, d2, title, eyebrow, description, caption, height = 500 } = Astro.props;
 const embedSrc = src ? src + (src.includes('?') ? '&' : '?') + 'embed=1' : '';
+const darkSvg = svg?.replace(/\.svg$/, '.dark.svg');
 ---
 
 {svg ? (
@@ -42,13 +43,13 @@ const embedSrc = src ? src + (src.includes('?') ? '&' : '?') + 'embed=1' : '';
         <button type="button" data-diagram-zoom="fit" class="de-drawing-fit" aria-label="Fit diagram to available width">Fit</button>
       </div>
       <div class="de-drawing-actions">
-        <a href={svg} target="_blank" rel="noopener">Open full-size SVG ↗</a>
+        <a href={svg} data-diagram-fullsize target="_blank" rel="noopener">Open full-size SVG ↗</a>
         {d2 && <a href={d2} download>D2 source ↓</a>}
         {drawio && <a href={drawio} download>Editable .drawio ↓</a>}
       </div>
     </div>
     <div class="de-drawing-viewport" tabindex="0" role="region" aria-label={'Scrollable diagram: ' + title}>
-      <img src={svg} alt={description || title} loading="lazy" decoding="async" draggable="false" />
+      <img src={svg} data-light-src={svg} data-dark-src={darkSvg} alt={description || title} loading="lazy" decoding="async" draggable="false" />
     </div>
     <div class="de-drawing-help">Fit shows the whole diagram. Zoom in for readable labels, then swipe or scroll to pan.</div>
     {(caption || drawio) && <figcaption class="de-drawing-caption">
@@ -187,10 +188,11 @@ const embedSrc = src ? src + (src.includes('?') ? '&' : '?') + 'embed=1' : '';
   .de-drawing-viewport {
     width: 100%; min-width: 0; max-width: 100%;
     box-sizing: border-box; overflow-x: auto; overflow-y: hidden;
-    padding: 1rem; background: #f8fafc;
+    padding: 1rem; background: #0b1726;
     overscroll-behavior-inline: contain;
     -webkit-overflow-scrolling: touch;
   }
+  :global(html.theme-light) .de-drawing-viewport { background: #f8fafc; }
   .de-drawing-viewport img {
     display: block; width: 100%; min-width: 0;
     max-width: none; height: auto; margin: 0;
@@ -246,6 +248,20 @@ const embedSrc = src ? src + (src.includes('?') ? '&' : '?') + 'embed=1' : '';
     const fit = figure.querySelector<HTMLButtonElement>('[data-diagram-zoom="fit"]');
     if (!viewport || !image || !status || !zoomIn || !zoomOut || !fit) continue;
 
+    const fullSize = figure.querySelector<HTMLAnchorElement>('[data-diagram-fullsize]');
+    const lightSource = image.dataset.lightSrc;
+    const darkSource = image.dataset.darkSrc;
+    const syncTheme = () => {
+      const isLight = document.documentElement.classList.contains('theme-light');
+      const target = isLight ? lightSource : (darkSource || lightSource);
+      if (!target) return;
+      if (image.getAttribute('src') !== target) image.setAttribute('src', target);
+      if (fullSize) fullSize.setAttribute('href', target);
+    };
+    new MutationObserver(syncTheme).observe(document.documentElement, {
+      attributes: true, attributeFilter: ['class'],
+    });
+    syncTheme();
     let scale = 1;
     function setZoom(value: number) {
       const next = Math.min(5, Math.max(1, Math.round(value * 100) / 100));
