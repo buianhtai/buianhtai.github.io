@@ -1,0 +1,402 @@
+---
+/**
+ * Source-anchored, interactive DeerFlow request-path explorer.
+ * Scenarios model representative exchanges, not a recorded trace. Events may
+ * overlap, particularly SSE and graph execution.
+ *
+ * Source revision: bytedance/deer-flow@1f15e0b43ca58b9601514f9f5c408fb032022833
+ */
+import { Icon } from 'astro-icon/components';
+
+const ref = '1f15e0b43ca58b9601514f9f5c408fb032022833';
+const sourceBase = 'https://github.com/bytedance/deer-flow/blob/' + ref + '/';
+const backend = 'backend/packages/harness/deerflow/';
+const app = 'backend/app/gateway/';
+const files = {
+  proxy: 'docker/nginx/nginx.conf',
+  front: 'frontend/src/core/api/api-client.ts',
+  route: app + 'routers/thread_runs.py',
+  threads: app + 'routers/threads.py',
+  admission: app + 'services.py',
+  request: app + 'run_models.py',
+  run: backend + 'runtime/runs/manager.py',
+  worker: backend + 'runtime/runs/worker.py',
+  agent: backend + 'agents/lead_agent/agent.py',
+  checkpoint: backend + 'runtime/checkpointer/provider.py',
+  sql: backend + 'persistence/run/model.py',
+  events: backend + 'runtime/events/store/db.py',
+  stream: backend + 'runtime/stream_bridge/base.py',
+  redis: backend + 'runtime/stream_bridge/redis.py',
+  model: backend + 'models/factory.py',
+  mcp: backend + 'mcp/client.py',
+  authz: backend + 'authz/provider.py',
+  reconnect: 'frontend/src/core/threads/stream-state.ts',
+};
+const lanes = [
+  {id:'fe', short:'FE', label:'Next.js / React',sub:'SDK & chat UI', icon:'lucide:monitor-smartphone'},
+  {id:'edge',short:'EDGE',label:'Nginx proxy',sub:'URL rewrite',icon:'lucide:network'},
+  {id:'gateway',short:'BE',label:'FastAPI Gateway',sub:'HTTP & SSE',icon:'lucide:shield-check'},
+  {id:'run',short:'RUNTIME',label:'RunManager / worker',sub:'asyncio + LangGraph',icon:'lucide:workflow'},
+  {id:'sql',short:'APP DB',label:'Application SQL',sub:'runs / run_events',icon:'lucide:database'},
+  {id:'checkpoint',short:'GRAPH DB',label:'LangGraph state',sub:'checkpoints / store',icon:'lucide:database-zap'},
+  {id:'stream',short:'STREAM',label:'StreamBridge',sub:'memory or Redis',icon:'lucide:radio-tower'},
+  {id:'llm',short:'MODEL',label:'LLM provider',sub:'model API',icon:'lucide:brain-circuit'},
+  {id:'tool',short:'TOOL',label:'MCP / sandbox',sub:'optional execution',icon:'lucide:terminal'},
+];
+const E = (from, to, protocol, label, when, what, why, storage, code) =>
+  ({from,to,protocol,label,when,what,why,storage,code});
+const scenarios = [
+  {
+    id:'chat',number:'01',icon:'lucide:message-square-text',name:'Chat → answer',
+    intro:'A normal user message with a direct model response; no tool call required.',
+    summary:'HTTP admission → in-process agent task → LangGraph state → SSE delivery',
+    steps:[
+      E('fe','edge','HTTPS','POST /runs/stream','The user sends a message.','LangGraph JS SDK submits a validated run payload, usually to /api/langgraph/threads/{thread_id}/runs/stream.','The client chooses a thread; it does not own run admission or backend execution.','HTTP request body; no persistent write yet.',files.front),
+      E('edge','gateway','HTTP','Rewrite /api/langgraph/*','Nginx receives the same-origin request.','The proxy rewrites /api/langgraph/* to /api/* and forwards it to FastAPI; streaming response buffering is disabled.','The browser keeps one stable public origin while the API has its own native paths.','No queue involved.',files.proxy),
+      E('gateway','sql','SQL','Admit run / INSERT runs','FastAPI authenticates and validates RunCreateRequest.','services.start_run() calls RunManager.create_or_reject(); a persistent RunStore records admission, request identity and status when configured.','Idempotent admission and exclusive thread/run ownership must happen before launching work.','runs: run_id, thread_id, status, idempotency_key, owner_worker_id.',files.admission),
+      E('gateway','run','IN-PROC','asyncio.create_task()','After successful durable admission.','Gateway attaches the coroutine returned by run_after_metadata() using asyncio.create_task(worker).','The worker is an in-process asynchronous task, not a Kafka/Temporal/RabbitMQ consumer.','Memory: asyncio Task attached to RunRecord.',files.admission),
+      E('run','checkpoint','CHECKPOINT','Load graph state','The agent invocation prepares thread state.','The LangGraph checkpointer loads the latest state or initializes a new thread; backend may be memory, SQLite or PostgreSQL.','A new turn can continue earlier graph context without reading the run-event journal as its checkpoint.','LangGraph checkpoint/store tables; logically separate from application runs.',files.checkpoint),
+      E('run','llm','HTTPS','Model call + tool schemas','The lead-agent model node executes.','The assembled LangChain agent sends messages and permitted tool schemas to the configured model provider.','Model reasoning/tool choice is runtime-controlled; model API calls are not direct browser traffic.','No DeerFlow DB write implied by the outbound model request.',files.agent),
+      E('llm','run','HTTPS','AIMessage: final answer','The model returns content without tool calls.','The graph receives the model response; this path skips MCP and sandbox execution.','Tool execution is a branch, not mandatory on every request.','Message is available in graph state and events.',files.worker),
+      E('run','checkpoint','CHECKPOINT','Persist graph checkpoint','Graph step or invocation state advances.','LangGraph persists state through its configured checkpointer.','A checkpoint supports future turns and safe resume semantics; it is not the SSE cursor.','checkpoints / checkpoint_blobs / checkpoint_writes managed by LangGraph.',files.worker),
+      E('run','stream','BRIDGE','publish(run_id, event)','The graph emits model, update, or completion data.','The worker publishes structured stream events through StreamBridge; memory or Redis Streams can implement the bridge.','Producer and connected browser subscriber should not be the same task.','Live retention/buffer, not durable SQL journal.',files.stream),
+      E('stream','gateway','BRIDGE','subscribe(run_id)','The SSE consumer awaits run events.','sse_consumer() iterates the stream bridge and formats events, heartbeat or terminal sentinel.','Streaming can overlap graph execution; it is not a final-only response.','Subscriber cursor may use Last-Event-ID.',files.admission),
+      E('gateway','fe','SSE','event: / data: / id:','While the model runs, and on completion.','The Gateway streams text/event-stream frames; the SDK updates React thread state as frames arrive.','No polling loop is required for every token; event delivery is server-driven over HTTP.','SSE replay cursor is not the checkpoint ID.',files.front),
+      E('run','sql','SQL','Persist terminal status','The run finishes, errors or is interrupted.','RunManager and journal store lifecycle status, usage and relevant events in application persistence.','Run metadata/journal survive independently of a subscriber connection.','runs.status; token usage; run_events (when configured).',files.run),
+    ],
+  },
+  {
+    id:'mcp',number:'02',icon:'lucide:plug-zap',name:'LLM → MCP tool',
+    intro:'The model selects an external tool. Watch which component authorizes the action and transports the call.',
+    summary:'Tool selection → policy → MCP transport → ToolMessage → model loop → SSE',
+    steps:[
+      E('fe','edge','HTTPS','Submit question','The user asks for data from an external system.','The React client sends a thread-scoped run request.','External tool access never begins in the browser.','The request includes the input messages.',files.front),
+      E('edge','gateway','HTTP','Proxy to Gateway','Nginx rewrites /api/langgraph/* to /api/*.','FastAPI receives and validates the run request.','Keep FE/BE boundaries explicit.','None at the proxy.',files.proxy),
+      E('gateway','sql','SQL','Create durable run','After authorization and admission.','RunManager persists the run identity and ownership in the configured RunStore.','Protect against concurrent conflicting writes on one thread.','runs + idempotency key if supplied.',files.run),
+      E('gateway','run','IN-PROC','Start worker task','The run has been admitted.','An asyncio Task executes the LangGraph graph using a configured agent factory.','There is no required external job broker in this default path.','RunRecord.task in memory.',files.admission),
+      E('run','llm','HTTPS','Send tool schemas','After graph state and available tools are assembled.','The lead agent sends the prompt and allowed tool definitions to the model.','This is where the model sees tool affordances, not where an external side effect has happened.','The authorized tool catalog comes from the harness.',files.agent),
+      E('llm','run','HTTPS','tool_calls(name, args)','The model requests a tool.','The model response contains a structured tool call with arguments for a named tool.','A model proposal is not itself an authorization decision.','AIMessage(tool_calls) enters graph state.',files.worker),
+      E('run','tool','MCP','Authorize, execute tool','Only after a permitted tool call is selected.','Authorization/guardrails are checked; the MCP adapter invokes a configured stdio, SSE or HTTP server. This scenario depicts HTTP/stdio as transport alternatives.','Tool availability and execution permission are separate controls.','Potential external side effect; not automatically exactly-once.',files.mcp),
+      E('tool','run','MCP','Tool result / error','Remote MCP tool finishes or fails.','Adapter returns the tool observation to the graph as a ToolMessage (or an error to handle).','The model must reason over observed data, not an assumed success.','Tool result becomes part of graph state.',files.worker),
+      E('run','checkpoint','CHECKPOINT','Checkpoint observation','The tool observation is merged into graph state.','LangGraph writes updated messages and other state using the checkpointer.','Future turns can inspect what the tool returned.','Graph checkpoint; distinct from run_events journal.',files.worker),
+      E('run','llm','HTTPS','Repeat model decision','After ToolMessage is appended.','The next model invocation sees previous tool output and chooses another call or final answer.','Agent execution is a loop, not a fixed chain of HTTP steps.','Model usage accumulates for the run.',files.agent),
+      E('run','stream','BRIDGE','Publish progress + answer','As graph chunks or terminal events become available.','The worker emits model/tool/update events to StreamBridge.','The UI can display tool progress while the graph continues.','Memory/Redis event buffer; not a job queue.',files.stream),
+      E('stream','gateway','BRIDGE','Deliver stream items','A browser has an active stream subscription.','Gateway consumes bridge entries and formats SSE.','Separate execution from transport to the browser.','Cursor and optional heartbeat.',files.admission),
+      E('gateway','fe','SSE','Render tool & answer','The browser receives event/data/id frames.','The SDK transforms incremental events into thread UI messages, tool progress and artifacts.','One-way SSE keeps presentation synchronized without granting the browser tool privileges.','The frontend holds presentation state.',files.front),
+    ],
+  },
+  {
+    id:'reconnect',number:'03',icon:'lucide:refresh-cw',name:'SSE reconnect',
+    intro:'A browser loses its SSE connection while the run remains active. Explore cursor replay versus durable-state reload.',
+    summary:'on_disconnect=continue → join active run → replay if retained → state refresh if gap',
+    steps:[
+      E('fe','edge','HTTPS','POST /runs/stream','The user starts a streaming run.','Client submits on_disconnect=continue to permit background execution after the creating stream closes.','Disconnect policy is part of the run contract, not an assumption of the UI.','Run request has on_disconnect policy.',files.request),
+      E('edge','gateway','HTTP','Forward to FastAPI','Nginx receives the request.','The proxy forwards the streaming path and disables buffering.','Browser-facing and native backend route namespaces differ.','No broker enqueue.',files.proxy),
+      E('gateway','run','IN-PROC','Start admitted run','The run is admitted.','Gateway creates an asyncio Task and retains a run ID for joining later.','The SSE connection does not own the graph execution task itself.','The RunRecord references the worker task.',files.admission),
+      E('run','stream','BRIDGE','Publish incremental output','Agent graph yields updates.','Worker publishes event chunks under the run ID; the configured StreamBridge retains a limited replay window.','Subscribers can rejoin without invoking the model a second time.','Redis Streams allows shared-worker subscriber access when selected.',files.stream),
+      E('stream','gateway','BRIDGE','Subscribe to events','The creating stream or observer subscribes.','The Gateway sse_consumer receives frames through StreamBridge.subscribe().','The same producer may outlive a particular client connection.','Subscriber has an event cursor.',files.admission),
+      E('gateway','fe','SSE','Stream interrupted','Browser network connection disappears.','With on_disconnect=continue, the original subscriber closes while the agent is allowed to keep running; cancel has different behavior.','A network failure is not necessarily an agent run failure.','Any already-persisted run/checkpoint state remains.',files.admission),
+      E('fe','edge','HTTPS','GET /runs/{id}/join','The client restores an in-flight run.','The frontend joins the existing run ID through the LangGraph-compatible join endpoint, with cursor data where applicable.','Joining does not mean creating a second run or redoing tool side effects.','Last-Event-ID identifies the requested stream cursor.',files.front),
+      E('edge','gateway','HTTP','Forward join request','Nginx rewrites the join route.','Gateway checks thread ownership, run state and whether its stream is reachable.','A process-local stream cannot automatically be observed from a different Gateway worker.','Run metadata may be checked in SQL.',files.route),
+      E('gateway','stream','BRIDGE','subscribe(last_event_id)','The target stream exists and the client requests replay.','The bridge returns retained events from the cursor or emits a gap if retained history is insufficient.','Bounded stream retention makes replay best-effort, not complete durable history.','Memory or Redis Streams replay buffer.',files.stream),
+      E('gateway','fe','SSE','Replay or gap signal','Gateway streams retained events, or detects a missing range.','A gap frame identifies stream_replay_gap and instructs the client to reload durable state.','Silently skipping lost events would give a misleading incomplete conversation.','SSE gap != missing SQL journal/checkpoint.',files.admission),
+      E('fe','edge','HTTPS','GET /threads/{id}/state','The replay gap indicates durable refresh is required.','Frontend requests a fresh thread state through /api/langgraph/threads/{thread_id}/state.','Never treat a missing retained SSE frame as proof that no checkpoint exists.','GET request; separate from the existing run.',files.front),
+      E('edge','gateway','HTTP','Forward state GET','Nginx receives the thread-state URL.','The proxy rewrites the prefix and sends the GET to FastAPI.','Client access still passes through server-side authorization and routing.','No direct browser-to-database access.',files.proxy),
+      E('gateway','checkpoint','CHECKPOINT','Read durable thread state','The thread-state handler evaluates the request.','The Gateway obtains the persisted graph state using the configured checkpointer.','Durable graph history is authoritative after a replay gap.','LangGraph checkpoint/store.',files.threads),
+      E('checkpoint','gateway','CHECKPOINT','Return saved state','Checkpoint read succeeds.','The checkpoint provider returns current values to the Gateway.','Reconciliation uses saved state rather than inventing lost live events.','State snapshot, not an SSE event replay.',files.checkpoint),
+      E('gateway','fe','HTTP','Render refreshed state','The HTTP request finishes.','The client updates the React thread state from the durable response.','This is recovery by reload, not re-executing an external tool.','Thread UI state refreshed.',files.front),
+    ],
+  },
+  {
+    id:'failure',number:'04',icon:'lucide:triangle-alert',name:'Worker fails',
+    intro:'What remains after a worker is lost, and what DeerFlow does not guarantee about retrying external effects.',
+    summary:'Run lease expires → orphan detected → durable state inspected → explicit recovery policy',
+    steps:[
+      E('fe','edge','HTTPS','Send task request','The user starts a task.','The frontend creates a thread-scoped run.','Client triggers the work, but backend owns its lifecycle.','Request carries run identity after admission.',files.front),
+      E('edge','gateway','HTTP','Rewrite /runs/stream','Nginx forwards the API request.','Gateway validates permissions and context.','Do not conflate proxy connection with worker ownership.','No application write at proxy.',files.proxy),
+      E('gateway','sql','SQL','Persist run ownership','Before the worker starts.','RunManager persists owner_worker_id and lease_expires_at when the SQL-backed multi-worker ownership path is enabled.','Run ownership lets other processes identify stale executions.','runs.owner_worker_id, runs.lease_expires_at.',files.run),
+      E('gateway','run','IN-PROC','Attach asyncio.Task','After successful admission.','Worker starts in the Gateway process, not as a separately reserved Kafka job.','Crash recovery must account for process-local execution state.','In-memory task handle; SQL metadata is separate.',files.admission),
+      E('run','checkpoint','CHECKPOINT','Persist graph progress','As graph steps complete.','LangGraph writes checkpoint state; it can precede the last external side effect.','Checkpoints help reconstruct graph state but do not guarantee the success of an external API operation.','Graph checkpoint tables.',files.worker),
+      E('run','stream','BRIDGE','Publish partial events','While the worker is alive.','Progress is written to in-memory or Redis Streams depending on configuration.','A client may see partial results before a worker failure.','Live stream retention is bounded.',files.stream),
+      E('run','sql','SQL','Heartbeat lease','While worker ownership heartbeat is enabled.','The owner renews its lease, typically every lease_seconds / 3; default lease 30s and grace 10s.','Peer detection of a dead worker requires timeouts and sufficiently synchronized clocks.','runs.lease_expires_at; heartbeat_enabled defaults false.',files.run),
+      E('run','run','IN-PROC','Worker lost: no callback','A crash or termination interrupts execution.','The running asyncio Task and its in-process state disappear; a process crash does not send a reliable notification to the Gateway or its peers.','A surviving process must infer lost ownership from persisted lease or reconnect behavior, rather than relying on a crash event.','External tool effects may be OUTCOME_UNKNOWN.',files.run),
+      E('gateway','sql','SQL','Detect expired ownership','A surviving worker or recovery path inspects the stored run.','Lease/orphan recovery may mark the abandoned run as interrupted/error according to the implementation and its configuration.','Orphan detection is not the same as blindly resuming the tool call.','Durable terminal status and stop reason are recorded.',files.run),
+      E('gateway','checkpoint','CHECKPOINT','Inspect durable graph state','Operator or application decides how to continue.','Checkpoint history indicates saved graph progress, but cannot resolve every external side effect.','An already-created remote resource must be reconciled with its source of truth.','Checkpoint exists independently of SSE replay.',files.checkpoint),
+      E('gateway','fe','SSE','Report interruption or refresh','The client reconnects or reloads history.','UI should show terminal/recoverable state from the Gateway rather than silently completing the interrupted run.','Explicit recovery is safer than retrying arbitrary side effects.','Run outcome is not proof that an external operation rolled back.',files.route),
+    ],
+  },
+];
+const laneIndex = Object.fromEntries(lanes.map((lane, i) => [lane.id,i]));
+const kindLabels = {HTTPS:'HTTPS / REST',HTTP:'HTTP PROXY',SQL:'SQL / ORM','IN-PROC':'PYTHON / ASYNC',CHECKPOINT:'LANGGRAPH STATE',BRIDGE:'STREAM BRIDGE',SSE:'SSE / HTTP',MCP:'MCP TRANSPORT'};
+const allSteps = scenarios.flatMap(scenario=>scenario.steps.map((step,i)=>({...step,scenario:scenario.id,i,key:scenario.id+'-'+i})));
+---
+
+<section class="drx not-prose" data-drx-root aria-label="DeerFlow interactive network and storage request explorer">
+  <div class="drx-heading">
+    <div class="drx-eyebrow"><Icon name="lucide:scan-eye" size={17}/> REQUEST PATH EXPLORER · SOURCE-BASED</div>
+    <h3>Follow the request. Inspect every boundary.</h3>
+    <p>Choose a scenario, then select an arrow or use Next/Previous. Trace the precise FE → proxy → Gateway → asynchronous execution → storage / model → SSE path, one interaction at a time.</p>
+    <div class="drx-topnote"><Icon name="lucide:info" size={15}/><span><strong>No default job queue.</strong> A normal run is attached as an <code>asyncio.Task</code>; Redis Streams is an optional <em>event-delivery bridge</em>, not a Kafka-style execution queue.</span></div>
+  </div>
+
+  <div class="drx-scenarios" role="group" aria-label="Choose request path">
+    {scenarios.map((scenario,i)=>(
+      <button type="button" data-drx-tab={scenario.id} class:list={['drx-tab',{ 'is-current':i===0 }]} aria-pressed={i===0}>
+        <Icon name={scenario.icon} size={17}/><span><small>SCENARIO {scenario.number}</small><strong>{scenario.name}</strong></span>
+      </button>
+    ))}
+  </div>
+
+  <div class="drx-scenario-overview" aria-live="polite">
+    {scenarios.map((scenario,i)=>(
+      <div data-drx-overview={scenario.id} hidden={i!==0}>
+        <strong>{scenario.summary}</strong>
+        <p>{scenario.intro}</p>
+      </div>
+    ))}
+  </div>
+
+  <div class="drx-main">
+    <div class="drx-map">
+      <div class="drx-map-toolbar"><span><Icon name="lucide:network" size={15}/> COMPONENT / PROTOCOL SWIMLANES</span><span><Icon name="lucide:move-horizontal" size={14}/> Swipe horizontally on mobile</span></div>
+      {scenarios.map((scenario,si)=>(
+        <div class="drx-view" data-drx-view={scenario.id} hidden={si!==0}>
+          <div class="drx-scroll" tabindex="0" aria-label={scenario.name+' request sequence, horizontally scrollable'}>
+            <div class="drx-canvas">
+              <div class="drx-lane-heads">
+                {lanes.map(lane=>(
+                  <button type="button" class="drx-lane" data-drx-lane={lane.id} aria-pressed="false" title={'Focus exchanges involving '+lane.label}>
+                    <Icon name={lane.icon} size={18}/>
+                    <strong>{lane.short}</strong><span>{lane.label}</span><small>{lane.sub}</small>
+                  </button>
+                ))}
+              </div>
+              <div class="drx-rows">
+                <div class="drx-lifelines" aria-hidden="true">
+                  {lanes.map((_,j)=><span style={'left:'+((j+0.5)/lanes.length*100)+'%'}></span>)}
+                </div>
+                {scenario.steps.map((step,i)=>{
+                  const from=laneIndex[step.from],to=laneIndex[step.to];
+                  const lo=Math.min(from,to),hi=Math.max(from,to),isBackward=from>to,isSelf=from===to;
+                  const left=(lo+.5)/lanes.length*100;
+                  const width=Math.max(0.04,(hi-lo)/lanes.length*100);
+                  const labelLeft=Math.min(81,Math.max(0,left));
+                  return <button type="button" class:list={['drx-flow',{ 'is-current':i===0 }]} data-drx-step={i} data-drx-from={step.from} data-drx-to={step.to} aria-pressed={i===0} aria-label={'Step '+(i+1)+': '+step.label+', '+step.from+' to '+step.to} title={'Step '+(i+1)+' · '+step.from+' → '+step.to+' · '+step.label}>
+                    <span class="drx-flow-label" style={'left:'+labelLeft+'%'}><span>{String(i+1).padStart(2,'0')}</span>{step.label}</span>
+                    <span class:list={['drx-wire','proto-'+step.protocol.toLowerCase(),{'is-backwards':isBackward,'is-self':isSelf}]} style={'--x:'+left+'%;--w:'+width+'%;'}><span class="drx-origin"></span><span class="drx-arrowhead"></span></span>
+                    <span class="drx-proto" style={'left:'+Math.min(86,Math.max(0,((from+to+1)/2/lanes.length*100)))+'%'}>{step.protocol}</span>
+                  </button>;
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      ))}
+      <div class="drx-legend">
+        <span><i class="proto-https"></i> HTTP(S)</span>
+        <span><i class="proto-in-proc"></i> in-process</span>
+        <span><i class="proto-sql"></i> SQL / checkpoint</span>
+        <span><i class="proto-bridge"></i> bridge</span>
+        <span><i class="proto-sse"></i> SSE</span>
+        <span><i class="proto-mcp"></i> MCP</span>
+      </div>
+    </div>
+
+    <aside class="drx-inspector" aria-label="Selected request step" aria-live="polite">
+      <div class="drx-inspector-head"><Icon name="lucide:crosshair" size={16}/> EXCHANGE INSPECTOR <span data-drx-count>01 / 12</span></div>
+      {allSteps.map(step=>(
+        <article class="drx-detail" data-drx-detail={step.key} hidden={!(step.scenario==='chat'&&step.i===0)}>
+          <div class="drx-detail-id">EXCHANGE {String(step.i+1).padStart(2,'0')} · {kindLabels[step.protocol]}</div>
+          <h4>{step.label}</h4>
+          <div class="drx-endpoints">
+            <div><small>FROM</small><strong>{lanes[laneIndex[step.from]].label}</strong></div>
+            <Icon name="lucide:arrow-right" size={20}/>
+            <div><small>TO</small><strong>{lanes[laneIndex[step.to]].label}</strong></div>
+          </div>
+          <div class="drx-field"><span><Icon name="lucide:clock-3" size={14}/> WHEN</span><p>{step.when}</p></div>
+          <div class="drx-field"><span><Icon name="lucide:settings-2" size={14}/> WHAT HAPPENS</span><p>{step.what}</p></div>
+          <div class="drx-field"><span><Icon name="lucide:lightbulb" size={14}/> WHY IT EXISTS</span><p>{step.why}</p></div>
+          <div class="drx-storage"><Icon name="lucide:database" size={15}/><span>{step.storage}</span></div>
+          <a class="drx-code-link" href={sourceBase+step.code} target="_blank" rel="noopener noreferrer"><Icon name="lucide:code-2" size={16}/> Inspect implementation <Icon name="lucide:external-link" size={13}/></a>
+          <code class="drx-path">{step.code}</code>
+        </article>
+      ))}
+      <div class="drx-nav"><button type="button" data-drx-prev disabled><Icon name="lucide:arrow-left" size={16}/> Previous</button><button type="button" data-drx-next>Next <Icon name="lucide:arrow-right" size={16}/></button></div>
+    </aside>
+  </div>
+
+  <div class="drx-lower">
+    <div><Icon name="lucide:layers-3" size={20}/><strong>Two databases, logically—not always physically.</strong><span>Application SQL tables and LangGraph checkpoint tables may share the same SQLite file or PostgreSQL database. Their schemas and owners remain different.</span></div>
+    <div><Icon name="lucide:shield-alert" size={20}/><strong>Not a packet capture.</strong><span>Order is representative. Stream publishing, SQL writes, and checkpointing can overlap. Some arrows summarize a server-mediated read for clarity.</span></div>
+  </div>
+  <footer class="drx-footer">Code revision: <a href={'https://github.com/bytedance/deer-flow/tree/'+ref} target="_blank" rel="noopener noreferrer">{ref.slice(0,7)}</a> · Verified by inspecting the FastAPI, Nginx, runtime, SSE, persistence and frontend adapters. Select any arrow or lane to investigate further.</footer>
+</section>
+
+<style>
+.drx{--drx-bg:#0c1625;--drx-surface:#142238;--drx-card:#182b40;--drx-ink:#eaf4ff;--drx-dim:#a9bfd4;--drx-line:#324a63;--drx-accent:#73d9cd;--drx-selected:#19444c;--drx-blue:#81bffa;--drx-orange:#ffc58b;--drx-green:#82dac3;--drx-purple:#b5a3f8;--drx-pink:#f7a7bf;max-width:100%;min-width:0;overflow:hidden;border:1px solid var(--color-border);border-radius:17px;background:var(--drx-bg);color:var(--drx-ink);margin:2rem 0;font-family:Inter,system-ui,sans-serif;box-shadow:0 20px 48px #00000019}
+.drx *{box-sizing:border-box}
+.drx-heading{padding:clamp(1rem,2.5vw,1.8rem);background:radial-gradient(ellipse at top left,#15505b66,transparent 60%),var(--drx-bg);border-bottom:1px solid var(--drx-line)}
+.drx-eyebrow{font:700 .65rem/1.6 var(--font-mono,monospace);letter-spacing:.09em;color:var(--drx-accent);display:flex;align-items:center;gap:.5rem}
+.drx-heading h3{font-size:clamp(1.2rem,2.3vw,1.7rem)!important;letter-spacing:-.035em!important;line-height:1.3!important;margin:.65rem 0 .55rem!important;color:var(--drx-ink)!important}
+.drx-heading>p{color:var(--drx-dim);line-height:1.65;font-size:.8rem;max-width:82ch;margin:0}
+.drx-topnote{display:flex;align-items:flex-start;gap:.6rem;margin-top:1rem;background:color-mix(in srgb,var(--drx-accent) 10%,var(--drx-surface));border:1px solid color-mix(in srgb,var(--drx-accent) 40%,var(--drx-line));border-radius:9px;padding:.8rem;color:var(--drx-dim);font-size:.72rem;line-height:1.55}
+.drx-topnote svg{flex-shrink:0;color:var(--drx-accent);margin-top:.1rem}
+.drx-topnote strong{color:var(--drx-ink)}.drx-topnote code{font-family:var(--font-mono,monospace);color:var(--drx-accent);font-size:.7rem}
+.drx-scenarios{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.4rem;padding:.8rem;background:var(--drx-surface);border-bottom:1px solid var(--drx-line)}
+.drx-tab{display:flex;align-items:center;gap:.55rem;min-width:0;padding:.7rem .65rem;border-radius:8px;border:1px solid transparent;color:var(--drx-dim);background:transparent;text-align:left;cursor:pointer;font:inherit}
+.drx-tab>svg{color:var(--drx-accent);flex-shrink:0}
+.drx-tab>span{display:flex;flex-direction:column;gap:.25rem;min-width:0}
+.drx-tab small{font:.59rem var(--font-mono,monospace);letter-spacing:.04em;color:var(--drx-dim)}.drx-tab strong{font-size:.76rem;line-height:1.3;color:var(--drx-ink)}
+.drx-tab:hover{background:var(--drx-card)}.drx-tab.is-current{background:var(--drx-selected);border-color:color-mix(in srgb,var(--drx-accent) 48%,var(--drx-line))}
+.drx-tab:focus-visible,.drx-flow:focus-visible,.drx-lane:focus-visible,.drx-nav button:focus-visible{outline:2px solid var(--drx-accent);outline-offset:2px}
+.drx-scenario-overview{border-bottom:1px solid var(--drx-line);padding:.85rem 1rem;background:var(--drx-bg);min-height:84px}
+.drx-scenario-overview strong{font-size:.74rem;line-height:1.5;color:var(--drx-accent)}.drx-scenario-overview p{margin:.25rem 0 0;font-size:.73rem;line-height:1.6;color:var(--drx-dim)}
+.drx-main{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(255px,1fr);align-items:stretch}
+.drx-map{min-width:0;overflow:hidden;border-right:1px solid var(--drx-line)}
+.drx-map-toolbar{display:flex;align-items:center;justify-content:space-between;gap:.7rem;flex-wrap:wrap;padding:.75rem .85rem;border-bottom:1px solid var(--drx-line);color:var(--drx-dim);font:700 .58rem/1.5 var(--font-mono,monospace);letter-spacing:.035em}
+.drx-map-toolbar>span{display:flex;align-items:center;gap:.35rem}.drx-map-toolbar svg{color:var(--drx-accent)}
+.drx-scroll{width:100%;max-width:100%;min-width:0;overflow-x:auto;overflow-y:hidden;scrollbar-color:var(--drx-line) transparent;overscroll-behavior-inline:contain;-webkit-overflow-scrolling:touch}
+.drx-scroll:focus-visible{outline:2px solid var(--drx-accent);outline-offset:-2px}
+.drx-canvas{width:100%;min-width:1160px}
+.drx-lane-heads{display:grid;grid-template-columns:repeat(9,minmax(0,1fr));border-bottom:1px solid var(--drx-line);padding:.55rem 0;background:var(--drx-surface)}
+.drx-lane{border:0;border-right:1px solid var(--drx-line);min-width:0;padding:.65rem .25rem;background:transparent;color:var(--drx-dim);display:flex;flex-direction:column;align-items:center;gap:.23rem;cursor:pointer;font:inherit}
+.drx-lane:last-child{border-right:0}.drx-lane>svg{color:var(--drx-accent)}.drx-lane strong{font:700 .63rem var(--font-mono,monospace);color:var(--drx-ink)}.drx-lane span{font-size:.64rem;line-height:1.3;text-align:center}.drx-lane small{font-size:.58rem;color:var(--drx-dim)}
+.drx-lane:hover,.drx-lane.is-focused{background:var(--drx-selected)}
+.drx-rows{position:relative;padding:.55rem 0;background:var(--drx-bg)}
+.drx-lifelines{position:absolute;pointer-events:none;inset:0}.drx-lifelines span{position:absolute;top:0;bottom:0;border-left:1px dashed var(--drx-line);opacity:.85}
+.drx-flow{height:61px;width:100%;display:block;position:relative;padding:0;background:transparent;border:0;border-bottom:1px solid color-mix(in srgb,var(--drx-line) 32%,transparent);cursor:pointer;font:inherit;color:var(--drx-ink);text-align:left}
+.drx-flow:hover{background:color-mix(in srgb,var(--drx-accent) 7%,transparent)}
+.drx-flow.is-current{background:color-mix(in srgb,var(--drx-accent) 15%,transparent);box-shadow:inset 3px 0 var(--drx-accent)}
+.drx-flow.is-muted{opacity:.22}
+.drx-flow-label{position:absolute;top:5px;white-space:nowrap;overflow:hidden;max-width:222px;text-overflow:ellipsis;display:flex;align-items:center;gap:.4rem;color:var(--drx-ink);font:650 .66rem/1.4 var(--font-mono,monospace);padding:.12rem .3rem;border-radius:4px;background:var(--drx-bg)}
+.drx-flow-label span{color:var(--drx-accent);font-weight:800}
+.drx-wire{position:absolute;left:var(--x);width:var(--w);top:35px;height:2px;background:var(--drx-blue);color:var(--drx-blue);min-width:7px}
+.drx-wire.proto-http,.drx-wire.proto-https{background:var(--drx-blue);color:var(--drx-blue)}
+.drx-wire.proto-in-proc{background:var(--drx-purple);color:var(--drx-purple)}
+.drx-wire.proto-sql,.drx-wire.proto-checkpoint{background:var(--drx-orange);color:var(--drx-orange)}
+.drx-wire.proto-bridge{background:var(--drx-green);color:var(--drx-green)}
+.drx-wire.proto-sse{background:var(--drx-accent);color:var(--drx-accent)}
+.drx-wire.proto-mcp{background:var(--drx-pink);color:var(--drx-pink)}
+.drx-origin{width:6px;height:6px;border-radius:50%;border:1px solid currentColor;background:var(--drx-bg);position:absolute;left:-3px;top:-2px}
+.drx-arrowhead{position:absolute;right:-2px;top:-4px;border:5px solid transparent;border-left-color:currentColor}
+.drx-wire.is-backwards .drx-arrowhead{right:auto;left:-6px;transform:rotate(180deg)}
+.drx-wire.is-backwards .drx-origin{left:auto;right:-2px}
+.drx-wire.is-self{width:16px!important;border-top:2px dashed currentColor;height:15px;background:transparent}
+.drx-proto{position:absolute;top:45px;font:600 .53rem/1.3 var(--font-mono,monospace);color:var(--drx-dim);letter-spacing:.06em;white-space:nowrap;background:var(--drx-bg);padding:0 .2rem}
+.drx-legend{display:flex;align-items:center;gap:.4rem .75rem;flex-wrap:wrap;padding:.65rem .85rem;background:var(--drx-surface);border-top:1px solid var(--drx-line)}
+.drx-legend span{display:flex;align-items:center;gap:.3rem;color:var(--drx-dim);font:500 .58rem/1.4 var(--font-mono,monospace)}
+.drx-legend i{display:inline-block;height:3px;width:13px;background:var(--drx-blue)}.drx-legend i.proto-in-proc{background:var(--drx-purple)}.drx-legend i.proto-sql{background:var(--drx-orange)}.drx-legend i.proto-bridge{background:var(--drx-green)}.drx-legend i.proto-sse{background:var(--drx-accent)}.drx-legend i.proto-mcp{background:var(--drx-pink)}
+.drx-inspector{min-width:0;padding:1rem;background:var(--drx-surface);display:flex;flex-direction:column}
+.drx-inspector-head{display:flex;align-items:center;gap:.5rem;border-bottom:1px solid var(--drx-line);padding:0 0 .75rem;color:var(--drx-accent);font:700 .61rem/1.5 var(--font-mono,monospace);letter-spacing:.05em}
+.drx-inspector-head span{margin-left:auto;color:var(--drx-dim);font-variant-numeric:tabular-nums}
+.drx-detail{min-width:0;flex:1;padding-top:1rem}
+.drx-detail-id{font:700 .63rem var(--font-mono,monospace);color:var(--drx-accent);letter-spacing:.03em}
+.drx-detail h4{color:var(--drx-ink)!important;line-height:1.32!important;font-size:1.18rem!important;margin:.65rem 0 1rem!important}
+.drx-endpoints{display:grid;grid-template-columns:minmax(0,1fr) 20px minmax(0,1fr);align-items:center;gap:.6rem;border:1px solid var(--drx-line);border-radius:9px;padding:.65rem;background:var(--drx-bg)}
+.drx-endpoints>div{min-width:0}.drx-endpoints small{display:block;color:var(--drx-dim);font:600 .58rem var(--font-mono,monospace);margin-bottom:.3rem}
+.drx-endpoints strong{font-size:.72rem;line-height:1.35;color:var(--drx-ink);overflow-wrap:anywhere}.drx-endpoints svg{color:var(--drx-accent)}
+.drx-field{padding:.8rem 0;border-bottom:1px solid var(--drx-line)}
+.drx-field>span{display:flex;align-items:center;gap:.35rem;font:750 .63rem var(--font-mono,monospace);color:var(--drx-accent)}
+.drx-field p{font-size:.75rem;line-height:1.65;color:var(--drx-ink);margin:.38rem 0 0;overflow-wrap:anywhere}
+.drx-storage{display:flex;align-items:flex-start;gap:.45rem;margin:.95rem 0;border:1px solid color-mix(in srgb,var(--drx-orange) 32%,var(--drx-line));border-radius:7px;background:var(--drx-bg);padding:.65rem;font-size:.69rem;line-height:1.55;color:var(--drx-dim)}
+.drx-storage svg{flex-shrink:0;color:var(--drx-orange)}
+.drx-code-link{display:flex;align-items:center;gap:.4rem;color:var(--drx-accent)!important;font:700 .72rem var(--font-mono,monospace);text-decoration:none!important;padding:.45rem 0}
+.drx-code-link:hover{text-decoration:underline!important}
+.drx-path{font:500 .6rem/1.5 var(--font-mono,monospace);color:var(--drx-dim);overflow-wrap:anywhere;display:block}
+.drx-nav{display:flex;gap:.6rem;margin-top:auto;padding-top:1.1rem}
+.drx-nav button{display:flex;flex:1;justify-content:center;align-items:center;gap:.35rem;border:1px solid var(--drx-line);border-radius:7px;padding:.65rem .45rem;font:700 .7rem var(--font-mono,monospace);background:var(--drx-card);color:var(--drx-ink);cursor:pointer}
+.drx-nav button:hover:not(:disabled){border-color:var(--drx-accent)}.drx-nav button:disabled{opacity:.35;cursor:default}
+.drx-lower{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.6rem;padding:.85rem;border-top:1px solid var(--drx-line)}
+.drx-lower>div{display:grid;grid-template-columns:20px minmax(0,1fr);align-content:start;column-gap:.6rem;row-gap:.25rem;border:1px solid var(--drx-line);padding:.7rem;border-radius:8px}
+.drx-lower svg{color:var(--drx-accent);grid-row:span 2}.drx-lower strong{font-size:.72rem;color:var(--drx-ink)}.drx-lower span{font-size:.68rem;line-height:1.6;color:var(--drx-dim)}
+.drx-footer{padding:.8rem 1rem;border-top:1px solid var(--drx-line);color:var(--drx-dim);font:.62rem/1.65 var(--font-mono,monospace)}
+.drx-footer a{color:var(--drx-accent)!important;text-decoration:underline}
+:global(html.theme-light) .drx{--drx-bg:#f7fbff;--drx-surface:#edf5fb;--drx-card:#ffffff;--drx-ink:#182c44;--drx-dim:#536b80;--drx-line:#d2e0ec;--drx-accent:#087873;--drx-selected:#dcefeb;--drx-blue:#246aab;--drx-orange:#af722c;--drx-green:#147c67;--drx-purple:#7762b9;--drx-pink:#ae476a;box-shadow:0 15px 36px #1b39531c}
+:global(html.theme-light) .drx-heading{background:radial-gradient(ellipse at top left,#cfeae55c,transparent 65%),var(--drx-bg)}
+@media(max-width:1100px){.drx-main{grid-template-columns:minmax(0,1fr)}.drx-map{border-right:0;border-bottom:1px solid var(--drx-line)}.drx-inspector{padding:.95rem}.drx-detail{flex:none}.drx-scenarios{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:540px){.drx-heading{padding:1rem}.drx-tab{padding:.5rem}.drx-tab strong{font-size:.69rem}.drx-tab small{font-size:.53rem}.drx-scenarios{gap:.25rem;padding:.45rem}.drx-scenario-overview{padding:.75rem}.drx-lower{grid-template-columns:minmax(0,1fr)}.drx-map-toolbar{font-size:.55rem}}
+@media(prefers-reduced-motion:reduce){.drx *{scroll-behavior:auto!important}}
+</style>
+
+<script>
+  for (const root of document.querySelectorAll<HTMLElement>('[data-drx-root]')) {
+    const tabs = [...root.querySelectorAll<HTMLButtonElement>('[data-drx-tab]')];
+    const views = [...root.querySelectorAll<HTMLElement>('[data-drx-view]')];
+    const overview = [...root.querySelectorAll<HTMLElement>('[data-drx-overview]')];
+    const detailPanels = [...root.querySelectorAll<HTMLElement>('[data-drx-detail]')];
+    const prev = root.querySelector<HTMLButtonElement>('[data-drx-prev]');
+    const next = root.querySelector<HTMLButtonElement>('[data-drx-next]');
+    const count = root.querySelector<HTMLElement>('[data-drx-count]');
+    if (!tabs.length || !prev || !next || !count) continue;
+    let scenario = tabs[0].dataset.drxTab || 'chat';
+    let selected = 0;
+    let focusedLane: string | null = null;
+    function activate(index: number) {
+      const view = views.find(x => x.dataset.drxView === scenario);
+      if (!view) return;
+      const arrows = [...view.querySelectorAll<HTMLButtonElement>('[data-drx-step]')];
+      selected = Math.max(0, Math.min(arrows.length - 1, index));
+      arrows.forEach((button,i) => {
+        const current = i === selected;
+        button.classList.toggle('is-current', current);
+        button.setAttribute('aria-pressed', String(current));
+      });
+      detailPanels.forEach(panel => { panel.hidden = panel.dataset.drxDetail !== scenario+'-'+selected; });
+      count.textContent = String(selected+1).padStart(2,'0')+' / '+String(arrows.length).padStart(2,'0');
+      // Keep the currently selected protocol hop visible inside the diagram
+      // scroller. Never scroll the entire blog horizontally on mobile.
+      const scroll = view.querySelector<HTMLElement>('.drx-scroll');
+      const wire = arrows[selected]?.querySelector<HTMLElement>('.drx-wire');
+      if (scroll && wire) {
+        const box = wire.getBoundingClientRect();
+        const frame = scroll.getBoundingClientRect();
+        const center = (box.left + box.width / 2) - frame.left + scroll.scrollLeft;
+        scroll.scrollLeft = Math.max(0, center - scroll.clientWidth / 2);
+      }
+      prev.disabled = selected === 0;
+      next.disabled = selected === arrows.length - 1;
+    }
+    function updateFocus() {
+      const view = views.find(x => x.dataset.drxView === scenario);
+      if (!view) return;
+      view.querySelectorAll<HTMLButtonElement>('[data-drx-lane]').forEach(button => {
+        const yes = button.dataset.drxLane === focusedLane;
+        button.classList.toggle('is-focused', yes);
+        button.setAttribute('aria-pressed', String(yes));
+      });
+      view.querySelectorAll<HTMLElement>('[data-drx-step]').forEach(row => {
+        const related = row.dataset.drxFrom === focusedLane || row.dataset.drxTo === focusedLane;
+        row.classList.toggle('is-muted', !!focusedLane && !related);
+      });
+    }
+    tabs.forEach(button => button.addEventListener('click', () => {
+      scenario = button.dataset.drxTab || 'chat';
+      selected = 0;
+      focusedLane = null;
+      tabs.forEach(tab => {
+        const active = tab === button;
+        tab.classList.toggle('is-current', active);
+        tab.setAttribute('aria-pressed', String(active));
+      });
+      views.forEach(view => { view.hidden = view.dataset.drxView !== scenario; });
+      overview.forEach(item => { item.hidden = item.dataset.drxOverview !== scenario; });
+      activate(0);
+      updateFocus();
+    }));
+    for (const view of views) {
+      view.querySelectorAll<HTMLButtonElement>('[data-drx-step]').forEach(button => {
+        button.addEventListener('click', () => activate(Number(button.dataset.drxStep)));
+      });
+      view.querySelectorAll<HTMLButtonElement>('[data-drx-lane]').forEach(button => {
+        button.addEventListener('click', () => {
+          const lane = button.dataset.drxLane || null;
+          focusedLane = focusedLane === lane ? null : lane;
+          updateFocus();
+        });
+      });
+    }
+    prev.addEventListener('click', () => activate(selected - 1));
+    next.addEventListener('click', () => activate(selected + 1));
+    activate(0);
+  }
+</script>

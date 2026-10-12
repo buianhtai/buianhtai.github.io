@@ -63,6 +63,44 @@ async function inspect(width, theme) {
       return image && image.complete && image.naturalWidth > 0;
     }, i, { timeout: 15_000 });
   }
+  const explorer = page.locator('[data-drx-root]');
+  assert.equal(await explorer.count(), 1, 'Interactive request explorer must be present');
+  assert.equal(await explorer.locator('[data-drx-tab]').count(), 4, 'Four real execution scenarios');
+  const first = explorer.locator('[data-drx-view="chat"]');
+  assert.equal(await first.locator('[data-drx-lane]').count(), 9, 'FE, proxy, BE, runtime, DB, checkpoint, stream, model, tool lanes');
+  assert.equal(await first.locator('[data-drx-step]').count(), 12, 'Normal chat scenario should have 12 exchanges');
+  assert.equal(await explorer.locator('[data-drx-detail]:visible').count(), 1, 'Exactly one exchange inspector is visible');
+  await explorer.locator('[data-drx-next]').click();
+  assert.equal(await explorer.locator('[data-drx-detail="chat-1"]').isVisible(), true, 'Next traverses real request exchanges');
+  await explorer.locator('[data-drx-tab="mcp"]').click();
+  assert.equal(await explorer.locator('[data-drx-view="chat"]').isVisible(), false, 'Old request sequence hidden');
+  assert.equal(await explorer.locator('[data-drx-view="mcp"]').isVisible(), true, 'MCP path shown');
+  await explorer.locator('[data-drx-view="mcp"] [data-drx-step="6"]').click();
+  assert.equal(await explorer.locator('[data-drx-detail="mcp-6"]').isVisible(), true, 'MCP authorization exchange selected');
+  await explorer.locator('[data-drx-view="mcp"] [data-drx-lane="tool"]').click();
+  assert.equal(await explorer.locator('[data-drx-view="mcp"] .drx-flow.is-muted').count() > 0, true, 'Lane focus mutes unrelated hops');
+  await explorer.locator('[data-drx-tab="reconnect"]').click();
+  assert.equal(await explorer.locator('[data-drx-detail="reconnect-0"]').isVisible(), true, 'Scenario switch resets inspector');
+  await explorer.locator('[data-drx-tab="failure"]').click();
+  assert.equal(await explorer.locator('[data-drx-view="failure"]').isVisible(), true, 'Worker failure sequence shown');
+  await explorer.locator('[data-drx-prev]').isDisabled().then((disabled) =>
+    assert.equal(disabled, true, 'Previous disabled at first exchange'));
+  await explorer.locator('[data-drx-tab="chat"]').click();
+  assert.equal(await explorer.locator('[data-drx-detail]:visible').count(), 1, 'Only selected inspector active after switching back');
+  await explorer.screenshot({ path: output + '/request-explorer-' + theme + '-' + width + '.png' });
+  const explorerMetrics = await explorer.evaluate((el) => {
+    const scroll = el.querySelector('.drx-view:not([hidden]) .drx-scroll');
+    const style = getComputedStyle(el);
+    return { width: el.getBoundingClientRect().width, background: style.backgroundColor,
+      scrollerWidth: scroll.clientWidth, scrollWidth: scroll.scrollWidth };
+  });
+  assert.equal(explorerMetrics.background, theme === 'light' ? 'rgb(247, 251, 255)' : 'rgb(12, 22, 37)',
+    'Request explorer follows active site theme');
+  if (width <= 768) {
+    assert(explorerMetrics.scrollWidth > explorerMetrics.scrollerWidth,
+      'Nine-lane protocol diagram must pan within its own viewport on mobile');
+  }
+
   // The E2E walkthrough must be interactive, not just numbered static boxes.
   const trace = page.locator('[data-deerflow-e2e]');
   assert.equal(await trace.count(), 1, 'A technical E2E walkthrough should be present');
