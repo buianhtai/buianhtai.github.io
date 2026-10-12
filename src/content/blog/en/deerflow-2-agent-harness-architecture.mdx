@@ -1,0 +1,507 @@
+---
+title: "Inside DeerFlow 2.0: How ByteDance Builds a Long-Running AI Agent"
+description: "A source-code walkthrough of DeerFlow's LangGraph agent loop, Gateway, middleware, tools, MCP, skills, sandbox, subagents, memory, checkpointing, streaming, cost controls, and lessons for building an agent platform."
+pubDate: 2026-10-12
+tags: ["ai", "agents", "deerflow", "langgraph", "langchain", "architecture", "multi-agent", "mcp", "agent-platform"]
+lang: "en"
+category: "ai"
+series: "ai-agent-tools"
+seriesOrder: 21
+featured: true
+draft: false
+postLayout: "foundations"
+---
+
+import Card from '../../../components/mdx/Card.astro';
+import Label from '../../../components/mdx/Label.astro';
+import Callout from '../../../components/mdx/Callout.astro';
+import FlowStep from '../../../components/mdx/FlowStep.astro';
+import DataTable from '../../../components/mdx/DataTable.astro';
+import Mermaid from '../../../components/mdx/Mermaid.astro';
+
+**How do you actually build an AI agent?** Not a prompt that calls a search tool once, but an agent that plans a multi-hour task, explores a codebase, delegates independent subtasks, executes commands safely, remembers useful facts, and streams its work to a browser.
+
+I read the [DeerFlow](https://github.com/bytedance/deer-flow) source to answer that question. The useful discovery is that **the model is only one part of the system**. Almost everything that makes an agent usable in practice is engineering around the model: controlled tools, state, execution environments, middleware, persistence, streaming, identity, and recovery.
+
+This article examines **DeerFlow 2.0**, not the older 1.x Deep Research implementation. Version 2 is a ground-up rewrite. I reviewed repository `main` at [commit `1f15e0b`](https://github.com/bytedance/deer-flow/tree/1f15e0b43ca58b9601514f9f5c408fb032022833) on **October 12, 2026**. Architecture and class names can change after that commit. The pseudocode below explains the execution model; it is **not a verbatim copy** of the implementation.
+
+<Callout color="teal">
+  **Mental model:** DeerFlow is a *harness for agents*, not a magical model and not simply a predefined LangGraph flow. It assembles a language model, tools, instructions, state schema, and middleware into a runnable agent, then surrounds it with a Gateway, sandbox, persistence, and UI.
+</Callout>
+
+## <Label color="teal">01</Label> Architecture at a glance
+
+The deployed system has four main runtime pieces. Nginx is its public entry point. Next.js renders the workspace. The FastAPI Gateway hosts the actual agent runtime. An optional provisioner creates remote sandboxes when that deployment mode is selected.
+
+<Mermaid
+  chart={`flowchart TB
+    Web["Browser / Next.js :3000"]
+    IM["Slack / Telegram / Feishu / other channels"]
+    Nginx["Nginx :2026<br/>single public ingress"]
+    GW["FastAPI Gateway :8001<br/>thread and run APIs"]
+    RM["RunManager + run_agent()<br/>StreamBridge"]
+    Harness["DeerFlow harness<br/>make_lead_agent()"]
+    Tools["Tools / MCP / Skills"]
+    Store[("Checkpoints / Run state<br/>Memory / metadata")]
+    Sandbox["Sandbox provider<br/>local or isolated"]
+    Prov["Optional Provisioner :8002"]
+    Web --> Nginx
+    IM --> GW
+    Nginx -->|"/api/langgraph/* + /api/*"| GW
+    Nginx -->|"HTML / assets"| Web
+    GW --> RM --> Harness
+    Harness <--> Tools
+    Harness <--> Store
+    Tools --> Sandbox
+    Prov -.-> Sandbox`}
+  caption="Logical topology reconstructed from the DeerFlow 2.0 architecture documentation. The frontend and API are separate services, but the normal Gateway path embeds the LangGraph-compatible runtime."
+/>
+
+| Component | Responsibility | Important boundary |
+| --- | --- | --- |
+| **Gateway / App** | HTTP APIs, authentication, messaging channels, run lifecycle | Network-facing application |
+| **Harness** | Models, agent creation, tools, MCP, memory, middleware, sandbox interface | Reusable execution logic |
+| **LangGraph / LangChain** | Agent graph, tool loop, state transitions and checkpoints | Orchestration primitive |
+| **Sandbox** | Filesystem and command execution | Untrusted code execution |
+| **Frontend** | Threads, streaming messages, artifacts and task progress | Presentation, not execution ownership |
+
+A subtle design choice matters: the reusable package lives under `backend/packages/harness/deerflow/`, while the app lives under `backend/app/`. **The application depends on the harness; the harness must not depend on the application.** A repository test enforces that boundary. This is a useful pattern if the same agent core must eventually serve a browser, scheduler, webhook, or CLI.
+
+Source: [top-level architecture](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/docs/ARCHITECTURE.md), [backend architecture](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/docs/ARCHITECTURE.md).
+
+## <Label color="green">02</Label> What happens after a user sends a message?
+
+Take a concrete request:
+
+> “Investigate why this web service became slow, inspect the recent changes, and write a short report.”
+
+That instruction is **not** hardcoded to run search, then shell, then a summary. Instead, the agent sees a set of available tool schemas, chooses the next action, receives its result, and repeats until it can answer or hits a limit.
+
+<Mermaid
+  chart={`sequenceDiagram
+    autonumber
+    participant U as Browser
+    participant G as Gateway / RunManager
+    participant A as Lead Agent
+    participant M as LLM
+    participant T as Tool Registry
+    participant S as Sandbox / External API
+    participant DB as Checkpointer
+    U->>G: Submit message in thread
+    G->>DB: Load thread state
+    G->>A: Start graph with run context
+    A->>M: Messages + system prompt + tool schemas
+    M-->>A: Tool call (name + arguments)
+    A->>T: Dispatch authorized tool
+    T->>S: Execute bounded operation
+    S-->>T: Result or error
+    T-->>A: ToolMessage
+    A->>DB: Checkpoint state
+    A->>M: Continue with observation
+    M-->>A: Final text or another tool call
+    A-->>G: Events + final output
+    G-->>U: SSE message / state / task updates`}
+  caption="An illustrative end-to-end turn. The actual run may issue multiple tool calls and middleware can intercept or stop execution."
+/>
+
+<FlowStep steps={[
+  { title: "Admit the run", body: "The Gateway authenticates the request, associates it with a thread and creates a run. Server-owned context must not be forged by the client.", color: "teal" },
+  { title: "Assemble the agent", body: "Choose an allowed model, select tools, build the system prompt, and compose middleware according to the run and agent configuration.", color: "green" },
+  { title: "Reason, act, observe", body: "The LLM returns text or structured tool calls. Tool results are appended to the conversation and can drive further calls.", color: "amber" },
+  { title: "Persist and stream", body: "LangGraph state is checkpointed; the Gateway publishes incremental output, task events, artifacts, and terminal state to clients.", color: "teal" }
+]}/>
+
+The important answer to **“What triggers an agent?”** is: an external entry point creates a run. The LLM does not spontaneously start processes. The Gateway, an IM channel, an internal client, or a scheduled job initiates a run; **the agent determines the steps inside that run**. DeerFlow's scheduler reuses the Gateway run lifecycle rather than inventing a separate kind of AI execution.
+
+Source: [Gateway runtime overview](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/docs/ARCHITECTURE.md), [runtime package](https://github.com/bytedance/deer-flow/tree/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/packages/harness/deerflow/runtime).
+
+## <Label color="teal">03</Label> The core: a model + graph + tool loop
+
+The entry point is `make_lead_agent()` in [`lead_agent/agent.py`](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/packages/harness/deerflow/agents/lead_agent/agent.py). It delegates to an assembly path and eventually builds a LangChain agent using `create_agent`. DeerFlow adds a significant amount of configuration and middleware around that primitive.
+
+A simplified conceptual equivalent looks like this:
+
+<Card accent="teal" flush={true}>
+
+```python
+# PSEUDOCODE — conceptual model, not a DeerFlow API example
+def build_agent(run_config):
+    model = resolve_allowed_model(run_config)
+    tools = discover_tools(run_config)
+    tools = authorize_and_filter_tools(tools, run_config.identity)
+    system_prompt = render_instructions(run_config)
+    middleware = build_middleware_stack(run_config)
+
+    return create_agent(
+        model=model,
+        tools=tools,
+        system_prompt=system_prompt,
+        middleware=middleware,
+        state_schema=ThreadState,
+        checkpointer=checkpointer,
+    )
+```
+
+</Card>
+
+Then the underlying graph behaves roughly like:
+
+```text
+                  +------------------+
+                  |  Model invocation|
+                  +--------+---------+
+                           |
+                 tool calls requested?
+                   /               \
+                  yes               no
+                   |                 |
+          validate / execute      final answer
+                   |
+             ToolMessages
+                   |
+              update state
+                   |
+                   +-------> next model invocation
+```
+
+This explains why the “agent” can adapt its execution order: **the model picks a tool based on the task and the schemas it can see**. But tool execution is not unrestricted. Middleware, authorization, budget controls, and the available tool registry constrain what the model can actually do.
+
+The source additionally produces a `LeadAgentAssembly` descriptor describing the effective graph configuration. That makes assembly observable rather than assuming a graph with a familiar name was assembled identically on every run.
+
+### Why middleware matters more than clever prompting
+
+A practical agent needs behavior at multiple boundaries: before the first model call, before each model call, after a tool result, and on failures. DeerFlow's middleware stack includes thread setup, uploads, sandbox acquisition, summarization, title generation, todo planning, image handling, clarification and, in current source, controls such as loop detection, token budgets, tool filtering, model compatibility and terminal-response handling.
+
+<Mermaid
+  chart={`flowchart LR
+    Input["Run request"] --> Context["Identity + thread<br/>memory + uploaded files"]
+    Context --> Guards["Middleware<br/>authorization, budget,<br/>loop and safety checks"]
+    Guards --> Model["Model decision"]
+    Model --> Decision{"Tool call?"}
+    Decision -->|Yes| Tool["Guarded tool / MCP / sandbox"]
+    Tool --> Observation["Tool result + state"]
+    Observation --> Guards
+    Decision -->|No| Output["Final answer"]
+    Output --> Save["Checkpoint + SSE"]`}
+  caption="Conceptual control loop. Middleware is not simply a one-time preprocessing stage; hooks also govern repeated model/tool boundaries."
+/>
+
+**Design lesson:** do not implement cost ceilings, permissions or dangerous-operation approvals solely as sentences inside the system prompt. The model can be instructed to comply; the host must still *enforce* the rule.
+
+## <Label color="green">04</Label> Tools, Skills, MCP: three different things
+
+These terms are often mixed up, but DeerFlow treats them as distinct mechanisms.
+
+<DataTable
+  caption="Three different extension surfaces"
+  accent="teal"
+  headers={["Mechanism", "What it provides", "Typical example", "Who controls execution?"]}
+  rows={[
+    { "Mechanism": "Tool", "What it provides": "A callable operation with arguments and a result", "Typical example": "read_file, bash, web search", "Who controls execution?": "Host tool implementation" },
+    { "Mechanism": "Skill", "What it provides": "Reusable instructions and supporting workflow resources", "Typical example": "Investigate a repository and produce a report", "Who controls execution?": "Agent, through allowed tools" },
+    { "Mechanism": "MCP server", "What it provides": "An external tool/resource integration protocol", "Typical example": "Issue tracker or document source", "Who controls execution?": "MCP connector + server + host policy" }
+  ]}
+/>
+
+DeerFlow merges several sources into an available tool catalog: built-in tools, configured sandbox and web tools, MCP tools, and optional extension/subagent tools. The model sees their **descriptions and argument schemas**, not a general permission to invoke arbitrary functions.
+
+A skill is closer to a **capability package or runbook** than a new execution engine. The harness discovers skills and loads instructions when relevant; those instructions can direct the agent to compose existing tools. It should not be interpreted as a security policy: a skill telling the agent not to run a dangerous command is weaker than blocking that command in the tool executor.
+
+MCP is different: it exposes tools from another process or service. The external server does not need to know about DeerFlow's UI or chat messages. DeerFlow's adapter provides the model-facing schema and execution bridge.
+
+### Keeping large tool catalogs affordable
+
+Every tool schema included in a model request consumes context. The current lead-agent source contains **deferred MCP tool-schema filtering**, tool promotion and routing-related middleware. That is an important scaling idea: a platform with hundreds of integrations should avoid injecting every detailed schema into every model call. Discovery and selection can narrow what is visible, while execution still rechecks permission.
+
+A recommended design for a configurable platform is:
+
+```text
+User input
+  -> deterministic eligibility filter
+  -> small relevant tool catalog
+  -> model selects a tool
+  -> server-side authorization
+  -> execution adapter
+  -> structured result
+```
+
+Do not confuse **tool discovery** with **tool authorization**. An LLM hiding or omitting a tool is not a substitute for a server-side deny.
+
+Source: [tools registry](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/packages/harness/deerflow/tools/tools.py), [lead-agent assembly](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/packages/harness/deerflow/agents/lead_agent/agent.py).
+
+## <Label color="teal">05</Label> How sub-agents really work
+
+“Multi-agent” does **not** necessarily mean a swarm of agents permanently chatting with one another. In DeerFlow the lead agent can delegate a bounded task to a subagent, often through the `task` tool, and then use the result in its own reasoning.
+
+Imagine a request to compare three candidate libraries. The lead agent can investigate one library itself or delegate independent investigations in parallel. The choice is a cost/latency trade-off, not an automatic requirement.
+
+<Mermaid
+  chart={`sequenceDiagram
+    autonumber
+    participant Lead as Lead Agent
+    participant Tool as task tool
+    participant Ctrl as Subagent Executor
+    participant Child as Subagent
+    participant External as Tools / Sandbox
+    Lead->>Tool: task(agent_type, scoped instruction)
+    Tool->>Ctrl: Validate policy and capacity
+    Ctrl->>Child: Create isolated execution context
+    loop Until finished or bounded stop
+      Child->>External: Authorized tool call
+      External-->>Child: Observation
+    end
+    Child-->>Ctrl: Result + execution status
+    Ctrl-->>Tool: Correlated task result
+    Tool-->>Lead: ToolMessage / task event
+    Lead->>Lead: Synthesize findings`}
+  caption="Ordinary delegation, simplified. DeerFlow also has more advanced durable batch-task paths; this diagram does not represent every scheduling mode."
+/>
+
+Key implementation details worth studying:
+
+- The source tracks a **server-side `execution_id`** and correlates work back to the provider's `tool_call_id`. That matters for tool messages, lifecycle events and retries.
+- Subagents have **separate execution context** so they need not carry the entire lead conversation. The parent can pass a task-specific snapshot.
+- Built-in subagent types include **`general-purpose`** and **`bash`**. Additional types can be configured or managed.
+- The system limits **concurrent** and **total** delegation, and supports per-subagent turn and timeout policies.
+- The documented policy prefers *direct execution* unless parallel latency, specialization, or context isolation justifies delegation.
+
+<Callout color="amber">
+  **A subagent is not free concurrency.** Each child can pay for its own context, tool discovery, model turns, and summarization. Parallel calls can reduce elapsed time while increasing total tokens, external API requests, and side-effect risk.
+</Callout>
+
+For a platform with user-defined agents, I would separate **agent selection** from **subagent delegation**. A deterministic router can select the appropriate top-level agent. Once running, the lead agent may delegate bounded subtasks to specialists. Those are two different decisions and need separate authorization.
+
+Source: [subagent executor](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/packages/harness/deerflow/subagents/executor.py), [subagent package guidance](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/packages/harness/deerflow/subagents/AGENTS.md).
+
+## <Label color="green">06</Label> Why a sandbox is a security boundary, not a convenience
+
+Giving the model a `bash` tool is easy. Giving it a safe place to use that tool is the hard part.
+
+DeerFlow abstracts the execution environment behind a `SandboxProvider`. Local mode can execute directly for development; production-oriented configurations can use isolated Docker-based environments, with additional provisioner support for deployments that need managed sandboxes.
+
+That abstraction allows the *tool interface* to remain stable even if the *execution environment* changes. Conceptually:
+
+```python
+# PSEUDOCODE: one tool contract, multiple backends
+def run_command(command, execution_context):
+    sandbox = sandbox_provider.acquire(execution_context.thread_id)
+    return sandbox.exec(command, timeout=execution_context.command_timeout)
+```
+
+The tool sees a command and a context. The sandbox provider decides which filesystem, process namespace, network policy and runtime apply. DeerFlow also maps logical paths into its user-data workspace.
+
+Do **not** treat sandboxing as complete multitenant authorization. A production system still needs tenant-scoped credentials, allowlisted network destinations, resource quotas, secret handling, execution timeouts, audit records, and explicit approvals for high-risk actions.
+
+I particularly like the separation: tools are a *capability interface*, while sandbox providers are an *execution adapter*. This maps naturally onto local Docker, Kubernetes jobs, controlled remote workers, or tightly scoped third-party automation.
+
+Source: [architecture security model](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/docs/ARCHITECTURE.md).
+
+## <Label color="teal">07</Label> State, memory and checkpointing are different systems
+
+A common mistake is to store every piece of agent data in one growing chat history. DeerFlow separates concerns.
+
+<DataTable
+  caption="What is remembered, by whom, and for how long?"
+  accent="green"
+  headers={["State type", "Typical content", "Purpose"]}
+  rows={[
+    { "State type": "Thread / graph state", "Typical content": "Messages, todos, artifacts, uploads, sandbox references, delegation metadata", "Purpose": "Continue the current conversation safely" },
+    { "State type": "Checkpoint", "Typical content": "Materialized graph state at execution boundaries", "Purpose": "Resume, inspect, replay and recover" },
+    { "State type": "Long-term memory", "Typical content": "User or agent-specific summaries and extracted facts", "Purpose": "Carry selected knowledge across conversations" },
+    { "State type": "Workspace files", "Typical content": "Downloaded inputs, generated code, reports and other artifacts", "Purpose": "Store large payloads outside the message context" }
+  ]}
+/>
+
+The [`ThreadState` implementation](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/packages/harness/deerflow/agents/thread_state.py) extends LangGraph's `AgentState` with additional fields. It uses **reducers** to merge certain updates safely. This is not the same as adding arbitrary entries to a Python dictionary: for concurrent tool or subagent updates, merge semantics matter.
+
+For longer sessions, summarization reduces context pressure. Long-term memory has a separate backend-neutral manager and tools such as `memory_search`, `memory_get` and `memory_add`. Its default local DeerMem backend stores a user-level summary and individual agent-scoped fact files, with optional alternative backends. The memory system has different passive-middleware and explicit-tool operating modes.
+
+A useful operating principle:
+
+> **Checkpoint to recover execution. Summarize to fit the context window. Store facts to remember across sessions. Save files to retain artifacts.**
+
+These four concerns should not be implemented by the same unbounded message array.
+
+### A less obvious detail: checkpoint storage cost
+
+DeerFlow's runtime documentation covers both **full** and **delta** checkpoint channel modes. In full mode, repeated snapshots of a growing message history can become expensive. Delta mode stores incremental writes and periodic snapshots, trading off storage efficiency against more complex restore and branching semantics. The mode is process-frozen and requires compatible readers.
+
+This is an especially useful lesson from a real codebase: durable execution isn't “add Postgres and forget it.” Message identity, reducers, checkpoint ancestry, branching and cancellation recovery require explicit design.
+
+Source: [memory system](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/packages/harness/deerflow/agents/memory/AGENTS.md), [checkpoint/runtime guidance](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/packages/harness/deerflow/runtime/AGENTS.md).
+
+## <Label color="green">08</Label> How does the result reach the UI?
+
+The worker does not need a direct network connection to the browser. The **Gateway owns the run and streams its observable events**.
+
+In the standard web path, the frontend uses `@langchain/langgraph-sdk` to open a thread, submit input, and subscribe to Server-Sent Events (SSE). The Gateway's `StreamBridge` adapts runtime events to the HTTP stream. The frontend reduces streamed messages, state snapshots, task progress and artifact changes into its thread UI.
+
+<Mermaid
+  chart={`flowchart LR
+    Worker["Agent graph"] -->|"messages / values / custom"| Bridge["StreamBridge"]
+    Bridge -->|SSE| Client["LangGraph SDK"]
+    Client --> Reducer["Thread state reducer"]
+    Reducer --> Chat["Chat tokens"]
+    Reducer --> Tasks["Todos / child progress"]
+    Reducer --> Art["Artifacts / files"]`}
+  caption="The browser receives projections of the run through the Gateway; it does not directly invoke the Python tool executor."
+/>
+
+The implementation distinguishes several stream modes:
+
+- **`messages`** carry model-token or message deltas.
+- **`values`** carry graph state snapshots.
+- **`custom`** can carry explicit task or progress events.
+
+Subgraph events may be **namespaced** so a child agent does not masquerade as the root thread. This is important for UIs that show subtask progress while preserving a coherent parent conversation.
+
+**Product implication:** persist a run ID and thread ID, make events monotonic/idempotent where practical, and give the frontend a way to reload authoritative state after reconnecting. A token stream alone is insufficient for a long-running agent application.
+
+Source: [streaming design](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/docs/STREAMING.md), [frontend architecture](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/frontend/AGENTS.md).
+
+## <Label color="teal">09</Label> Reliability, permissions and stopping conditions
+
+Long-running agents need **mechanical stop conditions**, not only a prompt saying “be careful.”
+
+From the current code and architecture guidance, notable controls include:
+
+| Failure mode | DeerFlow mechanism to inspect | Broader lesson |
+| --- | --- | --- |
+| Model repeats a tool loop | Loop detection middleware | Put a hard guard around repetition |
+| Run spends too many tokens | Token budget / usage middleware | Count across the execution, not only a single reply |
+| Excessive child-agent fanout | Subagent concurrency and total limits | Bound parallelism and total work |
+| Context becomes too large | Summarization middleware | Compact intentionally, preserving needed facts |
+| Unsafe tool or model access | Authorization/filtering before model and execution | Enforce access outside the LLM |
+| Tool execution fails mid-task | Run status, checkpoints, retries and explicit error outcomes | Distinguish retryable failures from uncertain side effects |
+| Client disconnects | Gateway run lifecycle and persisted state | UI connection must not be the source of truth |
+
+One especially valuable pattern in the architecture is the **run-context trust boundary**. Values provided by a client are not automatically trusted just because they have names like `user_id`, `non_interactive`, or `sandbox_id`. Server-authored identity and lifecycle fields must be established from authenticated context, not accepted from request JSON.
+
+For external side effects—sending email, updating a record, executing an HTTP webhook—my additional recommendation is a **tool-operation ledger** with a stable idempotency key, approval state and possible `OUTCOME_UNKNOWN` status. That is **an architectural recommendation**, not a claim that every DeerFlow tool uses this exact ledger contract.
+
+## <Label color="green">10</Label> How I would use these ideas to build a configurable agent platform
+
+DeerFlow shows **how to build a powerful execution harness**. A configurable multi-tenant platform needs another layer: managing who defines agents, which version is published, what data they may reach, and whether a particular run is allowed.
+
+<Mermaid
+  chart={`flowchart TB
+    Admin["Admin / Agent Builder UI"] --> Definition["Versioned Agent Definition<br/>model + instructions + skills + tools"]
+    Definition --> Compiler["Compiler / Policy Validator"]
+    User["User / API / Event / Schedule"] --> Router["Eligibility + Agent Router"]
+    Router --> Run["Run Manager<br/>admission + budget + audit"]
+    Compiler --> Run
+    Run --> Harness["DeerFlow-like agent harness<br/>LLM + middleware + state"]
+    Harness --> Adapters["Authorized tool adapters<br/>MCP / HTTP / workflow / sandbox"]
+    Adapters --> Apps["External systems and data"]
+    Harness --> Events["Event stream + checkpoints"]
+    Events --> UI["Chat / Tasks / Approval UI"]
+    Policy["Identity + tenant / workspace RBAC"] --> Compiler
+    Policy --> Run
+    Policy --> Adapters`}
+  caption="Proposed platform architecture inspired by DeerFlow; these extra platform services are recommendations, not claims about DeerFlow's internal topology."
+/>
+
+I would split responsibilities into three layers:
+
+**1. Control plane — define and govern.** Store `AgentDefinition`, `AgentRevision`, `ModelPolicy`, `SkillBinding` and `ToolBinding`. Validate configuration, permissions and schema compatibility before publishing. Pin a revision for each run so later edits cannot silently change an in-progress execution.
+
+**2. Runtime plane — execute and recover.** Admit a run, obtain an allowed model, construct the agent, enforce budgets, track state, delegate bounded work, invoke tools and publish event streams. DeerFlow provides many useful patterns here.
+
+**3. Integration plane — connect and enforce.** HTTP, MCP, SQL read-only connectors, workflow engines, and controlled shell execution should implement stable tool contracts. Always reauthorize at execution time. Keep credentials inside the integration service or broker, not the model prompt.
+
+### How should requests select an agent?
+
+Do not begin every request with an expensive supervisor model. A sensible default is:
+
+```text
+1. Authenticate caller; determine tenant/workspace permissions.
+2. Filter agents by allowed workspace, status, revision and capabilities.
+3. Check deterministic routing rules or explicit agent selection.
+4. If ambiguous, compare intent with descriptions/example questions.
+5. Use a small model only when the cheap router lacks confidence.
+6. Admit the selected agent run with an explicit budget.
+7. Delegate child tasks only when independent work justifies them.
+```
+
+This is **my recommended routing design**, not DeerFlow's claimed universal selection algorithm.
+
+### Example: an extensible support investigation
+
+Suppose a user asks, “Why did my order fail yesterday?”
+
+A support agent may need an order lookup, an incident log search and a knowledge-base query. The platform can expose all three as authorized tools. A bounded agent chooses which to call, combines evidence and drafts an answer. Only if ambiguity remains should it escalate to a stronger model or a specialist. A refund or data mutation must go through deterministic authorization and approval.
+
+This generalizes without hardcoding every possible workflow into Python, while keeping business-critical operations outside the model's discretion.
+
+## <Label color="teal">11</Label> Cost and performance: what I would measure
+
+A sophisticated agent is easy to make **expensive**. An agent that delegates five investigations may feel fast, but model calls can multiply while the parent still needs to synthesize the results.
+
+Use the following as an engineering budget model, not as DeerFlow benchmark data:
+
+```text
+run_cost ≈ Σ(model input tokens × input price)
+         + Σ(model output tokens × output price)
+         + tool / search / sandbox / retrieval cost
+         + delegated subagent cost
+```
+
+End-to-end latency is not just the sum of tokens, either. Independent subagents can overlap in wall-clock time, but their shared resource contention, tool dependencies and final synthesis remain. The best choice can be **one model call**, **deterministic code**, or **one direct agent**, not always a swarm.
+
+<DataTable
+  caption="Optimization ideas and the hypothesis to validate"
+  accent="amber"
+  headers={["Optimization", "Expected benefit", "What to verify"]}
+  rows={[
+    { "Optimization": "Hide irrelevant tool schemas", "Expected benefit": "Smaller prompts", "What to verify": "Routing accuracy and token use" },
+    { "Optimization": "Use deterministic steps first", "Expected benefit": "Lower model cost", "What to verify": "Task success without extra reasoning" },
+    { "Optimization": "Summarize long threads", "Expected benefit": "Bounded context growth", "What to verify": "Information loss and answer quality" },
+    { "Optimization": "Parallelize only independent children", "Expected benefit": "Lower wall-clock latency", "What to verify": "Fanout cost and conflicting side effects" },
+    { "Optimization": "Cache safe, immutable retrieval", "Expected benefit": "Fewer repeated tool calls", "What to verify": "Permission scope and data freshness" },
+    { "Optimization": "Escalate from cheaper to stronger models", "Expected benefit": "Lower average inference cost", "What to verify": "False confidence, retries and total cost" }
+  ]}
+/>
+
+For every agent revision, capture at least **task success**, **latency p50/p95**, **input/output tokens**, **tool errors**, **delegation count**, **cost per successful task**, **human escalation rate**, and **side-effect outcomes**. Without those numbers, “more agents” or “a smaller model” is a hypothesis, not a performance improvement.
+
+## <Label color="green">12</Label> A practical reading path through the source
+
+If you want to understand the implementation rather than just its architecture diagram, read the repository in this order:
+
+<FlowStep steps={[
+  { title: "Start with the topology", body: "docs/ARCHITECTURE.md and backend/docs/ARCHITECTURE.md — understand Gateway versus harness and the embedded runtime.", color: "teal" },
+  { title: "Find the agent factory", body: "backend/packages/harness/deerflow/agents/lead_agent/agent.py — trace make_lead_agent, model resolution, tools, and middleware composition.", color: "green" },
+  { title: "Trace the actual loop", body: "backend/packages/harness/deerflow/runtime/runs/ and tools/tools.py — connect run lifecycle to LangGraph and tool dispatch.", color: "teal" },
+  { title: "Follow a child task", body: "backend/packages/harness/deerflow/subagents/executor.py and runtime.py — inspect capacity, isolation, correlation, results and cancellation.", color: "amber" },
+  { title: "Study durable state", body: "agents/thread_state.py, agents/memory/ and runtime/checkpoint_state.py — understand reducers, memories and resumability.", color: "green" },
+  { title: "Return to the browser", body: "backend/docs/STREAMING.md and frontend/src/core/threads/ — see how model/tool progress is converted into UI state.", color: "teal" }
+]}/>
+
+These source locations are linked below at the **reviewed commit**, so future refactors will not break the context of the article.
+
+<Card accent="teal">
+  **Annotated source index**
+
+  - [Architecture overview](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/docs/ARCHITECTURE.md)
+  - [Lead agent assembly](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/packages/harness/deerflow/agents/lead_agent/agent.py)
+  - [Tools registry](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/packages/harness/deerflow/tools/tools.py)
+  - [Subagent executor](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/packages/harness/deerflow/subagents/executor.py)
+  - [Thread state and reducers](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/packages/harness/deerflow/agents/thread_state.py)
+  - [Memory internals](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/packages/harness/deerflow/agents/memory/AGENTS.md)
+  - [Streaming implementation guide](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/docs/STREAMING.md)
+  - [Runtime and checkpoint invariants](https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/backend/packages/harness/deerflow/runtime/AGENTS.md)
+</Card>
+
+## Conclusion: what DeerFlow gets right
+
+The lesson is not “every product should adopt DeerFlow.” The lesson is that **the LLM decision loop is the simplest part of a robust agent**.
+
+DeerFlow is a particularly useful reference for the runtime side: graph construction, middleware, tool extensibility, isolation, state, delegation and event streaming. Those systems allow a model to work for more than one or two turns without the application collapsing into an unobservable chain of API calls.
+
+For a multi-tenant configurable agent platform, I would **borrow the architecture principles** while placing agent definitions, versioning, identity, routing, audit, budgets and tool policies in an explicit platform control plane. The model proposes actions; the platform owns the authority to execute them.
+
+The next implementation exercise I would do is deliberately small: one support agent, three read-only tools, one versioned configuration, one SSE thread, one checkpoint store, a cost ceiling, and one explicit approval gate. If that works reliably, subagent delegation is an optimization to add—not the foundation to start with.
+
+---
+
+*Source: [ByteDance DeerFlow](https://github.com/bytedance/deer-flow), reviewed October 12, 2026. This is an independent technical architecture study, not a production benchmark or an endorsement of a specific deployment configuration.*
