@@ -37,7 +37,9 @@ const canvasMinWidth = Number.isFinite(minWidth) ? Math.min(1600, Math.max(0, mi
     </div>
   )}
   <div class="mermaid-scroll" style={'--mermaid-min-width:' + canvasMinWidth + 'px'}>
-    <pre class="mermaid" set:html={chart}></pre>
+    <div class="mermaid-canvas">
+      <pre class="mermaid" set:html={chart}></pre>
+    </div>
   </div>
   {editorial && <p class="mermaid-gesture">Zoom for readable labels; swipe to pan inside the diagram.</p>}
   {(caption || legend.length > 0) && (
@@ -93,6 +95,15 @@ const canvasMinWidth = Number.isFinite(minWidth) ? Math.min(1600, Math.max(0, mi
     -webkit-overflow-scrolling: touch;
     background-image: radial-gradient(color-mix(in srgb, var(--color-text-muted) 11%, transparent) 0.7px, transparent 0.7px);
     background-size: 16px 16px; background-position: 8px 8px;
+  }
+  /* A dedicated canvas owns the intrinsic width; SVG/pre widths alone may
+     remain capped by article typography CSS and fail to create a scroll area. */
+  .mermaid-scroll .mermaid-canvas {
+    display: block;
+    max-width: none;
+    min-width: 0;
+    width: max-content;
+    margin: 0 auto;
   }
   .mermaid-scroll pre.mermaid {
     background: transparent !important; border: none !important;
@@ -168,7 +179,8 @@ const canvasMinWidth = Number.isFinite(minWidth) ? Math.min(1600, Math.max(0, mi
             const figure = node.closest('.mermaid-figure--editorial');
             const viewport = node.closest('.mermaid-scroll');
             const svg = node.querySelector('svg');
-            if (!figure || !viewport || !svg) continue;
+            const canvas = node.parentElement;
+            if (!figure || !viewport || !svg || !canvas) continue;
             const zoomIn = figure.querySelector('[data-mermaid-zoom="in"]');
             const zoomOut = figure.querySelector('[data-mermaid-zoom="out"]');
             const fit = figure.querySelector('[data-mermaid-zoom="fit"]');
@@ -192,6 +204,9 @@ const canvasMinWidth = Number.isFinite(minWidth) ? Math.min(1600, Math.max(0, mi
               // clientWidth includes left and right padding. Measuring the actual
               // content box avoids a small but real horizontal overflow at 320/390px.
               const width = Math.max(1, Math.floor(available * scale));
+              canvas.style.width = width + 'px';
+              canvas.style.minWidth = width + 'px';
+              canvas.style.margin = '0';
               node.style.width = width + 'px';
               node.style.minWidth = width + 'px';
               svg.style.width = width + 'px';
