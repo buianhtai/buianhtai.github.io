@@ -39,7 +39,7 @@ The deployed system has four main runtime pieces. Nginx is its public entry poin
   description="Real application services are separated from the reusable harness, external callers, and execution/data dependencies."
   minWidth={1110}
   legend={[{"label":"Ingress / channel","tone":"teal"},{"label":"Gateway & runtime","tone":"blue"},{"label":"Agent reasoning","tone":"violet"},{"label":"Tool execution","tone":"amber"},{"label":"Durable data","tone":"green"}]}
-  chart={`%%{init: {"theme":"base","themeVariables":{"background":"#102032","primaryColor":"#183449","primaryTextColor":"#eef6fc","primaryBorderColor":"#638ba2","lineColor":"#7e9cac","fontFamily":"Inter, Arial, sans-serif","clusterBkg":"#111f2f","clusterBorder":"#668397","secondaryColor":"#1c3a4f","tertiaryColor":"#24384b"},"flowchart":{"curve":"linear","nodeSpacing":36,"rankSpacing":52,"padding":18}}}%%
+  chart={`%%{init: {"theme":"base","themeVariables":{"background":"#102032","primaryColor":"#183449","primaryTextColor":"#eef6fc","primaryBorderColor":"#638ba2","textColor":"#eef6fc","edgeLabelBackground":"#14263a","lineColor":"#93b1c2","fontFamily":"Inter, Arial, sans-serif","clusterBkg":"#111f2f","clusterBorder":"#668397","secondaryColor":"#1c3a4f","tertiaryColor":"#24384b"},"flowchart":{"curve":"linear","nodeSpacing":36,"rankSpacing":52,"padding":18}}}%%
 flowchart TB
   subgraph INPUT["01 / CALLER SURFACES · OUTSIDE SERVER TRUST"]
     direction LR
@@ -117,7 +117,7 @@ That instruction is **not** hardcoded to run search, then shell, then a summary.
   description="Shows which component admits the run, decides actions, enforces tool access, saves progress, and streams the result."
   minWidth={1150}
   legend={[{"label":"Run orchestration","tone":"blue"},{"label":"Model / tool loop","tone":"violet"},{"label":"Persistence","tone":"green"}]}
-  chart={`%%{init: {"theme":"base","themeVariables":{"actorBkg":"#1b3548","actorBorder":"#63a4b1","actorTextColor":"#f1f8fc","actorLineColor":"#7397a9","signalColor":"#67909f","signalTextColor":"#1e4050","noteBkgColor":"#e9f3f5","noteTextColor":"#183849","noteBorderColor":"#9dc2c9","loopTextColor":"#173b4a","labelBoxBkgColor":"#e9f3f5","labelTextColor":"#173b4a","sequenceNumberColor":"#edf7fc","fontFamily":"Inter, Arial, sans-serif"}}%%
+  chart={`%%{init: {"theme":"base","themeVariables":{"actorBkg":"#1b3548","actorBorder":"#63a4b1","actorTextColor":"#f1f8fc","actorLineColor":"#7397a9","signalColor":"#67909f","signalTextColor":"#eef6fc","noteBkgColor":"#e9f3f5","noteTextColor":"#183849","noteBorderColor":"#9dc2c9","loopTextColor":"#173b4a","labelBoxBkgColor":"#e9f3f5","labelTextColor":"#173b4a","sequenceNumberColor":"#edf7fc","fontFamily":"Inter, Arial, sans-serif"}}%%
 sequenceDiagram
   autonumber
   participant U as Browser
@@ -224,7 +224,7 @@ A practical agent needs behavior at multiple boundaries: before the first model 
   description="Model-proposed actions return through enforced tool checks and state reducers before another reasoning turn."
   minWidth={1040}
   legend={[{"label":"Execution control","tone":"blue"},{"label":"Model decision","tone":"violet"},{"label":"Tool boundary","tone":"amber"},{"label":"Persisted state","tone":"green"}]}
-  chart={`%%{init: {"theme":"base","themeVariables":{"background":"#102032","primaryColor":"#183449","primaryTextColor":"#eef6fc","primaryBorderColor":"#638ba2","lineColor":"#7e9cac","fontFamily":"Inter, Arial, sans-serif","clusterBkg":"#111f2f","clusterBorder":"#668397","secondaryColor":"#1c3a4f","tertiaryColor":"#24384b"},"flowchart":{"curve":"linear","nodeSpacing":36,"rankSpacing":52,"padding":18}}}%%
+  chart={`%%{init: {"theme":"base","themeVariables":{"background":"#102032","primaryColor":"#183449","primaryTextColor":"#eef6fc","primaryBorderColor":"#638ba2","textColor":"#eef6fc","edgeLabelBackground":"#14263a","lineColor":"#93b1c2","fontFamily":"Inter, Arial, sans-serif","clusterBkg":"#111f2f","clusterBorder":"#668397","secondaryColor":"#1c3a4f","tertiaryColor":"#24384b"},"flowchart":{"curve":"linear","nodeSpacing":36,"rankSpacing":52,"padding":18}}}%%
 flowchart LR
   START["ThreadState<br/>messages, todos, artifacts"]:::data --> CONTEXT["Build prompt<br/>memory, skills, schema filtering"]:::runtime
   CONTEXT --> POLICY{"Middleware gates<br/>budget, loop, safety"}:::gate
@@ -278,7 +278,7 @@ MCP is different: it exposes tools from another process or service. The external
   description="Skills influence model behavior; tool schemas enable selection; execution adapters and policy make the final authorization decision."
   minWidth={1060}
   legend={[{"label":"Capability definition","tone":"blue"},{"label":"LLM instruction","tone":"violet","dashed":true},{"label":"Controlled execution","tone":"amber"}]}
-  chart={`%%{init: {"theme":"base","themeVariables":{"background":"#102032","primaryColor":"#183449","primaryTextColor":"#eef6fc","primaryBorderColor":"#638ba2","lineColor":"#7e9cac","fontFamily":"Inter, Arial, sans-serif","clusterBkg":"#111f2f","clusterBorder":"#668397","secondaryColor":"#1c3a4f","tertiaryColor":"#24384b"},"flowchart":{"curve":"linear","nodeSpacing":36,"rankSpacing":52,"padding":18}}}%%
+  chart={`%%{init: {"theme":"base","themeVariables":{"background":"#102032","primaryColor":"#183449","primaryTextColor":"#eef6fc","primaryBorderColor":"#638ba2","textColor":"#eef6fc","edgeLabelBackground":"#14263a","lineColor":"#93b1c2","fontFamily":"Inter, Arial, sans-serif","clusterBkg":"#111f2f","clusterBorder":"#668397","secondaryColor":"#1c3a4f","tertiaryColor":"#24384b"},"flowchart":{"curve":"linear","nodeSpacing":36,"rankSpacing":52,"padding":18}}}%%
 flowchart LR
   subgraph AUTHOR["CONFIGURATION / DISCOVERY"]
     direction TB
@@ -349,7 +349,7 @@ Imagine a request to compare three candidate libraries. The lead agent can inves
   description="A delegated task has a scope, an execution identity, capacity limits, and a result that returns to the lead agent."
   minWidth={1110}
   legend={[{"label":"Parent","tone":"blue"},{"label":"Child execution","tone":"violet"},{"label":"Policy / sandbox","tone":"amber"}]}
-  chart={`%%{init: {"theme":"base","themeVariables":{"actorBkg":"#1b3548","actorBorder":"#63a4b1","actorTextColor":"#f1f8fc","actorLineColor":"#7397a9","signalColor":"#67909f","signalTextColor":"#1e4050","noteBkgColor":"#e9f3f5","noteTextColor":"#183849","noteBorderColor":"#9dc2c9","loopTextColor":"#173b4a","labelBoxBkgColor":"#e9f3f5","labelTextColor":"#173b4a","sequenceNumberColor":"#edf7fc","fontFamily":"Inter, Arial, sans-serif"}}%%
+  chart={`%%{init: {"theme":"base","themeVariables":{"actorBkg":"#1b3548","actorBorder":"#63a4b1","actorTextColor":"#f1f8fc","actorLineColor":"#7397a9","signalColor":"#67909f","signalTextColor":"#eef6fc","noteBkgColor":"#e9f3f5","noteTextColor":"#183849","noteBorderColor":"#9dc2c9","loopTextColor":"#173b4a","labelBoxBkgColor":"#e9f3f5","labelTextColor":"#173b4a","sequenceNumberColor":"#edf7fc","fontFamily":"Inter, Arial, sans-serif"}}%%
 sequenceDiagram
   autonumber
   participant L as Lead Agent
@@ -437,7 +437,7 @@ A common mistake is to store every piece of agent data in one growing chat histo
   description="Graph checkpoints, long-term memory, context summaries and filesystem artifacts should not be conflated into one chat history."
   minWidth={940}
   legend={[{"label":"Graph state","tone":"blue"},{"label":"Memory/checkpoint","tone":"green"},{"label":"Workspace files","tone":"amber"}]}
-  chart={`%%{init: {"theme":"base","themeVariables":{"background":"#102032","primaryColor":"#183449","primaryTextColor":"#eef6fc","primaryBorderColor":"#638ba2","lineColor":"#7e9cac","fontFamily":"Inter, Arial, sans-serif","clusterBkg":"#111f2f","clusterBorder":"#668397","secondaryColor":"#1c3a4f","tertiaryColor":"#24384b"},"flowchart":{"curve":"linear","nodeSpacing":36,"rankSpacing":52,"padding":18}}}%%
+  chart={`%%{init: {"theme":"base","themeVariables":{"background":"#102032","primaryColor":"#183449","primaryTextColor":"#eef6fc","primaryBorderColor":"#638ba2","textColor":"#eef6fc","edgeLabelBackground":"#14263a","lineColor":"#93b1c2","fontFamily":"Inter, Arial, sans-serif","clusterBkg":"#111f2f","clusterBorder":"#668397","secondaryColor":"#1c3a4f","tertiaryColor":"#24384b"},"flowchart":{"curve":"linear","nodeSpacing":36,"rankSpacing":52,"padding":18}}}%%
 flowchart TB
   TURN["New input + active thread"]:::edge --> STATE["ThreadState<br/>messages · todos · artifacts"]:::runtime
   STATE --> GRAPH["LangGraph agent<br/>state updates + reducers"]:::logic
@@ -489,7 +489,7 @@ In the standard web path, the frontend uses `@langchain/langgraph-sdk` to open a
   description="The UI observes authoritative run state via SSE. It never connects directly to a Python sandbox or child worker."
   minWidth={980}
   legend={[{"label":"State snapshot","tone":"green"},{"label":"Model output","tone":"violet"},{"label":"Runtime events","tone":"amber"},{"label":"Client stream","tone":"teal"}]}
-  chart={`%%{init: {"theme":"base","themeVariables":{"background":"#102032","primaryColor":"#183449","primaryTextColor":"#eef6fc","primaryBorderColor":"#638ba2","lineColor":"#7e9cac","fontFamily":"Inter, Arial, sans-serif","clusterBkg":"#111f2f","clusterBorder":"#668397","secondaryColor":"#1c3a4f","tertiaryColor":"#24384b"},"flowchart":{"curve":"linear","nodeSpacing":36,"rankSpacing":52,"padding":18}}}%%
+  chart={`%%{init: {"theme":"base","themeVariables":{"background":"#102032","primaryColor":"#183449","primaryTextColor":"#eef6fc","primaryBorderColor":"#638ba2","textColor":"#eef6fc","edgeLabelBackground":"#14263a","lineColor":"#93b1c2","fontFamily":"Inter, Arial, sans-serif","clusterBkg":"#111f2f","clusterBorder":"#668397","secondaryColor":"#1c3a4f","tertiaryColor":"#24384b"},"flowchart":{"curve":"linear","nodeSpacing":36,"rankSpacing":52,"padding":18}}}%%
 flowchart LR
   subgraph AGENT["01 / LANGGRAPH RUNTIME"]
     direction TB
@@ -568,7 +568,7 @@ DeerFlow shows **how to build a powerful execution harness**. A configurable mul
   description="Control plane defines an approved agent; runtime owns a durable run; integration plane enforces external side effects."
   minWidth={1120}
   legend={[{"label":"Platform control plane","tone":"teal"},{"label":"Agent runtime","tone":"violet"},{"label":"Adapter / integration","tone":"amber"},{"label":"State & audit","tone":"green"}]}
-  chart={`%%{init: {"theme":"base","themeVariables":{"background":"#102032","primaryColor":"#183449","primaryTextColor":"#eef6fc","primaryBorderColor":"#638ba2","lineColor":"#7e9cac","fontFamily":"Inter, Arial, sans-serif","clusterBkg":"#111f2f","clusterBorder":"#668397","secondaryColor":"#1c3a4f","tertiaryColor":"#24384b"},"flowchart":{"curve":"linear","nodeSpacing":36,"rankSpacing":52,"padding":18}}}%%
+  chart={`%%{init: {"theme":"base","themeVariables":{"background":"#102032","primaryColor":"#183449","primaryTextColor":"#eef6fc","primaryBorderColor":"#638ba2","textColor":"#eef6fc","edgeLabelBackground":"#14263a","lineColor":"#93b1c2","fontFamily":"Inter, Arial, sans-serif","clusterBkg":"#111f2f","clusterBorder":"#668397","secondaryColor":"#1c3a4f","tertiaryColor":"#24384b"},"flowchart":{"curve":"linear","nodeSpacing":36,"rankSpacing":52,"padding":18}}}%%
 flowchart TB
   BUILDER["Agent Builder UI"]:::edge --> DEFINITIONS["Versioned agent definitions<br/>model, skills, tools, policies"]:::edge
   USER["User / schedule / webhook"]:::edge --> ROUTER["Auth + eligibility filter<br/>rules / optional intent router"]:::runtime
