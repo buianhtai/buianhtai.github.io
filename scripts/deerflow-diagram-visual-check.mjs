@@ -74,6 +74,10 @@ async function inspect(width, theme) {
   await mermaidFigure.scrollIntoViewIfNeeded();
   await mermaidFigure.locator('[data-mermaid-zoom="in"]').click();
   assert.equal(await mermaidFigure.locator('[data-mermaid-scale]').innerText(), '160%');
+  await page.waitForFunction(() => {
+    const el = document.querySelector('figure.mermaid-figure--editorial .mermaid-scroll');
+    return el && el.scrollWidth > el.clientWidth + 2;
+  }, null, { timeout: 5_000 });
   const mermaidExpanded = await mermaidScroll.evaluate((el) => ({
     client: el.clientWidth, scroll: el.scrollWidth,
   }));
@@ -81,6 +85,10 @@ async function inspect(width, theme) {
     'Mermaid diagram must pan inside its scroll viewport when zoomed: ' + JSON.stringify(mermaidExpanded));
   await mermaidFigure.locator('[data-mermaid-zoom="fit"]').click();
   assert.equal(await mermaidFigure.locator('[data-mermaid-scale]').innerText(), 'Fit');
+  await page.waitForFunction(() => {
+    const el = document.querySelector('figure.mermaid-figure--editorial .mermaid-scroll');
+    return el && el.scrollWidth <= el.clientWidth + 2;
+  }, null, { timeout: 5_000 });
   assert((await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)) <= 2,
     'Neither Mermaid nor the infographic may overflow the page');
 
