@@ -1,0 +1,223 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import { Icon } from 'astro-icon/components';
+const revision='1f15e0b43ca58b9601514f9f5c408fb032022833';
+const repo='https://github.com/bytedance/deer-flow/blob/'+revision+'/';
+const scenes=[
+ {chapter:'01 / THE REQUEST',short:'HTTP entry',title:'A message enters the system.',lead:'One click in React becomes an HTTP request. The model is not called from the browser.',takeaway:'The frontend is the remote control, not the engine.',explain:'The LangGraph SDK sends a run request. Nginx rewrites /api/langgraph/* to /api/*, then FastAPI receives the validated input.',boundary:'HTTPS → Nginx → FastAPI',steps:['React browser','HTTPS / JSON','Nginx','HTTP proxy','FastAPI Gateway'],code:'POST /api/langgraph/threads/{thread_id}/runs/stream\nContent-Type: application/json\n\n{\n  "assistant_id": "<configured assistant>",\n  "input": {"messages": [\n    {"role": "human", "content": "Summarize this incident"}\n  ]},\n  "on_disconnect": "continue"\n}',mode:'ILLUSTRATIVE HTTP PAYLOAD',sources:[['Frontend client','frontend/src/core/api/api-client.ts','LangGraph SDK and CSRF hook'],['Nginx configuration','docker/nginx/nginx.conf','Public-to-Gateway URL rewrite'],['FastAPI route','backend/app/gateway/routers/thread_runs.py','POST /{thread_id}/runs/stream']],pins:['browser','nginx','gateway'],paths:['http1','http2']},
+ {chapter:'02 / ADMISSION',short:'Async execution',title:'The Gateway starts a run.',lead:'The Gateway accepts the task, records its identity and starts Python execution.',takeaway:'A normal run is not enqueued onto Kafka, RabbitMQ or Temporal.',explain:'RunManager checks identity and conflicting runs. With persistent storage enabled, it records the run. The Gateway attaches an asyncio.Task to execute the graph.',boundary:'FastAPI → RunStore + asyncio.Task',steps:['FastAPI Gateway','Run admission','Application SQL¹','Python asyncio','Run worker'],code:'record = await run_mgr.create_or_reject(...)\n\nif not record.idempotency_reused:\n    worker = run_after_metadata(record)\n    record.task = asyncio.create_task(worker)\n\n# ¹ SQL only when persistent RunStore is configured.\n# Pseudocode omits validation, locks and errors.',mode:'SIMPLIFIED PYTHON CONTROL FLOW',sources:[['Gateway admission','backend/app/gateway/services.py','start_run() and asyncio.create_task'],['RunManager','backend/packages/harness/deerflow/runtime/runs/manager.py','Ownership and idempotent admission'],['Application SQL','backend/packages/harness/deerflow/persistence/run/model.py','RunRow persistence schema']],pins:['gateway','worker','db'],paths:['sql','task']},
+ {chapter:'03 / THE RESPONSE',short:'SSE delivery',title:'The answer streams back.',lead:'The agent can keep executing while the browser receives incremental updates.',takeaway:'SSE is an HTTP response stream, not a job-dispatch queue.',explain:'The worker executes graph.astream(...), communicates with the model and publishes events to StreamBridge. A Gateway consumer forwards those events as SSE frames.',boundary:'LangGraph → StreamBridge → SSE → React',steps:['LangGraph worker','publish(event)','StreamBridge','subscribe(event)','FastAPI Gateway','SSE via Nginx','React browser'],code:'HTTP/1.1 200 OK\nContent-Type: text/event-stream\n\nid: <stream-event-id>\nevent: <event-name>\ndata: <JSON event payload>\n\n: heartbeat\n\nevent: end\ndata: null\n\n# Example wire shape; exact events depend on mode.',mode:'ILLUSTRATIVE SSE WIRE FORMAT',sources:[['Graph worker','backend/packages/harness/deerflow/runtime/runs/worker.py','Graph streaming and event publication'],['StreamBridge contract','backend/packages/harness/deerflow/runtime/stream_bridge/base.py','publish()/subscribe() abstraction'],['SSE consumer','backend/app/gateway/services.py','sse_consumer() and format_sse()'],['React stream client','frontend/src/core/api/api-client.ts','LangGraph SDK events']],pins:['browser','gateway','worker','bridge','model'],paths:['model','publish','subscribe','sse']},
+];
+const nodes=[
+ {id:'browser',x:106,y:132,name:'Browser',sub:'React / SDK',tag:'CLIENT',n:'01'},
+ {id:'nginx',x:326,y:132,name:'Nginx',sub:'Reverse proxy',tag:'EDGE',n:'02'},
+ {id:'gateway',x:546,y:132,name:'FastAPI',sub:'Gateway',tag:'BACKEND',n:'03'},
+ {id:'worker',x:806,y:132,name:'Run worker',sub:'LangGraph / async',tag:'RUNTIME',n:'04'},
+ {id:'bridge',x:326,y:354,name:'StreamBridge',sub:'Memory / Redis',tag:'EVENTS',n:'07'},
+ {id:'db',x:546,y:354,name:'Application DB',sub:'Run records',tag:'SQL',n:'05'},
+ {id:'model',x:806,y:354,name:'Model provider',sub:'LLM API',tag:'EXTERNAL',n:'06'},
+];
+const paths=[
+ {id:'http1',d:'M 192 132 H 239',label:'HTTPS',x:215,y:115,color:'#448dc8'},
+ {id:'http2',d:'M 412 132 H 459',label:'HTTP',x:435,y:115,color:'#448dc8'},
+ {id:'sql',d:'M 546 179 V 305',label:'SQL / ORM',x:600,y:242,color:'#c78743'},
+ {id:'task',d:'M 632 132 H 719',label:'asyncio.Task',x:675,y:115,color:'#928be4'},
+ {id:'model',d:'M 806 179 V 305',label:'model call',x:853,y:244,color:'#928be4'},
+ {id:'publish',d:'M 892 132 H 940 V 451 H 326 V 404',label:'publish()',x:675,y:438,color:'#169b89'},
+ {id:'subscribe',d:'M 326 305 V 264 H 546 V 180',label:'subscribe()',x:432,y:251,color:'#169b89'},
+ {id:'sse',d:'M 546 84 V 48 H 106 V 84',label:'SSE / HTTP',x:320,y:37,color:'#169b89'},
+];
+---
+<BaseLayout title="DeerFlow request story — design prototype" description="Three-scene visual engineering explainer of HTTP, run admission, Python execution and SSE in DeerFlow." noindex>
+<div class="story" data-story-root data-scene="0">
+ <div class="wrap">
+  <header class="intro">
+   <div class="eyebrow top"><span><Icon name="lucide:layers-3" size={15}/> ENGINEERING EXPLAINED</span><span class="draft"><i></i> DESIGN PROTOTYPE · NOT IN THE BLOG</span></div>
+   <div class="intro-grid">
+    <div><p class="eyebrow sub">INSIDE DEERFLOW 2.0 / A GUIDED STORY</p><h1>One message.<br/><em>Three journeys.</em></h1><p class="lede">You press Send. What actually happens underneath? Follow a single request from the browser to asynchronous Python execution—and back through SSE.</p></div>
+    <aside class="intro-note"><strong>03</strong><span>SCENES. ONE REQUEST.</span><p>Built for backend and full-stack engineers. First understand the story, then inspect the implementation.</p><a href="/en/blog/deerflow-2-agent-harness-architecture/">Full technical article <Icon name="lucide:arrow-up-right" size={14}/></a></aside>
+   </div>
+  </header>
+  <main class="editorial">
+   <div class="chapter-label"><span><Icon name="lucide:route" size={16}/> FOLLOW THE REQUEST</span><output data-counter>01 / 03</output></div>
+   <nav class="chapters" aria-label="Choose a story scene">
+    {scenes.map((s,i)=><button type="button" data-scene-tab={i} class:list={['chapter',{'selected':i===0}]} aria-pressed={i===0}><span>0{i+1}</span><div><strong>{s.short}</strong><small>{s.chapter.split('/ ')[1]}</small></div><Icon name="lucide:arrow-up-right" size={15}/></button>)}
+   </nav>
+   <section class="drawing" aria-label="Animated system diagram">
+    <div class="drawing-top"><span><Icon name="lucide:component" size={16}/> ONE SYSTEM, REVEALED IN LAYERS</span><small>Positions stay fixed across scenes</small></div>
+    <div class="map" aria-hidden="false">
+     <svg viewBox="0 0 960 482" role="img" aria-labelledby="map-title map-description">
+      <title id="map-title">DeerFlow runtime request and response map</title>
+      <desc id="map-description">Seven components occupy fixed locations. Selecting a scene reveals HTTP request, asynchronous admission, or model and SSE delivery paths.</desc>
+      <defs>
+       <pattern id="story-grid" width="24" height="24" patternUnits="userSpaceOnUse"><path d="M24 0 H0 V24" fill="none" stroke="currentColor" stroke-opacity=".07"/></pattern>
+       {paths.map(p=><marker id={'arrow-'+p.id} markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6 Z" fill={p.color}/></marker>)}
+      </defs>
+      <rect width="960" height="482" fill="url(#story-grid)"/>
+      <text x="18" y="23" class="zone">01 / CLIENT & EXECUTION</text>
+      <text x="18" y="275" class="zone">02 / STATE & DEPENDENCIES</text>
+      {paths.map(p=><g class:list={['wire',{'on':scenes[0].paths.includes(p.id)}]} data-wire={p.id}>
+       <path d={p.d} fill="none" stroke={p.color} stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" marker-end={'url(#arrow-'+p.id+')'}/>
+       <text x={p.x} y={p.y} text-anchor="middle" class="wire-label">{p.label}</text>
+      </g>)}
+      {nodes.map(node=><g data-node={node.id} class:list={['node',{'on':scenes[0].pins.includes(node.id)}]}>
+       <rect x={node.x-86} y={node.y-48} width="172" height="96" rx="13" class="node-box"/>
+       <rect x={node.x-76} y={node.y-39} width="33" height="33" rx="7" class="node-number-box"/>
+       <text x={node.x-59.5} y={node.y-18} text-anchor="middle" class="node-number">{node.n}</text>
+       <text x={node.x-35} y={node.y-20} class="node-title">{node.name}</text>
+       <text x={node.x-35} y={node.y-4} class="node-sub">{node.sub}</text>
+       <line x1={node.x-75} y1={node.y+14} x2={node.x+74} y2={node.y+14} class="node-divider"/>
+       <text x={node.x-75} y={node.y+32} class="node-tag">{node.tag}</text>
+      </g>)}
+     </svg>
+    </div>
+    <div class="mobile-path">
+     {scenes.map((s,i)=><div data-mobile={i} hidden={i!==0}><p>FOLLOW THE REQUEST PATH</p>
+      {s.steps.map((step,j)=><div class:list={['mobile-hop',{'transport':j%2===1}]}>
+       {j%2===0?<><b>{String(Math.floor(j/2)+1).padStart(2,'0')}</b><strong>{step}</strong></>:<><Icon name="lucide:arrow-down" size={16}/><span>{step}</span></>}
+      </div>)}
+     </div>)}
+    </div>
+    <div class="legend"><span><i class="http"></i> HTTP(S)</span><span><i class="async"></i> Async / model</span><span><i class="sql"></i> DB</span><span><i class="stream"></i> Stream / SSE</span></div>
+   </section>
+   <section class="scene-cards" aria-label="Scene narration">
+    {scenes.map((s,i)=><article class="scene-card" data-story-panel={i} hidden={i!==0}>
+     <div class="narration"><p class="eyebrow">{s.chapter}</p><h2>{s.title}</h2><p class="scene-lead">{s.lead}</p><div class="key"><Icon name="lucide:zap" size={19}/><div><strong>THE IMPORTANT PART</strong><p>{s.explain}</p></div></div><p class="remember"><strong>Remember.</strong> {s.takeaway}</p></div>
+     <aside class="inspector"><p class="inspector-kicker"><Icon name="lucide:crosshair" size={15}/> THE BOUNDARY</p><strong>{s.boundary}</strong><p>What travels between components—and what stays inside the backend?</p>
+      <details data-inspector><summary>Inspect the implementation <Icon name="lucide:chevron-down" size={16}/></summary>
+       <div class="inspector-detail"><p class="payload-label"><Icon name="lucide:code-xml" size={15}/> {s.mode}</p><pre><code>{s.code}</code></pre><p class="payload-label"><Icon name="lucide:github" size={15}/> VERIFIED SOURCE REFERENCES</p>
+       {s.sources.map(f=><a href={repo+f[1]} target="_blank" rel="noopener noreferrer" class="source"><span><strong>{f[0]}</strong><small>{f[2]}</small></span><Icon name="lucide:external-link" size={15}/></a>)}
+       <p class="caveat">Teaching example only. Not a live packet capture. Defaults and actual event data vary with the deployment and request.</p></div>
+      </details>
+     </aside>
+    </article>)}
+   </section>
+   <div class="controls">
+    <button type="button" class="control prev" data-prev disabled><Icon name="lucide:arrow-left" size={16}/> Previous</button>
+    <div class="meter"><small>READING PROGRESS</small><div role="progressbar" aria-label="Scene progress" aria-valuemin="1" aria-valuemax="3" aria-valuenow="1" data-progress><span></span></div><output data-meter-label>01 / 03</output></div>
+    <button type="button" class="control play" data-play aria-pressed="false"><Icon name="lucide:play" size={15}/><span>Play story</span></button>
+    <button type="button" class="control next" data-next>Next scene <Icon name="lucide:arrow-right" size={16}/></button>
+   </div>
+   <div class="disclaimer"><Icon name="lucide:book-open-check" size={19}/><p><strong>Source-backed teaching, not a trace recording.</strong> Protocols and functions are based on a pinned DeerFlow commit. Payloads are illustrative; no invented timings, actual user data, or claims of automatic job-queue recovery.</p><a href={'https://github.com/bytedance/deer-flow/tree/'+revision}>SOURCE @ {revision.slice(0,7)} <Icon name="lucide:arrow-up-right" size={13}/></a></div>
+  </main>
+  <footer class="outro"><span><Icon name="lucide:pen-tool" size={17}/> DESIGN STUDY · ROUND 1</span><p>Only three scenes on purpose. We are validating story clarity and mobile readability before adding tools, checkpoints, failure injection or an advanced debugger.</p><strong>FIN.</strong></footer>
+ </div>
+</div>
+</BaseLayout>
+
+<style>
+.story{--bg:#0e1821;--card:#142431;--stage:#192c39;--ink:#ebf3f5;--dim:#acc0c9;--line:#344d5a;--accent:#83dfd1;--shadow:rgba(0,0,0,.25);min-height:100vh;padding:0 22px 65px;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,sans-serif}
+.story *{box-sizing:border-box}.story [hidden]{display:none!important}.wrap{max-width:1190px;margin:0 auto}
+.intro{padding:47px 0 51px}.eyebrow{color:var(--accent);font:750 .66rem/1.5 var(--font-mono,monospace);letter-spacing:.11em}
+.eyebrow.top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.eyebrow.top>span{display:flex;align-items:center;gap:9px}.draft{color:var(--dim);font-size:.59rem;letter-spacing:.045em}.draft i{height:7px;width:7px;border-radius:50%;background:#e5b682;display:inline-block;box-shadow:0 0 0 4px #e5b68222}
+.intro-grid{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(235px,.55fr);align-items:end;gap:44px;margin-top:51px}.eyebrow.sub{color:var(--dim);margin:0 0 18px}
+.story h1{font-size:clamp(3.4rem,7vw,6.8rem);line-height:1.015;letter-spacing:-.083em;margin:0;font-weight:760}.story h1 em{font-weight:500;font-style:normal;color:var(--accent)}
+.lede{font-size:clamp(.94rem,1.4vw,1.1rem);line-height:1.78;max-width:670px;color:var(--dim);margin:26px 0 0}
+.intro-note{padding:9px 0 8px 23px;border-left:1px solid var(--line)}.intro-note>strong{display:block;font:650 5rem/1 var(--font-mono,monospace);letter-spacing:-.085em;color:var(--accent)}
+.intro-note>span{display:block;padding:14px 0 0;margin-top:14px;border-top:1px solid var(--line);font:750 .66rem var(--font-mono,monospace);letter-spacing:.07em}.intro-note p{line-height:1.7;font-size:.78rem;color:var(--dim);margin:12px 0}.intro-note a{display:flex;align-items:center;gap:5px;color:var(--accent);font-weight:650;font-size:.7rem;text-decoration:none}
+.editorial{border:1px solid var(--line);border-radius:17px;overflow:hidden;background:var(--card);box-shadow:0 20px 55px var(--shadow)}
+.chapter-label{padding:20px 21px 13px;display:flex;justify-content:space-between;align-items:center;gap:10px;font:750 .65rem var(--font-mono,monospace);letter-spacing:.085em}.chapter-label span{display:flex;align-items:center;gap:8px}.chapter-label svg{color:var(--accent)}.chapter-label output{color:var(--accent)}
+.chapters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));padding:0 14px;scroll-margin-top:88px}
+.chapter{display:flex;align-items:center;gap:13px;padding:14px 12px 16px;border:0;border-bottom:2px solid var(--line);text-align:left;cursor:pointer;background:transparent;color:var(--ink);font:inherit;min-width:0}
+.chapter.selected{background:color-mix(in srgb,var(--accent) 8%,transparent);border-bottom-color:var(--accent)}.chapter:hover{background:color-mix(in srgb,var(--accent) 9%,transparent)}
+.chapter>span{color:var(--accent);font:750 1.07rem var(--font-mono,monospace)}.chapter>div{display:flex;flex-direction:column;gap:5px;min-width:0}.chapter strong{font-size:.76rem}.chapter small{font:600 .58rem var(--font-mono,monospace);color:var(--dim);letter-spacing:.065em}.chapter>svg{margin-left:auto;opacity:.4}
+.chapter.selected>svg{color:var(--accent);opacity:1}
+.drawing{background:var(--stage);border-bottom:1px solid var(--line)}.drawing-top{display:flex;align-items:center;justify-content:space-between;gap:9px;flex-wrap:wrap;padding:19px 24px 7px}.drawing-top>span{display:flex;align-items:center;gap:8px;font:750 .63rem var(--font-mono,monospace);letter-spacing:.075em}.drawing-top svg{color:var(--accent)}.drawing-top small{color:var(--dim);font-size:.67rem}
+.map{max-width:960px;margin:0 auto;padding:0 10px}.map svg{display:block;width:100%;height:auto;overflow:visible}.zone{fill:var(--dim);font:700 10px var(--font-mono,monospace);letter-spacing:1.3px}
+.node{opacity:.31;transition:opacity .3s ease}.node.on{opacity:1}.node-box{fill:var(--card);stroke:var(--line);stroke-width:1.3}.node.on .node-box{stroke:var(--accent);stroke-width:1.9}
+.node-number-box{fill:color-mix(in srgb,var(--accent) 12%,var(--card));stroke:var(--line)}.node-number{fill:var(--accent);font:700 12px var(--font-mono,monospace)}
+.node-title{fill:var(--ink);font:700 14px Inter,sans-serif}.node-sub{fill:var(--dim);font:500 11px Inter,sans-serif}.node-divider{stroke:var(--line)}.node-tag{fill:var(--dim);font:700 9px var(--font-mono,monospace);letter-spacing:1.1px}
+.wire{opacity:.055;transition:opacity .3s ease}.wire.on{opacity:1}.wire-label{fill:var(--ink);font:650 10px var(--font-mono,monospace);stroke:var(--stage);stroke-width:5px;paint-order:stroke fill;stroke-linejoin:round}
+.wire.on path{stroke-dasharray:7 7;animation:dash 1.4s linear infinite}@keyframes dash{to{stroke-dashoffset:-28}}
+.mobile-path{display:none}.legend{display:flex;align-items:center;gap:12px 25px;flex-wrap:wrap;padding:0 25px 18px}
+.legend span{display:flex;align-items:center;gap:8px;color:var(--dim);font:550 .61rem var(--font-mono,monospace)}.legend i{width:16px;height:3px;border-radius:2px;background:#448dc8}.legend i.async{background:#928be4}.legend i.sql{background:#c78743}.legend i.stream{background:#169b89}
+.scene-cards{padding:0 24px}.scene-card{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(310px,.75fr);gap:39px;padding:37px 0 34px;align-items:start}
+.narration h2{font-size:clamp(1.8rem,3.3vw,2.9rem);line-height:1.12;letter-spacing:-.058em;color:var(--ink);margin:13px 0 18px;font-weight:760}
+.scene-lead{font-size:.97rem;line-height:1.7;color:var(--dim);margin:0;max-width:60ch}
+.key{display:flex;gap:15px;border-top:1px solid var(--line);margin-top:25px;padding-top:21px}.key>svg{color:var(--accent);flex-shrink:0}
+.key strong{font:700 .66rem var(--font-mono,monospace);letter-spacing:.065em}.key p{font-size:.82rem;line-height:1.72;color:var(--dim);margin:8px 0 0}
+.remember{font-size:.81rem;line-height:1.65;color:var(--dim);margin:19px 0 0}.remember strong{color:var(--accent)}
+.inspector{background:color-mix(in srgb,var(--bg) 35%,var(--stage));border:1px solid var(--line);border-radius:11px;padding:19px;min-width:0}
+.inspector-kicker{display:flex;align-items:center;gap:8px;font:720 .64rem var(--font-mono,monospace);letter-spacing:.06em;color:var(--accent);margin:0 0 15px}
+.inspector>strong{display:block;font-size:1.05rem;color:var(--ink)}.inspector>p:not(.inspector-kicker){font-size:.77rem;line-height:1.65;color:var(--dim);margin:9px 0 17px}
+.inspector details{border-top:1px solid var(--line);padding-top:14px}.inspector summary{display:flex;justify-content:space-between;gap:10px;cursor:pointer;font-size:.76rem;font-weight:750;list-style:none;color:var(--ink)}
+.inspector summary::-webkit-details-marker{display:none}.inspector summary svg{color:var(--accent);transition:transform .2s}.inspector details[open] summary svg{transform:rotate(180deg)}
+.inspector-detail{padding-top:17px}.payload-label{font:720 .6rem/1.5 var(--font-mono,monospace);letter-spacing:.045em;color:var(--accent);display:flex;align-items:center;gap:7px;margin:0 0 10px}
+.inspector pre{background:var(--bg);border:1px solid var(--line);border-radius:8px;overflow:auto;max-width:100%;padding:14px;color:var(--ink);font:500 .64rem/1.7 var(--font-mono,monospace);margin:0 0 20px;white-space:pre}
+.inspector pre code{font:inherit}.source{display:flex;align-items:center;justify-content:space-between;gap:12px;text-decoration:none!important;color:var(--ink);padding:10px 0;border-top:1px solid var(--line)}
+.source>span{display:flex;flex-direction:column;gap:5px}.source strong{font-size:.7rem}.source small{font-size:.66rem;color:var(--dim)}.source svg{color:var(--accent);flex-shrink:0}.source:hover strong{text-decoration:underline}.caveat{font-size:.68rem;line-height:1.6;color:var(--dim);margin:15px 0 0}
+.controls{display:flex;align-items:center;gap:16px;justify-content:space-between;background:var(--stage);border-top:1px solid var(--line);padding:18px 24px}
+.control{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 15px;border:1px solid var(--line);background:var(--card);border-radius:8px;color:var(--ink);font:700 .75rem Inter,sans-serif;cursor:pointer;white-space:nowrap}
+.control:hover:not(:disabled){border-color:var(--accent)}.control:disabled{opacity:.35;cursor:default}.control.next{background:var(--accent);color:var(--bg);border-color:var(--accent)}.control.play{background:transparent}.control.play svg{color:var(--accent)}
+.meter{width:150px;display:flex;flex-direction:column;gap:5px}.meter small{font:700 .55rem var(--font-mono,monospace);letter-spacing:.075em;color:var(--dim)}.meter>div{height:3px;border-radius:2px;background:var(--line)}.meter>div span{display:block;height:100%;background:var(--accent);width:33.33%;transition:width .22s}.meter output{text-align:right;color:var(--accent);font:700 .6rem var(--font-mono,monospace)}
+.disclaimer{display:flex;align-items:center;gap:13px;padding:16px 23px;border-top:1px solid var(--line)}.disclaimer>svg{color:var(--accent);flex-shrink:0}.disclaimer p{font-size:.7rem;line-height:1.65;color:var(--dim);margin:0;flex:1}.disclaimer strong{color:var(--ink)}.disclaimer a{display:flex;gap:4px;align-items:center;color:var(--accent);font:700 .6rem var(--font-mono,monospace);text-decoration:none;white-space:nowrap}
+.outro{display:grid;grid-template-columns:auto 1fr auto;gap:28px;align-items:start;border-top:1px solid var(--line);margin-top:28px;padding-top:20px}.outro span{display:flex;align-items:center;gap:9px;color:var(--accent);font:700 .62rem var(--font-mono,monospace)}.outro p{margin:0;color:var(--dim);font-size:.75rem;line-height:1.6;max-width:56ch}.outro>strong{color:var(--dim);font:700 1.15rem var(--font-mono,monospace)}
+.story button:focus-visible,.story a:focus-visible,.story summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+:global(html.theme-light) .story{--bg:#f7f9f7;--card:#fff;--stage:#edf4f2;--ink:#1b3036;--dim:#526b74;--line:#cededd;--accent:#0d7771;--shadow:rgba(15,40,45,.06)}
+:global(html.theme-light) .control.next{color:white}
+@media(max-width:860px){.intro-grid{grid-template-columns:1fr;gap:18px;margin-top:35px}.intro-note{display:none}.scene-card{grid-template-columns:1fr;gap:22px}}
+@media(max-width:640px){
+ .story{padding:0 12px 42px}.intro{padding:28px 0 32px}.eyebrow.top{font-size:.57rem}.draft{font-size:.5rem}.story h1{font-size:clamp(2.75rem,11vw,4.4rem)}.intro-grid{margin-top:34px}.lede{font-size:.86rem;margin-top:19px}
+ .chapter-label{padding:16px 12px 12px;font-size:.58rem}.chapters{padding:0 8px}.chapter{gap:5px;padding:11px 5px}.chapter>span{font-size:.82rem}.chapter strong{font-size:.63rem}.chapter small{font-size:.5rem}.chapter>svg{display:none}
+ .drawing-top{padding:17px 15px 10px}.drawing-top>span{font-size:.55rem}.drawing-top small{font-size:.55rem}
+ .map{display:none}.mobile-path{display:block;padding:10px 16px 18px}.mobile-path p{font:700 .58rem var(--font-mono,monospace);letter-spacing:.1em;color:var(--dim);margin:0 0 13px}
+ .mobile-hop{display:flex;align-items:center;gap:13px;min-height:45px;padding:11px 12px;border:1px solid var(--line);border-radius:9px;background:var(--card)}
+ .mobile-hop b{font:700 .72rem var(--font-mono,monospace);color:var(--accent)}.mobile-hop strong{font-size:.82rem}.mobile-hop.transport{min-height:36px;border:0;background:transparent;padding:5px 18px;font:600 .64rem var(--font-mono,monospace);color:var(--dim)}.mobile-hop.transport svg{color:var(--accent)}
+ .legend{gap:10px 16px;padding:0 16px 16px}.legend span{font-size:.55rem}
+ .scene-cards{padding:0 17px}.scene-card{padding:25px 0}.narration h2{font-size:2rem}.scene-lead{font-size:.86rem}.inspector{padding:17px}
+ .controls{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:14px}.control{font-size:.71rem;padding:12px 8px}.control.prev{grid-column:1;grid-row:1}.control.next{grid-column:2;grid-row:1}.control.play{grid-column:1;grid-row:2}.meter{grid-column:2;grid-row:2;width:100%}
+ .disclaimer{display:block;padding:16px}.disclaimer>svg{float:left;margin-right:10px}.disclaimer a{margin-top:12px}.outro{grid-template-columns:1fr auto;gap:12px}.outro p{grid-column:1;font-size:.7rem}
+}
+@media(prefers-reduced-motion:reduce){.story *{animation:none!important;transition:none!important}}
+</style>
+<script>
+ for(const root of document.querySelectorAll<HTMLElement>('[data-story-root]')){
+  const tabs=[...root.querySelectorAll<HTMLButtonElement>('[data-scene-tab]')];
+  const panels=[...root.querySelectorAll<HTMLElement>('[data-story-panel]')];
+  const mobile=[...root.querySelectorAll<HTMLElement>('[data-mobile]')];
+  const nodes=[...root.querySelectorAll<SVGGElement>('[data-node]')];
+  const wires=[...root.querySelectorAll<SVGGElement>('[data-wire]')];
+  const prev=root.querySelector<HTMLButtonElement>('[data-prev]');
+  const next=root.querySelector<HTMLButtonElement>('[data-next]');
+  const play=root.querySelector<HTMLButtonElement>('[data-play]');
+  const counter=root.querySelector<HTMLElement>('[data-counter]');
+  const progress=root.querySelector<HTMLElement>('[data-progress]');
+  const meter=progress?.querySelector<HTMLElement>('span');
+  const meterLabel=root.querySelector<HTMLOutputElement>('[data-meter-label]');
+  if(!prev||!next||!play||!counter||!progress||!meter||!meterLabel)continue;
+  const activeNodes=[['browser','nginx','gateway'],['gateway','worker','db'],['browser','gateway','worker','bridge','model']];
+  const activeWires=[['http1','http2'],['sql','task'],['model','publish','subscribe','sse']];
+  let current=0;let timer:number|undefined;
+  const revealStory=()=>{
+   const chapterNav=root.querySelector<HTMLElement>('.chapters');
+   if(!chapterNav)return;
+   const reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+   chapterNav.scrollIntoView({block:'start',behavior:reduce?'auto':'smooth'});
+  };
+  const stop=()=>{if(timer!==undefined){clearInterval(timer);timer=undefined;}play.setAttribute('aria-pressed','false');play.querySelector('span')!.textContent='Play story';};
+  const show=(n:number)=>{
+   current=Math.max(0,Math.min(2,n));root.dataset.scene=String(current);
+   tabs.forEach((b,i)=>{b.classList.toggle('selected',i===current);b.setAttribute('aria-pressed',String(i===current));});
+   panels.forEach((p,i)=>{p.hidden=i!==current;});mobile.forEach((m,i)=>{m.hidden=i!==current;});
+   nodes.forEach(n=>n.classList.toggle('on',activeNodes[current].includes(n.dataset.node||'')));
+   wires.forEach(w=>w.classList.toggle('on',activeWires[current].includes(w.dataset.wire||'')));
+   counter.textContent='0'+(current+1)+' / 03';meterLabel.textContent=counter.textContent;
+   progress.setAttribute('aria-valuenow',String(current+1));meter.style.width=((current+1)/3*100)+'%';
+   prev.disabled=current===0;next.disabled=current===2;
+  };
+  tabs.forEach((b,i)=>b.addEventListener('click',()=>{stop();show(i);revealStory();}));
+  prev.addEventListener('click',()=>{stop();show(current-1);revealStory();});
+  next.addEventListener('click',()=>{stop();show(current+1);revealStory();});
+  play.addEventListener('click',()=>{if(timer!==undefined){stop();return;}if(current===2)show(0);revealStory();
+   play.setAttribute('aria-pressed','true');play.querySelector('span')!.textContent='Pause';
+   timer=window.setInterval(()=>{if(current===2){stop();return;}show(current+1);if(current===2)stop();},4200);
+  });
+  document.addEventListener('visibilitychange',()=>{if(document.hidden)stop();});
+  tabs.forEach(b=>b.addEventListener('keydown',e=>{
+   if(e.key!=='ArrowRight'&&e.key!=='ArrowLeft')return;
+   e.preventDefault();stop();const index=e.key==='ArrowRight'?(current+1)%3:(current+2)%3;show(index);tabs[index]?.focus();revealStory();
+  }));
+  show(0);
+ }
+</script>
