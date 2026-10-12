@@ -1,0 +1,199 @@
+---
+/**
+ * Source-grounded execution walkthrough. It is an interactive visualization,
+ * not a mock live runner or a claim that the browser executes DeerFlow.
+ * Event timing and conditional branches are explicit rather than a false
+ * strictly linear service pipeline.
+ */
+import { Icon } from 'astro-icon/components';
+
+const steps = [
+  { number:'01', icon:'lucide:send', title:'Submit or trigger', boundary:'CLIENT / CHANNEL',
+    when:'A person sends a prompt, or a trusted scheduler/channel initiates a run.',
+    how:'The client supplies the message and thread context to the Gateway entry point.',
+    why:'Only an external, authorized event starts work. The LLM cannot launch itself.',
+    input:'User: “Investigate why the service is slow and write a report.”',
+    output:'Authenticated request enters the application.',
+    signal:'REQUEST', tone:'blue' },
+  { number:'02', icon:'lucide:shield-check', title:'Validate & admit', boundary:'FASTAPI GATEWAY',
+    when:'On request arrival, before invoking an agent.',
+    how:'Check caller identity and thread access. Create or validate server-owned run context and hand off to the RunManager.',
+    why:'The browser must not manufacture privileged agent identity, scope, or execution rights.',
+    input:'Authenticated message + thread reference',
+    output:'Admitted run / run context or a rejection.',
+    signal:'ACCEPT / REJECT', tone:'blue' },
+  { number:'03', icon:'lucide:database', title:'Recover run state', boundary:'RUNMANAGER + CHECKPOINTER',
+    when:'After admission and before resuming the lead-agent graph.',
+    how:'Resolve existing thread checkpoint or initialize graph state and the streaming bridge.',
+    why:'A new turn must have durable conversational context and recoverable execution state.',
+    input:'Run ID + thread checkpoint reference',
+    output:'Materialized graph state and a running invocation.',
+    signal:'RESUME / INITIALIZE', tone:'teal' },
+  { number:'04', icon:'lucide:blocks', title:'Assemble the harness', boundary:'DEERFLOW HARNESS',
+    when:'When the lead agent is invoked or resumed.',
+    how:'Compose the selected model, system instructions, middleware, permitted tool catalog, MCP bindings and available skills.',
+    why:'This is where reusable agent behavior and execution restrictions come together.',
+    input:'Run configuration + permitted capabilities',
+    output:'LangGraph/LangChain lead-agent invocation.',
+    signal:'COMPOSE', tone:'violet' },
+  { number:'05', icon:'lucide:brain-circuit', title:'Ask model for next action', boundary:'LANGGRAPH / MODEL',
+    when:'At the first agent iteration and again after every tool observation.',
+    how:'Send the conversation state and allowed tool schemas to the model. Inspect the model response for text or tool calls.',
+    why:'An agent chooses its next step from the current evidence; it is not a hardcoded list of API calls.',
+    input:'Prompt + state + allowed tool schemas',
+    output:'Tool call(s) → step 06, or final answer → step 08.',
+    signal:'DECISION', tone:'violet' },
+  { number:'06', icon:'lucide:terminal', title:'Authorize & execute tools', boundary:'MIDDLEWARE + SANDBOX / MCP',
+    when:'Only if the model requested a tool call.',
+    how:'Validate arguments and enforce tool scope/budgets; execute via bounded sandbox, local adapter or external MCP provider. A subagent may be delegated when its tool is selected.',
+    why:'Visibility of a tool schema is not permission to perform an external side effect.',
+    input:'Requested tool name + arguments + run authorization',
+    output:'Tool result or explicit error → step 07. Rejection also returns an observation.',
+    signal:'CONDITIONAL TOOL', tone:'amber' },
+  { number:'07', icon:'lucide:repeat-2', title:'Observe, persist, repeat', boundary:'LANGGRAPH + STATE',
+    when:'After tool completion/error, or whenever the graph transitions to the next iteration.',
+    how:'Append ToolMessage, persist checkpoint and updated state, then return to step 05 while work remains and limits allow.',
+    why:'The agent must reason over actual observations, and work must be resumable and auditable.',
+    input:'ToolMessage/result + updated graph state',
+    output:'Loop → 05 for more work; or terminal answer → 08.',
+    signal:'LOOP OR STOP', tone:'teal' },
+  { number:'08', icon:'lucide:radio-tower', title:'Stream updates & finish', boundary:'RUNMANAGER → GATEWAY SSE → UI',
+    when:'Progress/events can stream during steps 03–07; the final event follows completion or failure.',
+    how:'Stream tokens, task progress, artifacts and status events through the Gateway to the browser. Send terminal outcome on finish.',
+    why:'The user sees progress rather than an opaque long-running request, and can distinguish ongoing from completed work.',
+    input:'Agent output + progress + terminal run outcome',
+    output:'Rendered messages, artifacts, success/failure state in thread UI.',
+    signal:'CONCURRENT + TERMINAL', tone:'green' },
+];
+---
+
+<section class="de2e not-prose" data-deerflow-e2e aria-label="Interactive end-to-end DeerFlow execution walkthrough">
+  <header class="de2e-header">
+    <div class="de2e-kicker"><Icon name="lucide:route" size={17}/> INTERACTIVE EXECUTION TRACE · 8 NUMBERED STAGES</div>
+    <h3>What happens, when, how—and why?</h3>
+    <p>Follow a realistic request through the actual logical components. Select any numbered stage to inspect the trigger, responsibility, input, output and next transition.</p>
+    <div class="de2e-legend"><span><Icon name="lucide:circle-dot" size={13}/> Solid path: required</span><span><Icon name="lucide:git-branch" size={13}/> Tool path: conditional</span><span><Icon name="lucide:radio" size={13}/> SSE: concurrent</span></div>
+  </header>
+
+  <div class="de2e-layout">
+    <nav class="de2e-nav" aria-label="Execution stages">
+      <ol>
+        {steps.map((step) => (
+          <li class:list={['de2e-item','de2e-'+step.tone]}>
+            <button type="button" class="de2e-step" data-e2e-trigger={step.number} aria-controls={'de2e-panel-'+step.number} aria-expanded="true">
+              <span class="de2e-index">{step.number}</span>
+              <span class="de2e-step-label"><strong>{step.title}</strong><small>{step.boundary}</small></span>
+              <span class="de2e-stage-icon"><Icon name={step.icon} size={18}/></span>
+            </button>
+          </li>
+        ))}
+      </ol>
+    </nav>
+    <div class="de2e-details" aria-live="polite">
+      {steps.map((step) => (
+        <article id={'de2e-panel-'+step.number} class:list={['de2e-panel','de2e-'+step.tone]} data-e2e-panel={step.number}>
+          <div class="de2e-panel-overline"><span>STEP {step.number} / 08</span><span class="de2e-signal">{step.signal}</span></div>
+          <h4>{step.title}</h4>
+          <p class="de2e-owner"><Icon name={step.icon} size={16}/>{step.boundary}</p>
+          <div class="de2e-field"><span>WHEN / TRIGGER</span><p>{step.when}</p></div>
+          <div class="de2e-field"><span>HOW / OPERATION</span><p>{step.how}</p></div>
+          <div class="de2e-field"><span>WHY / GUARANTEE</span><p>{step.why}</p></div>
+          <div class="de2e-io">
+            <div><span>INPUT</span><p>{step.input}</p></div>
+            <div><span>OUTPUT / NEXT</span><p>{step.output}</p></div>
+          </div>
+        </article>
+      ))}
+      <div class="de2e-nav-buttons">
+        <button type="button" data-e2e-prev disabled><Icon name="lucide:arrow-left" size={14}/> Previous</button>
+        <output data-e2e-position>01 / 08</output>
+        <button type="button" data-e2e-next>Next <Icon name="lucide:arrow-right" size={14}/></button>
+      </div>
+    </div>
+  </div>
+  <div class="de2e-branches">
+    <div><Icon name="lucide:git-merge" size={19}/><span><strong>Decision at 05:</strong> model chooses a tool → 06 → 07 → 05 (repeat), or produces an answer → 08. Step 06 is skipped if no tool is needed.</span></div>
+    <div><Icon name="lucide:radio-tower" size={19}/><span><strong>Streaming is not last-only:</strong> SSE progress can be delivered while the agent runs; the terminal event happens after success, failure or cancellation.</span></div>
+  </div>
+  <footer class="de2e-footer">Illustrative source-based walkthrough, not an executable DeerFlow deployment, real event trace or promise of the exact internal ordering of concurrent operations.</footer>
+</section>
+
+<style>
+.de2e{--flow-surface:#142238;--flow-panel:#1b2d44;--flow-ink:#eaf3fc;--flow-dim:#acbed1;--flow-border:#31485e;--flow-soft:#16263a;--flow-accent:#7ce1d5;box-sizing:border-box;min-width:0;max-width:100%;overflow:hidden;border:1px solid var(--color-border);border-radius:15px;background:var(--flow-surface);color:var(--flow-ink);margin:2rem 0;font-family:Inter,system-ui,sans-serif}
+.de2e-header{padding:clamp(1rem,2vw,1.55rem);border-bottom:1px solid var(--flow-border);background:linear-gradient(110deg,color-mix(in srgb,var(--flow-accent) 8%,var(--flow-surface)),var(--flow-surface))}
+.de2e-kicker{display:flex;align-items:center;gap:.45rem;color:var(--flow-accent);font:700 .68rem/1.5 var(--font-mono,monospace);letter-spacing:.065em}
+.de2e-header h3{font-size:clamp(1.15rem,2.5vw,1.55rem)!important;line-height:1.3!important;margin:.7rem 0 .5rem!important;color:var(--flow-ink)!important}
+.de2e-header p{color:var(--flow-dim);font-size:.83rem;line-height:1.65;margin:0;max-width:72ch}
+.de2e-legend{display:flex;flex-wrap:wrap;gap:.5rem 1rem;margin-top:1rem}
+.de2e-legend span{display:flex;align-items:center;gap:.35rem;font:.65rem var(--font-mono,monospace);color:var(--flow-dim)}
+.de2e-legend svg{color:var(--flow-accent)}
+.de2e-layout{display:grid;grid-template-columns:minmax(210px,.95fr) minmax(0,1.45fr);gap:0}
+.de2e-nav{min-width:0;border-right:1px solid var(--flow-border);background:var(--flow-soft)}
+.de2e-nav ol{list-style:none;margin:0;padding:.75rem;display:flex;flex-direction:column;gap:.35rem}
+.de2e-item{position:relative;min-width:0}
+.de2e-item:not(:last-child):after{content:"";position:absolute;left:20px;top:calc(100% + 1px);height:.35rem;border-left:1px solid var(--flow-border)}
+.de2e-step{display:flex;align-items:center;gap:.65rem;width:100%;min-width:0;cursor:pointer;text-align:left;padding:.65rem .55rem;border:1px solid transparent;border-radius:9px;background:transparent;color:var(--flow-dim);font:inherit}
+.de2e-step:hover{background:var(--flow-panel)}
+.de2e-step:focus-visible{outline:2px solid var(--flow-accent);outline-offset:1px}
+.de2e-index{display:grid;place-items:center;flex-shrink:0;width:31px;height:31px;border-radius:8px;border:1px solid var(--flow-border);color:var(--flow-accent);background:var(--flow-surface);font:700 .75rem var(--font-mono,monospace)}
+.de2e-step-label{display:flex;flex-direction:column;min-width:0;gap:.24rem}
+.de2e-step-label strong{color:var(--flow-ink);font-size:.76rem;line-height:1.35;font-weight:700}
+.de2e-step-label small{font:500 .57rem/1.35 var(--font-mono,monospace);color:var(--flow-dim);overflow-wrap:anywhere}
+.de2e-stage-icon{margin-left:auto;flex-shrink:0;color:var(--flow-accent)}
+.de2e-item.is-current .de2e-step{border-color:color-mix(in srgb,var(--flow-accent) 52%,var(--flow-border));background:color-mix(in srgb,var(--flow-accent) 11%,var(--flow-panel))}
+.de2e-item.is-current .de2e-index{background:var(--flow-accent);color:var(--flow-surface);border-color:var(--flow-accent)}
+.de2e-details{padding:clamp(.8rem,1.8vw,1.4rem);min-width:0}
+.de2e-panel{border:1px solid var(--flow-border);border-radius:11px;overflow:hidden;background:var(--flow-panel);margin-bottom:.65rem}
+.de2e-panel-overline{display:flex;justify-content:space-between;align-items:center;gap:.5rem;flex-wrap:wrap;padding:.8rem 1rem;background:var(--flow-soft);color:var(--flow-accent);font:700 .64rem var(--font-mono,monospace);letter-spacing:.04em}
+.de2e-signal{color:var(--flow-dim);font-size:.62rem}
+.de2e-panel h4{color:var(--flow-ink)!important;font-size:1.12rem!important;margin:1rem 1rem .3rem!important}
+.de2e-owner{display:flex;align-items:center;gap:.4rem;color:var(--flow-accent);font:650 .67rem/1.4 var(--font-mono,monospace);margin:0 1rem 1rem}
+.de2e-field{margin:.8rem 1rem}
+.de2e-field>span,.de2e-io span{font:700 .65rem/1.4 var(--font-mono,monospace);letter-spacing:.055em;color:var(--flow-accent)}
+.de2e-field p,.de2e-io p{color:var(--flow-ink);font-size:.77rem;line-height:1.65;margin:.25rem 0 0}
+.de2e-io{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.6rem;padding:0 1rem 1rem}
+.de2e-io>div{border:1px solid var(--flow-border);border-radius:7px;background:var(--flow-soft);padding:.75rem;min-width:0}
+.de2e-io p{overflow-wrap:anywhere}
+.de2e-nav-buttons{display:flex;align-items:center;justify-content:space-between;gap:.4rem}
+.de2e-nav-buttons button{display:flex;align-items:center;justify-content:center;gap:.3rem;cursor:pointer;font:650 .7rem/1.5 var(--font-mono,monospace);color:var(--flow-ink);border:1px solid var(--flow-border);border-radius:6px;background:var(--flow-panel);padding:.45rem .55rem}
+.de2e-nav-buttons button:disabled{opacity:.4;cursor:default}
+.de2e-nav-buttons button:focus-visible{outline:2px solid var(--flow-accent);outline-offset:2px}
+.de2e-nav-buttons output{font:650 .68rem var(--font-mono,monospace);color:var(--flow-dim);font-variant-numeric:tabular-nums}
+.de2e-branches{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.6rem;padding:0 clamp(.8rem,2vw,1.4rem) 1rem}
+.de2e-branches>div{display:flex;align-items:flex-start;gap:.65rem;border:1px dashed var(--flow-border);border-radius:8px;padding:.75rem}
+.de2e-branches svg{flex-shrink:0;color:var(--flow-accent)}
+.de2e-branches span{color:var(--flow-dim);font-size:.73rem;line-height:1.55}
+.de2e-branches strong{color:var(--flow-ink)}
+.de2e-footer{font:.66rem/1.6 var(--font-mono,monospace);padding:.7rem clamp(.8rem,2vw,1.4rem);border-top:1px solid var(--flow-border);color:var(--flow-dim)}
+:global(html.theme-light) .de2e{--flow-surface:#f8fbff;--flow-panel:#fff;--flow-ink:#172b45;--flow-dim:#51677c;--flow-border:#d8e3ef;--flow-soft:#edf4fa;--flow-accent:#087b76}
+@media(max-width:780px){.de2e-layout{grid-template-columns:minmax(0,1fr)}.de2e-nav{border-right:0;border-bottom:1px solid var(--flow-border)}.de2e-nav ol{display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}.de2e-step{flex-direction:column;text-align:center;padding:.5rem .25rem}.de2e-step-label small,.de2e-stage-icon{display:none}.de2e-item:after{display:none!important}.de2e-branches{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:390px){.de2e-nav ol{grid-template-columns:repeat(4,minmax(0,1fr));gap:.2rem}.de2e-step-label strong{font-size:.62rem}.de2e-index{width:27px;height:27px}.de2e-io{grid-template-columns:minmax(0,1fr)}}
+</style>
+
+<script>
+  // Progressive enhancement: without JS, all eight panels remain readable.
+  for (const flow of document.querySelectorAll<HTMLElement>('[data-deerflow-e2e]')) {
+    const triggers = [...flow.querySelectorAll<HTMLButtonElement>('[data-e2e-trigger]')];
+    const panels = [...flow.querySelectorAll<HTMLElement>('[data-e2e-panel]')];
+    const prev = flow.querySelector<HTMLButtonElement>('[data-e2e-prev]');
+    const next = flow.querySelector<HTMLButtonElement>('[data-e2e-next]');
+    const position = flow.querySelector<HTMLOutputElement>('[data-e2e-position]');
+    if (!prev || !next || !position || triggers.length !== panels.length) continue;
+    let active = 0;
+    function show(index: number) {
+      active = Math.max(0, Math.min(triggers.length - 1, index));
+      triggers.forEach((button, i) => {
+        button.setAttribute('aria-expanded', String(i === active));
+        button.closest('.de2e-item')?.classList.toggle('is-current', i === active);
+      });
+      panels.forEach((panel, i) => { panel.hidden = i !== active; });
+      position.textContent = String(active + 1).padStart(2, '0') + ' / 08';
+      prev.disabled = active === 0;
+      next.disabled = active === triggers.length - 1;
+    }
+    triggers.forEach((button, i) => button.addEventListener('click', () => show(i)));
+    prev.addEventListener('click', () => show(active - 1));
+    next.addEventListener('click', () => show(active + 1));
+    show(0);
+  }
+</script>
