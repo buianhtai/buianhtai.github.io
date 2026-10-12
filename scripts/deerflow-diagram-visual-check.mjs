@@ -111,7 +111,7 @@ async function inspect(width, theme) {
   assert.equal(measurements.headings, 5, 'Mermaid diagrams need descriptive headings');
   assert.equal(measurements.broken, 0, 'No Mermaid render errors');
   assert(measurements.bodyWidth <= measurements.viewport + 2, 'Document overflow: ' + JSON.stringify(measurements));
-  if (width <= 390) assert(measurements.longCharts >= 1, 'Wide diagrams should scroll inside their own frame');
+  if (width <= 390) assert.equal(measurements.longCharts, 0, 'Mermaid figures should initially fit narrow screens; zooming enables panning');
   assert.deepEqual(runtimeErrors, [], 'Browser encountered script errors');
   // Regression coverage: preview must fit its panel, and zoom must be usable on phones.
   const firstDrawing = page.locator('figure.de-drawing').first();
