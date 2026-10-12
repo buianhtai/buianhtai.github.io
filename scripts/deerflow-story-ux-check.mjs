@@ -50,6 +50,7 @@ try {
       assert.equal(await root.locator('[data-story-panel="1"]').isVisible(),true,'Next shows admission');
       assert.equal(await root.locator('[data-scene-tab="1"]').getAttribute('aria-pressed'),'true');
       assert.equal(await root.locator('[data-progress]').getAttribute('aria-valuenow'),'2');
+      if (width === 390 || width === 1440) await root.screenshot({path:out+'/story-admission-'+theme+'-'+width+'.png', animations:'disabled'});
       assert.equal(await root.locator('[data-story-panel="1"] [data-inspector]').getAttribute('open'),null,'Next scene code stays tucked away');
       await root.locator('[data-scene-tab="2"]').click();
       assert.equal(await root.locator('[data-story-panel="2"]').isVisible(),true,'Third scene explains the stream');
@@ -57,6 +58,13 @@ try {
       assert.equal(await root.locator('[data-progress]').getAttribute('aria-valuenow'),'3');
       assert.equal(await root.locator('.node.on').count(),5,'SSE scene highlights relevant components');
       assert.equal(await root.locator('.wire.on').count(),4,'SSE scene displays model/publish/subscribe/HTTP links');
+      if (width === 390 || width === 1440) await root.screenshot({path:out+'/story-stream-'+theme+'-'+width+'.png', animations:'disabled'});
+      if (width === 1440) {
+        await root.locator('[data-play]').click();
+        assert.equal(await root.locator('[data-play]').getAttribute('aria-pressed'),'true','Autoplay is opt-in');
+        await root.locator('[data-play]').click();
+        assert.equal(await root.locator('[data-play]').getAttribute('aria-pressed'),'false','Autoplay can be paused');
+      }
       await root.locator('[data-scene-tab="0"]').click();
       assert.equal(await root.locator('.node.on').count(),3,'Scene 1 highlights only relevant nodes');
       assert.equal(await root.locator('.wire.on').count(),2,'Scene 1 has only 2 HTTP paths');
