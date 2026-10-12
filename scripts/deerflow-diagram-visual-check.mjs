@@ -63,11 +63,36 @@ async function inspect(width, theme) {
       return image && image.complete && image.naturalWidth > 0;
     }, i, { timeout: 15_000 });
   }
+  // The E2E walkthrough must be interactive, not just numbered static boxes.
+  const trace = page.locator('[data-deerflow-e2e]');
+  assert.equal(await trace.count(), 1, 'A technical E2E walkthrough should be present');
+  assert.equal(await trace.locator('[data-e2e-trigger]').count(), 8, 'Eight accountable stages required');
+  assert.equal(await trace.locator('[data-e2e-panel]:visible').count(), 1, 'Only selected stage shown');
+  await trace.locator('[data-e2e-trigger="05"]').click();
+  assert.equal(await trace.locator('[data-e2e-panel="05"]').isVisible(), true, 'Model decision stage opens');
+  await trace.locator('[data-e2e-next]').click();
+  assert.equal(await trace.locator('[data-e2e-panel="06"]').isVisible(), true, 'Next enters conditional tool path');
+  await trace.locator('[data-e2e-trigger="08"]').click();
+  assert.equal(await trace.locator('[data-e2e-panel="08"]').isVisible(), true, 'Terminal/SSE stage opens');
+  assert.equal(await trace.locator('[data-e2e-next]').isDisabled(), true, 'At last stage Next disabled');
+  await trace.locator('[data-e2e-trigger="01"]').click();
+  await trace.screenshot({ path: output + '/e2e-trace-' + theme + '-' + width + '.png' });
+
   const infographic = page.locator('figure.dfi');
   assert.equal(await infographic.count(), 1, 'One architecture infographic should precede the technical diagrams');
   assert.equal(await infographic.locator('.dfi-stage').count(), 5, 'The infographic should show five boundary stages');
   assert((await infographic.locator('svg').count()) >= 18, 'Expect semantic icons and flow signals');
   await infographic.screenshot({ path: output + '/system-map-' + theme + '-' + width + '.png' });
+  const infographicBg = await infographic.evaluate((el) => getComputedStyle(el).backgroundColor);
+  assert.equal(infographicBg, theme === 'light' ? 'rgb(247, 251, 255)' : 'rgb(11, 20, 34)',
+    'Infographic must follow the active site theme');
+  const themeImages = await page.locator('figure.de-drawing img').evaluateAll((imgs) => imgs.map((img) =>
+    ({ src: img.getAttribute('src'), dark: img.dataset.darkSrc, light: img.dataset.lightSrc })
+  ));
+  assert(themeImages.length === 3 && themeImages.every((asset) =>
+    asset.src === (theme === 'light' ? asset.light : asset.dark)),
+    'D2 drawings must swap to the matching SVG theme: ' + JSON.stringify(themeImages));
+
 
   const mermaidFigure = page.locator('figure.mermaid-figure--editorial').first();
   const mermaidScroll = mermaidFigure.locator('.mermaid-scroll');

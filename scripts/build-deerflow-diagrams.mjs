@@ -23,14 +23,15 @@ const iconCatalog = JSON.parse(fs.readFileSync(
 const iconDir = path.join(output, 'icons');
 fs.mkdirSync(iconDir, { recursive: true });
 const iconNames = new Set();
-function iconSvg(name) {
+function iconSvg(name, dark = false) {
   const icon = iconCatalog.icons[name];
   if (!icon) throw new Error('Unknown Lucide icon in diagram scene: ' + name);
   const w = icon.width ?? iconCatalog.width ?? 24;
   const h = icon.height ?? iconCatalog.height ?? 24;
+  const iconColor = dark ? '#a5d8e9' : '#38667f';
   return '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 '
-    + w + ' ' + h + '" fill="none" color="#38667f">'
-    + icon.body.replaceAll('currentColor', '#38667f') + '</svg>\n';
+    + w + ' ' + h + '" fill="none" color="' + iconColor + '">'
+    + icon.body.replaceAll('currentColor', iconColor) + '</svg>\n';
 }
 function embedIcon(name) {
   return 'data:image/svg+xml;base64,' + Buffer.from(iconSvg(name), 'utf8').toString('base64');
@@ -43,20 +44,27 @@ const palette = {
   teal: ['#38988d', '#e6f7f2'],
   amber: ['#c08740', '#fff2e0'],
 };
+const darkPalette = {
+  slate: ['#9bb2cf', '#17283e'],
+  blue: ['#84b9ed', '#142f49'],
+  violet: ['#b8a3fa', '#2b2645'],
+  teal: ['#7fdccc', '#123a40'],
+  amber: ['#f0bc76', '#40301e'],
+};
 const xmlEscape = (value) => String(value ?? '').replace(/[<>&"']/g, (ch) =>
   ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' })[ch],
 );
 // Treat intentional backslash-n from authored metadata as a line break too.
 const normalizeText = (value) => String(value ?? '').replace(/\\n/g, '\n');
 const d2Quote = (s) => JSON.stringify(normalizeText(s));
-const style = (accent, isBoundary = false) => {
-  const [stroke, fill] = palette[accent];
+const style = (accent, isBoundary = false, dark = false) => {
+  const [stroke, fill] = (dark ? darkPalette : palette)[accent];
   return [
     'style: {',
-    'fill: ' + d2Quote(isBoundary ? fill : '#ffffff'),
+    'fill: ' + d2Quote(isBoundary ? fill : (dark ? '#203147' : '#ffffff')),
     'stroke: ' + d2Quote(stroke),
     'stroke-width: 2',
-    'font-color: "#1e3045"',
+    'font-color: ' + d2Quote(dark ? '#edf6ff' : '#1e3045'),
     'font-size: 17',
     'border-radius: 10',
     ...(isBoundary ? ['stroke-dash: 3'] : ['shadow: true']),
@@ -81,13 +89,13 @@ function validate(scene) {
   }
 }
 
-function toD2(scene) {
+function toD2(scene, dark = false) {
   const lines = [
     '# Generated from docs/deerflow/diagrams/' + scene.slug + '.json.',
     '# Do not edit this generated copy. Modify the semantic JSON scene instead.',
     'direction: right',
     'style: {',
-    '  fill: "#f8fafc"',
+    '  fill: ' + d2Quote(dark ? '#0b1726' : '#f8fafc'),
     '}',
     '',
   ];
@@ -97,8 +105,8 @@ function toD2(scene) {
     const head = indent + b.id + ': ' + d2Quote(label) + ' {';
     lines.push(head);
     if (b.kind === 'data') lines.push(indent + '  shape: cylinder');
-    if (b.icon) lines.push(indent + '  icon: ' + d2Quote('./icons/' + b.icon + '.svg'));
-    for (const st of style(b.accent, b.kind === 'boundary')) lines.push(indent + '  ' + st);
+    if (b.icon) lines.push(indent + '  icon: ' + d2Quote('./icons/' + (dark ? 'dark/' : '') + b.icon + '.svg'));
+    for (const st of style(b.accent, b.kind === 'boundary', dark)) lines.push(indent + '  ' + st);
     if (b.kind === 'boundary') {
       for (const child of scene.boxes.filter((x) => x.parent === b.id)) writeNode(child, indent + '  ');
     }
@@ -109,7 +117,7 @@ function toD2(scene) {
   for (const e of scene.edges) {
     const label = e.label ? ': ' + d2Quote(e.label) : '';
     lines.push(qualified.get(e.from) + ' -> ' + qualified.get(e.to) + label + ' {');
-    lines.push('  style.stroke: ' + d2Quote(palette[e.accent][0]));
+    lines.push('  style.stroke: ' + d2Quote((dark ? darkPalette : palette)[e.accent][0]));
     lines.push('  style.stroke-width: 2');
     if (e.dashed) lines.push('  style.stroke-dash: 3');
     lines.push('}');
@@ -165,26 +173,40 @@ for (const name of names) {
   for (const b of scene.boxes) {
     if (b.icon && !iconNames.has(b.icon)) {
       fs.writeFileSync(path.join(iconDir, b.icon + '.svg'), iconSvg(b.icon), 'utf8');
+      const darkIconDir = path.join(iconDir, 'dark');
+      fs.mkdirSync(darkIconDir, { recursive: true });
+      fs.writeFileSync(path.join(darkIconDir, b.icon + '.svg'), iconSvg(b.icon, true), 'utf8');
       iconNames.add(b.icon);
     }
   }
   validate(scene);
   const d2 = path.join(output, name + '.d2');
   const svg = path.join(output, name + '.svg');
+  const darkD2 = path.join(output, name + '.dark.d2');
+  const darkSvg = path.join(output, name + '.dark.svg');
   const drawio = path.join(output, name + '.drawio');
   const d2Source = toD2(scene);
+  const darkD2Source = toD2(scene, true);
   const drawioSource = toDrawio(scene);
   if (d2Source.includes('\\\\n')) throw new Error('Double-escaped newline in D2: ' + name);
   fs.writeFileSync(d2, d2Source, 'utf8');
+  fs.writeFileSync(darkD2, darkD2Source, 'utf8');
   fs.writeFileSync(drawio, drawioSource, 'utf8');
   const result = spawnSync('d2', [d2, svg], { encoding: 'utf8' });
   if (result.error || result.status !== 0) {
     throw new Error('D2 build failed for ' + name + ':\n' + (result.stderr || result.error?.message || 'unknown error'));
   }
+  const darkResult = spawnSync('d2', [darkD2, darkSvg], { encoding: 'utf8' });
+  if (darkResult.error || darkResult.status !== 0) {
+    throw new Error('Dark D2 build failed for ' + name + ':\n' + (darkResult.stderr || darkResult.error?.message || 'unknown error'));
+  }
+  if (!fs.existsSync(darkSvg) || fs.statSync(darkSvg).size < 1000) {
+    throw new Error('No dark SVG generated for ' + name);
+  }
   if (!fs.existsSync(svg) || fs.statSync(svg).size < 1000) throw new Error('No SVG generated for ' + name);
   // Ensure labels are rendered cleanly, not as visible backslash-n escapes.
   const svgText = fs.readFileSync(svg, 'utf8');
-  if (svgText.includes('\\n')) {
+  if (svgText.includes('\\n') || fs.readFileSync(darkSvg, 'utf8').includes('\\n')) {
     throw new Error('Literal backslash-n found in rendered SVG for ' + name);
   }
   if (drawioSource.includes('&amp;lt;br')) {
