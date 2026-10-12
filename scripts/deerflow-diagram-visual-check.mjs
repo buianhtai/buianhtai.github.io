@@ -77,7 +77,7 @@ async function inspect(width, theme) {
   assert.deepEqual(runtimeErrors, [], 'Browser encountered script errors');
   const label = theme + '-' + width;
   await page.locator('figure.mermaid-figure--editorial').first().screenshot({ path: output + '/topology-' + label + '.png' });
-  await page.locator('figure.mermaid-figure--editorial').nth(3).screenshot({ path: output + '/delegation-' + label + '.png' });
+  await page.locator('figure.mermaid-figure--editorial').nth(4).screenshot({ path: output + '/delegation-' + label + '.png' });
   console.log('PASS: ' + label + ' ' + JSON.stringify(measurements));
   await context.close();
 }
