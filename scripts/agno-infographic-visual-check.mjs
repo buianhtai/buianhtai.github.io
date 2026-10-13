@@ -44,7 +44,7 @@ try{
     assert.equal(await lab.locator('[data-node="agent"]').getAttribute('aria-pressed'),null,'Node is not mistakenly handled as filter button');
 
     await lab.locator('.ai-scenarios [data-scenario="queue"]').click();
-    assert.match(await lab.locator('#ai-story-title').innerText(),/Queue Configuration/i);
+    assert.match(await lab.locator('#ai-story-title').innerText(),/AgentOS API/i);
     const count=await lab.locator('.ai-edge.is-active').count();
     await lab.locator('#ai-next').click();
     assert((await lab.locator('.ai-edge.is-active').count())>=count,'Scenario path advances');
