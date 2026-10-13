@@ -349,7 +349,13 @@ async def go():
     assert any(r["expression"] == "self.inc" and r["confidence"] == "resolved-self" for r in out["relations"])
     assert any(b["condition"] == "n > 0" for b in out["branches"])
     assert out["stats"]["symbols"] == 4
-    print("AST symbol, class-method call, await and branch self-test passed")
+    package = parse_file("backend/packages/harness/deerflow/runtime/__init__.py", "from .runs import run_agent")
+    runs = parse_file("backend/packages/harness/deerflow/runtime/runs/__init__.py", "from .worker import run_agent")
+    worker = parse_file("backend/packages/harness/deerflow/runtime/runs/worker.py", "async def run_agent():\n    return None")
+    gateway = parse_file("backend/app/gateway/services.py", "from deerflow.runtime import run_agent\nasync def start_run():\n    await run_agent()")
+    exports = resolve([package, runs, worker, gateway])
+    assert any(r["expression"] == "run_agent" and r["confidence"] == "resolved-reexport" and r["to"] is not None for r in exports["relations"])
+    print("AST symbol, branches, async and two-level re-export tests passed")
 
 
 def main():
