@@ -75,9 +75,10 @@ try {
     const errors=[];
     page.on('pageerror', e => errors.push(e.message));
     await page.goto(host+'/en/labs/deerflow-code-flow/',{waitUntil:'domcontentloaded'});
-    await page.locator('[data-total-flows]').getByText(/[0-9]/).waitFor({timeout:12000});
+    await page.waitForFunction(() => /^\\d+$/.test(document.querySelector('[data-total-flows]')?.textContent || ''), {timeout:12000});
     assert((await page.locator('[data-boxes] .cf-box').count())>3,'Control flow source nodes are rendered');
     await page.locator('[data-mode="effects"]').click();
+    assert.equal(await page.locator('[data-diagram]').isVisible(),false,'Flow diagram hides in effect mode');
     assert((await page.locator('.cf-effect').count())>2,'State effects visual lanes rendered');
     await page.locator('.cf-effect').first().click();
     assert.notEqual(await page.locator('[data-title]').innerText(),'Choose a code node','Effect inspector updates');
