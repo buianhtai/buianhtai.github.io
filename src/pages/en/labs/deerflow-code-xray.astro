@@ -44,6 +44,24 @@ const edges = [
  {from:'publish',to:'subscribe',kind:'event',line:82,source:files.bridge,description:'Separate publish/subscribe sides of a StreamBridge contract; NOT a direct function call.'},
  {from:'end',to:'subscribe',kind:'event',line:86,source:files.bridge,description:'Terminal event travels through the bridge; NOT a synchronous caller/callee edge.'}
 ];
+const diagramEdges = edges.map((edge, i) => {
+  const a = nodes.find(n => n.id === edge.from);
+  const b = nodes.find(n => n.id === edge.to);
+  const w = 210, h = 72;
+  const ax = a.x + w / 2, ay = a.y + h / 2;
+  const bx = b.x + w / 2, by = b.y + h / 2;
+  const right = bx > ax + 100, left = bx < ax - 100;
+  const sx = right ? a.x + w : left ? a.x : ax;
+  const ex = right ? b.x : left ? b.x + w : bx;
+  const sy = right || left ? ay : a.y + h;
+  const ey = right || left ? by : b.y;
+  const dx = ex - sx, dy = ey - sy;
+  const path = right || left
+    ? 'M ' + sx + ' ' + sy + ' C ' + (sx + dx * .48) + ' ' + sy + ', ' + (ex - dx * .48) + ' ' + ey + ', ' + ex + ' ' + ey
+    : 'M ' + sx + ' ' + sy + ' C ' + sx + ' ' + (sy + dy * .5) + ', ' + ex + ' ' + (ey - dy * .5) + ', ' + ex + ' ' + ey;
+  return { ...edge, path, index: i };
+});
+
 ---
 <BaseLayout title="DeerFlow Code X-Ray — Source-derived function graph" description="Follow real DeerFlow Python functions, direct calls, asyncio task scheduling and StreamBridge event relationships with pinned source links.">
 <main class="code-xray" data-code-xray>
@@ -74,16 +92,7 @@ const edges = [
               {['HTTP ROUTES','APPLICATION SERVICE','RUN MANAGER','WORKER','LIBRARY / BRIDGE'].map((t,i)=><g><rect x={15+i*243} y="17" width="231" height="780" rx="14"/><text x={30+i*243} y="45">{t}</text></g>)}
             </g>
             <g class="edges">
-              {edges.map((e,i)=>{
-                const a=nodes.find(n=>n.id===e.from);const b=nodes.find(n=>n.id===e.to);
-                const w=210,h=72;
-                const ax=a.x+w/2,ay=a.y+h/2,bx=b.x+w/2,by=b.y+h/2;
-                const right=bx>ax+100, left=bx<ax-100, sx=right?a.x+w:left?a.x:ax, ex=right?b.x:left?b.x+w:bx;
-                const sy=right||left?ay:a.y+h,ey=right||left?by:b.y;
-                const dx=ex-sx,dy=ey-sy;
-                const path=right||left?'M '+sx+' '+sy+' C '+(sx+dx*.48)+' '+sy+', '+(ex-dx*.48)+' '+ey+', '+ex+' '+ey:'M '+sx+' '+sy+' C '+sx+' '+(sy+dy*.5)+', '+ex+' '+(ey-dy*.5)+', '+ex+' '+ey;
-                return <path d={path} class:list={['edge',e.kind]} data-edge-index={i} role="button" tabindex="0" aria-label={e.from+' to '+e.to+', '+e.kind} />;
-              })}
+              {diagramEdges.map((e,i)=><path d={e.path} class:list={['edge',e.kind]} data-edge-index={i} role="button" tabindex="0" aria-label={e.from+' to '+e.to+', '+e.kind} />)}
             </g>
             <g class="graph-nodes">
               {nodes.map((n,i)=><g class="graph-node" data-node-index={i} role="button" tabindex="0" aria-label={'Inspect '+n.label}>
