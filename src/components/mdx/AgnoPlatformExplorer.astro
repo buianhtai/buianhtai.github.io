@@ -221,7 +221,7 @@ const revision = '1f2aac51eb28dc9c0970836d3b7ae046bae81bbb';
     setText('al-event-description',current.desc+' '+current.why);setText('al-event-code',current.code);
     const row=$('al-step-list');row.replaceChildren();
     s.steps.forEach((e,i)=>{const b=document.createElement('button');b.type='button';b.setAttribute('aria-pressed',String(i===step));b.innerHTML='<span>'+String(i+1).padStart(2,'0')+' · '+e.proto.replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</span><strong>'+e.title.replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</strong>';b.addEventListener('click',()=>{step=i;renderAll();});row.append(b);});
-    const activeStep=row.children[step];if(activeStep&&view==='execution')activeStep.scrollIntoView({block:'nearest',inline:'nearest'});
+    const activeStep=row.children[step];if(activeStep&&view==='execution')row.scrollLeft=Math.max(0,activeStep.offsetLeft-row.offsetLeft-12);
     renderFile();
   }
   function advance(delta){const max=scenarios[scenario].steps.length;step=(step+delta+max)%max;selected=scenarios[scenario].steps[step].to;renderAll();}
