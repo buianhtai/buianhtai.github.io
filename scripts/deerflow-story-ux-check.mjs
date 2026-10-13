@@ -61,13 +61,17 @@ try {
       assert.equal(new URL(page.url()).searchParams.get('depth'),'code','Depth persists into shared URL');
       await root.locator('[data-depth-button="components"]').click();
       assert.equal(await root.locator('[data-code-focus]').isVisible(),false,'Components depth hides code stripe');
+      await root.locator('.scenario-picker summary').click();
       await root.locator('[data-failure-button="denied"]').click();
       assert.equal(await root.locator('[data-failure-explanation]').isVisible(),true,'Denied tool scenario teaches recovery boundary');
       assert.equal(new URL(page.url()).searchParams.get('failure'),'denied','Scenario persists in URL');
+      await root.locator('.scenario-picker summary').click();
       await root.locator('[data-failure-button="crash"]').click();
       assert.equal(await root.locator('[data-scene-tab="6"]').getAttribute('aria-pressed'),'true','Worker failure maps to recovery chapter');
+      await root.locator('.scenario-picker summary').click();
       await root.locator('[data-failure-button="disconnect"]').click();
       assert.equal(await root.locator('[data-scene-tab="5"]').getAttribute('aria-pressed'),'true','Disconnect maps to reconnect chapter');
+      await root.locator('.scenario-picker summary').click();
       await root.locator('[data-failure-button="normal"]').click();
       assert.equal(await root.locator('[data-failure-explanation]').isVisible(),false,'Normal scenario hides failure explanation');
       await root.locator('[data-scene-tab="0"]').click();
