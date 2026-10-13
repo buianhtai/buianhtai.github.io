@@ -11,11 +11,12 @@
     "blog:new": "npx tsx scripts/blog.ts",
     "blog:update": "npx tsx scripts/update.ts",
     "blog:validate": "npx tsx scripts/validate.ts",
-    "build:astro": "npm run codegraph:test && npm run codegraph:generate && npm run diagrams:deerflow && astro build",
+    "build:astro": "npm run codegraph:test && npm run codegraph:generate && npm run controlflow:generate && npm run diagrams:deerflow && astro build",
     "search:index": "npx --yes pagefind@1.5.2 --site dist",
     "diagrams:deerflow": "node scripts/build-deerflow-diagrams.mjs",
     "codegraph:generate": "python3 scripts/generate-deerflow-codegraph.py",
-    "codegraph:test": "python3 scripts/generate-deerflow-codegraph.py --self-test"
+    "codegraph:test": "python3 scripts/generate-deerflow-codegraph.py --self-test",
+    "controlflow:generate": "python3 scripts/generate-deerflow-controlflow.py"
   },
   "dependencies": {
     "@astrojs/mdx": "^4.3.14",
