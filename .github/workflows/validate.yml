@@ -218,6 +218,10 @@ jobs:
         timeout-minutes: 3
         run: node scripts/deerflow-diagram-visual-check.mjs
 
+      - name: Validate AST source explorer, interactions, mobile and theme
+        timeout-minutes: 3
+        run: node scripts/deerflow-source-atlas-ux-check.mjs
+
       - name: Validate DeerFlow guided story (desktop, mobile, light and dark)
         timeout-minutes: 3
         run: node scripts/deerflow-story-ux-check.mjs
