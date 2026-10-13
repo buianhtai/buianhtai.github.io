@@ -96,7 +96,7 @@ const pinned='https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f
   const forward=root.querySelector<HTMLButtonElement>('[data-trace-forward]');
   const counter=root.querySelector<HTMLOutputElement>('[data-trace-count]');
   const step=root.querySelector<HTMLElement>('[data-trace-step]');
-  if(!back||!forward||!counter||!step)return;
+  if(!back||!forward||!counter||!step)continue;
   let index=0;
   const show=(i:number)=>{
    index=Math.max(0,Math.min(buttons.length-1,i));
