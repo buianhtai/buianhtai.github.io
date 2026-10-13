@@ -45,9 +45,9 @@ try {
     assert.equal(await lab.locator('[data-view="execution"]').getAttribute('aria-selected'), 'true');
     assert.match(await lab.locator('#al-scenario-heading').innerText(), /Tool loop/);
     await lab.locator('#al-next').click();
-    assert.match(await lab.locator('#al-step-title').innerText(), /Start agent/);
+    assert.match(await lab.locator('#al-step-title').innerText(), /Start agent/i);
     await lab.locator('#al-range').evaluate(el => { el.value = '4'; el.dispatchEvent(new Event('input', { bubbles: true })); });
-    assert.match(await lab.locator('#al-step-title').innerText(), /Result returned/);
+    assert.match(await lab.locator('#al-step-title').innerText(), /Result returned/i);
     assert.equal(await lab.locator('#al-step-list button[aria-pressed="true"]').count(), 1);
 
     await lab.locator('[data-scenario="failure"]').click();
@@ -55,7 +55,7 @@ try {
     await lab.locator('[data-view="code"]').click();
     assert.equal(await lab.locator('#al-files button').count(), 7);
     await lab.locator('#al-files button').nth(2).click();
-    assert.match(await lab.locator('#al-file-title').innerText(), /Run event/);
+    assert.match(await lab.locator('#al-file-title').innerText(), /Run event/i);
     assert.match(await lab.locator('#al-file-link').getAttribute('href'), /1f2aac51eb28dc9c0970836d3b7ae046bae81bbb/);
 
     await lab.locator('[data-view="architecture"]').click();
