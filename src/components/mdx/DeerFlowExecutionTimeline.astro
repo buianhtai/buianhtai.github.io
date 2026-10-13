@@ -18,7 +18,7 @@ const pinned='https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f
 ---
 <section class="trace-lab" data-trace-lab aria-label="Explore representative DeerFlow request execution timeline">
  <header class="tl-header">
-  <div><span class="tl-kicker">TRACE EXPLAINER · SOURCE-GROUNDED</span><h2>Follow one request, event by event.</h2><p>Switch between the browser, worker, model, tools, persistence and SSE. See what each step does—and what it does not guarantee.</p></div>
+  <div><span class="tl-kicker">TRACE EXPLAINER · SOURCE-GROUNDED</span><h2>Follow one request, event by event.</h2><p>Switch between the browser, worker, model, tools, persistence and SSE. Selecting an event also highlights its actual participating components in the diagram above.</p></div>
   <span class="tl-notice">Illustrative order · no measured timings</span>
  </header>
  <div class="tl-surface">
@@ -33,6 +33,7 @@ const pinned='https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f
   </div>
   <div class="tl-inspect">
    <div class="tl-inspect-head"><span>STEP INSPECTOR</span><span data-trace-step>01 / REQUEST</span></div>
+   <button type="button" class="tl-reveal" data-trace-visual>↑ View highlighted architecture diagram</button>
    {events.map((e,i)=><article data-trace-panel={i} hidden={i!==0}>
     <span class="tl-panel-lane">{e.lane} · {e.tag}</span>
     <h3>{e.title}</h3>
@@ -79,6 +80,7 @@ const pinned='https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f
 .tl-inspect code{font:550 .68rem/1.7 var(--font-mono,monospace);color:var(--tl-ink)}
 .tl-inspect article>a{display:flex;flex-direction:column;gap:5px;overflow-wrap:anywhere;color:var(--tl-accent);font-weight:700;font-size:.7rem;text-decoration:none}
 .tl-inspect article>a small{color:var(--tl-muted);font:500 .6rem/1.4 var(--font-mono,monospace)}
+ .tl-reveal{border:0;border-bottom:1px solid var(--tl-line);display:block;width:100%;background:color-mix(in srgb,var(--tl-accent) 8%,transparent);padding:11px 17px;font:750 .68rem Inter,system-ui,sans-serif;color:var(--tl-accent);text-align:left;cursor:pointer}.tl-reveal:hover{text-decoration:underline}
 .tl-steps{display:flex;gap:10px;justify-content:space-between;padding:16px 20px;border-top:1px solid var(--tl-line)}
 .tl-steps button{background:transparent;border:1px solid var(--tl-line);border-radius:7px;padding:10px 12px;color:var(--tl-ink);font-size:.72rem;font-weight:700;cursor:pointer}.tl-steps button:hover:not(:disabled){border-color:var(--tl-accent)}.tl-steps button:disabled{opacity:.35;cursor:default}
 .tl-caveat{padding:15px 25px 0;font-size:.72rem;line-height:1.8;color:var(--tl-muted)}.tl-caveat strong{color:var(--tl-ink)}
@@ -96,9 +98,10 @@ const pinned='https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f
   const forward=root.querySelector<HTMLButtonElement>('[data-trace-forward]');
   const counter=root.querySelector<HTMLOutputElement>('[data-trace-count]');
   const step=root.querySelector<HTMLElement>('[data-trace-step]');
+  const visual=root.querySelector<HTMLButtonElement>('[data-trace-visual]');
   if(!back||!forward||!counter||!step)continue;
   let index=0;
-  const show=(i:number)=>{
+  const show=(i:number,notify=false)=>{
    index=Math.max(0,Math.min(buttons.length-1,i));
    buttons.forEach((b,j)=>{b.classList.toggle('active',index===j);b.setAttribute('aria-pressed',String(index===j));});
    panels.forEach((p,j)=>{p.hidden=index!==j;});
@@ -107,10 +110,20 @@ const pinned='https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f
    counter.textContent=String(index+1).padStart(2,'0')+' / 09';
    step.textContent=String(index+1).padStart(2,'0')+' / '+(buttons[index]?.querySelector('.tl-event-text small')?.textContent||'EVENT');
    back.disabled=index===0;forward.disabled=index===buttons.length-1;
+   if(notify)document.dispatchEvent(new CustomEvent('deerflow:trace-selected',{detail:{index}}));
   };
-  buttons.forEach((b,i)=>b.addEventListener('click',()=>show(i)));
-  back.addEventListener('click',()=>show(index-1));
-  forward.addEventListener('click',()=>show(index+1));
-  show(0);
+  buttons.forEach((b,i)=>b.addEventListener('click',()=>show(i,true)));
+  back.addEventListener('click',()=>show(index-1,true));
+  forward.addEventListener('click',()=>show(index+1,true));
+  visual?.addEventListener('click',()=>{
+   const diagram=document.querySelector<HTMLElement>('[data-story-root] .drawing');
+   diagram?.scrollIntoView({block:'start',behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
+  });
+  document.addEventListener('deerflow:trace-set',(e:Event)=>{
+   const n=(e as CustomEvent<{index:number}>).detail?.index;
+   if(typeof n==='number')show(n,false);
+  });
+  const requested=Number(new URLSearchParams(location.search).get('event')||'1');
+  show(Number.isInteger(requested)?requested-1:0);
  }
 </script>
