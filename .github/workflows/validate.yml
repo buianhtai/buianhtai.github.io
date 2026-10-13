@@ -220,6 +220,9 @@ jobs:
       - name: Verify Agno article interactions and responsive light/dark mode
         timeout-minutes: 3
         run: node scripts/agno-explorer-visual-check.mjs
+      - name: Verify Agno distributed architecture article interactions
+        timeout-minutes: 3
+        run: node scripts/agno-distributed-visual-check.mjs
       - name: Render DeerFlow article diagrams and capture responsive screenshots
         timeout-minutes: 3
         run: node scripts/deerflow-diagram-visual-check.mjs
