@@ -32,7 +32,7 @@ try {
   for(const width of [390,1400]){
     for(const route of routes){
       const context=await browser.newContext({viewport:{width,height:930},reducedMotion:'reduce'});
-      await context.addInitScript(()=>localStorage.setItem('theme','terminal'));
+      await context.addInitScript(()=>{ if(localStorage.getItem('theme') === null) localStorage.setItem('theme','terminal'); });
       await context.route('**/*',r=>r.request().url().startsWith(host)?r.continue():r.abort());
       const page=await context.newPage();
       const errors=[];page.on('pageerror',e=>errors.push(e.message));
