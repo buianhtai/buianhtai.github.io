@@ -65,5 +65,7 @@ try {
 } finally {
   clearTimeout(timeout);
   await browser?.close();
-  server.kill('SIGTERM');
+  server.kill('SIGKILL');
+  // npm can leave the Astro preview child holding stdout open after the wrapper exits.
+  process.exit(process.exitCode || 0);
 }
