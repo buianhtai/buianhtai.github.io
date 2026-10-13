@@ -1,0 +1,68 @@
+---
+const nodes=[
+ {id:'browser',x:24,y:112,w:150,title:'React UI',sub:'LangGraph SDK',zone:'CLIENT',info:'Creates the HTTP run request and consumes SSE. A disconnected tab does not prove the run stopped.',source:'frontend/src/core/api/api-client.ts'},
+ {id:'nginx',x:222,y:112,w:150,title:'Nginx proxy',sub:'HTTP / SSE',zone:'EDGE',info:'Forwards /api/langgraph/* traffic to the API. SSE requires non-buffered streaming behaviour.',source:'docker/nginx/nginx.conf'},
+ {id:'gateway',x:420,y:112,w:158,title:'FastAPI Gateway',sub:'routes + SSE',zone:'APPLICATION',info:'Validates and admits HTTP requests, then subscribes to streaming events for response delivery.',source:'backend/app/gateway/services.py'},
+ {id:'manager',x:420,y:278,w:158,title:'RunManager',sub:'admission + lease',zone:'APPLICATION',info:'Owns run identity, concurrent admission and lifecycle decisions independently from SSE transport.',source:'backend/packages/harness/deerflow/runtime/runs/manager.py'},
+ {id:'worker',x:643,y:112,w:164,title:'Run worker',sub:'asyncio + LangGraph',zone:'EXECUTION',info:'Advances the LangGraph run using an in-process asynchronous task; publishes events separately.',source:'backend/packages/harness/deerflow/runtime/runs/worker.py'},
+ {id:'bridge',x:643,y:278,w:164,title:'StreamBridge',sub:'pub/sub + replay',zone:'TRANSPORT',info:'Separates worker event publication from subscribed consumers. Replay depends on transport and retention.',source:'backend/packages/harness/deerflow/runtime/stream_bridge/base.py'},
+ {id:'store',x:420,y:444,w:158,title:'RunStore',sub:'metadata + owner',zone:'STATE',info:'Stores run lifecycle records when persistent storage is enabled. Not equivalent to graph checkpoints.',source:'backend/packages/harness/deerflow/persistence/run/model.py'},
+ {id:'checkpoint',x:643,y:444,w:164,title:'Checkpointer',sub:'graph / thread',zone:'STATE',info:'Maintains graph execution state at configured checkpoint boundaries, not a record of every side effect.',source:'backend/packages/harness/deerflow/runtime/runs/worker.py'},
+ {id:'model',x:867,y:112,w:168,title:'Model provider',sub:'LLM API',zone:'EXTERNAL',info:'Receives model calls from the graph. Model outputs may initiate further tool operations.',source:'backend/packages/harness/deerflow/runtime/runs/worker.py'},
+ {id:'tools',x:867,y:278,w:168,title:'Tool adapters',sub:'MCP / sandbox',zone:'EXTERNAL',info:'Integration boundary for authorized tool execution; external effects require their own retry semantics.',source:'backend/packages/harness/deerflow/authz/enforcement.py'}
+];
+const edges=[
+ {id:'http',a:'browser',b:'nginx',label:'HTTPS',x:179,y:101,d:'M174 147 H222',phase:'request'},
+ {id:'proxy',a:'nginx',b:'gateway',label:'proxy HTTP',x:378,y:101,d:'M372 147 H420',phase:'request'},
+ {id:'admit',a:'gateway',b:'manager',label:'admission',x:501,y:237,d:'M500 184 V278',phase:'runtime'},
+ {id:'start',a:'manager',b:'worker',label:'asyncio.Task',x:604,y:247,d:'M578 310 H610 V147 H643',phase:'runtime'},
+ {id:'persist',a:'manager',b:'store',label:'metadata',x:500,y:410,d:'M500 350 V444',phase:'state'},
+ {id:'graph',a:'worker',b:'checkpoint',label:'checkpoint',x:805,y:419,d:'M733 184 V432 H725 V444',phase:'state'},
+ {id:'model',a:'worker',b:'model',label:'model API',x:838,y:101,d:'M807 147 H867',phase:'runtime'},
+ {id:'tool',a:'worker',b:'tools',label:'authorized tool',x:931,y:243,d:'M807 169 H851 V310 H867',phase:'runtime'},
+ {id:'publish',a:'worker',b:'bridge',label:'publish()',x:728,y:237,d:'M725 184 V278',phase:'stream'},
+ {id:'subscribe',a:'bridge',b:'gateway',label:'subscribe()',x:611,y:392,d:'M643 327 H608 V181 H578',phase:'stream'},
+ {id:'sse',a:'gateway',b:'browser',label:'SSE response',x:354,y:44,d:'M500 112 V57 H100 V112',phase:'stream'}
+];
+const repo='https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/';
+---
+<section class="topology" data-topology aria-label="Interactive DeerFlow architecture topology">
+ <header class="topology-header"><div><span class="topology-kicker">ARCHITECTURE / INTERACTIVE TOPOLOGY</span><h2>Follow the boundaries, not just the arrows.</h2><p>Select a phase, component or transport path to inspect the responsibility and source.</p></div><div class="topology-legend"><span><i class="http"></i>HTTP</span><span><i class="runtime"></i>Runtime</span><span><i class="stream"></i>Event transport</span><span><i class="state"></i>State</span></div></header>
+ <div class="topology-controls" role="group" aria-label="Architecture phase">
+  <button type="button" data-phase="all" aria-pressed="true">Full system</button>
+  <button type="button" data-phase="request" aria-pressed="false">01 HTTP admission</button>
+  <button type="button" data-phase="runtime" aria-pressed="false">02 Execution</button>
+  <button type="button" data-phase="stream" aria-pressed="false">03 SSE streaming</button>
+  <button type="button" data-phase="state" aria-pressed="false">04 Persistence</button>
+ </div>
+ <div class="topology-scroll"><svg viewBox="0 0 1070 548" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Bounded diagram with client, edge, application, execution, state and external service components connected by selectable transport paths">
+ <defs><marker id="topology-arrow" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8" stroke="currentColor" stroke-width="1.4" fill="none"/></marker></defs>
+ <g class="topology-zones">
+  <rect x="8" y="70" width="182" height="158" rx="15"/><text x="23" y="91">CLIENT</text>
+  <rect x="206" y="70" width="182" height="158" rx="15"/><text x="220" y="91">EDGE</text>
+  <rect x="404" y="70" width="190" height="474" rx="15"/><text x="420" y="91">APPLICATION / RUN</text>
+  <rect x="627" y="70" width="196" height="474" rx="15"/><text x="643" y="91">EXECUTION / EVENTS</text>
+  <rect x="851" y="70" width="198" height="315" rx="15"/><text x="867" y="91">EXTERNAL SYSTEMS</text>
+ </g>
+ <g class="topology-edges">{edges.map(e=><g class="topology-edge" data-edge={e.id} data-edge-phase={e.phase} data-edge-from={e.a} data-edge-to={e.b} tabindex="0" role="button" aria-label={e.label}><path d={e.d} marker-end="url(#topology-arrow)"/><text x={e.x} y={e.y} text-anchor="middle">{e.label}</text></g>)}</g>
+ <g class="topology-nodes">{nodes.map(n=><g class="topology-node" data-node-id={n.id} tabindex="0" role="button" aria-label={n.title}><rect x={n.x} y={n.y} width={n.w} height="72" rx="11"/><rect class="node-icon" x={n.x+12} y={n.y+15} width="26" height="26" rx="6"/><text class="node-symbol" x={n.x+25} y={n.y+33} text-anchor="middle">{n.id==='browser'?'UI':n.id==='store'?'DB':n.id==='model'?'AI':n.id==='worker'?'AG':n.id==='bridge'?'EV':n.id==='nginx'?'PX':n.id==='gateway'?'AP':n.id==='manager'?'RM':n.id==='tools'?'TL':'CP'}</text><text class="node-name" x={n.x+45} y={n.y+30}>{n.title}</text><text class="node-sub" x={n.x+45} y={n.y+48}>{n.sub}</text></g>)}</g>
+ </svg></div>
+ <div class="topology-detail" aria-live="polite"><div><span data-topology-category>COMPONENT / CLIENT</span><h3 data-topology-title>React UI</h3><p data-topology-description>Creates the HTTP run request and consumes SSE.</p></div><a data-topology-source href={repo+nodes[0].source} target="_blank" rel="noopener noreferrer">Explore implementation ↗</a></div>
+</section>
+<script define:vars={{nodes,edges,repo}}>
+const container=document.querySelector('[data-topology]');if(container){
+ const nodeEls=[...container.querySelectorAll('[data-node-id]')],edgeEls=[...container.querySelectorAll('[data-edge]')],phases=[...container.querySelectorAll('[data-phase]')];
+ let current='all',selected='browser';
+ const output=(title,category,desc,source)=>{container.querySelector('[data-topology-title]').textContent=title;container.querySelector('[data-topology-category]').textContent=category;container.querySelector('[data-topology-description]').textContent=desc;container.querySelector('[data-topology-source]').href=repo+source;};
+ function paint(){nodeEls.forEach(el=>{const id=el.dataset.nodeId;el.classList.toggle('selected',selected===id);el.classList.toggle('dim',current!=='all'&&!edges.some(e=>e.phase===current&&(e.a===id||e.b===id)));});edgeEls.forEach(el=>{el.classList.toggle('selected',selected===el.dataset.edge);el.classList.toggle('dim',current!=='all'&&el.dataset.edgePhase!==current);});phases.forEach(p=>p.setAttribute('aria-pressed',String(p.dataset.phase===current)));}
+ function pickNode(id){selected=id;const n=nodes.find(x=>x.id===id);output(n.title,n.zone+' / COMPONENT',n.info,n.source);paint();}
+ function pickEdge(id){selected=id;const e=edges.find(x=>x.id===id);const a=nodes.find(x=>x.id===e.a),b=nodes.find(x=>x.id===e.b);output(e.label,e.phase.toUpperCase()+' / TRANSPORT',a.title+' → '+b.title+'. This path crosses explicit component boundaries; inspect both sides for exact contract and failure semantics.',a.source);paint();}
+ function bindKeys(el,fn){el.addEventListener('click',fn);el.addEventListener('keydown',ev=>{if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();fn();}});}
+ nodeEls.forEach(el=>bindKeys(el,()=>pickNode(el.dataset.nodeId)));edgeEls.forEach(el=>bindKeys(el,()=>pickEdge(el.dataset.edge)));
+ phases.forEach(p=>p.addEventListener('click',()=>{current=p.dataset.phase;const e=edges.find(x=>x.phase===current);if(e)pickEdge(e.id);else pickNode('browser');paint();}));
+ pickNode('browser');
+}
+</script>
+<style>
+.topology{--top-bg:#142635;--top-surface:#1b3243;--top-border:#41586a;--top-ink:#eef5f7;--top-muted:#a9c3ce;--top-accent:#72dcc7;background:var(--top-bg);color:var(--top-ink);border:1px solid var(--top-border);border-radius:17px;padding:clamp(14px,2vw,26px);margin:32px auto;max-width:1330px;font-family:Inter,system-ui,sans-serif}.topology *{box-sizing:border-box}.topology-header{display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap}.topology-kicker,.topology-detail span{font:700 .66rem ui-monospace,monospace;letter-spacing:.1em;color:var(--top-accent)}.topology-header h2{font-size:clamp(1.25rem,2.5vw,2rem);letter-spacing:-.045em;margin:8px 0}.topology-header p,.topology-detail p{color:var(--top-muted);line-height:1.65;font-size:.86rem}.topology-legend{display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap}.topology-legend span{font:.64rem ui-monospace,monospace;color:var(--top-muted)}.topology-legend i{display:inline-block;width:9px;height:9px;border-radius:100%;background:#6cbbf1;margin-right:5px}.topology-legend .runtime{background:#e5b675}.topology-legend .stream{background:#70ddc6}.topology-legend .state{background:#bcaff9}.topology-controls{display:flex;gap:8px;overflow-x:auto;padding:18px 0}.topology-controls button{border:1px solid var(--top-border);background:var(--top-surface);color:var(--top-ink);border-radius:8px;padding:10px 14px;white-space:nowrap;font:.76rem ui-monospace,monospace;cursor:pointer}.topology-controls button[aria-pressed=true]{background:var(--top-accent);border-color:var(--top-accent);color:#102833;font-weight:700}.topology button:focus-visible,.topology [role=button]:focus-visible{outline:3px solid var(--top-accent);outline-offset:3px}.topology-scroll{overflow-x:auto;border:1px solid var(--top-border);border-radius:12px;background:var(--top-surface)}.topology-scroll svg{min-width:820px;width:100%;height:auto;display:block}.topology-zones rect{fill:var(--top-bg);stroke:var(--top-border);stroke-width:1.4;stroke-dasharray:5 4}.topology-zones text{fill:var(--top-muted);font:700 11px ui-monospace,monospace;letter-spacing:1px}.topology-edge{color:#8baebd;cursor:pointer;transition:opacity .2s}.topology-edge path{fill:none;stroke:currentColor;stroke-width:2}.topology-edge text{fill:var(--top-muted);font:11px ui-monospace,monospace}.topology-edge.selected{color:var(--top-accent)}.topology-edge.selected path{stroke-width:4;stroke-dasharray:7 5;animation:topology-dash 1.5s linear infinite}.topology-edge.dim,.topology-node.dim{opacity:.2}.topology-node{cursor:pointer;transition:opacity .2s}.topology-node>rect:first-child{fill:var(--top-surface);stroke:#608197;stroke-width:1.4}.topology-node.selected>rect:first-child{fill:#245449;stroke:var(--top-accent);stroke-width:2.8}.topology-node .node-icon{fill:#365d68}.topology-node .node-symbol{font:700 10px ui-monospace,monospace;fill:#d1fff4}.topology-node .node-name{font:700 12px system-ui,sans-serif;fill:var(--top-ink)}.topology-node .node-sub{font:10px ui-monospace,monospace;fill:var(--top-muted)}.topology-detail{display:flex;gap:20px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:20px 3px 2px}.topology-detail h3{margin:8px 0;font-size:1.18rem}.topology-detail p{max-width:760px;margin:0}.topology-detail a{color:var(--top-accent);font:.78rem ui-monospace,monospace;overflow-wrap:anywhere}@keyframes topology-dash{to{stroke-dashoffset:-24}}:global(html.theme-light) .topology{--top-bg:#f9fcfc;--top-surface:#e8f1f3;--top-border:#b6cdd3;--top-ink:#173848;--top-muted:#4d6572;--top-accent:#087b6f}:global(html.theme-light) .topology-node.selected>rect:first-child{fill:#c7eee3}:global(html.theme-light) .topology-node .node-icon{fill:#28766f}@media(prefers-reduced-motion:reduce){.topology-edge.selected path{animation:none}}
+</style>
