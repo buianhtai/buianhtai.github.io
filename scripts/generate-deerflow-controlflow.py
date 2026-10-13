@@ -131,7 +131,7 @@ class Flow:
         first=self.block(func.body,end,0,None,end)
         start=self.node(func,"entry",func.name+"() / ENTRY",0)
         self.link(start,first)
-        self.nodes.sort(key=lambda n:(n["line"], 0 if n["kind"]=="entry" else 2 if n["kind"]=="end" else 1,n["id"]))
+        self.nodes.sort(key=lambda n:(-1 if n["kind"]=="entry" else 10**9 if n["kind"]=="end" else n["line"], n["id"]))
         # Preserve order in generated layout but always include the synthetic EXIT node.
         return {"nodes":self.nodes,"edges":self.edges,"effects":sorted(self.effects,key=lambda m:m["line"]),
                 "caveat":"Structural AST approximation. Except edges are possible handlers, not exact exception propagation. Finally control transfer and runtime dispatch may differ."}
