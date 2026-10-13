@@ -1,0 +1,133 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+const revision = '1f15e0b43ca58b9601514f9f5c408fb032022833';
+---
+<BaseLayout title="DeerFlow Source Atlas — Generated Code Diagrams" description="Generated from pinned Python AST: interactive function call graphs, class structures, source branches, and imports.">
+<main class="sa">
+<header class="hero">
+  <a class="back" href="/en/labs/deerflow-code-xray/">← Curated execution graph</a>
+  <p class="eyebrow">DEERFLOW / SOURCE CODE INTELLIGENCE</p>
+  <h1>Explore the <em>implementation.</em></h1>
+  <p>Real functions and relationships extracted by Python AST analysis. Select any symbol, follow its calls, inspect source branches and compare class interfaces. No hand-drawn function connections.</p>
+  <div class="metrics"><span><b id="sa-files">—</b> Python modules</span><span><b id="sa-symbols">—</b> Definitions</span><span><b id="sa-calls">—</b> Call sites</span><span><b id="sa-branches">—</b> Branch nodes</span><span class="revision">{revision.slice(0,12)}</span></div>
+</header>
+<section class="studio" data-atlas data-upstream={'https://github.com/bytedance/deer-flow/blob/'+revision+'/'}>
+  <header class="studio-top"><strong><span class="dot"></span> CODE EXPLORER</strong><span>GENERATED FROM PYTHON AST · STATIC ANALYSIS</span></header>
+  <div class="studio-layout">
+    <aside class="browser">
+      <label for="sa-search">SEARCH SYMBOLS</label>
+      <input id="sa-search" data-search type="search" placeholder="Search functions, classes…" />
+      <label for="sa-module">MODULE FILTER</label>
+      <select id="sa-module" data-module><option value="all">All selected source files</option></select>
+      <div class="browser-count"><span>DEFINITIONS</span><span data-count>—</span></div>
+      <div class="browser-list" data-list><p>Loading generated source graph…</p></div>
+    </aside>
+    <section class="middle">
+      <div class="view-head">
+        <div class="tabs">
+          <button type="button" data-view="calls" aria-pressed="true">Call graph</button>
+          <button type="button" data-view="classes" aria-pressed="false">Class map</button>
+          <button type="button" data-view="branches" aria-pressed="false">Branch paths</button>
+          <button type="button" data-view="imports" aria-pressed="false">Imports</button>
+        </div>
+        <span class="hint">CLICK · DRAG · WHEEL ZOOM</span>
+      </div>
+      <div class="visual" data-visual>
+        <div class="visual-header"><span data-view-title>FUNCTION CALL GRAPH</span><span data-view-count></span></div>
+        <div data-graph-viewport class="graph-viewport">
+          <svg viewBox="0 0 980 570" data-svg aria-label="Source generated code relationship graph" role="group">
+            <defs><marker id="sa-arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0 0 L7 4 L0 8" fill="none" stroke="#7ebad3" stroke-width="1.3"/></marker></defs>
+            <g data-transform><g data-bands></g><g data-edges></g><g data-nodes></g></g>
+          </svg>
+        </div>
+        <div class="stack" data-stack hidden></div>
+        <div class="zoom"><button type="button" data-minus aria-label="Zoom out">−</button><button type="button" data-reset>100%</button><button type="button" data-plus aria-label="Zoom in">+</button></div>
+        <p class="visual-note" data-note>Click a function to re-center its callers and callees.</p>
+      </div>
+      <div class="seeds"><span>JUMP TO</span><button type="button" data-seed="stream_run">stream_run()</button><button type="button" data-seed="start_run">start_run()</button><button type="button" data-seed="run_agent">run_agent()</button><button type="button" data-seed="sse_consumer">sse_consumer()</button><button type="button" data-seed="RunManager">RunManager</button></div>
+    </section>
+    <aside class="inspector">
+      <div class="inspector-top"><span>IMPLEMENTATION INSPECTOR</span><span data-certainty>VERIFIED AST</span></div>
+      <h2 data-title>Select a symbol</h2>
+      <p class="signature" data-signature></p>
+      <p class="description" data-description>Select a function in the left panel to explore its code.</p>
+      <div class="block"><span>SOURCE LOCATION</span><a href="#" target="_blank" rel="noopener noreferrer" data-source><span data-path>—</span><span data-line>↗</span></a></div>
+      <div class="block"><span>ACTUAL SOURCE EXCERPT</span><pre><code data-code>Loading…</code></pre></div>
+      <div class="block"><span>RELATED EXPLORATIONS</span><div class="related" data-related></div></div>
+      <p class="caveat">Resolved means statically traceable—not observed at runtime. Candidate receiver methods and dynamic calls are not asserted as definite targets. Branch maps show AST syntax, not a complete control-flow graph.</p>
+    </aside>
+  </div>
+</section>
+<section class="after">
+  <p class="eyebrow">SOURCE → STRUCTURE → DIAGRAM</p>
+  <h2>Why these diagrams are different</h2>
+  <div class="three"><article><h3>Actual symbols</h3><p>Functions, classes, signatures, and source excerpts parsed from the pinned implementation.</p></article><article><h3>Evidence for edges</h3><p>Each call expression retains an originating file and line. Dynamic method dispatch is marked as uncertain.</p></article><article><h3>Multiple code lenses</h3><p>Change between call neighborhoods, class members, imports and syntactic branch points without leaving the source.</p></article></div>
+  <p>Generated from seven selected DeerFlow modules at build time. This is a source-derived static map, not a runtime trace. The <a href="/en/labs/deerflow-code-xray/">execution graph</a> continues to explain asynchronous scheduling and event delivery.</p>
+</section>
+</main>
+<script is:inline>
+(function(){
+  const root=document.querySelector('[data-atlas]');if(!root)return;
+  const $=s=>root.querySelector(s), $$=s=>Array.from(root.querySelectorAll(s));
+  const ns='http://www.w3.org/2000/svg';
+  const state={data:null,map:null,selected:null,view:'calls',search:'',module:'all',zoom:1,x:0,y:0,drag:null};
+  const svg=$('[data-svg]'),layer=$('[data-transform]');
+  const upstream=root.dataset.upstream;
+  function txt(el,v){el.textContent=String(v==null?'':v)}
+  function elem(type,props,textValue){const node=document.createElementNS(ns,type);Object.entries(props||{}).forEach(([k,v])=>node.setAttribute(k,String(v)));if(textValue!=null)node.textContent=String(textValue);return node}
+  function bind(el,fn){el.addEventListener('click',fn);el.setAttribute('role','button');el.setAttribute('tabindex','0');el.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();fn()}})}
+  function url(path,line){return upstream+path+'#L'+line}
+  function shorten(value,max){value=String(value||'');return value.length>max?value.slice(0,max-1)+'…':value}
+  function clickButton(label,fn){const b=document.createElement('button');b.type='button';b.textContent=label;b.addEventListener('click',fn);return b}
+  function selectSymbol(id){const s=state.map.get(id);if(!s)return;state.selected=s;renderList();inspectSymbol(s);render();let params=new URLSearchParams(location.search);params.set('symbol',s.name);history.replaceState(null,'',location.pathname+'?'+params.toString())}
+  function inspectSymbol(s){txt($('[data-title]'),s.qualname);txt($('[data-signature]'),s.signature);txt($('[data-description]'),s.doc||'Verified '+s.kind+' definition from the pinned source.');txt($('[data-certainty]'),'VERIFIED AST');txt($('[data-path]'),s.path);txt($('[data-line]'),'L'+s.line+' ↗');$('[data-source]').href=url(s.path,s.line);txt($('[data-code]'),s.excerpt||s.signature);const out=state.data.relations.filter(r=>r.from===s.id&&r.kind==='call'),ins=state.data.relations.filter(r=>r.to===s.id&&r.kind==='call'),br=state.data.branches.filter(b=>b.owner===s.id);const t=$('[data-related]');t.replaceChildren();t.append(clickButton(out.length+' outgoing calls · '+ins.length+' incoming',()=>switchView('calls')));t.append(clickButton(br.length+' branch / return nodes',()=>switchView('branches')));if(s.kind==='class'||s.kind==='method')t.append(clickButton('Inspect class members',()=>switchView('classes')))}
+  function inspectEdge(r){txt($('[data-title]'),r.expression);txt($('[data-signature]'),(r.awaited?'AWAITED ':'')+'CALL SITE / L'+r.line);const desc=r.confidence==='candidate'?'A matching method exists, but the receiver type cannot be proven statically.':r.confidence==='unresolved'?'The call expression is real, but the concrete implementation was not resolved.':'A static symbol resolution exists for this callsite.';txt($('[data-description]'),desc);txt($('[data-certainty]'),r.confidence.toUpperCase());txt($('[data-path]'),r.path);txt($('[data-line]'),'L'+r.line+' ↗');$('[data-source]').href=url(r.path,r.line);txt($('[data-code]'),'# Actual AST call expression at line '+r.line+'\n'+(r.awaited?'await ':'')+r.expression+'(...)');const target=$('[data-related]');target.replaceChildren();target.append(clickButton('Inspect caller',()=>selectSymbol(r.from)));if(r.to&&state.map.has(r.to))target.append(clickButton('Inspect candidate / resolved callee',()=>selectSymbol(r.to)))}
+  function filtered(){let syms=state.data.symbols;if(state.module!=='all')syms=syms.filter(s=>s.module===state.module);if(state.search)syms=syms.filter(s=>(s.qualname+' '+s.module+' '+s.signature+' '+s.doc).toLowerCase().includes(state.search));return syms}
+  function renderList(){const arr=filtered();txt($('[data-count]'),arr.length);const list=$('[data-list]');list.replaceChildren();arr.slice(0,140).forEach(s=>{const b=clickButton('',()=>selectSymbol(s.id));b.className='symbol-row'+(state.selected?.id===s.id?' on':'');const name=document.createElement('strong');name.textContent=s.qualname;const sub=document.createElement('small');sub.textContent=s.kind.toUpperCase()+' · '+s.path.split('/').pop()+':'+s.line;b.append(name,sub);list.append(b)});if(!arr.length){const p=document.createElement('p');p.textContent='No matching symbols.';list.append(p)}}
+  function transform(){layer.setAttribute('transform','translate('+state.x+' '+state.y+') scale('+state.zoom+')');txt($('[data-reset]'),Math.round(state.zoom*100)+'%')}
+  function clearGraph(){['[data-bands]','[data-edges]','[data-nodes]'].forEach(q=>$(q).replaceChildren());state.zoom=1;state.x=0;state.y=0;transform()}
+  function label(x,y,t){return elem('text',{x,y,class:'band-label'},t)}
+  function card(x,y,title,sub,isFocus,confidence,click){const g=elem('g',{class:'graph-card'+(isFocus?' focus':'')+(confidence==='candidate'?' candidate':'')});g.append(elem('rect',{x,y,width:252,height:78,rx:10}),elem('rect',{x,y:y+15,width:4,height:48,rx:2,class:'strip'}),elem('text',{x:x+18,y:y+29,class:'card-title'},shorten(title,28)),elem('text',{x:x+18,y:y+51,class:'card-sub'},shorten(sub,34)));if(click)bind(g,click);return g}
+  function graph(){const s=state.selected;if(!s)return;clearGraph();const bands=$('[data-bands]'),nodes=$('[data-nodes]'),edges=$('[data-edges]');const d=state.data;
+    for(const [x,title] of [[18,'CALLERS / SOURCES'],[365,'CURRENT SYMBOL'],[712,'CALLEES / TARGETS']])bands.append(elem('rect',{x,y:40,width:260,height:496,rx:12,class:'band'}),label(x+12,67,title));
+    const isClass=state.view==='classes';let focus=s;
+    if(isClass&&s.kind!=='class'){focus=state.data.symbols.find(x=>x.kind==='class'&&x.module===s.module&&x.qualname===s.parent)||s}
+    const from=isClass?d.relations.filter(r=>r.from===focus.id&&r.kind==='inherits').map(r=>({key:r.expression,title:r.expression,sub:'base class expression',edge:r})):d.relations.filter(r=>r.kind==='call'&&r.to===focus.id).map(r=>({key:r.from,title:state.map.get(r.from)?.name||r.from,sub:state.map.get(r.from)?.module||'',symbol:state.map.get(r.from),edge:r}));
+    const to=isClass?d.symbols.filter(x=>x.parent===focus.qualname&&x.module===focus.module).map(x=>({key:x.id,title:x.name+'()',sub:'class method · L'+x.line,symbol:x})):d.relations.filter(r=>r.kind==='call'&&r.from===focus.id).map(r=>({key:r.to||r.expression,title:state.map.get(r.to)?.name||r.expression,sub:r.confidence+' · L'+r.line,symbol:state.map.get(r.to),edge:r}));
+    const uniq=xs=>Array.from(new Map(xs.map(x=>[x.key,x])).values()).slice(0,7);const left=uniq(from),right=uniq(to);
+    nodes.append(card(369,258,focus.qualname,focus.module,true,'resolved',()=>selectSymbol(focus.id)));
+    for(const [items,x,side] of [[left,20,'left'],[right,714,'right']])items.forEach((entry,i)=>{const y=94+i*(items.length>1?Math.min(62,370/(items.length-1)):0)+(items.length<=3?80:0);const kind=entry.edge?.confidence==='candidate'?'candidate':entry.edge?.confidence==='unresolved'?'unknown':'resolved';const el=card(x,y,entry.title,entry.sub,false,kind,()=>entry.symbol?selectSymbol(entry.symbol.id):entry.edge?inspectEdge(entry.edge):null);nodes.append(el);const a=side==='left'?272:621,b=side==='left'?369:714,fy=297,cy=y+39;const path=side==='left'?'M'+a+' '+cy+' C319 '+cy+',319 '+fy+','+b+' '+fy:'M'+a+' '+fy+' C668 '+fy+',668 '+cy+','+b+' '+cy;const l=elem('path',{d:path,class:'graph-edge '+kind,'marker-end':'url(#sa-arrow)'});if(entry.edge)bind(l,()=>inspectEdge(entry.edge));edges.append(l)});
+    txt($('[data-view-count]'),left.length+' incoming · '+right.length+' outgoing');txt($('[data-note]'),isClass?'Bases are AST expressions, not verified runtime MRO. Select any method to drill in.':'Diagram shows at most seven unique neighbors on each side. Select nodes to expand the call graph.');
+  }
+  function stackItems(){const target=$('[data-stack]');target.replaceChildren();const s=state.selected;if(!s)return;
+    if(state.view==='branches'){const all=state.data.branches.filter(b=>b.owner===s.id);txt($('[data-view-count]'),all.length+' AST syntax nodes');for(const [i,b] of all.slice(0,110).entries()){const a=document.createElement('a');a.href=url(s.path,b.line);a.target='_blank';a.rel='noopener noreferrer';a.className='stack-item';const index=document.createElement('span');index.textContent=String(i+1).padStart(2,'0');const details=document.createElement('div');const h=document.createElement('strong');h.textContent=b.kind.toUpperCase()+' · L'+b.line;const p=document.createElement('code');p.textContent=b.condition||'(control block)';details.append(h,p);a.append(index,details);target.append(a)}}
+    if(state.view==='imports'){const file=state.data.files.find(f=>f.module===s.module);const groups=new Map();for(const imp of file?.imports||[]){if(!groups.has(imp.module))groups.set(imp.module,[]);groups.get(imp.module).push(imp)}txt($('[data-view-count]'),groups.size+' imported modules');for(const [name,arr] of groups){const a=document.createElement('a');a.href=url(s.path,arr[0].line);a.target='_blank';a.rel='noopener noreferrer';a.className='stack-item';const title=document.createElement('div');const h=document.createElement('strong');h.textContent=name||'(relative module)';const p=document.createElement('code');p.textContent=arr.map(x=>x.name||x.alias).join(', ');title.append(h,p);a.append(title);target.append(a)}}}
+  function render(){if(!state.data||!state.selected)return;const graphMode=state.view==='calls'||state.view==='classes';$('[data-graph-viewport]').hidden=!graphMode;$('[data-stack]').hidden=graphMode;txt($('[data-view-title]'),({calls:'FUNCTION CALL NEIGHBORHOOD',classes:'CLASS / INTERFACE MEMBERS',branches:'SOURCE BRANCHES AND EXCEPTIONS',imports:'MODULE IMPORTS'})[state.view]);if(graphMode)graph();else stackItems()}
+  function switchView(view){state.view=view;$$('[data-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===view)));render()}
+  $$('[data-view]').forEach(b=>b.addEventListener('click',()=>switchView(b.dataset.view)));
+  $('[data-search]').addEventListener('input',e=>{state.search=e.target.value.toLowerCase().trim();renderList()});
+  $('[data-module]').addEventListener('change',e=>{state.module=e.target.value;renderList()});
+  $$('[data-seed]').forEach(b=>b.addEventListener('click',()=>{const s=state.data?.symbols.find(x=>x.name===b.dataset.seed);if(s)selectSymbol(s.id)}));
+  $('[data-plus]').addEventListener('click',()=>{state.zoom=Math.min(2.4,state.zoom*1.15);transform()});
+  $('[data-minus]').addEventListener('click',()=>{state.zoom=Math.max(.55,state.zoom/1.15);transform()});
+  $('[data-reset]').addEventListener('click',()=>{state.zoom=1;state.x=state.y=0;transform()});
+  svg.addEventListener('wheel',e=>{e.preventDefault();state.zoom=Math.max(.55,Math.min(2.4,state.zoom*(e.deltaY>0?.92:1.09)));transform()},{passive:false});
+  svg.addEventListener('pointerdown',e=>{if(e.target.closest('[role=button]'))return;state.drag={x:e.clientX,y:e.clientY,tx:state.x,ty:state.y};svg.setPointerCapture(e.pointerId)});
+  svg.addEventListener('pointermove',e=>{if(!state.drag)return;const rect=svg.getBoundingClientRect();state.x=state.drag.tx+(e.clientX-state.drag.x)*980/rect.width;state.y=state.drag.ty+(e.clientY-state.drag.y)*570/rect.height;transform()});
+  svg.addEventListener('pointerup',()=>state.drag=null);svg.addEventListener('pointercancel',()=>state.drag=null);
+  fetch('/data/deerflow-codegraph.generated.json').then(r=>{if(!r.ok)throw new Error('Manifest HTTP '+r.status);return r.json()}).then(d=>{if(!d.symbols||!d.relations||!d.branches)throw new Error('Invalid manifest');state.data=d;state.map=new Map(d.symbols.map(s=>[s.id,s]));for(const key of ['files','symbols','calls','branches'])txt(document.getElementById('sa-'+key),d.stats[key].toLocaleString());for(const mod of [...new Set(d.files.map(f=>f.module))].sort()){const o=document.createElement('option');o.value=mod;o.textContent=mod;$('[data-module]').append(o)}let preset=new URLSearchParams(location.search).get('symbol');let first=d.symbols.find(s=>s.name===preset)||d.symbols.find(s=>s.name==='stream_run')||d.symbols[0];selectSymbol(first.id)}).catch(e=>{txt($('[data-list]'),'Unable to load AST data: '+e.message);txt($('[data-view-title]'),'SOURCE GRAPH UNAVAILABLE')});
+})();
+</script>
+<style>
+.sa{--bg:#0a1827;--panel:#12273b;--surface:#192e42;--stroke:#3d596c;--ink:#eef7fb;--muted:#aac2d0;--mint:#77e5d2;--blue:#75bce9;--amber:#efc080;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,sans-serif;min-height:100vh;padding:clamp(14px,3vw,48px)}.sa *{box-sizing:border-box}.hero,.studio,.after{max-width:1600px;margin:auto}.hero{padding-bottom:30px}.back,.sa a{color:var(--mint)}.back{text-decoration:none;font-size:.8rem}.eyebrow{font:700 .67rem ui-monospace,monospace;letter-spacing:.13em;color:var(--mint);margin-top:28px}.hero h1{font-size:clamp(2.4rem,5vw,5rem);letter-spacing:-.07em;line-height:1.05;margin:17px 0}.hero h1 em{color:var(--mint);font-style:normal}.hero>p:not(.eyebrow){color:var(--muted);line-height:1.75;max-width:870px}.metrics{display:flex;gap:20px;flex-wrap:wrap;border-top:1px solid var(--stroke);margin-top:25px;padding-top:18px}.metrics span{display:flex;gap:7px;align-items:baseline;color:var(--muted);font:.7rem ui-monospace,monospace}.metrics b{font-size:1.6rem;color:var(--ink)}.metrics .revision{margin-left:auto}.studio{border:1px solid var(--stroke);border-radius:14px;overflow:hidden;background:var(--panel)}.studio-top{padding:14px 19px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;border-bottom:1px solid var(--stroke);font:.65rem ui-monospace,monospace;color:var(--muted)}.studio-top strong{color:var(--ink)}.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--mint);margin-right:9px}.studio-layout{display:grid;grid-template-columns:minmax(210px,.7fr) minmax(0,2fr) minmax(280px,1fr);min-height:710px}.browser{padding:17px;border-right:1px solid var(--stroke);min-width:0}.browser label,.block>span{display:block;color:var(--muted);font:700 .63rem ui-monospace,monospace;letter-spacing:.08em;margin:5px 0 10px}.browser input,.browser select{width:100%;min-width:0;background:var(--surface);border:1px solid var(--stroke);color:var(--ink);border-radius:7px;padding:10px;margin-bottom:18px;font-size:.78rem}.browser-count{display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid var(--stroke);padding:8px 0;font:700 .64rem ui-monospace,monospace;color:var(--muted)}.browser-list{display:grid;gap:4px;align-content:start;max-height:565px;overflow-y:auto;margin-top:10px}.browser-list>p{color:var(--muted);font-size:.8rem}.symbol-row{display:grid;gap:5px;text-align:left;background:transparent;color:var(--ink);border:1px solid transparent;padding:10px;border-radius:8px;cursor:pointer;overflow-wrap:anywhere}.symbol-row strong{font-size:.76rem}.symbol-row small{font:.62rem ui-monospace,monospace;color:var(--muted)}.symbol-row:hover,.symbol-row.on{background:var(--surface);border-color:var(--stroke)}.symbol-row.on{border-left:3px solid var(--mint)}.middle{min-width:0;border-right:1px solid var(--stroke);display:flex;flex-direction:column}.view-head{display:flex;gap:10px;justify-content:space-between;align-items:center;flex-wrap:wrap;padding:15px;border-bottom:1px solid var(--stroke)}.tabs{display:flex;gap:5px;flex-wrap:wrap}.tabs button,.seeds button,.zoom button{border:1px solid var(--stroke);border-radius:7px;background:var(--surface);color:var(--ink);padding:9px 12px;font-size:.7rem;cursor:pointer}.tabs button[aria-pressed=true]{background:var(--mint);border-color:var(--mint);color:#11333b;font-weight:800}.hint{font:.58rem ui-monospace,monospace;color:var(--muted)}.visual{flex:1;position:relative;background:radial-gradient(ellipse at 50% 38%,#19374a,#0d1d2e 78%);min-height:570px}.visual-header{padding:15px;display:flex;gap:8px;justify-content:space-between;color:var(--muted);font:700 .61rem ui-monospace,monospace;letter-spacing:.05em}.graph-viewport{overflow-x:auto;touch-action:pan-y}.graph-viewport svg{display:block;min-width:630px;width:100%;height:auto;cursor:grab}.graph-viewport svg:active{cursor:grabbing}.band{fill:#122a3d;stroke:#36556a;stroke-dasharray:4 5}.band-label{font:700 12px ui-monospace,monospace;fill:#9cb8c9}.graph-card{cursor:pointer}.graph-card>rect:first-child{fill:#1d3b50;stroke:#65869e;stroke-width:1.5}.graph-card .strip{fill:var(--blue)}.graph-card.focus>rect:first-child{fill:#18584e;stroke:var(--mint);stroke-width:3}.graph-card.candidate>rect:first-child{stroke:var(--amber)}.graph-card.candidate .strip{fill:var(--amber)}.card-title{font:700 15px ui-monospace,monospace;fill:#f4fafd}.card-sub{font:12px ui-monospace,monospace;fill:#acc8d6}.graph-edge{fill:none;stroke:var(--blue);stroke-width:2.4;cursor:pointer}.graph-edge.candidate{stroke:var(--amber);stroke-dasharray:7 5}.graph-edge.unknown{stroke:#8d9ead;stroke-dasharray:3 6}.graph-edge:hover{stroke-width:5}.zoom{position:absolute;bottom:48px;right:12px;display:flex;gap:5px}.zoom button{padding:8px 10px}.visual-note{padding:8px 16px;color:var(--muted);font:.65rem/1.6 ui-monospace,monospace}.stack{max-height:570px;overflow:auto;padding:14px;display:grid;gap:9px;align-content:start}.stack-item{background:var(--surface);padding:13px;border-radius:8px;border:1px solid var(--stroke);display:flex;gap:14px;text-decoration:none}.stack-item>span{color:var(--mint);font:700 .7rem ui-monospace,monospace}.stack-item strong{font:.75rem ui-monospace,monospace;color:var(--ink)}.stack-item code{display:block;font:.73rem/1.6 ui-monospace,monospace;color:var(--muted);white-space:normal;overflow-wrap:anywhere;margin-top:7px}.seeds{padding:16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;border-top:1px solid var(--stroke)}.seeds>span{font:700 .65rem ui-monospace,monospace;color:var(--muted)}.inspector{padding:19px;min-width:0}.inspector-top{display:flex;justify-content:space-between;gap:8px;color:var(--muted);font:700 .6rem ui-monospace,monospace}.inspector-top span:last-child{color:var(--mint)}.inspector h2{font-size:clamp(1.35rem,2.3vw,2rem);letter-spacing:-.05em;overflow-wrap:anywhere;margin:27px 0 15px}.signature{color:var(--mint);font:.7rem/1.6 ui-monospace,monospace;overflow-wrap:anywhere}.description{color:var(--muted);line-height:1.75;font-size:.83rem}.block{border-top:1px solid var(--stroke);margin-top:20px;padding-top:17px}.block a{display:grid;gap:7px;overflow-wrap:anywhere;font:.7rem/1.6 ui-monospace,monospace}.block pre{background:#071523;border:1px solid var(--stroke);border-radius:8px;padding:12px;overflow:auto;max-height:355px;color:#b3f3de;font:11px/1.7 ui-monospace,monospace}.related{display:grid;gap:7px}.related button{border:1px solid var(--stroke);border-radius:7px;padding:10px;background:var(--surface);color:var(--ink);text-align:left;cursor:pointer;font-size:.73rem}.caveat{margin-top:26px;padding-top:17px;border-top:1px solid var(--stroke);color:var(--muted);line-height:1.7;font-size:.7rem}.after{padding:55px 0}.after h2{font-size:clamp(1.5rem,3vw,2.5rem);letter-spacing:-.045em}.three{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px}.three article{border:1px solid var(--stroke);border-radius:10px;background:var(--panel);padding:22px}.three h3{margin-top:0}.three p,.after>p:last-child{line-height:1.75;color:var(--muted);font-size:.83rem}.sa :is(button,a,input,select,[role=button]):focus-visible{outline:3px solid var(--mint);outline-offset:2px}
+:global(html.theme-light) .sa{--bg:#f1f7f8;--panel:#fff;--surface:#e7f1f3;--stroke:#bdd0d7;--ink:#173848;--muted:#516e7b;--mint:#087967;--blue:#3282ac;--amber:#a66b20}
+:global(html.theme-light) .visual{background:radial-gradient(ellipse at 50% 38%,#e9f5f5,#cddfe3 85%)}
+:global(html.theme-light) .band{fill:#e5eff1;stroke:#b6cbd1}
+:global(html.theme-light) .band-label{fill:#52717b}
+:global(html.theme-light) .graph-card>rect:first-child{fill:#d5e9eb;stroke:#8da9b5}
+:global(html.theme-light) .graph-card.focus>rect:first-child{fill:#c9f0e2;stroke:var(--mint)}
+:global(html.theme-light) .card-title{fill:#193a4a}
+:global(html.theme-light) .card-sub{fill:#587584}
+@media(max-width:1330px){.studio-layout{grid-template-columns:minmax(210px,.64fr) minmax(0,1.7fr)}.middle{border-right:0}.inspector{grid-column:1 / -1;border-top:1px solid var(--stroke)}}
+@media(max-width:740px){.studio-layout{display:flex;flex-direction:column}.browser{border-right:0;border-bottom:1px solid var(--stroke)}.browser-list{max-height:220px}.middle{min-height:470px}.inspector{border-top:1px solid var(--stroke)}.three{grid-template-columns:1fr}.hint{display:none}.graph-viewport svg{min-width:800px}.hero h1{font-size:2.6rem}.metrics{gap:10px}}
+</style>
