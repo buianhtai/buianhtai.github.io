@@ -37,6 +37,18 @@ try {
       assert.equal(await root.count(),1,'One and only one storytelling UI');
       assert.equal(await page.locator('meta[name="robots"]').getAttribute('content'),'noindex,follow','Prototype must not be indexed');
       assert.equal(await root.locator('[data-scene-tab]').count(),8,'Eight progressive chapters');
+      const trace=root.locator('[data-trace-lab]');
+      assert.equal(await trace.count(),1,'One source-backed execution timeline');
+      assert.equal(await trace.locator('[data-trace-event]').count(),9,'Nine representative trace events');
+      assert.equal(await trace.locator('[data-trace-panel]:visible').count(),1,'Single active trace inspector');
+      await trace.locator('[data-trace-forward]').click();
+      assert.equal(await trace.locator('[data-trace-panel="1"]').isVisible(),true,'Next trace event navigates inspector');
+      assert.equal(await trace.locator('[data-lane-pill="RUNTIME"]').getAttribute('class'),'active','Correct runtime lane is highlighted');
+      await trace.locator('[data-trace-event="8"]').click();
+      assert.equal(await trace.locator('[data-trace-forward]').isDisabled(),true,'Final trace event stops navigation');
+      await trace.locator('[data-trace-event="0"]').click();
+      assert.equal(await trace.locator('[data-trace-back]').isDisabled(),true,'First trace event disables back');
+
       assert.equal(await root.locator('[data-story-example]:visible').count(),1,'Intro has one readable request/response example');
       assert.equal(await root.locator('[data-story-panel]:visible').count(),1,'Only one scene narration is visible');
       assert.equal(await root.locator('[data-scene-tab="0"]').getAttribute('aria-pressed'),'true');
