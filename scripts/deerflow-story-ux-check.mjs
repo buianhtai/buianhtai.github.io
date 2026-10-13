@@ -51,8 +51,8 @@ try {
       // The timeline and the stable architecture map must share one focus.
       await trace.locator('[data-trace-event="5"]').click();
       assert.equal(await root.locator('[data-scene-tab="3"]').getAttribute('aria-pressed'),'true','Tool event focuses the agent chapter');
-      assert.equal(await root.locator('[data-node="tools"]').getAttribute('class')?.includes('on'),true,'Tool adapter highlighted');
-      assert.equal(await root.locator('[data-wire="toolcall"]').getAttribute('class')?.includes('on'),true,'Authorized tool edge highlighted');
+      assert.equal(String(await root.locator('[data-node="tools"]').getAttribute('class')).split(/\s+/).includes('on'),true,'Tool adapter highlighted');
+      assert.equal(String(await root.locator('[data-wire="toolcall"]').getAttribute('class')).split(/\s+/).includes('on'),true,'Authorized tool edge highlighted');
       assert.equal(new URL(page.url()).searchParams.get('event'),'6','Shareable URL preserves selected event');
       await root.locator('[data-depth-button="overview"]').click();
       assert.equal(await root.getAttribute('data-depth'),'overview','Overview emphasizes boundaries');
@@ -75,7 +75,7 @@ try {
       await root.locator('[data-failure-button="normal"]').click();
       assert.equal(await root.locator('[data-failure-explanation]').isVisible(),false,'Normal scenario hides failure explanation');
       await root.locator('[data-scene-tab="0"]').click();
-      assert.equal(await root.locator('[data-node="tools"]').getAttribute('class')?.includes('on'),false,'Chapter selection restores broad chapter focus');
+      assert.equal(String(await root.locator('[data-node="tools"]').getAttribute('class')).split(/\s+/).includes('on'),false,'Chapter selection restores broad chapter focus');
 
 
       assert.equal(await root.locator('[data-story-example]:visible').count(),1,'Intro has one readable request/response example');
