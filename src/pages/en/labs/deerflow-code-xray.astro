@@ -1,0 +1,152 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+const revision = '1f15e0b43ca58b9601514f9f5c408fb032022833';
+const upstream = 'https://github.com/bytedance/deer-flow/blob/'+revision+'/';
+const files = {
+  route:'backend/app/gateway/routers/thread_runs.py',
+  service:'backend/app/gateway/services.py',
+  manager:'backend/packages/harness/deerflow/runtime/runs/manager.py',
+  worker:'backend/packages/harness/deerflow/runtime/runs/worker.py',
+  bridge:'backend/packages/harness/deerflow/runtime/stream_bridge/base.py',
+};
+const nodes = [
+ {id:'stream',label:'stream_run()',role:'HTTP route',lane:'HTTP',x:28,y:125,file:files.route,line:993,at:1005,kind:'async def',explain:'POST /{thread_id}/runs/stream; retrieves the StreamBridge and RunManager, calls start_run, then constructs a StreamingResponse.',snippet:'bridge = get_stream_bridge(request)\nrun_mgr = get_run_manager(request)\nrecord = await start_run(\n    body, thread_id, request, ...\n)',evidence:'thread_runs.py:993–1038'},
+ {id:'response',label:'StreamingResponse',role:'HTTP/SSE output',lane:'HTTP',x:28,y:565,file:files.route,line:1025,at:1025,kind:'FastAPI response',explain:'Returns an HTTP text/event-stream response, taking sse_consumer(...) as the async generator.',snippet:'return StreamingResponse(\n    sse_consumer(bridge, record, request, run_mgr, ...),\n    media_type="text/event-stream",\n)',evidence:'thread_runs.py:1025–1038'},
+ {id:'start',label:'start_run()',role:'Gateway service',lane:'APPLICATION',x:271,y:125,file:files.service,line:1845,at:1845,kind:'async def',explain:'Validates the request and identity, prepares runtime context, atomically admits the run, and attaches a background task.',snippet:'record = await run_mgr.create_or_reject(...)\nworker = run_after_metadata(record)\nrecord.task = asyncio.create_task(worker)',evidence:'services.py:2325–2384'},
+ {id:'metadata',label:'run_after_metadata()',role:'Nested coroutine',lane:'APPLICATION',x:271,y:285,file:files.service,line:2167,at:2293,kind:'async def',explain:'A coroutine nested in start_run; ensures thread metadata before calling run_agent with the prepared execution context.',snippet:'async def run_after_metadata(record):\n    ...\n    await run_agent(\n        bridge, run_mgr, record,\n        ctx=execution_context, ...\n    )',evidence:'services.py:2167,2293–2307'},
+ {id:'consumer',label:'sse_consumer()',role:'SSE generator',lane:'APPLICATION',x:271,y:565,file:files.service,line:2590,at:2644,kind:'async def',explain:'Subscribes to bridge events using Last-Event-ID and yields SSE frames, heartbeats and replay-gap events. It treats disconnect separately from completion.',snippet:'last_event_id = request.headers.get("Last-Event-ID")\nasync for entry in bridge.subscribe(\n    record.run_id, last_event_id=last_event_id\n):\n    yield format_sse(entry.event, entry.data, ...)',evidence:'services.py:2590–2695'},
+ {id:'format',label:'format_sse()',role:'Wire serializer',lane:'APPLICATION',x:271,y:710,file:files.service,line:196,at:196,kind:'def',explain:'Serializes an event name, payload and optional ID into the SSE wire format.',snippet:'format_sse(event, data, event_id=...)\n# SSE frames are HTTP response chunks,\n# not persisted checkpoints.',evidence:'services.py:196–210'},
+ {id:'admit',label:'create_or_reject()',role:'RunManager method',lane:'RUN CONTROL',x:514,y:125,file:files.manager,line:1562,at:1577,kind:'async def',explain:'Atomically admits a normal run by delegating to _admit_thread_operation().',snippet:'return await self._admit_thread_operation(\n    thread_id, assistant_id,\n    operation_kind=ThreadOperationKind.run, ...\n)',evidence:'manager.py:1562–1589'},
+ {id:'operation',label:'_admit_thread_operation()',role:'Ownership logic',lane:'RUN CONTROL',x:514,y:285,file:files.manager,line:1636,at:1636,kind:'async def',explain:'Implements the shared thread-operation admission boundary; coordinates thread concurrency, idempotency and optional durable store.',snippet:'async def _admit_thread_operation(\n    self, thread_id, assistant_id=None, ...\n):\n    # Admission and persistence checks',evidence:'manager.py:1636+'},
+ {id:'try',label:'try_start()',role:'State transition',lane:'RUN CONTROL',x:514,y:425,file:files.manager,line:939,at:939,kind:'async def',explain:'Worker invokes this method to attempt the transition from admitted to actively running.',snippet:'start_outcome = await run_manager.try_start(run_id)\nif start_outcome is not RunStartOutcome.started:\n    return',evidence:'worker.py:1069–1083'},
+ {id:'agent',label:'run_agent()',role:'Async worker',lane:'EXECUTION',x:757,y:125,file:files.worker,line:893,at:893,kind:'async def',explain:'Background coroutine. Prepares run context, executes the graph and publishes terminal events.',snippet:'async def run_agent(bridge, run_manager, record, ...):\n    checkpointer = ctx.checkpointer\n    ...\n    await run_manager.try_start(run_id)',evidence:'worker.py:893–923,1075'},
+ {id:'once',label:'_stream_once()',role:'Graph stream loop',lane:'EXECUTION',x:757,y:285,file:files.worker,line:1404,at:1404,kind:'nested async def',explain:'Creates a LangGraph astream and iterates graph updates. Depending on modes/subgraphs, publishes serialized events directly or via helper functions.',snippet:'stream = agent.astream(\n    input_payload, config=stream_config,\n    stream_mode=single_mode\n)\nasync for chunk in stream:\n    await bridge.publish(run_id, sse_event, ...)',evidence:'worker.py:1404–1452'},
+ {id:'astream',label:'agent.astream()',role:'LangGraph API',lane:'EXTERNAL API',x:1000,y:285,file:files.worker,line:1412,at:1412,kind:'dynamic call',explain:'The graph object comes from the agent factory; this is a dynamic library call, not a statically resolved DeerFlow function definition.',snippet:'stream = agent.astream(\n    input_payload, config=stream_config,\n    stream_mode=single_mode\n)',evidence:'worker.py:1412–1415'},
+ {id:'publish',label:'bridge.publish()',role:'Event producer',lane:'EXTERNAL API',x:1000,y:425,file:files.worker,line:1428,at:1428,kind:'interface method',explain:'Worker publishes a serialized stream event through StreamBridge. The concrete bridge implementation is runtime-configured.',snippet:'await bridge.publish(\n    run_id, sse_event, single_payload\n)',evidence:'worker.py:1424–1428'},
+ {id:'end',label:'bridge.publish_end()',role:'Terminal event',lane:'EXECUTION',x:757,y:710,file:files.worker,line:1933,at:1933,kind:'interface method',explain:'When execution finalizes, the worker publishes the terminal stream marker.',snippet:'await bridge.publish_end(run_id)',evidence:'worker.py:1933'},
+ {id:'subscribe',label:'bridge.subscribe()',role:'Event consumer',lane:'EXTERNAL API',x:1000,y:565,file:files.service,line:2644,at:2644,kind:'interface method',explain:'Async subscription returns events, heartbeat sentinels, end sentinels, or replay gaps. StreamBridge defines the abstract contract.',snippet:'async for entry in bridge.subscribe(\n    record.run_id, last_event_id=last_event_id\n):\n    ...',evidence:'services.py:2644–2677'},
+];
+const edges = [
+ {from:'stream',to:'start',kind:'call',line:1007,source:files.route,description:'stream_run() awaits start_run().'},
+ {from:'stream',to:'response',kind:'call',line:1025,source:files.route,description:'stream_run() returns StreamingResponse.'},
+ {from:'start',to:'admit',kind:'call',line:2325,source:files.service,description:'start_run() awaits run_mgr.create_or_reject().'},
+ {from:'admit',to:'operation',kind:'call',line:1577,source:files.manager,description:'create_or_reject() delegates to _admit_thread_operation().'},
+ {from:'start',to:'metadata',kind:'task',line:2384,source:files.service,description:'start_run() attaches run_after_metadata to asyncio.create_task; this is a scheduling boundary.'},
+ {from:'metadata',to:'agent',kind:'call',line:2293,source:files.service,description:'The scheduled coroutine awaits run_agent().'},
+ {from:'agent',to:'try',kind:'call',line:1075,source:files.worker,description:'run_agent() awaits RunManager.try_start().'},
+ {from:'agent',to:'once',kind:'call',line:1538,source:files.worker,description:'run_agent() awaits its nested _stream_once().'},
+ {from:'once',to:'astream',kind:'call',line:1412,source:files.worker,description:'_stream_once() invokes LangGraph agent.astream(). Target is dynamically supplied.'},
+ {from:'once',to:'publish',kind:'call',line:1428,source:files.worker,description:'The graph event loop awaits StreamBridge.publish().'},
+ {from:'agent',to:'end',kind:'call',line:1933,source:files.worker,description:'Worker finalization awaits StreamBridge.publish_end().'},
+ {from:'response',to:'consumer',kind:'call',line:1026,source:files.route,description:'StreamingResponse consumes the SSE async generator; the generator executes as a response stream.'},
+ {from:'consumer',to:'subscribe',kind:'call',line:2644,source:files.service,description:'sse_consumer() iterates bridge.subscribe().'},
+ {from:'consumer',to:'format',kind:'call',line:2677,source:files.service,description:'sse_consumer() serializes stream messages using format_sse().'},
+ {from:'publish',to:'subscribe',kind:'event',line:82,source:files.bridge,description:'Separate publish/subscribe sides of a StreamBridge contract; NOT a direct function call.'},
+ {from:'end',to:'subscribe',kind:'event',line:86,source:files.bridge,description:'Terminal event travels through the bridge; NOT a synchronous caller/callee edge.'}
+];
+---
+<BaseLayout title="DeerFlow Code X-Ray — Source-derived function graph" description="Follow real DeerFlow Python functions, direct calls, asyncio task scheduling and StreamBridge event relationships with pinned source links.">
+<main class="code-xray" data-code-xray>
+  <header class="xray-hero">
+    <a href="/en/labs/deerflow-protocol-inspector/" class="back">← Protocol inspector</a>
+    <p class="eyebrow">DEERFLOW / CODE INTELLIGENCE LAB</p>
+    <div class="hero-grid"><div><h1>Actual code.<br /><em>Visible connections.</em></h1><p>Explore a real DeerFlow request path as a function-level diagram. Every node points to a definition or call site; every edge explains the relationship proved by the pinned source.</p></div><div class="hero-stat"><strong>{nodes.length}</strong><span>Source-linked symbols</span><strong>{edges.length}</strong><span>Explained relationships</span></div></div>
+    <p class="truth-note">Verified, curated snapshot from DeerFlow revision <code>{revision.slice(0,12)}</code>. This is not an automatically generated whole-repository call graph. Dynamic Python and asynchronous event delivery are labeled explicitly.</p>
+  </header>
+  <section class="xray-workspace">
+    <div class="toolbar"><div><span class="eyebrow">01 / FUNCTION GRAPH</span><h2>Follow the call, not the component</h2></div><div class="legend"><span><i class="call"></i> Direct source call</span><span><i class="task"></i> Async task</span><span><i class="event"></i> Event transport</span></div></div>
+    <div class="xray-filters">
+      <div class="search"><span>⌕</span><input type="search" data-code-search placeholder="Find a function or module..." aria-label="Find a function or module" /></div>
+      <div class="filters" role="group" aria-label="Relationship types"><button type="button" data-filter="all" aria-pressed="true">All links</button><button type="button" data-filter="call" aria-pressed="false">Calls</button><button type="button" data-filter="task" aria-pressed="false">Tasks</button><button type="button" data-filter="event" aria-pressed="false">Events</button></div>
+      <button class="reset" type="button" data-reset>Reset view</button>
+    </div>
+    <div class="workspace-grid">
+      <div class="diagram-zone">
+        <div class="diagram-instruction">SELECT ANY FUNCTION OR CONNECTION TO INSPECT EVIDENCE · SCROLL HORIZONTALLY ON MOBILE</div>
+        <div class="diagram-scroller">
+          <svg viewBox="0 0 1245 817" role="group" aria-label="Interactive function-level DeerFlow call graph organized by HTTP route, application service, run manager, asynchronous worker and library API">
+            <defs>
+              <marker id="xray-arrow-call" markerWidth="8" markerHeight="8" refX="6" refY="3.5" orient="auto"><path d="M0 0 L7 3.5 L0 7" stroke="currentColor" fill="none" stroke-width="1.4"/></marker>
+              <marker id="xray-arrow-task" markerWidth="8" markerHeight="8" refX="6" refY="3.5" orient="auto"><path d="M0 0 L7 3.5 L0 7" stroke="currentColor" fill="none" stroke-width="1.4"/></marker>
+              <marker id="xray-arrow-event" markerWidth="8" markerHeight="8" refX="6" refY="3.5" orient="auto"><path d="M0 0 L7 3.5 L0 7" stroke="currentColor" fill="none" stroke-width="1.4"/></marker>
+            </defs>
+            <g class="lane-bands">
+              {['HTTP ROUTES','APPLICATION SERVICE','RUN MANAGER','WORKER','LIBRARY / BRIDGE'].map((t,i)=><g><rect x={15+i*243} y="17" width="231" height="780" rx="14"/><text x={30+i*243} y="45">{t}</text></g>)}
+            </g>
+            <g class="edges">
+              {edges.map((e,i)=>{
+                const a=nodes.find(n=>n.id===e.from);const b=nodes.find(n=>n.id===e.to);
+                const w=210,h=72;
+                const ax=a.x+w/2,ay=a.y+h/2,bx=b.x+w/2,by=b.y+h/2;
+                const right=bx>ax+100, left=bx<ax-100, sx=right?a.x+w:left?a.x:ax, ex=right?b.x:left?b.x+w:bx;
+                const sy=right||left?ay:a.y+h,ey=right||left?by:b.y;
+                const dx=ex-sx,dy=ey-sy;
+                const path=right||left?'M '+sx+' '+sy+' C '+(sx+dx*.48)+' '+sy+', '+(ex-dx*.48)+' '+ey+', '+ex+' '+ey:'M '+sx+' '+sy+' C '+sx+' '+(sy+dy*.5)+', '+ex+' '+(ey-dy*.5)+', '+ex+' '+ey;
+                return <path d={path} class:list={['edge',e.kind]} data-edge-index={i} role="button" tabindex="0" aria-label={e.from+' to '+e.to+', '+e.kind} />;
+              })}
+            </g>
+            <g class="graph-nodes">
+              {nodes.map((n,i)=><g class="graph-node" data-node-index={i} role="button" tabindex="0" aria-label={'Inspect '+n.label}>
+                <rect x={n.x} y={n.y} width="210" height="72" rx="9"/>
+                <rect class="node-accent" x={n.x} y={n.y} width="4" height="72" rx="2"/>
+                <text class="node-title" x={n.x+15} y={n.y+28}>{n.label}</text>
+                <text class="node-sub" x={n.x+15} y={n.y+49}>{n.role}</text>
+                <text class="node-mark" x={n.x+195} y={n.y+59} text-anchor="end">{n.line}</text>
+              </g>)}
+            </g>
+          </svg>
+        </div>
+        <div class="graph-bottom"><span><b data-visible-count>{edges.length}</b> relationships · <b>{nodes.length}</b> symbols</span><span>Solid = code call · Dashed = async/event</span></div>
+      </div>
+      <aside class="source-panel" aria-live="polite">
+        <div class="source-panel-head"><span class="eyebrow" data-inspect-kind>FUNCTION / VERIFIED</span><button type="button" data-copy-source title="Copy source permalink">Copy link</button></div>
+        <h3 data-inspect-title>stream_run()</h3>
+        <p data-inspect-detail>FastAPI streaming endpoint.</p>
+        <div class="source-location"><span>PINNED SOURCE</span><a data-inspect-link href={upstream+nodes[0].file+'#L'+nodes[0].line} target="_blank" rel="noopener noreferrer"><span data-inspect-file>{nodes[0].file}</span><span data-inspect-line>line 993 ↗</span></a></div>
+        <div class="source-code-label"><span>CODE EXCERPT</span><span>CURATED · VERSIONED</span></div>
+        <pre><code data-inspect-code>{nodes[0].snippet}</code></pre>
+        <div class="inspector-more"><h4>WHAT DOES THIS RELATE TO?</h4><div data-inspect-relations class="relations"></div></div>
+        <p class="method-note">Dynamic dispatch and framework internals are not expanded unless verified. Links labelled “event” represent transport relationships, not direct calls.</p>
+      </aside>
+    </div>
+  </section>
+  <section class="reading"><div><span class="eyebrow">02 / UNDERSTAND THE MODEL</span><h2>How to interpret the code diagram</h2></div><div class="reading-grid"><article><h3>Function call</h3><p>Solid arrows are supported by a concrete call expression at a source location. Click an arrow to see the callsite.</p></article><article><h3>Async scheduling</h3><p>An attached <code>asyncio.Task</code> creates a separate execution lifetime. The HTTP response is not a direct return value from the worker.</p></article><article><h3>Event transport</h3><p>Publish and subscribe interact via an abstraction. Dashed paths indicate event delivery rather than direct function invocation.</p></article></div><p class="next">Next: generate this graph automatically from the pinned repository with Python AST and distinguish resolved calls, imported functions, dynamic calls and runtime-only relationships.</p></section>
+</main>
+<script define:vars={{nodes,edges,upstream}}>
+  const root=document.querySelector('[data-code-xray]');
+  if(root){
+    let selectedNode=0, selectedEdge=-1, filter='all', query='';
+    const $=s=>root.querySelector(s);
+    const nodeEls=[...root.querySelectorAll('[data-node-index]')],edgeEls=[...root.querySelectorAll('[data-edge-index]')];
+    const source=(file,line)=>upstream+file+'#L'+line;
+    function onActivation(el,fn){el.addEventListener('click',fn);el.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();fn();}});}
+    function render(){
+      const found=nodes.map((n,i)=>!query||[n.label,n.role,n.file,n.explain].some(v=>v.toLowerCase().includes(query))?i:-1).filter(i=>i>=0);
+      nodeEls.forEach((el,i)=>{el.classList.toggle('selected',selectedEdge<0&&selectedNode===i);el.classList.toggle('faded',query!==''&&!found.includes(i));});
+      let count=0;
+      edgeEls.forEach((el,i)=>{const e=edges[i];const matches=filter==='all'||e.kind===filter;const searchMatch=query===''||(found.includes(nodes.findIndex(n=>n.id===e.from))||found.includes(nodes.findIndex(n=>n.id===e.to)));const faded=!matches||!searchMatch;el.classList.toggle('faded',faded);el.classList.toggle('selected',selectedEdge===i);if(!faded)count++;});
+      $('[data-visible-count]').textContent=String(count);
+    }
+    function relationButton(label,index,kind){const b=document.createElement('button');b.textContent=label;b.type='button';b.addEventListener('click',()=>kind==='edge'?pickEdge(index):pickNode(index));return b;}
+    function setPanel(title,kind,detail,file,line,snippet,relationIndices,sourceLine){
+      $('[data-inspect-title]').textContent=title;$('[data-inspect-kind]').textContent=kind;$('[data-inspect-detail]').textContent=detail;$('[data-inspect-file]').textContent=file;$('[data-inspect-line]').textContent='line '+line+' ↗';$('[data-inspect-link]').href=source(file,sourceLine||line);$('[data-inspect-code]').textContent=snippet;
+      const target=$('[data-inspect-relations]');target.replaceChildren();
+      relationIndices.forEach(i=>{const e=edges[i],other=nodes.find(n=>n.id===(e.from===nodes[selectedNode]?.id?e.to:e.from));target.appendChild(relationButton((e.kind==='call'?'↗ ':e.kind==='task'?'⏳ ':'⇢ ')+nodes.find(n=>n.id===e.from).label+' → '+nodes.find(n=>n.id===e.to).label,i,'edge'));});
+    }
+    function pickNode(i){selectedNode=i;selectedEdge=-1;const n=nodes[i];const rel=edges.map((e,j)=>e.from===n.id||e.to===n.id?j:-1).filter(j=>j>=0);setPanel(n.label,n.kind.toUpperCase()+' / SOURCE VERIFIED',n.explain,n.file,n.line,n.snippet,rel,n.at);render();}
+    function pickEdge(i){selectedEdge=i;const e=edges[i];const a=nodes.findIndex(n=>n.id===e.from);selectedNode=a;setPanel(nodes[a].label+' → '+nodes.find(n=>n.id===e.to).label,e.kind.toUpperCase()+' / '+(e.kind==='event'?'TRANSPORT':'SOURCE EVIDENCE'),e.description,e.source,e.line,'Verified at '+e.source.split('/').at(-1)+':'+e.line+'\n\n'+(e.kind==='event'?'StreamBridge producer/consumer contract; no direct call.':'Select either function for its source excerpt.'),[i],e.line);render();}
+    nodeEls.forEach((el,i)=>onActivation(el,()=>pickNode(i)));
+    edgeEls.forEach((el,i)=>onActivation(el,()=>pickEdge(i)));
+    root.querySelectorAll('[data-filter]').forEach(el=>el.addEventListener('click',()=>{filter=el.dataset.filter;root.querySelectorAll('[data-filter]').forEach(b=>b.setAttribute('aria-pressed',String(b===el)));render();}));
+    $('[data-code-search]').addEventListener('input',e=>{query=e.target.value.toLowerCase().trim();render();});
+    $('[data-reset]').addEventListener('click',()=>{query='';filter='all';$('[data-code-search]').value='';root.querySelector('[data-filter="all"]').click();pickNode(0);});
+    $('[data-copy-source]').addEventListener('click',async()=>{try{await navigator.clipboard.writeText($('[data-inspect-link]').href);$('[data-copy-source]').textContent='Copied';setTimeout(()=>$('[data-copy-source]').textContent='Copy link',1100);}catch{$('[data-copy-source]').textContent='Unavailable';}});
+    const select=new URLSearchParams(location.search).get('symbol');const ix=nodes.findIndex(n=>n.id===select);pickNode(ix>=0?ix:0);
+  }
+</script>
+<style>
+.code-xray{--x-bg:#0c1726;--x-panel:#142335;--x-surface:#192c40;--x-border:#344d64;--x-ink:#f0f6fc;--x-muted:#a4b9c9;--x-accent:#6edccb;--x-call:#79bdf7;--x-task:#e5b77a;--x-event:#6edccb;background:var(--x-bg);color:var(--x-ink);min-height:100vh;padding:clamp(18px,3.5vw,55px);font-family:Inter,system-ui,sans-serif}.code-xray *{box-sizing:border-box}.xray-hero,.xray-workspace,.reading{max-width:1500px;margin:0 auto}.back,.code-xray a{color:var(--x-accent)}.back{font-size:.84rem;text-decoration:none}.eyebrow{font:700 .64rem/1.5 ui-monospace,monospace;letter-spacing:.1em;color:var(--x-accent)}.xray-hero>.eyebrow{margin-top:30px}.hero-grid{display:flex;align-items:end;gap:35px;justify-content:space-between}.hero-grid h1{font-size:clamp(2.3rem,5.4vw,5.4rem);line-height:1.05;letter-spacing:-.065em;margin:14px 0}.hero-grid h1 em{color:var(--x-accent);font-style:normal}.hero-grid p{max-width:820px;color:var(--x-muted);line-height:1.7;font-size:clamp(.91rem,1.5vw,1.08rem)}.hero-stat{border-left:1px solid var(--x-border);padding:0 25px 10px;display:grid;min-width:180px;gap:5px}.hero-stat strong{font-size:2rem;letter-spacing:-.045em}.hero-stat span{color:var(--x-muted);font-size:.72rem}.truth-note{margin:20px 0 34px;color:var(--x-muted);background:var(--x-panel);border-left:3px solid var(--x-accent);padding:11px 16px;font-size:.74rem;line-height:1.75}.truth-note code{font-size:inherit}.xray-workspace{border:1px solid var(--x-border);border-radius:16px;background:var(--x-panel);overflow:hidden}.toolbar{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:24px;flex-wrap:wrap}.toolbar h2{font-size:clamp(1.25rem,2vw,1.9rem);margin:4px 0;letter-spacing:-.04em}.legend{display:flex;gap:15px;flex-wrap:wrap}.legend span{font:.68rem ui-monospace,monospace;color:var(--x-muted)}.legend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;background:var(--x-call)}.legend .task{background:var(--x-task)}.legend .event{background:var(--x-event)}.xray-filters{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:0 24px 18px}.search{display:flex;align-items:center;gap:7px;padding:0 12px;border:1px solid var(--x-border);border-radius:8px;min-width:190px;flex:1}.search input{min-width:0;width:100%;border:0;padding:12px 0;background:transparent;color:var(--x-ink);font:inherit;font-size:.83rem;outline:none}.search:focus-within{outline:2px solid var(--x-accent)}.filters{display:flex;gap:7px;flex-wrap:wrap}.filters button,.reset,.source-panel-head button{padding:9px 12px;border:1px solid var(--x-border);background:var(--x-surface);color:var(--x-ink);border-radius:8px;font-size:.72rem;cursor:pointer}.filters button[aria-pressed=true]{background:var(--x-accent);color:#102b34;border-color:var(--x-accent);font-weight:750}.reset{color:var(--x-muted)}.workspace-grid{display:grid;grid-template-columns:minmax(0,1.8fr) minmax(285px,.74fr);border-top:1px solid var(--x-border)}.diagram-zone{min-width:0;border-right:1px solid var(--x-border)}.diagram-instruction{padding:15px 18px 0;color:var(--x-muted);font:700 .62rem ui-monospace,monospace;letter-spacing:.04em}.diagram-scroller{overflow-x:auto;scrollbar-color:var(--x-border) transparent}.diagram-scroller svg{min-width:800px;width:100%;height:auto;display:block}.lane-bands rect{fill:var(--x-bg);stroke:var(--x-border);stroke-width:1;stroke-dasharray:4 4}.lane-bands text{fill:var(--x-muted);font:700 11px ui-monospace,monospace;letter-spacing:.8px}.edge{fill:none;stroke:var(--x-call);stroke-width:2;cursor:pointer;marker-end:url(#xray-arrow-call);opacity:.75}.edge.task{stroke:var(--x-task);stroke-dasharray:7 5;marker-end:url(#xray-arrow-task)}.edge.event{stroke:var(--x-event);stroke-dasharray:3 6;marker-end:url(#xray-arrow-event)}.edge.faded{opacity:.055}.edge.selected{opacity:1;stroke-width:5;filter:drop-shadow(0 0 5px currentColor)}.graph-node{cursor:pointer}.graph-node>rect:first-child{fill:var(--x-surface);stroke:#64809b;stroke-width:1.2}.graph-node .node-accent{fill:var(--x-call)}.graph-node.selected>rect:first-child{stroke:var(--x-accent);stroke-width:3;fill:#225b58}.graph-node.selected .node-accent{fill:var(--x-accent)}.graph-node.faded{opacity:.16}.graph-node .node-title{fill:var(--x-ink);font:700 15px ui-monospace,monospace}.graph-node .node-sub{fill:var(--x-muted);font:12px ui-monospace,monospace}.graph-node .node-mark{fill:var(--x-accent);font:11px ui-monospace,monospace}.graph-bottom{border-top:1px solid var(--x-border);padding:12px 17px;display:flex;justify-content:space-between;gap:15px;flex-wrap:wrap;font:.65rem ui-monospace,monospace;color:var(--x-muted)}.source-panel{min-width:0;padding:22px;align-self:stretch}.source-panel-head{display:flex;gap:8px;align-items:center;justify-content:space-between}.source-panel h3{font-size:clamp(1.45rem,2.4vw,2rem);margin:20px 0 12px;letter-spacing:-.05em;overflow-wrap:anywhere}.source-panel p{color:var(--x-muted);font-size:.83rem;line-height:1.72}.source-location{border-top:1px solid var(--x-border);border-bottom:1px solid var(--x-border);padding:14px 0;display:grid;gap:7px;margin:22px 0}.source-location>span,.source-code-label,.inspector-more h4{font:700 .62rem ui-monospace,monospace;color:var(--x-muted);letter-spacing:.08em}.source-location>a{display:grid;gap:6px;text-decoration:none;overflow-wrap:anywhere;font:.72rem/1.6 ui-monospace,monospace}.source-code-label{display:flex;justify-content:space-between;gap:6px}.source-panel pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#081523;border:1px solid var(--x-border);color:#b3f0e0;border-radius:9px;font:11px/1.75 ui-monospace,monospace;padding:16px;min-height:130px}.relations{display:grid;gap:7px}.relations button{background:var(--x-surface);border:1px solid var(--x-border);border-radius:7px;padding:10px;text-align:left;color:var(--x-ink);font:.68rem/1.6 ui-monospace,monospace;cursor:pointer}.relations button:hover{border-color:var(--x-accent)}.method-note{border-top:1px solid var(--x-border);padding-top:16px;font-size:.72rem!important}.reading{padding:50px 0 15px}.reading h2{font-size:clamp(1.6rem,3vw,2.6rem);letter-spacing:-.05em;margin:6px 0 25px}.reading-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.reading article{border:1px solid var(--x-border);background:var(--x-panel);border-radius:10px;padding:22px}.reading h3{font-size:1.04rem}.reading p{line-height:1.7;color:var(--x-muted);font-size:.81rem}.next{margin:30px 0;color:var(--x-muted);line-height:1.75}.code-xray :is(button,[role=button],a):focus-visible{outline:3px solid var(--x-accent);outline-offset:2px}
+:global(html.theme-light) .code-xray{--x-bg:#edf4f6;--x-panel:#fff;--x-surface:#e4eff2;--x-border:#b9d0d6;--x-ink:#19394c;--x-muted:#506a79;--x-accent:#08786b;--x-call:#267bb4;--x-task:#9b5f16;--x-event:#08786b}
+:global(html.theme-light) .graph-node.selected>rect:first-child{fill:#d6f4eb}:global(html.theme-light) .graph-node>rect:first-child{stroke:#7e9eae}:global(html.theme-light) .source-panel pre{background:#102738;color:#dbfced}
+@media(max-width:1000px){.workspace-grid{grid-template-columns:1fr}.diagram-zone{border-right:0;border-bottom:1px solid var(--x-border)}.source-panel{padding:20px}}@media(max-width:650px){.code-xray{padding:15px}.hero-grid{display:block}.hero-stat{border-left:0;padding:10px 0;display:flex;gap:10px;align-items:baseline;min-width:0}.hero-stat strong{font-size:1.35rem}.toolbar{padding:17px}.xray-filters{padding:0 17px 17px}.reading-grid{grid-template-columns:1fr}.source-panel{padding:17px}.diagram-scroller svg{min-width:850px}.truth-note{margin-bottom:20px}}
+</style>
