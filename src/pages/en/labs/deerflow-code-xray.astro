@@ -1,5 +1,6 @@
 ---
 import BaseLayout from '../../../layouts/BaseLayout.astro';
+import DeerFlowThemeSwitch from '../../../components/DeerFlowThemeSwitch.astro';
 const revision = '1f15e0b43ca58b9601514f9f5c408fb032022833';
 const upstream = 'https://github.com/bytedance/deer-flow/blob/'+revision+'/';
 const files = {
@@ -67,7 +68,7 @@ const diagramEdges = edges.map((edge, i) => {
 <main class="code-xray" data-code-xray>
   <header class="xray-hero">
     <p class="truth-note"><strong>NEW:</strong> <a href="/en/labs/deerflow-source-atlas/">Explore the AST-generated source atlas →</a> · function calls, class structure, imports and decision branches derived from pinned code.</p>
-    <a href="/en/labs/deerflow-protocol-inspector/" class="back">← Protocol inspector</a>
+    <div class="code-lab-theme-row" style="display:flex;justify-content:space-between;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:22px"><a href="/en/labs/deerflow-protocol-inspector/" class="back">← Protocol inspector</a><DeerFlowThemeSwitch /></div>
     <p class="eyebrow">DEERFLOW / CODE INTELLIGENCE LAB</p>
     <div class="hero-grid"><div><h1>Actual code.<br /><em>Visible connections.</em></h1><p>Explore a real DeerFlow request path as a function-level diagram. Every node points to a definition or call site; every edge explains the relationship proved by the pinned source.</p></div><div class="hero-stat"><strong>{nodes.length}</strong><span>Source-linked symbols</span><strong>{edges.length}</strong><span>Explained relationships</span></div></div>
     <p class="truth-note">Verified, curated snapshot from DeerFlow revision <code>{revision.slice(0,12)}</code>. This is not an automatically generated whole-repository call graph. Dynamic Python and asynchronous event delivery are labeled explicitly.</p>
