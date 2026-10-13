@@ -287,9 +287,36 @@ root.querySelectorAll('[data-scenario]').forEach(b=>b.addEventListener('click',(
 function go(delta){const length=scenarios[scenario].edges.length;if(!length)return;step=Math.max(0,Math.min(length-1,step+delta));focused=null;setFocus(null);scenarioText()}
 get('ai-prev').addEventListener('click',()=>go(-1));get('ai-next').addEventListener('click',()=>go(1));get('ai-clear').addEventListener('click',()=>{scenario='overview';step=-1;layer='all';root.querySelectorAll('[data-scenario]').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.scenario==='overview')));root.querySelectorAll('.ai-filter [data-layer]').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.layer==='all')));setFocus(null);scenarioText()});
 let view={x:0,y:0,w:1200,h:762};
+const regions={
+ all:{x:0,y:0,w:1200,h:762,label:'Complete architecture'},
+ client:{x:5,y:54,w:285,h:475,label:'Clients and ingress'},
+ api:{x:293,y:71,w:290,h:438,label:'AgentOS API and registry'},
+ runtime:{x:584,y:71,w:291,h:438,label:'Agent runtime and worker'},
+ external:{x:878,y:55,w:313,h:470,label:'External dependencies'},
+ data:{x:291,y:527,w:585,h:215,label:'Operational data and streams'},
+ ops:{x:878,y:528,w:313,h:215,label:'Operations and governance'}
+};
+function frameRegion(key){
+ const region=regions[key]||regions.all;
+ view={x:region.x,y:region.y,w:region.w,h:region.h};updateView();
+ canvas.classList.add('is-fit');canvas.scrollLeft=0;canvas.scrollTop=0;
+ get('ai-region').value=key;
+ set(get('ai-view-status'),region.label+(key==='all'?' · essential paths emphasized':' · select nodes to explore'));
+}
+get('ai-region').addEventListener('change',e=>frameRegion(e.target.value));
+get('ai-find').addEventListener('change',e=>{
+ const id=e.target.value;if(!id){setFocus(null);return}
+ setFocus(id);
+ if(window.matchMedia('(max-width:700px)').matches){
+  const target=nodeMap[id],type=target.dataset.layer;
+  const x=Number(target.querySelector('rect').getAttribute('x'));
+  const region=type==='runtime'?(x<590?'api':'runtime'):type==='client'?'client':type==='external'?'external':type==='data'?'data':'ops';
+  frameRegion(region);get('ai-find').value=id;
+ }
+});
 function updateView(){svg.setAttribute('viewBox',[view.x,view.y,view.w,view.h].join(' '))}
 function zoom(factor,x=600,y=381){const scale=Math.min(1.5,Math.max(.42,view.w/1200*factor));const newW=1200*scale,newH=762*scale;view.x=x-(x-view.x)*newW/view.w;view.y=y-(y-view.y)*newH/view.h;view.w=newW;view.h=newH;updateView()}
-get('ai-zoom-in').addEventListener('click',()=>zoom(.82));get('ai-zoom-out').addEventListener('click',()=>zoom(1.21));get('ai-fit').addEventListener('click',()=>{view={x:0,y:0,w:1200,h:762};updateView();canvas.classList.add('is-fit');canvas.scrollLeft=0});get('ai-toggle-fit').addEventListener('click',()=>{canvas.classList.toggle('is-fit');view={x:0,y:0,w:1200,h:762};updateView()});
+get('ai-zoom-in').addEventListener('click',()=>zoom(.82));get('ai-zoom-out').addEventListener('click',()=>zoom(1.21));get('ai-fit').addEventListener('click',()=>frameRegion('all'));get('ai-toggle-fit').addEventListener('click',()=>{canvas.classList.toggle('is-fit');view={x:0,y:0,w:1200,h:762};updateView()});
 svg.addEventListener('wheel',e=>{if(!e.ctrlKey&&!e.metaKey&&Math.abs(e.deltaY)<.1)return;e.preventDefault();const rect=svg.getBoundingClientRect();const x=view.x+(e.clientX-rect.left)/rect.width*view.w,y=view.y+(e.clientY-rect.top)/rect.height*view.h;zoom(e.deltaY>0?1.12:.88,x,y)},{passive:false});
 let pointer=null;svg.addEventListener('pointerdown',e=>{if(e.target.closest('[data-node]')||e.button!==0)return;pointer={x:e.clientX,y:e.clientY,oldX:view.x,oldY:view.y};svg.classList.add('ai-grabbing');svg.setPointerCapture(e.pointerId)});
 svg.addEventListener('pointermove',e=>{if(!pointer)return;const r=svg.getBoundingClientRect();view.x=pointer.oldX-(e.clientX-pointer.x)*view.w/r.width;view.y=pointer.oldY-(e.clientY-pointer.y)*view.h/r.height;updateView()});
@@ -311,6 +338,7 @@ svg.addEventListener('touchmove',e=>{
 },{passive:false});
 svg.addEventListener('touchend',()=>{pinchDistance=null});
 svg.addEventListener('keydown',e=>{if(e.target!==svg)return;if(e.key==='+'){e.preventDefault();zoom(.85)}else if(e.key==='-'){e.preventDefault();zoom(1.15)}else if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)){e.preventDefault();view.x+=(e.key==='ArrowLeft'?-.08:e.key==='ArrowRight'?.08:0)*view.w;view.y+=(e.key==='ArrowUp'?-.08:e.key==='ArrowDown'?.08:0)*view.h;updateView()}});
+if(window.matchMedia('(max-width:700px)').matches)frameRegion('all');
 setFocus(null);scenarioText();paint();
 })();
 </script>
