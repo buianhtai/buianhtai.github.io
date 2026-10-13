@@ -34,6 +34,8 @@ try{
     assert.equal(await lab.locator('#ai-region').count(),1,'Subsystem navigation available');
     assert.equal(await lab.locator('#ai-find option').count(),19,'Searchable node picker includes every component');
     assert.equal(await lab.locator('#ai-lines').getAttribute('aria-pressed'),'false','Essential lines are the initial view');
+    await lab.scrollIntoViewIfNeeded();
+    await page.screenshot({path:out+'/overview-'+width+'-dark.png',fullPage:false});
 
     const firstEdge=lab.locator('[data-link="client-edge"]');
     const opacityBefore=await firstEdge.evaluate(el=>el.style.opacity);
