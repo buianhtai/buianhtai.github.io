@@ -368,7 +368,7 @@ const paths=[
   prev.addEventListener('click',()=>chooseChapter(current-1));
   next.addEventListener('click',()=>chooseChapter(current+1));
   depthButtons.forEach(b=>b.addEventListener('click',()=>{depth=(b.dataset.depthButton||'components') as Depth;render();}));
-  failureButtons.forEach(b=>b.addEventListener('click',()=>chooseFailure((b.dataset.failureButton||'normal') as Failure)));
+  failureButtons.forEach(b=>b.addEventListener('click',()=>{chooseFailure((b.dataset.failureButton||'normal') as Failure);const menu=b.closest<HTMLDetailsElement>('details');if(menu)menu.open=false;}));
   document.addEventListener('deerflow:trace-selected',(e:Event)=>{
    const index=(e as CustomEvent<{index:number}>).detail?.index;
    if(typeof index==='number')chooseEvent(index);
