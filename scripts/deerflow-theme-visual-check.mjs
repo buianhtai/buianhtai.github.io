@@ -60,8 +60,15 @@ try {
       await page.locator('[data-deerflow-theme-switch] [data-theme-mode="dark"]').click();
       assert.equal(await page.locator('html.theme-light').count(),0,'Dark restores');
       assert.equal(await page.locator('#theme-toggle').getAttribute('aria-label'),'Switch to light mode');
-      const after=await shell.evaluate(el=>getComputedStyle(el).backgroundColor);
-      assert.equal(after,dark,'Reversible light/dark background');
+      // Theme classes update synchronously, but CSS color transitions settle asynchronously.
+      // Check the computed color until it reaches the original dark value instead of
+      // sampling the first animation frame immediately after a click.
+      let after=await shell.evaluate(el=>getComputedStyle(el).backgroundColor);
+      for(let attempt=0; attempt<40 && after!==dark; attempt++){
+        await page.waitForTimeout(75);
+        after=await shell.evaluate(el=>getComputedStyle(el).backgroundColor);
+      }
+      assert.equal(after,dark,'Reversible light/dark background after transition');
       await page.screenshot({path:out+'/'+route.name+'-'+width+'-dark.png',fullPage:false});
       assert.equal(errors.length,0,route.name+' browser errors: '+errors.join('; '));
       console.log(route.name+' '+width+'px: dark '+dark+' → light '+light+' → dark '+after+'; click/persist/reload passed');
