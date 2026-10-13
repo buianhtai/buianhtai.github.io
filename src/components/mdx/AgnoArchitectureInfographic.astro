@@ -1,0 +1,248 @@
+---
+/**
+ * Illustrated system/container map, grounded in pinned Agno source.
+ * Replica diagram is a recommended example, not Agno's mandatory deployment.
+ */
+const revision = '1f2aac51eb28dc9c0970836d3b7ae046bae81bbb';
+const sourceRoot = 'https://github.com/agno-agi/agno/blob/' + revision + '/libs/agno/agno/';
+const bounds = [
+  {name:'01 / EXPERIENCE & INGRESS',x:20,y:56,w:260,h:457,tone:'client',summary:'Outside AgentOS'},
+  {name:'02 / AGENTOS REPLICA FLEET',x:298,y:56,w:570,h:457,tone:'runtime',summary:'Co-deployed modules ≠ microservices'},
+  {name:'03 / EXTERNAL DEPENDENCIES',x:885,y:56,w:295,h:457,tone:'external',summary:'Configured providers and integrations'},
+  {name:'04 / DURABLE STATE & COORDINATION',x:298,y:535,w:570,h:204,tone:'data',summary:'Operational store + optional transport'},
+  {name:'05 / OPERATIONS & GOVERNANCE',x:885,y:535,w:295,h:204,tone:'ops',summary:'Not required in inference data path'}
+];
+const nodes = [
+ {id:'client',label:'Application / SDK',sub:'Browser · API clients',tag:'UI',layer:'client',x:44,y:118,w:211,h:70,detail:'Client application submits a run, consumes output, and may reconnect to the runtime.',why:'The user interface does not execute Python agent work.',source:'os/routers/agents/router.py'},
+ {id:'edge',label:'Ingress / Gateway',sub:'Load balancer · TLS',tag:'LB',layer:'client',x:44,y:236,w:211,h:70,detail:'Illustrative infrastructure forwards requests to available AgentOS replicas.',why:'A load balancer is deployment infrastructure, not an Agno SDK microservice.',source:'os/app.py'},
+ {id:'api',label:'AgentOS API',sub:'FastAPI · HTTP endpoints',tag:'API',layer:'runtime',x:327,y:117,w:240,h:69,detail:'FastAPI application composes agent, team, workflow, session, queue and operations routers.',why:'API routing is typically part of the AgentOS process, not a separate service per router.',source:'os/app.py'},
+ {id:'auth',label:'Auth & User Scope',sub:'JWT · authorization gates',tag:'ID',layer:'runtime',x:598,y:117,w:240,h:69,detail:'Authentication and authorization guards enforce caller authority and scoped access.',why:'A supplied user/tenant ID must never be accepted as authorization by itself.',source:'os/auth.py'},
+ {id:'registry',label:'Component Registry',sub:'Agent · Team · Workflow',tag:'REG',layer:'runtime',x:327,y:215,w:240,h:69,detail:'Runtime resolves registered agent, team, and workflow components for execution.',why:'Component registration and selection are not necessarily a new network hop.',source:'os/app.py'},
+ {id:'agent',label:'Agent Runtime',sub:'Model · tools · session',tag:'AG',layer:'runtime',x:598,y:215,w:240,h:69,detail:'Agent implementation prepares context, calls models, executes tools, and emits run events.',why:'Agent logic is a Python component within configured execution, not an obligatory microservice.',source:'agent/agent.py'},
+ {id:'team',label:'Teams & Workflows',sub:'Delegation · ordered steps',tag:'WF',layer:'runtime',x:327,y:313,w:240,h:69,detail:'Teams coordinate agents; workflows orchestrate configured application steps.',why:'Multi-agent delegation and deterministic orchestration are distinct programming models.',source:'os/routers/teams/router.py'},
+ {id:'worker',label:'Durable Queue Worker',sub:'Claim · lease · heartbeat',tag:'WK',layer:'runtime',x:598,y:313,w:240,h:69,detail:'Optional durable worker claims database-backed tickets and fences stale completions.',why:'One configured worker may run per replica; background in-process execution is a separate mode.',source:'os/job_queue.py'},
+ {id:'sse',label:'Event / SSE Delivery',sub:'Live events · resume',tag:'SSE',layer:'runtime',x:327,y:411,w:240,h:69,detail:'AgentOS delivers streamed run content, including cross-replica resume with shared event transport.',why:'SSE is a client-facing connection, not the authoritative run database.',source:'os/routers/agents/router.py'},
+ {id:'queue',label:'Queue Configuration',sub:'Admission · retry policy',tag:'Q',layer:'runtime',x:598,y:411,w:240,h:69,detail:'QueueConfig configures per-replica concurrency, durable acceptance, retries and optional Redis coordination.',why:'Queue configuration is not itself an independent message broker.',source:'job_queue/config.py'},
+ {id:'model',label:'LLM Provider',sub:'Inference API · tokens',tag:'LLM',layer:'external',x:910,y:117,w:244,h:70,detail:'Configured model providers serve inference requests; throughput and cost may be limited externally.',why:'AgentOS does not automatically provide a self-hosted foundation model.',source:'agent/agent.py'},
+ {id:'tools',label:'Tool Adapters',sub:'Python · HTTP · MCP',tag:'TOOL',layer:'external',x:910,y:215,w:244,h:70,detail:'Configured tools can invoke local code, protocols, or remote systems subject to application policy.',why:'Write-capable tools need authorization, idempotency, and secure execution boundaries.',source:'agent/agent.py'},
+ {id:'knowledge',label:'Knowledge / Retrieval',sub:'Search · vector backend',tag:'KB',layer:'external',x:910,y:313,w:244,h:70,detail:'Optional knowledge and retrieval integrations query configured backends for relevant context.',why:'A knowledge interface does not imply every vector database is embedded inside AgentOS.',source:'knowledge/knowledge.py'},
+ {id:'ext',label:'External Business APIs',sub:'Third-party state changes',tag:'EXT',layer:'external',x:910,y:411,w:244,h:70,detail:'Tool executions may create effects in independently owned external services.',why:'Run fencing does not reverse an external email, payment, or database write.',source:'os/job_queue.py'},
+ {id:'postgres',label:'Operational Database',sub:'Sessions · runs · jobs',tag:'PG',layer:'data',x:330,y:598,w:239,h:94,detail:'PostgreSQL adapter persists normalized runs, sessions and optional durable queue tickets.',why:'Run state and job ownership are authoritative here when PostgreSQL is configured.',source:'db/postgres/schemas.py'},
+ {id:'redis',label:'Redis / Valkey',sub:'Streams · cancellation',tag:'RED',layer:'data',x:598,y:598,w:239,h:94,detail:'Optional Redis coordination enables cross-replica event replay and cancellation signals.',why:'Events have retention limits; persisted final run state remains in the configured database.',source:'os/event_streams/redis.py'},
+ {id:'tracing',label:'Trace & Metrics',sub:'Spans · run diagnostics',tag:'OBS',layer:'ops',x:910,y:598,w:244,h:56,detail:'Observability records and operational metrics help diagnose execution across requests and workers.',why:'Telemetry storage, cardinality and retention require explicit operational decisions.',source:'os/routers/traces/router.py'},
+ {id:'control',label:'Control Plane / Admin',sub:'Inspect · govern · manage',tag:'OPS',layer:'ops',x:910,y:672,w:244,h:56,detail:'Separate administration and operational tools may inspect or manage the runtime through its APIs.',why:'An operations interface is not automatically on every model inference request path.',source:'os/app.py'}
+];
+const edges = [
+ {id:'client-edge',from:'client',to:'edge',kind:'http',label:'HTTPS'},
+ {id:'edge-api',from:'edge',to:'api',kind:'http',label:'HTTP'},
+ {id:'api-auth',from:'api',to:'auth',kind:'policy',label:'Auth gate'},
+ {id:'api-registry',from:'api',to:'registry',kind:'invoke',label:'Resolve'},
+ {id:'registry-agent',from:'registry',to:'agent',kind:'invoke',label:'Run'},
+ {id:'registry-team',from:'registry',to:'team',kind:'invoke',label:'Dispatch'},
+ {id:'team-agent',from:'team',to:'agent',kind:'invoke',label:'Delegate'},
+ {id:'agent-model',from:'agent',to:'model',kind:'http',label:'Inference'},
+ {id:'agent-tools',from:'agent',to:'tools',kind:'invoke',label:'Tool call'},
+ {id:'agent-knowledge',from:'agent',to:'knowledge',kind:'data',label:'Retrieve'},
+ {id:'tools-ext',from:'tools',to:'ext',kind:'http',label:'External call'},
+ {id:'agent-postgres',from:'agent',to:'postgres',kind:'data',label:'Run state'},
+ {id:'agent-sse',from:'agent',to:'sse',kind:'event',label:'Run events'},
+ {id:'sse-edge',from:'sse',to:'edge',kind:'event',label:'SSE'},
+ {id:'api-queue',from:'api',to:'queue',kind:'invoke',label:'Enqueue'},
+ {id:'queue-postgres',from:'queue',to:'postgres',kind:'data',label:'Ticket'},
+ {id:'worker-postgres',from:'worker',to:'postgres',kind:'data',label:'Lease / claim'},
+ {id:'worker-agent',from:'worker',to:'agent',kind:'invoke',label:'Execute'},
+ {id:'worker-redis',from:'worker',to:'redis',kind:'event',label:'XADD'},
+ {id:'redis-sse',from:'redis',to:'sse',kind:'event',label:'Replay'},
+ {id:'auth-postgres',from:'auth',to:'postgres',kind:'data',label:'Scope data'},
+ {id:'agent-tracing',from:'agent',to:'tracing',kind:'event',label:'Spans'},
+ {id:'worker-tracing',from:'worker',to:'tracing',kind:'event',label:'Worker state'},
+ {id:'control-api',from:'control',to:'api',kind:'http',label:'Admin APIs'}
+];
+const byId = Object.fromEntries(nodes.map(node=>[node.id,node]));
+function line(a,b){
+ const u=byId[a],v=byId[b];
+ const cx=u.x+u.w/2,cy=u.y+u.h/2,dx=v.x+v.w/2,dy=v.y+v.h/2;
+ if(Math.abs(dx-cx)>Math.abs(dy-cy)*1.15){
+   const right=dx>cx,sx=right?u.x+u.w:u.x,tx=right?v.x:v.x+v.w,k=Math.min(100,Math.abs(tx-sx)*.42);
+   return 'M'+sx+' '+cy+' C'+(sx+(right?k:-k))+' '+cy+' '+(tx+(right?-k:k))+' '+dy+' '+tx+' '+dy;
+ }
+ const down=dy>cy,sy=down?u.y+u.h:u.y,ty=down?v.y:v.y+v.h,k=Math.min(90,Math.abs(ty-sy)*.4);
+ return 'M'+cx+' '+sy+' C'+cx+' '+(sy+(down?k:-k))+' '+dx+' '+(ty+(down?-k:k))+' '+dx+' '+ty;
+}
+---
+<section id="agno-infographic" class="ai" aria-labelledby="ai-heading">
+  <header class="ai-header">
+    <div>
+      <p class="ai-overline">AGNO / AGENTOS · ARCHITECTURE ATLAS</p>
+      <h3 id="ai-heading">One platform. All the important connections.</h3>
+      <p>Select any component to illuminate its dependencies. Switch execution paths to see <em>why</em> each relationship exists.</p>
+    </div>
+    <span class="ai-rev">SOURCE SNAPSHOT <strong>{revision.slice(0, 8)}</strong></span>
+  </header>
+  <div class="ai-stats" aria-label="Architecture metadata">
+    <span><b>{nodes.length}</b> components</span><span><b>{edges.length}</b> modeled relationships</span><span><b>{bounds.length}</b> bounded areas</span>
+    <span class="ai-stats-note">Representative multi-replica deployment · optional elements labeled</span>
+  </div>
+  <div class="ai-toolbar">
+    <div class="ai-filter" role="group" aria-label="Highlight architecture layer">
+      {['all','runtime','data','external','ops','client'].map(layer=><button type="button" data-layer={layer} aria-pressed={layer==='all'}>{layer==='all'?'All layers':layer==='external'?'Integrations':layer==='client'?'Ingress':layer==='ops'?'Operations':layer==='data'?'State': 'Runtime'}</button>)}
+    </div>
+    <div class="ai-zoom" role="group" aria-label="Diagram zoom controls">
+      <button id="ai-zoom-out" aria-label="Zoom out" type="button">−</button>
+      <button id="ai-zoom-in" aria-label="Zoom in" type="button">+</button>
+      <button id="ai-fit" aria-label="Fit entire diagram" type="button">Fit</button>
+      <button id="ai-clear" aria-label="Clear component focus" type="button">Reset</button>
+    </div>
+  </div>
+  <div class="ai-workspace">
+    <div class="ai-map">
+      <div class="ai-canvas" id="ai-canvas">
+        <svg id="ai-svg" viewBox="0 0 1200 762" role="group" aria-label="Interactive architecture showing ingress, AgentOS runtime, external APIs, state, and operations. Select nodes to inspect relationships." tabindex="0">
+          <defs>
+            <pattern id="ai-grid" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r=".8" class="ai-dot"/></pattern>
+            <marker id="ai-arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L7 3.5 L0 7Z" class="ai-arrow-head"/></marker>
+          </defs>
+          <rect x="0" y="0" width="1200" height="762" class="ai-base"/>
+          <rect x="0" y="0" width="1200" height="762" fill="url(#ai-grid)"/>
+          {bounds.map(b=><g class={'ai-boundary ai-boundary-'+b.tone}>
+            <rect x={b.x} y={b.y} width={b.w} height={b.h} rx="15"/>
+            <text x={b.x+14} y={b.y+24} class="ai-boundary-title">{b.name}</text>
+            <text x={b.x+14} y={b.y+44} class="ai-boundary-sub">{b.summary}</text>
+          </g>)}
+          <g id="ai-edges" class="ai-edge-layer">
+            {edges.map(e=><path d={line(e.from,e.to)} class={'ai-edge ai-edge-'+e.kind} data-link={e.id} data-from={e.from} data-to={e.to} data-kind={e.kind} data-label={e.label} vector-effect="non-scaling-stroke" marker-end="url(#ai-arrow)"><title>{e.from+' → '+e.to+' · '+e.label}</title></path>)}
+          </g>
+          <g id="ai-nodes">
+            {nodes.map(n=><g class={'ai-node ai-node-'+n.layer} data-node={n.id} data-layer={n.layer} data-detail={n.detail} data-why={n.why} data-source={n.source} data-label={n.label} role="button" tabindex="0" aria-label={'Inspect '+n.label}>
+              <rect class="ai-node-rect" x={n.x} y={n.y} width={n.w} height={n.h} rx="10"/>
+              <rect class="ai-node-symbol" x={n.x+11} y={n.y+13} width="43" height="43" rx="9"/>
+              <text class="ai-node-symbol-text" x={n.x+32.5} y={n.y+39} text-anchor="middle">{n.tag}</text>
+              <text class="ai-node-label" x={n.x+64} y={n.y+29}>{n.label}</text>
+              <text class="ai-node-sub" x={n.x+64} y={n.y+47}>{n.sub}</text>
+              <title>{n.label+': '+n.detail}</title>
+            </g>)}
+          </g>
+        </svg>
+      </div>
+      <div class="ai-canvas-foot">
+        <span>Drag empty canvas to pan · wheel/pinch to zoom · select a component to highlight relationships</span>
+        <button type="button" id="ai-toggle-fit">Fit all / scroll</button>
+      </div>
+    </div>
+    <aside class="ai-aside" aria-label="Architecture inspector">
+      <p class="ai-inspector-kicker">CONNECTION INSPECTOR</p>
+      <h4 id="ai-selected-title">Platform overview</h4>
+      <p id="ai-selected-detail">AgentOS runs Python components behind a FastAPI application. Shared persistence and optional Redis coordination make a replicated deployment possible.</p>
+      <div class="ai-inspector-section">
+        <span class="ai-section-label">WHY IT MATTERS</span>
+        <p id="ai-selected-why">Select an element to reveal real dependencies and source references. All nodes stay visible to maintain the big picture.</p>
+      </div>
+      <div class="ai-inspector-section">
+        <span class="ai-section-label">DIRECT CONNECTIONS <span id="ai-rel-count"></span></span>
+        <div id="ai-relations"><p class="ai-placeholder">Select a component on the map to inspect its incoming and outgoing relationships.</p></div>
+      </div>
+      <a id="ai-source" href={'https://github.com/agno-agi/agno/tree/'+revision} target="_blank" rel="noopener noreferrer">Browse pinned Agno source ↗</a>
+    </aside>
+  </div>
+  <div class="ai-story">
+    <div class="ai-story-head"><span>TRACE A RELATIONSHIP PATH</span><small>Scenarios highlight illustrative routing, not captured request traces.</small></div>
+    <div class="ai-scenarios" role="group" aria-label="Architecture scenarios">
+      {[
+        {id:'overview',name:'All connections'},
+        {id:'answer',name:'Direct answer'},
+        {id:'tools',name:'Tool execution'},
+        {id:'queue',name:'Durable background'},
+        {id:'resume',name:'Reconnect / SSE'},
+        {id:'failure',name:'Worker recovery'}
+      ].map((s,i)=><button type="button" data-scenario={s.id} aria-pressed={i===0}>{s.name}</button>)}
+    </div>
+    <div class="ai-flow-row">
+      <button type="button" id="ai-prev" aria-label="Previous relation">←</button>
+      <div class="ai-story-copy"><strong id="ai-story-title">Explore the entire topology</strong><span id="ai-story-description">Select a scenario to highlight ordered relationships; select any component to inspect its code and dependencies.</span></div>
+      <div class="ai-stepcounter" id="ai-step-count">—</div>
+      <button type="button" id="ai-next" aria-label="Next relation">→</button>
+    </div>
+  </div>
+  <div class="ai-legend">
+    <span><i class="ai-key ai-k-http"></i> HTTP / API</span>
+    <span><i class="ai-key ai-k-invoke"></i> In-process call</span>
+    <span><i class="ai-key ai-k-data"></i> State / retrieval</span>
+    <span><i class="ai-key ai-k-event"></i> Events / SSE</span>
+    <span><i class="ai-key ai-k-policy"></i> Authorization</span>
+  </div>
+  <footer class="ai-foot">
+    <b>Source versus topology:</b> Router, worker, queue, storage, and streaming modules are verified at
+    <a href={'https://github.com/agno-agi/agno/tree/'+revision} target="_blank" rel="noopener noreferrer">Agno {revision.slice(0,8)}</a>.
+    Boxes are logical/deployment boundaries; optional Redis, knowledge, control-plane connections and infrastructure are deployment choices, not separate built-in microservices. Flow paths are educational illustrations.
+  </footer>
+</section>
+<style>
+.ai{--a-bg:var(--color-surface,#0c1726);--a-panel:var(--color-surface-2,#142337);--a-text:var(--color-text,#eff6fc);--a-muted:var(--color-text-dim,#a4b7c8);--a-border:var(--color-border,#3c5066);--a-accent:var(--color-accent,#51d7ba);--a-link:#67a9ef;--a-call:#4cbca8;--a-db:#ad8ff3;--a-event:#dc9e58;--a-policy:#e38e95;position:relative;left:50%;transform:translateX(-50%);width:min(1190px,calc(100vw - 20px));max-width:none!important;margin:2.5rem 0;background:var(--a-bg);color:var(--a-text);border:1px solid var(--a-border);border-radius:20px;overflow:hidden;font-family:inherit;box-shadow:0 16px 52px #00000016}
+.ai *{box-sizing:border-box}.ai button{cursor:pointer;color:var(--a-text)}.ai button:focus-visible,.ai a:focus-visible,.ai [role=button]:focus-visible{outline:2px solid var(--a-accent);outline-offset:3px}.ai-header{display:flex;justify-content:space-between;gap:16px;align-items:start;padding:24px 26px 16px;background:linear-gradient(115deg,color-mix(in srgb,var(--a-accent) 8%,var(--a-bg)),var(--a-bg) 60%)}.ai-overline{font:700 .66rem ui-monospace,monospace!important;letter-spacing:.16em;color:var(--a-accent)!important;margin:0!important}.ai-header h3{font-size:1.65rem;line-height:1.2;margin:8px 0 9px}.ai-header p{color:var(--a-muted);font-size:.82rem;line-height:1.6;margin:0}.ai-header em{font-style:normal;color:var(--a-text)}.ai-rev{font:.64rem ui-monospace,monospace;color:var(--a-muted);white-space:nowrap;border:1px solid var(--a-border);padding:9px;border-radius:7px}.ai-rev strong{color:var(--a-accent)}.ai-stats{display:flex;align-items:center;flex-wrap:wrap;gap:11px 19px;padding:12px 26px;background:var(--a-panel);border-block:1px solid var(--a-border);font-size:.76rem;color:var(--a-muted)}.ai-stats b{color:var(--a-text);font-size:.93rem}.ai-stats-note{margin-left:auto;font:.68rem ui-monospace,monospace}.ai-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 16px}.ai-filter,.ai-zoom,.ai-scenarios{display:flex;gap:5px;flex-wrap:wrap}.ai-filter button,.ai-zoom button,.ai-scenarios button,.ai-canvas-foot button,.ai-flow-row>button{background:var(--a-panel);border:1px solid var(--a-border);padding:8px 10px;border-radius:7px;font:600 .72rem system-ui;color:var(--a-muted)}.ai-filter button[aria-pressed=true],.ai-scenarios button[aria-pressed=true]{color:var(--a-accent);border-color:var(--a-accent);background:color-mix(in srgb,var(--a-accent) 10%,var(--a-bg))}.ai-zoom button{font-size:.84rem;color:var(--a-text);min-width:33px}.ai-workspace{display:grid;grid-template-columns:minmax(0,1fr) 259px;gap:12px;padding:0 15px 14px}.ai-map{border:1px solid var(--a-border);border-radius:12px;background:var(--a-panel);overflow:hidden;min-width:0}.ai-canvas{overflow:auto;overscroll-behavior:contain;background:var(--a-bg)}.ai-canvas svg{display:block;width:100%;min-width:930px;height:auto;user-select:none;cursor:grab;max-height:650px;touch-action:pan-y}.ai-canvas svg.ai-grabbing{cursor:grabbing;touch-action:none}.ai-canvas.is-fit svg{min-width:0}.ai-base{fill:var(--a-bg)}.ai-dot{fill:var(--a-muted);opacity:.14}.ai-boundary rect{fill:var(--a-panel);stroke:var(--a-border);stroke-width:1.3}.ai-boundary-runtime rect{fill:color-mix(in srgb,var(--a-call) 4%,var(--a-panel));stroke:color-mix(in srgb,var(--a-call) 45%,var(--a-border))}.ai-boundary-external rect{fill:color-mix(in srgb,var(--a-link) 3%,var(--a-panel))}.ai-boundary-data rect{fill:color-mix(in srgb,var(--a-db) 5%,var(--a-panel));stroke:color-mix(in srgb,var(--a-db) 35%,var(--a-border))}.ai-boundary-ops rect{fill:color-mix(in srgb,var(--a-event) 4%,var(--a-panel))}.ai-boundary-title{fill:var(--a-text);font:700 10px ui-monospace,monospace;letter-spacing:1px}.ai-boundary-sub{fill:var(--a-muted);font:10px system-ui}.ai-node{cursor:pointer;transition:opacity .17s}.ai-node-rect{fill:var(--a-bg);stroke:var(--a-border);stroke-width:1.3}.ai-node-symbol{fill:color-mix(in srgb,var(--a-link) 14%,var(--a-bg))}.ai-node-symbol-text{fill:var(--a-link);font:800 12px ui-monospace,monospace}.ai-node-runtime .ai-node-symbol{fill:color-mix(in srgb,var(--a-call) 14%,var(--a-bg))}.ai-node-runtime .ai-node-symbol-text{fill:var(--a-call)}.ai-node-data .ai-node-symbol{fill:color-mix(in srgb,var(--a-db) 15%,var(--a-bg))}.ai-node-data .ai-node-symbol-text{fill:var(--a-db)}.ai-node-ops .ai-node-symbol{fill:color-mix(in srgb,var(--a-event) 14%,var(--a-bg))}.ai-node-ops .ai-node-symbol-text{fill:var(--a-event)}.ai-node-label{fill:var(--a-text);font:700 12px system-ui}.ai-node-sub{fill:var(--a-muted);font:10px system-ui}.ai-node.is-focused .ai-node-rect,.ai-node:focus-visible .ai-node-rect{stroke:var(--a-accent);stroke-width:3}.ai-node.is-adjacent .ai-node-rect{stroke:var(--a-accent);stroke-opacity:.65}.ai-node.is-dimmed{opacity:.24}.ai-arrow-head{fill:var(--a-muted);opacity:.8}.ai-edge{fill:none;stroke-width:1.5;opacity:.23;pointer-events:none;transition:opacity .18s,stroke-width .18s}.ai-edge-http{stroke:var(--a-link)}.ai-edge-invoke{stroke:var(--a-call)}.ai-edge-data{stroke:var(--a-db)}.ai-edge-event{stroke:var(--a-event)}.ai-edge-policy{stroke:var(--a-policy)}.ai-edge.is-active{opacity:1;stroke-width:3;filter:drop-shadow(0 0 2px var(--a-bg))}.ai-edge.is-past{opacity:.6;stroke-width:2}.ai-canvas-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 12px;border-top:1px solid var(--a-border);color:var(--a-muted);font-size:.68rem}.ai-canvas-foot button{font-size:.68rem;padding:6px 9px;white-space:nowrap}.ai-aside{border:1px solid var(--a-border);border-radius:12px;padding:18px;background:var(--a-panel);display:flex;align-items:flex-start;flex-direction:column;gap:14px;min-width:0}.ai-inspector-kicker,.ai-section-label{font:700 .65rem ui-monospace,monospace;letter-spacing:.09em;color:var(--a-accent);margin:0}.ai-aside h4{font-size:1.15rem;line-height:1.25;margin:0}.ai-aside p{font-size:.78rem;line-height:1.65;color:var(--a-muted);margin:0}.ai-inspector-section{width:100%;border-top:1px solid var(--a-border);padding-top:12px}.ai-inspector-section .ai-section-label{display:block;margin-bottom:8px}.ai-placeholder{font-style:italic}.ai-relations{display:grid;gap:7px}.ai-rel-link{display:flex;justify-content:space-between;gap:7px;width:100%;align-items:center;text-align:left;border:1px solid var(--a-border);background:var(--a-bg);border-radius:7px;padding:9px 8px;color:var(--a-text)!important;font-size:.7rem}.ai-rel-link small{color:var(--a-muted);font-size:.64rem}.ai-aside>a{font-size:.73rem;color:var(--a-accent);text-decoration:underline;text-underline-offset:3px;margin-top:auto;overflow-wrap:anywhere}.ai-story{border-top:1px solid var(--a-border);padding:16px 22px}.ai-story-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:11px}.ai-story-head span{font:700 .67rem ui-monospace,monospace;letter-spacing:.09em;color:var(--a-accent)}.ai-story-head small{font-size:.71rem;color:var(--a-muted)}.ai-flow-row{display:flex;align-items:center;gap:12px;border:1px solid var(--a-border);padding:11px 12px;border-radius:9px;background:var(--a-panel);margin-top:11px}.ai-flow-row>button{font-size:.9rem;min-width:39px;align-self:stretch}.ai-story-copy{flex:1;display:grid;gap:5px}.ai-story-copy strong{font-size:.83rem}.ai-story-copy span{font-size:.73rem;line-height:1.45;color:var(--a-muted)}.ai-stepcounter{font:.7rem ui-monospace,monospace;color:var(--a-muted);white-space:nowrap}.ai-legend{display:flex;gap:16px;flex-wrap:wrap;padding:12px 22px;border-top:1px solid var(--a-border);font-size:.72rem;color:var(--a-muted)}.ai-legend span{display:flex;align-items:center;gap:6px}.ai-key{height:3px;width:17px;display:inline-block;border-radius:4px}.ai-k-http{background:var(--a-link)}.ai-k-invoke{background:var(--a-call)}.ai-k-data{background:var(--a-db)}.ai-k-event{background:var(--a-event)}.ai-k-policy{background:var(--a-policy)}.ai-foot{font-size:.74rem;line-height:1.65;color:var(--a-muted);padding:14px 22px;border-top:1px solid var(--a-border)}.ai-foot a{color:var(--a-accent)}@media(max-width:900px){.ai-workspace{grid-template-columns:1fr}.ai-aside{min-height:220px}.ai-header{flex-wrap:wrap}.ai-stats-note{margin-left:0}}@media(max-width:500px){.ai-header{padding:17px}.ai-header h3{font-size:1.35rem}.ai-toolbar{padding:10px}.ai-filter{overflow-x:auto;flex-wrap:nowrap;max-width:100%}.ai-filter button{white-space:nowrap}.ai-workspace{padding:0 9px 10px}.ai-story{padding:13px}.ai-story-copy strong{font-size:.75rem}.ai-canvas-foot>span{max-width:73%}}@media(prefers-reduced-motion:reduce){.ai-node,.ai-edge{transition:none}}
+</style>
+<script>
+(()=>{
+const root=document.querySelector('#agno-infographic');if(!root||root.dataset.ready==='1')return;root.dataset.ready='1';
+const get=id=>root.querySelector('#'+id),svg=get('ai-svg'),canvas=get('ai-canvas');
+const nodeEls=[...root.querySelectorAll('[data-node]')],edgeEls=[...root.querySelectorAll('[data-link]')];
+const nodeMap=Object.fromEntries(nodeEls.map(el=>[el.dataset.node,el]));
+const revision='1f2aac51eb28dc9c0970836d3b7ae046bae81bbb';
+const scenarios={
+ overview:{title:'Explore the entire topology',description:'Select a scenario to highlight ordered relations, or select any node to inspect what it connects to.',edges:[]},
+ answer:{title:'Direct answer — request to model to stream',description:'Interactive reply without an optional queue worker.',edges:['client-edge','edge-api','api-auth','api-registry','registry-agent','agent-model','agent-sse','sse-edge']},
+ tools:{title:'Tool execution — optional downstream write',description:'A model can select a tool, whose external side effects need application-level protection.',edges:['client-edge','edge-api','api-registry','registry-agent','agent-model','agent-tools','tools-ext','agent-sse','sse-edge']},
+ queue:{title:'Durable background — committed admission',description:'With durable queue enabled, a job is persisted before a worker claims and executes it.',edges:['edge-api','api-queue','queue-postgres','worker-postgres','worker-agent','agent-model','agent-postgres','worker-redis','redis-sse']},
+ resume:{title:'Cross-replica SSE — client reconnect',description:'When shared Redis events are configured, a different replica can replay/tail retained events.',edges:['api-queue','queue-postgres','worker-postgres','worker-agent','worker-redis','redis-sse','sse-edge']},
+ failure:{title:'Worker crash — claim, sweep and fence',description:'After lease expiry, a stale ticket can be failed or reclaimed by retry policy; external effects are not rolled back.',edges:['api-queue','queue-postgres','worker-postgres','worker-agent','worker-postgres','worker-redis','redis-sse']}
+};
+let focused=null,layer='all',scenario='overview',step=-1;
+function connected(id){return edgeEls.filter(e=>e.dataset.from===id||e.dataset.to===id)}
+function set(el,txt){el.textContent=txt}
+function setFocus(id){
+ focused=id||null;paint();
+ const target=nodeMap[id];if(!target){set(get('ai-selected-title'),'Platform overview');set(get('ai-selected-detail'),'AgentOS runs Python components behind a FastAPI application. Shared persistence and optional coordination allow multi-replica deployment.');set(get('ai-selected-why'),'Select a component to reveal connected services, relationships and source files.');get('ai-source').href='https://github.com/agno-agi/agno/tree/'+revision;get('ai-rel-count').textContent='';get('ai-relations').replaceChildren();return}
+ set(get('ai-selected-title'),target.dataset.label);set(get('ai-selected-detail'),target.dataset.detail);set(get('ai-selected-why'),target.dataset.why);get('ai-source').href='https://github.com/agno-agi/agno/blob/'+revision+'/libs/agno/agno/'+target.dataset.source;
+ const rel=connected(id);get('ai-rel-count').textContent='('+rel.length+')';
+ const box=get('ai-relations');box.replaceChildren();rel.forEach(e=>{const out=e.dataset.from===id,other=out?e.dataset.to:e.dataset.from;
+ const b=document.createElement('button');b.type='button';b.className='ai-rel-link';const label=document.createElement('span'),small=document.createElement('small');label.textContent=(out?'→ ':'← ')+nodeMap[other].dataset.label;small.textContent=e.dataset.label;b.append(label,small);b.addEventListener('click',()=>setFocus(other));box.append(b)});
+}
+function paint(){
+ const related=new Set([focused]);
+ const incident=focused?new Set(connected(focused).map(e=>{related.add(e.dataset.from);related.add(e.dataset.to);return e.dataset.link})) : null;
+ const path=scenarios[scenario].edges;
+ const active=new Set(path.slice(0,step+1)),allPath=new Set(path);
+ edgeEls.forEach(e=>{const match=focused?incident.has(e.dataset.link):scenario==='overview'?false:active.has(e.dataset.link);
+ e.classList.toggle('is-active',!!match);
+ e.classList.toggle('is-past',!focused&&scenario!=='overview'&&allPath.has(e.dataset.link)&&!match);
+ e.style.opacity=focused?(match?'1':'.07'):scenario!=='overview'?(active.has(e.dataset.link)?'1':allPath.has(e.dataset.link)?'.45':'.06'):'';
+ });
+ const flowNodes=new Set();if(scenario!=='overview'){path.slice(0,Math.max(1,step+1)).forEach(id=>{let e=edgeEls.find(x=>x.dataset.link===id);if(e){flowNodes.add(e.dataset.from);flowNodes.add(e.dataset.to)}})}
+ nodeEls.forEach(el=>{const id=el.dataset.node;const filter=layer==='all'||el.dataset.layer===layer;const eligible=focused?related.has(id):scenario==='overview'?true:flowNodes.has(id);
+ el.classList.toggle('is-focused',focused===id);el.classList.toggle('is-adjacent',!!focused&&id!==focused&&related.has(id));el.classList.toggle('is-dimmed',(!eligible||!filter)&&id!==focused);
+ });
+}
+function scenarioText(){
+ const s=scenarios[scenario],ids=s.edges; if(scenario==='overview'){set(get('ai-story-title'),s.title);set(get('ai-story-description'),s.description);set(get('ai-step-count'),'—');return}
+ const edge=edgeEls.find(e=>e.dataset.link===ids[step]);
+ const from=edge?nodeMap[edge.dataset.from]?.dataset.label:'',to=edge?nodeMap[edge.dataset.to]?.dataset.label:'';
+ set(get('ai-story-title'),edge?from+' → '+to:s.title);
+ set(get('ai-story-description'),edge?edge.dataset.label+' · '+s.description:s.description);
+ set(get('ai-step-count'),String(step+1).padStart(2,'0')+' / '+String(ids.length).padStart(2,'0'));
+}
+nodeEls.forEach(el=>{const activate=()=>setFocus(el.dataset.node);el.addEventListener('click',activate);el.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();activate()}})});
+root.querySelectorAll('[data-layer]').forEach(b=>b.addEventListener('click',()=>{layer=b.dataset.layer;root.querySelectorAll('[data-layer]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));paint()}));
+root.querySelectorAll('[data-scenario]').forEach(b=>b.addEventListener('click',()=>{scenario=b.dataset.scenario;step=scenario==='overview'?-1:0;focused=null;root.querySelectorAll('[data-scenario]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));setFocus(null);scenarioText()}));
+function go(delta){const length=scenarios[scenario].edges.length;if(!length)return;step=Math.max(0,Math.min(length-1,step+delta));focused=null;setFocus(null);scenarioText()}
+get('ai-prev').addEventListener('click',()=>go(-1));get('ai-next').addEventListener('click',()=>go(1));get('ai-clear').addEventListener('click',()=>{scenario='overview';step=-1;layer='all';root.querySelectorAll('[data-scenario]').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.scenario==='overview')));root.querySelectorAll('[data-layer]').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.layer==='all')));setFocus(null);scenarioText()});
+let view={x:0,y:0,w:1200,h:762};
+function updateView(){svg.setAttribute('viewBox',[view.x,view.y,view.w,view.h].join(' '))}
+function zoom(factor,x=600,y=381){const scale=Math.min(1.5,Math.max(.42,view.w/1200*factor));const newW=1200*scale,newH=762*scale;view.x=x-(x-view.x)*newW/view.w;view.y=y-(y-view.y)*newH/view.h;view.w=newW;view.h=newH;updateView()}
+get('ai-zoom-in').addEventListener('click',()=>zoom(.82));get('ai-zoom-out').addEventListener('click',()=>zoom(1.21));get('ai-fit').addEventListener('click',()=>{view={x:0,y:0,w:1200,h:762};updateView();canvas.classList.add('is-fit');canvas.scrollLeft=0});get('ai-toggle-fit').addEventListener('click',()=>{canvas.classList.toggle('is-fit');view={x:0,y:0,w:1200,h:762};updateView()});
+svg.addEventListener('wheel',e=>{if(!e.ctrlKey&&!e.metaKey&&Math.abs(e.deltaY)<.1)return;e.preventDefault();const rect=svg.getBoundingClientRect();const x=view.x+(e.clientX-rect.left)/rect.width*view.w,y=view.y+(e.clientY-rect.top)/rect.height*view.h;zoom(e.deltaY>0?1.12:.88,x,y)},{passive:false});
+let pointer=null;svg.addEventListener('pointerdown',e=>{if(e.target.closest('[data-node]')||e.button!==0)return;pointer={x:e.clientX,y:e.clientY,oldX:view.x,oldY:view.y};svg.classList.add('ai-grabbing');svg.setPointerCapture(e.pointerId)});
+svg.addEventListener('pointermove',e=>{if(!pointer)return;const r=svg.getBoundingClientRect();view.x=pointer.oldX-(e.clientX-pointer.x)*view.w/r.width;view.y=pointer.oldY-(e.clientY-pointer.y)*view.h/r.height;updateView()});
+function release(){pointer=null;svg.classList.remove('ai-grabbing')}svg.addEventListener('pointerup',release);svg.addEventListener('pointercancel',release);
+svg.addEventListener('keydown',e=>{if(e.target!==svg)return;if(e.key==='+'){e.preventDefault();zoom(.85)}else if(e.key==='-'){e.preventDefault();zoom(1.15)}else if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)){e.preventDefault();view.x+=(e.key==='ArrowLeft'?-.08:e.key==='ArrowRight'?.08:0)*view.w;view.y+=(e.key==='ArrowUp'?-.08:e.key==='ArrowDown'?.08:0)*view.h;updateView()}});
+setFocus(null);scenarioText();paint();
+})();
+</script>
