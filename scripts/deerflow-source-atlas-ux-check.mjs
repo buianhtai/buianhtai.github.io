@@ -61,6 +61,33 @@ try {
     }
   }
   assert.notEqual(colors[0],colors[1],'Saved light/dark theme changes the actual explorer palette');
+  const flows = await (await fetch(host + '/data/deerflow-controlflow.generated.json')).json();
+  assert(flows.stats.functions >= 8,'Structural code flow includes focused DeerFlow symbols');
+  assert(flows.stats.nodes > 100,'AST statement graph includes substantial code');
+  assert(flows.stats.effects > 10,'State/effect detector found concrete source evidence');
+  const sseFlow = Object.values(flows.flows).find(f => f.name === 'sse_consumer');
+  assert(sseFlow && sseFlow.edges.some(e => e.kind === 'possible exception'),'SSE function structural exception path present');
+  for (const theme of ['dark','light']) {
+    const ctx=await browser.newContext({viewport:{width:theme==='light'?390:1280,height:900}});
+    await ctx.addInitScript(value => localStorage.setItem('theme', value), theme);
+    await ctx.route('**/*',route=>route.request().url().startsWith(host)?route.continue():route.abort());
+    const page=await ctx.newPage();
+    const errors=[];
+    page.on('pageerror', e => errors.push(e.message));
+    await page.goto(host+'/en/labs/deerflow-code-flow/',{waitUntil:'domcontentloaded'});
+    await page.locator('[data-total-flows]').getByText(/[0-9]/).waitFor({timeout:12000});
+    assert((await page.locator('[data-boxes] .cf-box').count())>3,'Control flow source nodes are rendered');
+    await page.locator('[data-mode="effects"]').click();
+    assert((await page.locator('.cf-effect').count())>2,'State effects visual lanes rendered');
+    await page.locator('.cf-effect').first().click();
+    assert.notEqual(await page.locator('[data-title]').innerText(),'Choose a code node','Effect inspector updates');
+    await page.locator('[data-mode="flow"]').click();
+    await page.locator('[data-focus]').selectOption('decisions');
+    assert((await page.locator('[data-boxes] .cf-box').count())>0,'Decision filter renders nodes');
+    assert.equal(errors.length,0,'No Code Flow runtime errors: '+errors.join('; '));
+    await ctx.close();
+  }
+  console.log('Code Flow Lab browser checks passed: Python effects, code path diagram, filters, theme and mobile.');
   console.log('Code Atlas acceptance passed: source-generated data, graph navigation, AST views, theme, mobile, zoom.');
 } finally {
   clearTimeout(timeout);
