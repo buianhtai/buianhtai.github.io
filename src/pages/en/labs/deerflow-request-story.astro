@@ -3,6 +3,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 import { Icon } from 'astro-icon/components';
 import DeerFlowEditorialVignettes from '../../../components/mdx/DeerFlowEditorialVignettes.astro';
 import DeerFlowProtocolExamples from '../../../components/mdx/DeerFlowProtocolExamples.astro';
+import DeerFlowExecutionTimeline from '../../../components/mdx/DeerFlowExecutionTimeline.astro';
 const revision='1f15e0b43ca58b9601514f9f5c408fb032022833';
 const repo='https://github.com/bytedance/deer-flow/blob/'+revision+'/';
 const scenes=[
@@ -89,6 +90,7 @@ const paths=[
     </div>
     <div class="legend"><span><i class="http"></i> HTTP(S)</span><span><i class="async"></i> Async / model</span><span><i class="sql"></i> DB</span><span><i class="stream"></i> Stream / SSE</span></div>
    </section>
+   <DeerFlowExecutionTimeline />
    <section class="scene-cards" aria-label="Scene narration">
     {scenes.map((s,i)=><article class="scene-card" data-story-panel={i} hidden={i!==0}>
      <div class="narration"><p class="eyebrow">{s.chapter}</p><h2>{s.title}</h2><p class="scene-lead">{s.lead}</p><div class="key"><Icon name="lucide:zap" size={19}/><div><strong>THE IMPORTANT PART</strong><p>{s.explain}</p></div></div><p class="remember"><strong>Remember.</strong> {s.takeaway}</p></div>
