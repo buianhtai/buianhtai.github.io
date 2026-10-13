@@ -217,6 +217,9 @@ jobs:
       - name: Run visual checks and capture screenshots
         timeout-minutes: 2
         run: node scripts/editorial-visual-check.mjs
+      - name: Verify Agno article interactions and responsive light/dark mode
+        timeout-minutes: 3
+        run: node scripts/agno-explorer-visual-check.mjs
       - name: Render DeerFlow article diagrams and capture responsive screenshots
         timeout-minutes: 3
         run: node scripts/deerflow-diagram-visual-check.mjs
@@ -233,6 +236,13 @@ jobs:
         timeout-minutes: 5
         run: node scripts/eventcatalog-diagram-smoke.mjs
 
+      - name: Upload Agno architecture explorer screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agno-architecture-explorer
+          path: artifacts/agno-explorer/
+          if-no-files-found: warn
       - name: Upload DeerFlow light and dark screenshots
         if: always()
         uses: actions/upload-artifact@v4
