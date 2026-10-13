@@ -233,16 +233,19 @@ const scenarios={
  resume:{title:'Cross-replica SSE — client reconnect',description:'When shared Redis events are configured, a different replica can replay/tail retained events.',edges:['api-queue','queue-postgres','worker-postgres','worker-agent','worker-redis','redis-sse','sse-edge']},
  failure:{title:'Worker crash — claim, sweep and fence',description:'After lease expiry, a stale ticket can be failed or reclaimed by retry policy; external effects are not rolled back.',edges:['api-queue','queue-postgres','worker-postgres','worker-agent','worker-postgres','worker-redis','redis-sse']}
 };
-let focused=null,layer='all',scenario='overview',step=-1;
+let focused=null,layer='all',scenario='overview',step=-1,showAll=false;
+const majorEdges=new Set(['client-edge','edge-api','api-registry','registry-agent','agent-model','agent-tools','agent-postgres','agent-sse','sse-edge','worker-postgres','worker-agent','worker-redis','redis-sse']);
 function connected(id){return edgeEls.filter(e=>e.dataset.from===id||e.dataset.to===id)}
 function set(el,txt){el.textContent=txt}
 function setFocus(id){
  focused=id||null;paint();
+ get('ai-find').value=focused||'';
+ set(get('ai-edge-status'),focused?'Inspecting incoming and outgoing connections for '+nodeMap[focused].dataset.label+'.':'Select a node or scenario to explore connections.');
  const target=nodeMap[id];if(!target){set(get('ai-selected-title'),'Platform overview');set(get('ai-selected-detail'),'AgentOS runs Python components behind a FastAPI application. Shared persistence and optional coordination allow multi-replica deployment.');set(get('ai-selected-why'),'Select a component to reveal connected services, relationships and source files.');get('ai-source').href='https://github.com/agno-agi/agno/tree/'+revision;get('ai-rel-count').textContent='';get('ai-relations').replaceChildren();return}
  set(get('ai-selected-title'),target.dataset.label);set(get('ai-selected-detail'),target.dataset.detail);set(get('ai-selected-why'),target.dataset.why);get('ai-source').href='https://github.com/agno-agi/agno/blob/'+revision+'/libs/agno/agno/'+target.dataset.source;
  const rel=connected(id);get('ai-rel-count').textContent='('+rel.length+')';
  const box=get('ai-relations');box.replaceChildren();rel.forEach(e=>{const out=e.dataset.from===id,other=out?e.dataset.to:e.dataset.from;
- const b=document.createElement('button');b.type='button';b.className='ai-rel-link';const label=document.createElement('span'),small=document.createElement('small');label.textContent=(out?'→ ':'← ')+nodeMap[other].dataset.label;small.textContent=e.dataset.label;b.append(label,small);b.addEventListener('click',()=>setFocus(other));box.append(b)});
+ const b=document.createElement('button');b.type='button';b.className='ai-rel-link';const label=document.createElement('span'),small=document.createElement('small');label.textContent=(out?'→ ':'← ')+nodeMap[other].dataset.label;small.textContent=e.dataset.kind.toUpperCase()+' · '+e.dataset.label;b.append(label,small);b.addEventListener('click',()=>setFocus(other));box.append(b)});
 }
 function paint(){
  const related=new Set([focused]);
@@ -252,22 +255,33 @@ function paint(){
  edgeEls.forEach(e=>{const match=focused?incident.has(e.dataset.link):scenario==='overview'?false:active.has(e.dataset.link);
  e.classList.toggle('is-active',!!match);
  e.classList.toggle('is-past',!focused&&scenario!=='overview'&&allPath.has(e.dataset.link)&&!match);
- e.style.opacity=focused?(match?'1':'.07'):scenario!=='overview'?(active.has(e.dataset.link)?'1':allPath.has(e.dataset.link)?'.45':'.06'):'';
+ e.style.opacity=focused?(match?'1':'.035'):scenario!=='overview'?(active.has(e.dataset.link)?'1':allPath.has(e.dataset.link)?'.30':'.04'):(showAll?'.36':majorEdges.has(e.dataset.link)?'.63':'.045');
  });
  const flowNodes=new Set();if(scenario!=='overview'){path.slice(0,Math.max(1,step+1)).forEach(id=>{let e=edgeEls.find(x=>x.dataset.link===id);if(e){flowNodes.add(e.dataset.from);flowNodes.add(e.dataset.to)}})}
+ get('ai-step-annotation').setAttribute('visibility',(!focused&&scenario!=='overview')?'visible':'hidden');
  nodeEls.forEach(el=>{const id=el.dataset.node;const filter=layer==='all'||el.dataset.layer===layer;const eligible=focused?related.has(id):scenario==='overview'?true:flowNodes.has(id);
  el.classList.toggle('is-focused',focused===id);el.classList.toggle('is-adjacent',!!focused&&id!==focused&&related.has(id));el.classList.toggle('is-dimmed',(!eligible||!filter)&&id!==focused);
  });
 }
 function scenarioText(){
- const s=scenarios[scenario],ids=s.edges; if(scenario==='overview'){set(get('ai-story-title'),s.title);set(get('ai-story-description'),s.description);set(get('ai-step-count'),'—');return}
+ const s=scenarios[scenario],ids=s.edges; if(scenario==='overview'){get('ai-step-annotation').setAttribute('visibility','hidden');set(get('ai-story-title'),s.title);set(get('ai-story-description'),s.description);set(get('ai-step-count'),'—');return}
  const edge=edgeEls.find(e=>e.dataset.link===ids[step]);
  const from=edge?nodeMap[edge.dataset.from]?.dataset.label:'',to=edge?nodeMap[edge.dataset.to]?.dataset.label:'';
+ if(edge){
+  const distance=edge.getTotalLength(),position=edge.getPointAtLength(distance*.5);
+  const label=(step+1)+' · '+edge.dataset.label;
+  const w=Math.min(220,Math.max(90,20+label.length*6.3));
+  get('ai-step-bg').setAttribute('width',String(w));
+  get('ai-step-label').textContent=label;
+  get('ai-step-annotation').setAttribute('transform','translate('+Math.max(4,Math.min(1200-w-4,position.x-w/2))+' '+Math.max(56,Math.min(720,position.y-33))+')');
+ }
+ set(get('ai-edge-status'),edge?'Step '+(step+1)+' · '+edge.dataset.kind.toUpperCase()+' · '+from+' → '+to:'Select a node or scenario to explore connections.');
  set(get('ai-story-title'),edge?from+' → '+to:s.title);
  set(get('ai-story-description'),edge?edge.dataset.label+' · '+s.description:s.description);
  set(get('ai-step-count'),String(step+1).padStart(2,'0')+' / '+String(ids.length).padStart(2,'0'));
 }
 nodeEls.forEach(el=>{const activate=()=>setFocus(el.dataset.node);el.addEventListener('click',activate);el.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();activate()}})});
+get('ai-lines').addEventListener('click',()=>{showAll=!showAll;get('ai-lines').setAttribute('aria-pressed',String(showAll));get('ai-lines').textContent=showAll?'Essential links':'Show all links';paint()});
 root.querySelectorAll('.ai-filter [data-layer]').forEach(b=>b.addEventListener('click',()=>{layer=b.dataset.layer;root.querySelectorAll('.ai-filter [data-layer]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));paint()}));
 root.querySelectorAll('[data-scenario]').forEach(b=>b.addEventListener('click',()=>{scenario=b.dataset.scenario;step=scenario==='overview'?-1:0;focused=null;root.querySelectorAll('[data-scenario]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));setFocus(null);scenarioText()}));
 function go(delta){const length=scenarios[scenario].edges.length;if(!length)return;step=Math.max(0,Math.min(length-1,step+delta));focused=null;setFocus(null);scenarioText()}
