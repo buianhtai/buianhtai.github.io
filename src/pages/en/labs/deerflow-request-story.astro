@@ -21,6 +21,7 @@ const nodes=[
  {id:'nginx',x:326,y:132,name:'Nginx',sub:'Reverse proxy',tag:'EDGE',n:'02'},
  {id:'gateway',x:546,y:132,name:'FastAPI',sub:'Gateway',tag:'BACKEND',n:'03'},
  {id:'worker',x:806,y:132,name:'Run worker',sub:'LangGraph / async',tag:'RUNTIME',n:'04'},
+ {id:'tools',x:106,y:354,name:'Tool adapter',sub:'MCP / sandbox',tag:'INTEGRATIONS',n:'08'},
  {id:'bridge',x:326,y:354,name:'StreamBridge',sub:'Memory / Redis',tag:'EVENTS',n:'07'},
  {id:'db',x:546,y:354,name:'Application DB',sub:'Run records',tag:'SQL',n:'05'},
  {id:'model',x:806,y:354,name:'Model provider',sub:'LLM API',tag:'EXTERNAL',n:'06'},
@@ -33,11 +34,12 @@ const paths=[
  {id:'model',d:'M 806 179 V 305',label:'model call',x:853,y:244,color:'#928be4'},
  {id:'publish',d:'M 892 132 H 940 V 451 H 326 V 404',label:'publish()',x:675,y:438,color:'#169b89'},
  {id:'subscribe',d:'M 326 305 V 264 H 546 V 180',label:'subscribe()',x:432,y:251,color:'#169b89'},
+ {id:'toolcall',d:'M 720 154 H 686 V 436 H 106 V 404',label:'authorized tool',x:204,y:425,color:'#bb97e7'},
  {id:'sse',d:'M 546 84 V 48 H 106 V 84',label:'SSE / HTTP',x:320,y:37,color:'#169b89'},
 ];
 ---
 <BaseLayout title="DeerFlow request story — design prototype" description="Eight-chapter visual engineering explainer of HTTP, run admission, Python execution and SSE in DeerFlow." noindex>
-<div class="story" data-story-root data-scene="0">
+<div class="story" data-story-root data-scene="0" data-depth="components" data-source-root={repo}>
  <div class="wrap">
   <header class="intro">
    <div class="eyebrow top"><span><Icon name="lucide:layers-3" size={15}/> ENGINEERING EXPLAINED</span><span class="draft"><i></i> INTERACTIVE GUIDE</span></div>
@@ -53,15 +55,39 @@ const paths=[
    </nav>
    <section class="drawing" aria-label="Animated system diagram">
     <div class="drawing-top"><span><Icon name="lucide:component" size={16}/> ONE SYSTEM, REVEALED IN LAYERS</span><small>Positions stay fixed across scenes</small></div>
+    <div class="explorer-toolbar" aria-label="Diagram controls">
+     <div class="depth-modes" role="group" aria-label="Architecture detail level"><span>DETAIL LEVEL</span>
+      <button type="button" data-depth-button="overview" aria-pressed="false">Overview</button>
+      <button type="button" data-depth-button="components" aria-pressed="true">Components</button>
+      <button type="button" data-depth-button="code" aria-pressed="false">Code</button>
+     </div>
+     <div class="toolbar-actions"><button type="button" class="share-scene" data-share-view><Icon name="lucide:link" size={14}/> <span>Copy view link</span></button>
+      <details class="scenario-picker"><summary><Icon name="lucide:triangle-alert" size={14}/> Failure paths</summary><div class="scenario-options" role="group" aria-label="Choose a failure scenario">
+       <button type="button" data-failure-button="normal" aria-pressed="true">Normal request</button>
+       <button type="button" data-failure-button="disconnect" aria-pressed="false">SSE disconnect</button>
+       <button type="button" data-failure-button="denied" aria-pressed="false">Tool denied</button>
+       <button type="button" data-failure-button="crash" aria-pressed="false">Worker crash</button>
+      </div></details>
+     </div>
+    </div>
     <div class="map" aria-hidden="false">
      <svg viewBox="0 0 960 482" role="img" aria-labelledby="map-title map-description">
       <title id="map-title">DeerFlow runtime request and response map</title>
-      <desc id="map-description">Seven components occupy fixed locations. Selecting a scene reveals HTTP request, asynchronous admission, or model and SSE delivery paths.</desc>
+      <desc id="map-description">Eight components sit in marked frontend, edge, backend, persistence, transport, tool and external-model boundaries. Timeline events highlight actual conceptual communication paths.</desc>
       <defs>
        <pattern id="story-grid" width="24" height="24" patternUnits="userSpaceOnUse"><path d="M24 0 H0 V24" fill="none" stroke="currentColor" stroke-opacity=".07"/></pattern>
        {paths.map(p=><marker id={'arrow-'+p.id} markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6 Z" fill={p.color}/></marker>)}
       </defs>
       <rect width="960" height="482" fill="url(#story-grid)"/>
+      <g class="boundary-layer" aria-hidden="true">
+       <rect class="boundary-zone" x="8" y="55" width="195" height="156" rx="14"/><text class="boundary-label" x="18" y="72">FRONTEND · USER INTERFACE</text>
+       <rect class="boundary-zone" x="227" y="55" width="198" height="156" rx="14"/><text class="boundary-label" x="237" y="72">EDGE · REVERSE PROXY</text>
+       <rect class="boundary-zone" x="440" y="55" width="472" height="156" rx="14"/><text class="boundary-label" x="450" y="72">BACKEND · GATEWAY & RUNTIME</text>
+       <rect class="boundary-zone" x="8" y="282" width="195" height="135" rx="14"/><text class="boundary-label" x="18" y="298">TOOLS · EXTERNAL EFFECTS</text>
+       <rect class="boundary-zone" x="227" y="282" width="198" height="135" rx="14"/><text class="boundary-label" x="237" y="298">EVENT TRANSPORT</text>
+       <rect class="boundary-zone" x="440" y="282" width="214" height="135" rx="14"/><text class="boundary-label" x="450" y="298">PERSISTENCE</text>
+       <rect class="boundary-zone" x="697" y="282" width="215" height="135" rx="14"/><text class="boundary-label" x="707" y="298">EXTERNAL MODEL</text>
+      </g>
       <text x="18" y="23" class="zone">01 / CLIENT & EXECUTION</text>
       <text x="18" y="275" class="zone">02 / STATE & DEPENDENCIES</text>
       {paths.map(p=><g class:list={['wire',{'on':scenes[0].paths.includes(p.id)}]} data-wire={p.id}>
@@ -79,6 +105,9 @@ const paths=[
       </g>)}
      </svg>
     </div>
+    <div class="focus-callout" data-diagram-focus aria-live="polite"><span data-focus-index>EVENT 01 / 09</span><strong data-focus-title>React submits a run</strong><p data-focus-description>Browser → Nginx → FastAPI · HTTPS request</p></div>
+    <div class="implementation-focus" data-code-focus hidden><span>IMPLEMENTATION DETAIL</span><code data-code-line>POST /api/langgraph/threads/:thread_id/runs/stream</code><a data-code-source href={repo+'frontend/src/core/api/api-client.ts'} target="_blank" rel="noopener noreferrer">Open pinned source ↗</a></div>
+    <div class="failure-explanation" data-failure-explanation hidden role="status"><Icon name="lucide:shield-alert" size={19}/><div><strong data-failure-title></strong><p data-failure-description></p></div></div>
     <DeerFlowEditorialVignettes />
     <DeerFlowProtocolExamples />
     <div class="mobile-path">
@@ -167,6 +196,35 @@ const paths=[
 .story button:focus-visible,.story a:focus-visible,.story summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 :global(html.theme-light) .story{--bg:#f7f9f7;--card:#fff;--stage:#edf4f2;--ink:#1b3036;--dim:#526b74;--line:#cededd;--accent:#0d7771;--shadow:rgba(15,40,45,.06)}
 :global(html.theme-light) .control.next{color:white}
+
+/* Unified story + trace explorer: all buttons use the same scene focus state. */
+.explorer-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:15px 24px 12px;padding:10px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.depth-modes,.toolbar-actions{display:flex;gap:5px;align-items:center;flex-wrap:wrap}
+.depth-modes>span{font:750 .58rem var(--font-mono,monospace);color:var(--dim);letter-spacing:.09em;margin-right:9px}
+.depth-modes button,.share-scene,.scenario-picker summary,.scenario-options button{font:700 .67rem/1.4 Inter,system-ui,sans-serif;border:1px solid var(--line);color:var(--dim);background:var(--card);border-radius:7px;cursor:pointer;padding:9px 11px}
+.depth-modes button[aria-pressed="true"],.scenario-options button[aria-pressed="true"]{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,var(--card));color:var(--ink)}
+.depth-modes button:hover,.share-scene:hover,.scenario-picker summary:hover,.scenario-options button:hover{color:var(--ink);border-color:var(--accent)}
+.toolbar-actions{gap:8px}.share-scene{display:flex;align-items:center;gap:6px}
+.scenario-picker{position:relative}.scenario-picker summary{list-style:none;display:flex;align-items:center;gap:7px}.scenario-picker summary::-webkit-details-marker{display:none}
+.scenario-options{position:absolute;z-index:15;top:calc(100% + 7px);right:0;width:175px;background:var(--card);border:1px solid var(--line);box-shadow:0 16px 36px var(--shadow);border-radius:9px;padding:6px;display:grid;gap:5px}
+.scenario-options button{text-align:left;width:100%}
+.boundary-zone{stroke:var(--line);stroke-width:1;stroke-dasharray:4 5;fill:color-mix(in srgb,var(--accent) 2%,transparent)}
+.boundary-label{fill:var(--dim);font:750 9px var(--font-mono,monospace);letter-spacing:.35px}
+.story[data-depth="overview"] .boundary-zone{fill:color-mix(in srgb,var(--accent) 7%,transparent);stroke:var(--accent);stroke-opacity:.45}
+.story[data-depth="overview"] .node-number-box,.story[data-depth="overview"] .node-number,.story[data-depth="overview"] .node-divider,.story[data-depth="overview"] .node-tag,.story[data-depth="overview"] .node-sub,.story[data-depth="overview"] .wire-label{display:none}
+.story[data-depth="overview"] .node-title{transform:translateY(19px);font-size:15px}
+.story[data-depth="overview"] .wire:not(.on){opacity:0}
+.story[data-depth="code"] .wire-label{font-size:11px}
+.focus-callout{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 22px 17px;padding:12px 15px;border-left:3px solid var(--accent);background:color-mix(in srgb,var(--accent) 7%,var(--card));color:var(--ink)}
+.focus-callout>span,.implementation-focus>span{font:750 .57rem/1.5 var(--font-mono,monospace);letter-spacing:.07em;color:var(--accent)}
+.focus-callout strong{font-size:.82rem}.focus-callout p{font-size:.7rem;color:var(--dim);margin:0;line-height:1.45;flex:1 1 200px}
+.implementation-focus{margin:0 22px 17px;padding:12px 15px;background:var(--card);border:1px solid var(--line);border-radius:8px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.implementation-focus code{font:600 .67rem/1.5 var(--font-mono,monospace);color:var(--ink);overflow-wrap:anywhere;flex:1 1 260px}
+.implementation-focus a{color:var(--accent);font-size:.69rem;text-decoration:none;font-weight:700}
+.failure-explanation{margin:0 22px 17px;border:1px solid #b77e59;border-left:3px solid #d1a377;background:color-mix(in srgb,#d1a377 9%,var(--card));border-radius:8px;padding:14px;display:flex;gap:10px}
+.failure-explanation>svg{flex-shrink:0;color:#e4aa7a}.failure-explanation strong{font-size:.81rem}.failure-explanation p{margin:5px 0 0;color:var(--dim);font-size:.72rem;line-height:1.65}
+.story button:focus-visible,.story summary:focus-visible,.story a:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+@media(max-width:640px){.explorer-toolbar{margin:8px 14px;align-items:stretch}.depth-modes{width:100%;justify-content:space-between}.depth-modes>span{width:100%;margin:0 0 5px}.depth-modes button{flex:1}.toolbar-actions{width:100%;justify-content:space-between}.focus-callout,.implementation-focus,.failure-explanation{margin:0 12px 14px}.boundary-layer{display:none}}
 @media(max-width:1050px){.chapters{grid-template-columns:repeat(2,minmax(0,1fr))}.chapter{padding:12px 14px}.chapter>svg{display:block}}@media(max-width:860px){.intro-grid{grid-template-columns:1fr;gap:18px;margin-top:35px}.intro-note{display:none}.scene-card{grid-template-columns:1fr;gap:22px}}
 @media(max-width:640px){
  .story{padding:0 12px 42px}.intro{padding:28px 0 32px}.eyebrow.top{font-size:.57rem}.draft{font-size:.5rem}.story h1{font-size:clamp(2.75rem,11vw,4.4rem)}.intro-grid{margin-top:34px}.lede{font-size:.86rem;margin-top:19px}
@@ -183,6 +241,7 @@ const paths=[
 @media(prefers-reduced-motion:reduce){.story *{animation:none!important;transition:none!important}}
 </style>
 <script>
+ // One authoritative view model coordinates chapters, events, boundaries and deep links.
  for(const root of document.querySelectorAll<HTMLElement>('[data-story-root]')){
   const tabs=[...root.querySelectorAll<HTMLButtonElement>('[data-scene-tab]')];
   const panels=[...root.querySelectorAll<HTMLElement>('[data-story-panel]')];
@@ -191,6 +250,8 @@ const paths=[
   const protocolExamples=[...root.querySelectorAll<HTMLElement>('[data-story-example]')];
   const nodes=[...root.querySelectorAll<SVGGElement>('[data-node]')];
   const wires=[...root.querySelectorAll<SVGGElement>('[data-wire]')];
+  const depthButtons=[...root.querySelectorAll<HTMLButtonElement>('[data-depth-button]')];
+  const failureButtons=[...root.querySelectorAll<HTMLButtonElement>('[data-failure-button]')];
   const prev=root.querySelector<HTMLButtonElement>('[data-prev]');
   const next=root.querySelector<HTMLButtonElement>('[data-next]');
   const play=root.querySelector<HTMLButtonElement>('[data-play]');
@@ -198,41 +259,155 @@ const paths=[
   const progress=root.querySelector<HTMLElement>('[data-progress]');
   const meter=progress?.querySelector<HTMLElement>('span');
   const meterLabel=root.querySelector<HTMLOutputElement>('[data-meter-label]');
+  const focusIndex=root.querySelector<HTMLElement>('[data-focus-index]');
+  const focusTitle=root.querySelector<HTMLElement>('[data-focus-title]');
+  const focusDescription=root.querySelector<HTMLElement>('[data-focus-description]');
+  const codeFocus=root.querySelector<HTMLElement>('[data-code-focus]');
+  const codeLine=root.querySelector<HTMLElement>('[data-code-line]');
+  const codeSource=root.querySelector<HTMLAnchorElement>('[data-code-source]');
+  const failureBox=root.querySelector<HTMLElement>('[data-failure-explanation]');
+  const failureTitle=root.querySelector<HTMLElement>('[data-failure-title]');
+  const failureDescription=root.querySelector<HTMLElement>('[data-failure-description]');
+  const share=root.querySelector<HTMLButtonElement>('[data-share-view]');
   if(!prev||!next||!play||!counter||!progress||!meter||!meterLabel)continue;
-  const activeNodes=[["browser","nginx","gateway"],["gateway","worker","db"],["browser","gateway","worker","bridge","model"],["worker","model","bridge"],["worker","db","bridge","gateway"],["browser","gateway","bridge","db"],["gateway","worker","db"],["browser","nginx","gateway","worker","db","bridge","model"]];
-  const activeWires=[["http1","http2"],["sql","task"],["model","publish","subscribe","sse"],["model","publish"],["sql","subscribe","publish"],["http1","subscribe","sql","sse"],["task","sql"],["http1","http2","task","sql","model","publish","subscribe","sse"]];
-  let current=0;let timer:number|undefined;
+
+  const chapters=[
+   {nodes:['browser','nginx','gateway'],wires:['http1','http2']},
+   {nodes:['gateway','worker','db'],wires:['sql','task']},
+   {nodes:['browser','gateway','worker','bridge','model'],wires:['model','publish','subscribe','sse']},
+   {nodes:['worker','model','bridge','tools'],wires:['model','publish','toolcall']},
+   {nodes:['worker','db','bridge','gateway'],wires:['sql','subscribe','publish']},
+   {nodes:['browser','gateway','bridge','db'],wires:['http1','subscribe','sql','sse']},
+   {nodes:['gateway','worker','db'],wires:['task','sql']},
+   {nodes:['browser','nginx','gateway','worker','db','bridge','model','tools'],wires:['http1','http2','task','sql','model','publish','subscribe','sse','toolcall']}
+  ];
+  const traceEvents=[
+   {chapter:0,nodes:['browser','nginx','gateway'],wires:['http1','http2'],title:'React submits a run',detail:'Browser → Nginx → FastAPI · HTTP request',code:'POST /api/langgraph/threads/{id}/runs/stream',source:'frontend/src/core/api/api-client.ts'},
+   {chapter:1,nodes:['gateway'],wires:[],title:'RunManager accepts ownership',detail:'Request validation, run identity and admission inside the Gateway',code:'run_mgr.create_or_reject(...)',source:'backend/app/gateway/services.py'},
+   {chapter:1,nodes:['gateway','db'],wires:['sql'],title:'Optional run metadata persistence',detail:'RunStore writes metadata when persistent storage is configured',code:'RunStore · run status / ownership / journal',source:'backend/packages/harness/deerflow/runtime/runs/manager.py'},
+   {chapter:1,nodes:['gateway','worker'],wires:['task'],title:'Async Python worker starts',detail:'FastAPI Gateway → process-local asyncio.Task',code:'asyncio.create_task(worker)',source:'backend/app/gateway/services.py'},
+   {chapter:3,nodes:['worker','model'],wires:['model'],title:'LangGraph calls the model',detail:'Worker → model API · graph event streaming',code:'async for update in graph.astream(...):',source:'backend/packages/harness/deerflow/runtime/runs/worker.py'},
+   {chapter:3,nodes:['worker','tools'],wires:['toolcall'],title:'Authorized tool execution',detail:'Permission enforcement → MCP or another tool adapter (optional)',code:'model proposal → authorization → adapter',source:'backend/packages/harness/deerflow/authz/enforcement.py'},
+   {chapter:4,nodes:['worker','db'],wires:['sql'],title:'Graph state checkpoint',detail:'Configured LangGraph checkpointer · not the RunStore record',code:'Checkpointer → graph/thread state',source:'backend/packages/harness/deerflow/runtime/runs/worker.py'},
+   {chapter:2,nodes:['worker','bridge','gateway','browser'],wires:['publish','subscribe','sse'],title:'StreamBridge delivers events',detail:'Worker → StreamBridge → Gateway → SSE browser stream',code:'publish(event) → subscribe() → SSE',source:'backend/app/gateway/services.py'},
+   {chapter:2,nodes:['gateway','browser'],wires:['sse'],title:'Terminal stream signal',detail:'SSE completion frame to the React client',code:'event: end\ndata: null',source:'backend/app/gateway/services.py'}
+  ];
+  const chapterEvents=[0,3,7,5,6,7,3,8];
+  const failures={
+   disconnect:{chapter:5,event:7,nodes:['browser','gateway','bridge'],wires:['subscribe','sse'],title:'SSE connection interrupted',detail:'The browser stream may disappear while the run continues. Reconnect using a cursor when available; reload durable thread state if the buffered event gap cannot be replayed.'},
+   denied:{chapter:3,event:5,nodes:['worker','tools'],wires:['toolcall'],title:'Tool execution denied',detail:'A model can propose an action, but execution-time permissions can stop it. Do not assume that a denied tool has made an external change.'},
+   crash:{chapter:6,event:3,nodes:['gateway','worker','db'],wires:['task','sql'],title:'Worker interrupted or ownership stale',detail:'A lease detects stale ownership, not the outcome of external side effects. Reconcile state and tool outcomes before deciding whether to retry.'}
+  };
+  type Failure = 'normal'|'disconnect'|'denied'|'crash';
+  type Depth = 'overview'|'components'|'code';
+  let current=0,selectedEvent=0,depth:Depth='components',failure:Failure='normal',focus:'chapter'|'event'='chapter';
+  let timer:number|undefined;
+  const clamp=(v:number,max:number)=>Number.isInteger(v)?Math.max(0,Math.min(max,v)):0;
   const revealStory=()=>{
-   const chapterNav=root.querySelector<HTMLElement>('.chapters');
-   if(!chapterNav)return;
-   const reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-   chapterNav.scrollIntoView({block:'start',behavior:reduce?'auto':'smooth'});
+   const nav=root.querySelector<HTMLElement>('.chapters');if(!nav)return;
+   nav.scrollIntoView({block:'start',behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
   };
   const stop=()=>{if(timer!==undefined){clearInterval(timer);timer=undefined;}play.setAttribute('aria-pressed','false');play.querySelector('span')!.textContent='Play story';};
-  const show=(n:number)=>{
-   current=Math.max(0,Math.min(7,n));root.dataset.scene=String(current);
+  const syncTimeline=()=>{
+   document.dispatchEvent(new CustomEvent('deerflow:trace-set',{detail:{index:selectedEvent}}));
+  };
+  const syncUrl=()=>{
+   const url=new URL(location.href);
+   url.searchParams.set('chapter',String(current+1));
+   url.searchParams.set('event',String(selectedEvent+1));
+   url.searchParams.set('depth',depth);
+   url.searchParams.set('view',focus);
+   if(failure==='normal')url.searchParams.delete('failure');
+   else url.searchParams.set('failure',failure);
+   history.replaceState(null,'',url.pathname+url.search+url.hash);
+  };
+  const render=(writeUrl=true,syncTrace=true)=>{
+   root.dataset.scene=String(current);root.dataset.depth=depth;
    tabs.forEach((b,i)=>{b.classList.toggle('selected',i===current);b.setAttribute('aria-pressed',String(i===current));});
-   panels.forEach((p,i)=>{p.hidden=i!==current;});mobile.forEach((m,i)=>{m.hidden=i!==current;});
+   panels.forEach((p,i)=>{p.hidden=i!==current;});
+   mobile.forEach((p,i)=>{p.hidden=i!==current;});
    illustrations.forEach(el=>{el.hidden=Number(el.dataset.vignette)!==current;});
    protocolExamples.forEach(el=>{el.hidden=Number(el.dataset.storyExample)!==current;});
-   nodes.forEach(n=>n.classList.toggle('on',activeNodes[current].includes(n.dataset.node||'')));
-   wires.forEach(w=>w.classList.toggle('on',activeWires[current].includes(w.dataset.wire||'')));
-   counter.textContent='0'+(current+1)+' / 08';meterLabel.textContent=counter.textContent;
+   const fault=failure==='normal'?null:failures[failure];
+   const diagram=fault||(focus==='event'?traceEvents[selectedEvent]:chapters[current]);
+   nodes.forEach(n=>n.classList.toggle('on',diagram.nodes.includes(n.dataset.node||'')));
+   wires.forEach(w=>w.classList.toggle('on',diagram.wires.includes(w.dataset.wire||'')));
+   depthButtons.forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.depthButton===depth)));
+   failureButtons.forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.failureButton===failure)));
+   if(focusIndex)focusIndex.textContent=focus==='event'||fault?'EVENT '+String(selectedEvent+1).padStart(2,'0')+' / 09':'CHAPTER '+String(current+1).padStart(2,'0')+' / 08';
+   if(focusTitle)focusTitle.textContent=fault?fault.title:focus==='event'?traceEvents[selectedEvent].title:'System view · '+(tabs[current]?.querySelector('strong')?.textContent||'');
+   if(focusDescription)focusDescription.textContent=fault?fault.detail:traceEvents[selectedEvent].detail;
+   if(codeFocus)codeFocus.hidden=depth!=='code';
+   if(codeLine)codeLine.textContent=traceEvents[selectedEvent].code;
+   if(codeSource)codeSource.href=(root.dataset.sourceRoot||'')+traceEvents[selectedEvent].source;
+   if(failureBox)failureBox.hidden=!fault;
+   if(failureTitle)failureTitle.textContent=fault?.title||'';
+   if(failureDescription)failureDescription.textContent=fault?.detail||'';
+   counter.textContent=String(current+1).padStart(2,'0')+' / 08';
+   meterLabel.textContent=counter.textContent;
    progress.setAttribute('aria-valuenow',String(current+1));meter.style.width=((current+1)/8*100)+'%';
    prev.disabled=current===0;next.disabled=current===7;
+   if(syncTrace)syncTimeline();
+   if(writeUrl)syncUrl();
   };
-  tabs.forEach((b,i)=>b.addEventListener('click',()=>{stop();show(i);revealStory();}));
-  prev.addEventListener('click',()=>{stop();show(current-1);revealStory();});
-  next.addEventListener('click',()=>{stop();show(current+1);revealStory();});
-  play.addEventListener('click',()=>{if(timer!==undefined){stop();return;}if(current===7)show(0);revealStory();
-   play.setAttribute('aria-pressed','true');play.querySelector('span')!.textContent='Pause';
-   timer=window.setInterval(()=>{if(current===7){stop();return;}show(current+1);if(current===7)stop();},4200);
+  const chooseChapter=(n:number,scroll=true)=>{
+   stop();current=clamp(n,7);selectedEvent=chapterEvents[current];focus='chapter';failure='normal';
+   render();if(scroll)revealStory();
+  };
+  const chooseEvent=(n:number)=>{
+   stop();selectedEvent=clamp(n,8);current=traceEvents[selectedEvent].chapter;focus='event';failure='normal';
+   render(true,false); // Trace widget has already updated its own selection.
+  };
+  const chooseFailure=(value:Failure)=>{
+   stop();failure=value;
+   if(value==='normal'){focus='chapter';selectedEvent=chapterEvents[current];}
+   else{const fault=failures[value];current=fault.chapter;selectedEvent=fault.event;focus='event';}
+   render();
+  };
+  tabs.forEach((b,i)=>b.addEventListener('click',()=>chooseChapter(i)));
+  prev.addEventListener('click',()=>chooseChapter(current-1));
+  next.addEventListener('click',()=>chooseChapter(current+1));
+  depthButtons.forEach(b=>b.addEventListener('click',()=>{depth=(b.dataset.depthButton||'components') as Depth;render();}));
+  failureButtons.forEach(b=>b.addEventListener('click',()=>{chooseFailure((b.dataset.failureButton||'normal') as Failure);const menu=b.closest<HTMLDetailsElement>('details');if(menu)menu.open=false;}));
+  document.addEventListener('deerflow:trace-selected',(e:Event)=>{
+   const index=(e as CustomEvent<{index:number}>).detail?.index;
+   if(typeof index==='number')chooseEvent(index);
+  });
+  play.addEventListener('click',()=>{
+   if(timer!==undefined){stop();return;}
+   if(current===7){current=0;selectedEvent=0;focus='chapter';failure='normal';render();}
+   revealStory();play.setAttribute('aria-pressed','true');play.querySelector('span')!.textContent='Pause';
+   timer=window.setInterval(()=>{
+    if(current===7){stop();return;}
+    current++;selectedEvent=chapterEvents[current];focus='chapter';failure='normal';render();
+    if(current===7)stop();
+   },4200);
+  });
+  if(share)share.addEventListener('click',async()=>{
+   syncUrl();
+   try{await navigator.clipboard.writeText(location.href);
+    const label=share.querySelector<HTMLElement>('span');
+    if(label)label.textContent='Link copied';
+   }catch{const label=share.querySelector<HTMLElement>('span');if(label)label.textContent='Copy URL from address bar';}
   });
   document.addEventListener('visibilitychange',()=>{if(document.hidden)stop();});
   tabs.forEach(b=>b.addEventListener('keydown',e=>{
    if(e.key!=='ArrowRight'&&e.key!=='ArrowLeft')return;
-   e.preventDefault();stop();const index=e.key==='ArrowRight'?(current+1)%8:(current+7)%8;show(index);tabs[index]?.focus();revealStory();
+   e.preventDefault();const i=e.key==='ArrowRight'?(current+1)%8:(current+7)%8;
+   chooseChapter(i);tabs[i]?.focus();
   }));
-  show(0);
+  const loadUrl=()=>{
+   const p=new URLSearchParams(location.search);
+   const d=p.get('depth');depth=d==='overview'||d==='code'?d:'components';
+   const f=p.get('failure');failure=f==='disconnect'||f==='denied'||f==='crash'?f:'normal';
+   current=clamp(Number(p.get('chapter')||1)-1,7);
+   selectedEvent=clamp(Number(p.get('event')||chapterEvents[current]+1)-1,8);
+   focus=p.get('view')==='event'?'event':'chapter';
+   if(failure!=='normal'){const fault=failures[failure];current=fault.chapter;selectedEvent=fault.event;focus='event';}
+   else if(focus==='event')current=traceEvents[selectedEvent].chapter;
+   render(false);
+  };
+  window.addEventListener('popstate',()=>{stop();loadUrl();});
+  loadUrl();
  }
 </script>

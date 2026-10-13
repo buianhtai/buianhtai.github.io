@@ -48,6 +48,35 @@ try {
       assert.equal(await trace.locator('[data-trace-forward]').isDisabled(),true,'Final trace event stops navigation');
       await trace.locator('[data-trace-event="0"]').click();
       assert.equal(await trace.locator('[data-trace-back]').isDisabled(),true,'First trace event disables back');
+      // The timeline and the stable architecture map must share one focus.
+      await trace.locator('[data-trace-event="5"]').click();
+      assert.equal(await root.locator('[data-scene-tab="3"]').getAttribute('aria-pressed'),'true','Tool event focuses the agent chapter');
+      assert.equal(String(await root.locator('[data-node="tools"]').getAttribute('class')).split(/\s+/).includes('on'),true,'Tool adapter highlighted');
+      assert.equal(String(await root.locator('[data-wire="toolcall"]').getAttribute('class')).split(/\s+/).includes('on'),true,'Authorized tool edge highlighted');
+      assert.equal(new URL(page.url()).searchParams.get('event'),'6','Shareable URL preserves selected event');
+      await root.locator('[data-depth-button="overview"]').click();
+      assert.equal(await root.getAttribute('data-depth'),'overview','Overview emphasizes boundaries');
+      await root.locator('[data-depth-button="code"]').click();
+      assert.equal(await root.locator('[data-code-focus]').isVisible(),true,'Code depth reveals method and source');
+      assert.equal(new URL(page.url()).searchParams.get('depth'),'code','Depth persists into shared URL');
+      await root.locator('[data-depth-button="components"]').click();
+      assert.equal(await root.locator('[data-code-focus]').isVisible(),false,'Components depth hides code stripe');
+      await root.locator('.scenario-picker summary').click();
+      await root.locator('[data-failure-button="denied"]').click();
+      assert.equal(await root.locator('[data-failure-explanation]').isVisible(),true,'Denied tool scenario teaches recovery boundary');
+      assert.equal(new URL(page.url()).searchParams.get('failure'),'denied','Scenario persists in URL');
+      await root.locator('.scenario-picker summary').click();
+      await root.locator('[data-failure-button="crash"]').click();
+      assert.equal(await root.locator('[data-scene-tab="6"]').getAttribute('aria-pressed'),'true','Worker failure maps to recovery chapter');
+      await root.locator('.scenario-picker summary').click();
+      await root.locator('[data-failure-button="disconnect"]').click();
+      assert.equal(await root.locator('[data-scene-tab="5"]').getAttribute('aria-pressed'),'true','Disconnect maps to reconnect chapter');
+      await root.locator('.scenario-picker summary').click();
+      await root.locator('[data-failure-button="normal"]').click();
+      assert.equal(await root.locator('[data-failure-explanation]').isVisible(),false,'Normal scenario hides failure explanation');
+      await root.locator('[data-scene-tab="0"]').click();
+      assert.equal(String(await root.locator('[data-node="tools"]').getAttribute('class')).split(/\s+/).includes('on'),false,'Chapter selection restores broad chapter focus');
+
 
       assert.equal(await root.locator('[data-story-example]:visible').count(),1,'Intro has one readable request/response example');
       assert.equal(await root.locator('[data-story-panel]:visible').count(),1,'Only one scene narration is visible');
@@ -131,6 +160,16 @@ try {
       assert.equal(await expandedInspector.getAttribute('open'),null,'Default review image should present the closed inspector');
       await page.evaluate(() => window.scrollTo(0,0));
       await root.screenshot({path:out+'/story-'+theme+'-'+width+'.png', animations:'disabled'});
+
+      if (width === 390 || width === 1440) {
+        await page.goto(host+path+'?chapter=7&event=4&depth=code&view=event&failure=crash',{waitUntil:'domcontentloaded'});
+        assert.equal(await root.getAttribute('data-depth'),'code','Deep link restores implementation depth');
+        assert.equal(await root.locator('[data-scene-tab="6"]').getAttribute('aria-pressed'),'true','Deep link restores recovery chapter');
+        assert.equal(await root.locator('[data-failure-explanation]').isVisible(),true,'Deep link restores failure scenario');
+        assert.equal(await root.locator('[data-trace-event="3"]').getAttribute('aria-pressed'),'true','Deep link restores synchronized timeline event');
+        const deeplinkDims=await page.evaluate(()=>[document.documentElement.scrollWidth,document.documentElement.clientWidth]);
+        assert(deeplinkDims[0]<=deeplinkDims[1]+2,'Deep-linked view must not overflow');
+      }
       await context.close();
     }
   }
