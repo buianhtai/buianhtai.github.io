@@ -211,6 +211,9 @@ jobs:
         run: |
           npm install --no-save --no-package-lock playwright@1.56.1
           npx playwright install chromium
+      - name: Verify Light/Dark mode by clicking and capture screenshots
+        timeout-minutes: 3
+        run: node scripts/deerflow-theme-visual-check.mjs
       - name: Run visual checks and capture screenshots
         timeout-minutes: 2
         run: node scripts/editorial-visual-check.mjs
@@ -229,6 +232,14 @@ jobs:
       - name: Render C4 architecture diagrams in Chromium
         timeout-minutes: 5
         run: node scripts/eventcatalog-diagram-smoke.mjs
+
+      - name: Upload DeerFlow light and dark screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deerflow-code-theme-comparison
+          path: artifacts/deerflow-theme/
+          if-no-files-found: warn
 
       - name: Upload unpublished DeerFlow story prototype screenshots
         if: always()

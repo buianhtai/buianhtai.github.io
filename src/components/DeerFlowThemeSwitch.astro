@@ -1,0 +1,40 @@
+<div class="deerflow-theme-switch" data-deerflow-theme-switch role="group" aria-label="Choose color theme">
+  <span class="deerflow-theme-label">DISPLAY</span>
+  <button type="button" data-theme-mode="light" aria-label="Use light mode" aria-pressed="false"><span aria-hidden="true">☀</span> Light</button>
+  <button type="button" data-theme-mode="dark" aria-label="Use dark mode" aria-pressed="true"><span aria-hidden="true">☾</span> Dark</button>
+</div>
+<script is:inline>
+  (() => {
+    const switches = [...document.querySelectorAll('[data-deerflow-theme-switch]')];
+    if (!switches.length) return;
+    const root = document.documentElement;
+    function sync() {
+      const light = root.classList.contains('theme-light');
+      switches.forEach(group => group.querySelectorAll('[data-theme-mode]').forEach(button => {
+        button.setAttribute('aria-pressed', String((button.dataset.themeMode === 'light') === light));
+      }));
+    }
+    switches.forEach(group => group.querySelectorAll('[data-theme-mode]').forEach(button => {
+      button.addEventListener('click', () => {
+        const light = button.dataset.themeMode === 'light';
+        root.classList.toggle('theme-light', light);
+        root.classList.toggle('f-light-palette', light);
+        try { localStorage.setItem('theme', light ? 'light' : 'terminal'); } catch {}
+        root.dispatchEvent(new Event('theme-change', { bubbles:true }));
+        document.dispatchEvent(new Event('theme-change'));
+        sync();
+      });
+    }));
+    document.addEventListener('theme-change', sync);
+    window.addEventListener('storage', sync);
+    sync();
+  })();
+</script>
+<style>
+  .deerflow-theme-switch {display:flex;gap:4px;align-items:center;padding:5px;border:1px solid var(--color-border,#365064);background:var(--color-surface,#132438);border-radius:10px;color:var(--color-text,#f1f6fa);width:max-content;max-width:100%}
+  .deerflow-theme-label {padding:0 9px;font:700 10px ui-monospace,monospace;letter-spacing:.08em;color:var(--color-text-dim,#a6bcca)}
+  .deerflow-theme-switch button {border:1px solid transparent;border-radius:7px;padding:9px 12px;min-height:36px;background:transparent;color:inherit;font:600 12px system-ui,sans-serif;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+  .deerflow-theme-switch button[aria-pressed="true"] {background:var(--color-accent,#70ded0);color:var(--color-bg,#0c1725);font-weight:800}
+  .deerflow-theme-switch button:focus-visible {outline:3px solid var(--color-accent,#70ded0);outline-offset:3px}
+  @media(max-width:430px){.deerflow-theme-label{display:none}.deerflow-theme-switch button{padding:8px 10px}}
+</style>

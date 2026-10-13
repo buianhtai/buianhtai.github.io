@@ -1,11 +1,12 @@
 ---
 import BaseLayout from '../../../layouts/BaseLayout.astro';
+import DeerFlowThemeSwitch from '../../../components/DeerFlowThemeSwitch.astro';
 const rev = '1f15e0b43ca58b9601514f9f5c408fb032022833';
 ---
 <BaseLayout title="DeerFlow Code Flow Lab — Control Paths & State Writes" description="Source-generated control paths, exception handlers, assignments and possible external effects in DeerFlow Python functions.">
 <main class="cf-page" data-codeflow data-upstream={'https://github.com/bytedance/deer-flow/blob/'+rev+'/'}>
  <header class="cf-hero">
-  <a href="/en/labs/deerflow-source-atlas/">← Source Atlas</a>
+  <div class="code-lab-theme-row" style="display:flex;justify-content:space-between;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:22px"><a href="/en/labs/deerflow-source-atlas/">← Source Atlas</a><DeerFlowThemeSwitch /></div>
   <p class="cf-kicker">DEERFLOW / CODE EXECUTION ANATOMY</p>
   <h1>Look <em>inside</em> a function.</h1>
   <p>Explore source-derived decisions, exception handling, loop paths and state changes. Select a code node to see its exact source location. This is a structural AST diagram—not a fabricated runtime trace.</p>

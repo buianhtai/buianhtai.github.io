@@ -18,11 +18,14 @@
       const root = document.documentElement;
       const light = !root.classList.contains('theme-light');
       root.classList.toggle('theme-light', light);
-      localStorage.setItem('theme', light ? 'light' : 'terminal');
+      root.classList.toggle('f-light-palette', light);
+      try { localStorage.setItem('theme', light ? 'light' : 'terminal'); } catch {}
       root.dispatchEvent(new Event('theme-change', { bubbles:true }));
       document.dispatchEvent(new Event('theme-change'));
       sync();
     });
+    document.addEventListener('theme-change', sync);
+    window.addEventListener('pageshow', sync);
     sync();
   })();
 </script>
