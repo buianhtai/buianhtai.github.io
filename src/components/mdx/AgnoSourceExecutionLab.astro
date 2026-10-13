@@ -1,0 +1,84 @@
+---
+const commit = '1f2aac51eb28dc9c0970836d3b7ae046bae81bbb';
+---
+<section id="agno-source-lab" class="sl" aria-label="Agno source execution and recovery explorer">
+  <header class="sl-head">
+    <div><p class="sl-kicker">SOURCE-LEVEL RUNTIME LAB</p><h3>Follow a request. Inspect the code. Inject a failure.</h3><p>Repository-backed entry points with illustrative event consequences—not a captured trace.</p></div>
+    <span>AGNO · {commit.slice(0,8)}</span>
+  </header>
+  <div class="sl-tabs" role="group" aria-label="Execution perspective">
+    <button data-mode="stream" aria-pressed="true">HTTP → SSE</button>
+    <button data-mode="queue" aria-pressed="false">Durable queue</button>
+    <button data-mode="failure" aria-pressed="false">Fault injection</button>
+  </div>
+  <div class="sl-scenarios" role="group" aria-label="Inject a failure">
+    <button data-fault="normal" aria-pressed="true">Normal</button>
+    <button data-fault="disconnect" aria-pressed="false">Client disconnect</button>
+    <button data-fault="crash" aria-pressed="false">Worker crash</button>
+    <button data-fault="late" aria-pressed="false">Stale completion</button>
+  </div>
+  <div class="sl-layout">
+    <div class="sl-left">
+      <p class="sl-subhead">EXECUTION GRAPH <span id="sl-counter">01 / 04</span></p>
+      <div id="sl-graph" class="sl-graph" aria-label="Interactive ordered execution steps"></div>
+      <div class="sl-nav">
+        <button id="sl-prev">← Previous</button>
+        <input id="sl-scrub" aria-label="Scrub execution sequence" type="range" min="0" max="3" value="0">
+        <button id="sl-next">Next →</button>
+      </div>
+      <div class="sl-status"><span id="sl-verdict">Normal streaming path</span><small id="sl-caveat">Source-linked flow and explanatory notes</small></div>
+    </div>
+    <aside class="sl-detail" aria-live="polite">
+      <small>SELECTED SOURCE ENTRY POINT</small>
+      <h4 id="sl-title">Request router</h4>
+      <code id="sl-symbol">agent_response_streamer</code>
+      <p id="sl-description">Run endpoint transports messages and events.</p>
+      <dl><dt>Execution implication</dt><dd id="sl-effect"></dd><dt>Data / ownership</dt><dd id="sl-state"></dd></dl>
+      <a id="sl-link" href="https://github.com/agno-agi/agno" target="_blank" rel="noopener noreferrer">Inspect exact implementation ↗</a>
+    </aside>
+  </div>
+  <footer class="sl-footer">
+    <b>Evidence boundary:</b> source paths and named symbols were inspected at the pinned revision. The displayed cross-component sequences and failure scenarios are explanatory models; they are not runtime instrumented traces or measured guarantees. A worker-crash retry may repeat external side effects.
+  </footer>
+</section>
+<style>
+.sl{--sb:var(--color-surface,#101d2c);--sp:var(--color-surface-2,#1b2b3b);--st:var(--color-text,#edf4fc);--sm:var(--color-text-dim,#9daebe);--sr:var(--color-border,#3d5063);--sa:var(--color-accent,#4acbbb);position:relative;left:50%;transform:translateX(-50%);width:min(1100px,calc(100vw - 28px));max-width:none!important;margin:2rem 0;border:1px solid var(--sr);border-radius:18px;overflow:hidden;background:var(--sb);color:var(--st);font-family:inherit;box-shadow:0 16px 40px #00000012}
+.sl *{box-sizing:border-box}.sl-head{padding:23px;display:flex;justify-content:space-between;gap:12px}.sl-head h3{font-size:1.5rem;margin:5px 0}.sl-head p{margin:0;color:var(--sm);font-size:.85rem}.sl-head>span{font:700 .72rem ui-monospace,monospace;color:var(--sm);white-space:nowrap}.sl-kicker{font:700 .67rem ui-monospace,monospace!important;color:var(--sa)!important;letter-spacing:.1em}.sl-tabs,.sl-scenarios{display:flex;flex-wrap:wrap;gap:6px;padding:13px 17px;border-top:1px solid var(--sr)}.sl-scenarios{background:color-mix(in srgb,var(--sa) 5%,var(--sb))}.sl button{border:1px solid var(--sr);border-radius:8px;background:var(--sp);color:var(--st);font-size:.78rem;padding:9px 12px;cursor:pointer}.sl button[aria-pressed=true]{border-color:var(--sa);color:var(--sa);background:color-mix(in srgb,var(--sa) 10%,var(--sb))}.sl button:focus-visible,.sl a:focus-visible,.sl input:focus-visible{outline:2px solid var(--sa);outline-offset:3px}.sl-layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:12px;padding:16px}.sl-left,.sl-detail{border:1px solid var(--sr);background:var(--sp);border-radius:11px;min-width:0}.sl-left{padding:16px}.sl-subhead{margin:0 0 14px!important;display:flex;justify-content:space-between;color:var(--sm);font:700 .71rem ui-monospace,monospace;letter-spacing:.06em}.sl-graph{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}.sl-stage{min-width:0;min-height:129px;padding:13px 10px!important;display:flex;align-items:flex-start;flex-direction:column;gap:9px;text-align:left;border-radius:9px!important;position:relative}.sl-stage:not(:last-child):after{content:'→';position:absolute;right:-11px;top:51px;color:var(--sa);z-index:2;background:var(--sp);padding:2px;font-size:1rem}.sl-stage strong{font-size:.84rem}.sl-stage small{color:var(--sm);font-size:.7rem;line-height:1.45}.sl-stage em{font:700 .68rem ui-monospace,monospace;font-style:normal;color:var(--sa)}.sl-stage[aria-pressed=true]{border:2px solid var(--sa);background:var(--sb)}.sl-nav{display:flex;gap:9px;align-items:center;margin-top:17px}.sl-nav input{min-width:40px;flex:1;accent-color:var(--sa)}.sl-status{padding:14px;background:var(--sb);border:1px solid var(--sr);margin-top:13px;border-radius:8px}.sl-status span{font-weight:700;font-size:.82rem;display:block}.sl-status small{color:var(--sm);font-size:.73rem;display:block;margin-top:5px;line-height:1.5}.sl-detail{padding:18px;display:flex;align-items:start;flex-direction:column;gap:12px}.sl-detail>small{font:700 .68rem ui-monospace,monospace;color:var(--sa)}.sl-detail h4{margin:0;font-size:1.18rem}.sl-detail>code{font:.78rem ui-monospace,monospace;background:var(--sb);padding:8px;border-radius:6px;max-width:100%;overflow-wrap:anywhere}.sl-detail p{font-size:.8rem;color:var(--sm);line-height:1.6;margin:0}.sl-detail dl{display:grid;gap:8px;margin:0}.sl-detail dt{font:.67rem ui-monospace,monospace;color:var(--sa);text-transform:uppercase}.sl-detail dd{font-size:.78rem;color:var(--sm);line-height:1.5;margin:0}.sl-detail a{font-size:.77rem;color:var(--sa);margin-top:auto;overflow-wrap:anywhere}.sl-footer{padding:13px 20px;border-top:1px solid var(--sr);color:var(--sm);font-size:.73rem;line-height:1.6}@media(max-width:840px){.sl-layout{grid-template-columns:1fr}.sl-graph{grid-template-columns:repeat(2,minmax(0,1fr))}.sl-stage:not(:last-child):after{content:none}.sl-head{flex-wrap:wrap}}@media(max-width:420px){.sl-stage{min-height:155px}.sl-nav{flex-wrap:wrap}.sl-nav input{order:-1;flex-basis:100%}}
+</style>
+<script>
+(()=>{
+const root=document.querySelector('#agno-source-lab');if(!root||root.dataset.ready==='1')return;root.dataset.ready='1';
+const get=id=>root.querySelector('#'+id);
+const source='https://github.com/agno-agi/agno/blob/1f2aac51eb28dc9c0970836d3b7ae046bae81bbb/libs/agno/agno/';
+const items={
+stream:[
+ ['HTTP request','FastAPI route','Request router','agent_response_streamer','AgentOS agent run router prepares streaming response.','Inline SSE generator directly executes the agent; client disconnect cancels this inline execution path.','Client connection is not durable job ownership.','os/routers/agents/router.py'],
+ ['Invoke agent','Python async','Agent invocation','agent.arun','A registered agent executes async from the endpoint.','The runtime can generate events while model/tool work is underway.','Configured session storage is separate from the SSE socket.','os/routers/agents/router.py'],
+ ['Compose context','Agent modules','Agent implementation','Agent','Agent functionality is decomposed into run, messages, tools and session modules.','Model context and tool affordances are assembled under agent configuration.','Application tool permissions remain an application concern.','agent/agent.py'],
+ ['Stream events','SSE response','Run event transport','agent_response_streamer','AgentOS yields model or tool run events to the client.','Disconnect semantics depend on inline versus background execution.','SSE is a transport, not a durable queue.','os/routers/agents/router.py']
+],
+queue:[
+ ['Accept ticket','DB commit','Queue configuration','QueueConfig','Durable background mode commits a serializable job ticket.','Acceptance is a persistent row before HTTP 202 is returned.','Queue ticket id matches run_id by contract.','job_queue/config.py'],
+ ['Claim work','Lease','Durable queue worker','QueueWorker','Worker claims eligible jobs across replicas.','PostgreSQL uses SKIP LOCKED claiming, with lease time based on database clock.','(locked_by, attempt) identifies execution owner.','os/job_queue.py'],
+ ['Execute','Worker runtime','Agent execution','QueueWorker','Worker resolves the component and executes it.','Heartbeat refreshes lease while work continues.','The tool may cause external side effects outside the database transaction.','os/job_queue.py'],
+ ['Settle','Fenced update','Durable job status','QueuedJob','Terminal writes use worker ownership and attempt fencing.','An old worker cannot overwrite a newer attempt result.','The job can complete, fail, cancel or pause.','db/schemas/jobs.py']
+],
+failure:[
+ ['Owned job','Locked ticket','Durable queue worker','QueueWorker','A durable ticket is in running state and owned by a worker.','Lease-based ownership is not the same as exactly-once tool execution.','DB stores current owner and attempt.','os/job_queue.py'],
+ ['Inject failure','Process interruption','Queue persistence','QueuedJob','A process crash can occur after external effects but before terminal persistence.','The system cannot infer whether an external write occurred from a timeout alone.','Unknown downstream state is an application-level recovery problem.','db/schemas/jobs.py'],
+ ['Reclaim / fail','Policy decision','Retry configuration','QueueConfig.max_attempts','Stale jobs are swept or reclaimed according to retry policy.','Default max_attempts=1 avoids silent re-execution of a potentially non-idempotent run.','Setting attempts above 1 permits automatic replay.','job_queue/config.py'],
+ ['Fence result','Attempt generation','Durable worker settle','QueueWorker','Old execution completion is rejected if its generation is stale.','Fencing protects the queue/run state, not irreversible downstream effects.','Reconcile external writes before reissuing them.','os/job_queue.py']
+]};
+const faults={
+normal:['Normal execution','Selected call path runs without injected interruption.'],
+disconnect:['Client disconnect','In inline SSE, the generator documents cancellation on disconnect. In durable background mode the run can continue independently of the socket.'],
+crash:['Worker crash','Worker lease goes stale; max_attempts policy decides visible failure versus re-execution. A downstream write may already have committed.'],
+late:['Stale completion','An old attempt can finish after reassignment. Ownership/attempt fencing rejects the old queue settlement; external effects still require reconciliation.']
+};
+let mode='stream',fault='normal',idx=0;
+function render(){const steps=items[mode],s=steps[idx],f=faults[fault];get('sl-counter').textContent=String(idx+1).padStart(2,'0')+' / '+String(steps.length).padStart(2,'0');get('sl-title').textContent=s[2];get('sl-symbol').textContent=s[3];get('sl-description').textContent=s[4];get('sl-effect').textContent=s[5];get('sl-state').textContent=s[6];get('sl-link').href=source+s[7];get('sl-scrub').max=steps.length-1;get('sl-scrub').value=idx;get('sl-verdict').textContent=f[0];get('sl-caveat').textContent=f[1];const host=get('sl-graph');host.replaceChildren();steps.forEach((n,i)=>{const b=document.createElement('button');b.className='sl-stage';b.type='button';b.setAttribute('aria-pressed',String(i===idx));const num=document.createElement('em'),title=document.createElement('strong'),detail=document.createElement('small');num.textContent=String(i+1).padStart(2,'0')+' / '+n[1];title.textContent=n[0];detail.textContent=n[3];b.append(num,title,detail);b.addEventListener('click',()=>{idx=i;render()});host.append(b)})}
+for(const b of root.querySelectorAll('[data-mode]'))b.addEventListener('click',()=>{mode=b.dataset.mode;idx=0;root.querySelectorAll('[data-mode]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));render()});
+for(const b of root.querySelectorAll('[data-fault]'))b.addEventListener('click',()=>{fault=b.dataset.fault;root.querySelectorAll('[data-fault]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));render()});
+get('sl-prev').addEventListener('click',()=>{idx=Math.max(0,idx-1);render()});get('sl-next').addEventListener('click',()=>{idx=Math.min(items[mode].length-1,idx+1);render()});get('sl-scrub').addEventListener('input',e=>{idx=Number(e.target.value);render()});render();
+})();
+</script>
