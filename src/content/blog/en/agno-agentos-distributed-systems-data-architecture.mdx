@@ -15,6 +15,7 @@ postLayout: "foundations"
 import Label from '../../../components/mdx/Label.astro';
 import Callout from '../../../components/mdx/Callout.astro';
 import AgnoDistributedLab from '../../../components/mdx/AgnoDistributedLab.astro';
+import AgnoSourceExecutionLab from '../../../components/mdx/AgnoSourceExecutionLab.astro';
 
 A single agent request is relatively simple to explain: receive a message, construct a model prompt, optionally execute tools, return the result. The architecture gets more interesting when requests arrive on different replicas, long-running work continues after disconnection, the database becomes a shared coordination point, and a retry might repeat a real business operation.
 
@@ -31,6 +32,12 @@ The analysis is pinned to [Agno commit 1f2aac5](https://github.com/agno-agi/agno
 Use the lab to inspect the boundaries. Start with **Architecture**, select Replica B, PostgreSQL, and Redis, then switch to **Worker lifecycle** and test Worker crash and SSE reconnect. The **Data model** view shows verified schema relationships, and the **Scaling model** is an explicit arithmetic experiment, not reported runtime throughput.
 
 <AgnoDistributedLab />
+
+### Source execution and failure lab
+
+The following explorer adds a second, code-oriented perspective. It follows verified source entry points for **inline SSE**, **durable queue execution**, and **recovery logic**, then overlays controlled failure scenarios. It is an explanatory source graph, not a dynamically captured Python stack trace.
+
+<AgnoSourceExecutionLab />
 
 ## <Label color="teal">02</Label> Is AgentOS a microservice architecture?
 

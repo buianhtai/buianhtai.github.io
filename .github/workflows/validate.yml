@@ -223,6 +223,9 @@ jobs:
       - name: Verify Agno distributed architecture article interactions
         timeout-minutes: 3
         run: node scripts/agno-distributed-visual-check.mjs
+      - name: Verify Agno source execution and failure explorer
+        timeout-minutes: 3
+        run: node scripts/agno-source-lab-visual-check.mjs
       - name: Render DeerFlow article diagrams and capture responsive screenshots
         timeout-minutes: 3
         run: node scripts/deerflow-diagram-visual-check.mjs
