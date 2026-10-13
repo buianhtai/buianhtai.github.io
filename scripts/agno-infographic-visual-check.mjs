@@ -36,10 +36,10 @@ try{
     assert.equal(await lab.locator('#ai-lines').getAttribute('aria-pressed'),'false','Essential lines are the initial view');
 
     const firstEdge=lab.locator('[data-link="client-edge"]');
-    const opacityBefore=await firstEdge.evaluate(el=>getComputedStyle(el).opacity);
+    const opacityBefore=await firstEdge.evaluate(el=>el.style.opacity);
     await lab.locator('#ai-lines').click();
     assert.equal(await lab.locator('#ai-lines').getAttribute('aria-pressed'),'true');
-    const opacityAll=await firstEdge.evaluate(el=>getComputedStyle(el).opacity);
+    const opacityAll=await firstEdge.evaluate(el=>el.style.opacity);
     assert.notEqual(opacityAll,opacityBefore,'All connections mode changes visible link strength');
     await lab.locator('#ai-lines').click();
 
@@ -56,6 +56,7 @@ try{
     assert.match(await lab.locator('#ai-selected-detail').innerText(),/model/i);
     assert((await lab.locator('.ai-edge.is-active').count())>=3,'Focused relations highlighted');
     assert((await lab.locator('.ai-rel-link').count())>=3,'Inspectable relation list');
+    assert.equal(await lab.locator('.ai-rel-link').first().evaluate(el=>getComputedStyle(el).display),'flex','Dynamic relation cards inherit scoped styles');
     assert.match(await lab.locator('#ai-source').getAttribute('href'),/1f2aac51eb28dc9c0970836d3b7ae046bae81bbb/);
 
     await lab.locator('.ai-filter [data-layer="data"]').click();
