@@ -15,6 +15,7 @@ postLayout: "foundations"
 import Label from '../../../components/mdx/Label.astro';
 import Callout from '../../../components/mdx/Callout.astro';
 import AgnoDistributedLab from '../../../components/mdx/AgnoDistributedLab.astro';
+import AgnoArchitectureInfographic from '../../../components/mdx/AgnoArchitectureInfographic.astro';
 import AgnoSourceExecutionLab from '../../../components/mdx/AgnoSourceExecutionLab.astro';
 
 A single agent request is relatively simple to explain: receive a message, construct a model prompt, optionally execute tools, return the result. The architecture gets more interesting when requests arrive on different replicas, long-running work continues after disconnection, the database becomes a shared coordination point, and a retry might repeat a real business operation.
@@ -27,7 +28,15 @@ The analysis is pinned to [Agno commit 1f2aac5](https://github.com/agno-agi/agno
   **Mental model:** AgentOS can be replicated like an application service, but its Python modules are not automatically separate microservices. The scaling problem is about identifying which state must be shared, who owns a run, how events travel between replicas, and which guarantees survive a crash.
 </Callout>
 
-## <Label color="teal">01</Label> Explore the distributed architecture
+## <Label color="teal">01</Label> The full architecture at a glance
+
+Before tracing an individual request, use this complete system map. It separates **deployment boundaries** from **Python module boundaries**, shows the relationship types between the important components, and lets you focus on one subsystem without losing the whole picture.
+
+Select an API router, worker, model, or database to illuminate its direct dependencies and open the supporting source. Use **Direct answer**, **Tool execution**, **Durable background**, **Reconnect / SSE**, and **Worker recovery** to follow representative paths through the same shared architecture. Use **Fit** to see the entire poster at once; scroll or zoom for details on mobile.
+
+<AgnoArchitectureInfographic />
+
+## <Label color="teal">02</Label> Focused technical labs
 
 Use the lab to inspect the boundaries. Start with **Architecture**, select Replica B, PostgreSQL, and Redis, then switch to **Worker lifecycle** and test Worker crash and SSE reconnect. The **Data model** view shows verified schema relationships, and the **Scaling model** is an explicit arithmetic experiment, not reported runtime throughput.
 
@@ -39,7 +48,7 @@ The following explorer adds a second, code-oriented perspective. It follows veri
 
 <AgnoSourceExecutionLab />
 
-## <Label color="teal">02</Label> Is AgentOS a microservice architecture?
+## <Label color="teal">03</Label> Is AgentOS a microservice architecture?
 
 Not by definition.
 
@@ -60,7 +69,7 @@ The distinction matters. A modular monolith can be the right starting point: in-
 
 An important design rule: **start with deployable service boundaries only where independent scaling, security, or failure isolation justify the cost**. Do not turn every SDK class into an RPC service.
 
-## <Label color="teal">03</Label> Durable background execution: admission, claim, lease, and fence
+## <Label color="teal">04</Label> Durable background execution: admission, claim, lease, and fence
 
 Agno's [QueueConfig](https://github.com/agno-agi/agno/blob/1f2aac51eb28dc9c0970836d3b7ae046bae81bbb/libs/agno/agno/job_queue/config.py) separates several capabilities: a local concurrency cap, optional Redis coordination, and database-backed durability.
 
@@ -116,7 +125,7 @@ app = agent_os.get_app()
 
 In this example, the agent and database are configured separately. The numeric values are example settings, not recommended universal limits. Durable acceptance depends on the selected queue storage and its actual persistence configuration.
 
-## <Label color="teal">04</Label> Redis is a coordination channel, not the authoritative run store
+## <Label color="teal">05</Label> Redis is a coordination channel, not the authoritative run store
 
 A client submits a durable run to Replica A, Worker B executes it, and the client reconnects through Replica C. How does C find the live events?
 
@@ -138,7 +147,7 @@ When configured through QueueConfig.redis, AgentOS wires both the Redis-backed c
 
 This also suggests an operational warning: Redis Streams are not an infinite event log. A client that reconnects after a TTL or buffer window must have a fallback that understands terminal run state. If product requirements demand longer replay, that is a separate data-retention design.
 
-## <Label color="teal">05</Label> Data architecture: sessions, runs, jobs, and knowledge are not one table
+## <Label color="teal">06</Label> Data architecture: sessions, runs, jobs, and knowledge are not one table
 
 Agno v3's [storage migration guide](https://github.com/agno-agi/agno/blob/1f2aac51eb28dc9c0970836d3b7ae046bae81bbb/libs/agno/agno/db/migrations/V3_MIGRATION_GUIDE.md) describes a significant change: instead of rewriting a growing JSON list of runs inside a session row, each run is stored separately in agno_runs.
 
@@ -163,7 +172,7 @@ The point is not simply normalization for its own sake. It avoids rewriting an e
 
 **Data locality.** PostgreSQL stores operational data, Redis carries transient events, and vector retrieval may use a separate storage system. These are distinct consistency domains.
 
-## <Label color="teal">06</Label> State machines, concurrency, and human approvals
+## <Label color="teal">07</Label> State machines, concurrency, and human approvals
 
 The documented [job statuses](https://github.com/agno-agi/agno/blob/1f2aac51eb28dc9c0970836d3b7ae046bae81bbb/libs/agno/agno/db/schemas/jobs.py) are queued, running, completed, failed, cancelled, and paused. The paused state is particularly interesting: a run awaiting human input does not necessarily become a new queue ticket. A continuation can transition the **same ticket** from paused back to queued with continuation inputs merged into its payload.
 
@@ -179,7 +188,7 @@ Still, storing state is not the same as defining ownership. For each field or st
 
 Agno's queue API is an operator surface: [os/routers/job_queue/router.py](https://github.com/agno-agi/agno/blob/1f2aac51eb28dc9c0970836d3b7ae046bae81bbb/libs/agno/agno/os/routers/job_queue/router.py) restricts JWT-identified callers to administrator authority because tickets can expose payloads and user IDs across users. The security implications depend on whether and how JWT enforcement is configured; an unprotected runtime should not be exposed directly to untrusted networks.
 
-## <Label color="teal">07</Label> Multi-tenancy is more than storing a user_id
+## <Label color="teal">08</Label> Multi-tenancy is more than storing a user_id
 
 Agno provides configurable JWT authorization and per-user isolation. The [user isolation example](https://github.com/agno-agi/agno/blob/1f2aac51eb28dc9c0970836d3b7ae046bae81bbb/cookbook/05_agent_os/07_security/user_isolation.py) explicitly configures user_isolation=True and demonstrates scoped session access.
 
@@ -189,7 +198,7 @@ A strong design passes trusted principal and tenant context from API authorizati
 
 For custom script execution, use isolated workers with bounded CPU, memory, filesystem, and network access. An unconstrained shell tool running inside the main API process bypasses much of the isolation that an otherwise well-designed AgentOS deployment might provide.
 
-## <Label color="teal">08</Label> Performance: which resource saturates first?
+## <Label color="teal">09</Label> Performance: which resource saturates first?
 
 If one process can execute at most C background runs concurrently, R replicas are deployed, and the average execution time is L seconds, a deliberately simple upper bound is:
 
@@ -213,7 +222,7 @@ For a real load study, measure at least:
 
 A further subtlety comes from [QueueConfig's source comments](https://github.com/agno-agi/agno/blob/1f2aac51eb28dc9c0970836d3b7ae046bae81bbb/libs/agno/agno/job_queue/config.py): replicas sharing one queue must keep timing, retry, and retention settings consistent. A rolling deployment with mismatched lease grace or retention settings can lead to false stale-job detection or premature cleanup. Configuration rollout is a distributed-systems operation.
 
-## <Label color="teal">09</Label> Fault-injection tests before trusting production behavior
+## <Label color="teal">10</Label> Fault-injection tests before trusting production behavior
 
 Rather than evaluate the platform solely with a happy-path chat, test what the code promises.
 
@@ -232,7 +241,7 @@ Rather than evaluate the platform solely with a happy-path chat, test what the c
 
 This is the practical difference between a framework feature checklist and an engineering assessment. The tests measure actual semantics under failure.
 
-## <Label color="teal">10</Label> Which services should we extract?
+## <Label color="teal">11</Label> Which services should we extract?
 
 If I were extending an Agno-based application, I would not begin by separating every Agno module into microservices. I would start with a replicated AgentOS API/runtime and shared database, then introduce stricter boundaries only for demonstrated needs:
 
