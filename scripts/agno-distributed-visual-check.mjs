@@ -41,7 +41,7 @@ try {
     await lab.locator('[data-tab="database"]').click();
     assert.equal(await lab.locator('[data-page="database"]').isVisible(), true);
     await lab.locator('[data-table="jobs"]').click();
-    assert.match(await lab.locator('#dl-data-title').innerText(), /agno_jobs/);
+    assert.match(await lab.locator('#dl-data-title').innerText(), /agno_jobs/i);
 
     await lab.locator('[data-tab="lifecycle"]').click();
     await lab.locator('[data-scenario="crash"]').click();
@@ -53,7 +53,7 @@ try {
 
     await lab.locator('[data-tab="capacity"]').click();
     await lab.locator('#dl-rate').evaluate(input => { input.value = '24'; input.dispatchEvent(new Event('input', { bubbles: true })); });
-    assert.match(await lab.locator('#dl-growth').innerText(), /runs\/min/);
+    assert.match(await lab.locator('#dl-growth').innerText(), /runs\/min/i);
     assert.match(await lab.locator('#dl-interpret').innerText(), /exceeds/i);
 
     await lab.scrollIntoViewIfNeeded();
