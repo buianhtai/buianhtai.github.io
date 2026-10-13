@@ -1,11 +1,12 @@
 ---
 import BaseLayout from '../../../layouts/BaseLayout.astro';
+import DeerFlowThemeSwitch from '../../../components/DeerFlowThemeSwitch.astro';
 const revision = '1f15e0b43ca58b9601514f9f5c408fb032022833';
 ---
 <BaseLayout title="DeerFlow Source Atlas — Generated Code Diagrams" description="Generated from pinned Python AST: interactive function call graphs, class structures, source branches, and imports.">
 <main class="sa">
 <header class="hero">
-  <a class="back" href="/en/labs/deerflow-code-xray/">← Curated execution graph</a>
+  <div class="code-lab-theme-row" style="display:flex;justify-content:space-between;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:22px"><a class="back" href="/en/labs/deerflow-code-xray/">← Curated execution graph</a><DeerFlowThemeSwitch /></div>
   <p class="eyebrow">DEERFLOW / SOURCE CODE INTELLIGENCE</p>
   <h1>Explore the <em>implementation.</em></h1>
   <p>Real functions and relationships extracted by Python AST analysis. Select any symbol, follow its calls, inspect source branches and compare class interfaces. No hand-drawn function connections.</p>
