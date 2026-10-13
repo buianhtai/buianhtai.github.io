@@ -30,6 +30,8 @@ FILES = (
     "backend/packages/harness/deerflow/runtime/stream_bridge/base.py",
     "backend/packages/harness/deerflow/runtime/runs/schemas.py",
     "backend/packages/harness/deerflow/runtime/runs/store/base.py",
+    "backend/packages/harness/deerflow/runtime/__init__.py",
+    "backend/packages/harness/deerflow/runtime/runs/__init__.py",
 )
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 CACHE = ROOT / ".cache" / "deerflow-code-source" / REVISION
@@ -38,8 +40,10 @@ OUTPUT = ROOT / "public" / "data" / "deerflow-codegraph.generated.json"
 
 def module_name(path: str) -> str:
     if path.startswith("backend/app/"):
-        return "app." + path[len("backend/app/") : -3].replace("/", ".")
-    return "deerflow." + path.split("/deerflow/", 1)[1][:-3].replace("/", ".")
+        module = "app." + path[len("backend/app/") : -3].replace("/", ".")
+    else:
+        module = "deerflow." + path.split("/deerflow/", 1)[1][:-3].replace("/", ".")
+    return module[:-9] if module.endswith(".__init__") else module
 
 
 def source_for(path: str, source_root: pathlib.Path | None) -> str:
@@ -106,8 +110,11 @@ def parse_file(path: str, body: str):
                 imports.append({"module": alias.name, "alias": alias.asname or alias.name.split(".")[0], "kind": "import", "line": node.lineno})
 
         def visit_ImportFrom(self, node):
-            if node.level:  # Relative import resolution, relative to current package.
-                parts = module.split(".")[:-node.level]
+            if node.level:  # Relative imports are based on package, not the file.
+                package = module if path.endswith("/__init__.py") else module.rsplit(".", 1)[0]
+                parts = package.split(".")
+                if node.level > 1:
+                    parts = parts[:-(node.level - 1)]
                 imported_module = ".".join(parts + ([node.module] if node.module else []))
             else:
                 imported_module = node.module or ""
@@ -245,6 +252,23 @@ def resolve(source_files: list[dict]) -> dict:
     for sym in symbols:
         methods_by_name[sym["name"]].append(sym)
     imports_by_module = {f["module"]: f["imports"] for f in source_files}
+
+    def resolve_export(package: str, name: str, seen: set[str] | None = None) -> str | None:
+        """Follow explicit from-import re-exports through selected __init__.py files."""
+        key = f"{package}:{name}"
+        if key in index:
+            return key
+        seen = seen or set()
+        if key in seen:
+            return None
+        seen.add(key)
+        for item in imports_by_module.get(package, []):
+            if item["kind"] == "from" and item["alias"] == name:
+                resolved = resolve_export(item["module"], item["name"], seen)
+                if resolved:
+                    return resolved
+        return None
+
     relations = []
     for f in source_files:
         mod = f["module"]
@@ -261,9 +285,10 @@ def resolve(source_files: list[dict]) -> dict:
                 elif expr in visible_imports:
                     imp = visible_imports[expr]
                     if imp["kind"] == "from":
-                        candidate = f"{imp['module']}:{imp['name']}"
-                        if candidate in index:
-                            target, confidence = candidate, "resolved-import"
+                        candidate = resolve_export(imp["module"], imp["name"])
+                        if candidate:
+                            target = candidate
+                            confidence = "resolved-import" if candidate == f"{imp['module']}:{imp['name']}" else "resolved-reexport"
             elif expr.startswith("self."):
                 meth = expr.split(".", 1)[1]
                 nearest_class = source["qualname"].split(".")[0]
@@ -299,7 +324,7 @@ def resolve(source_files: list[dict]) -> dict:
             "files": [{"path": f["path"], "module": f["module"], "lines": f["lines"], "imports": f["imports"]} for f in source_files],
             "symbols": symbols, "relations": relations, "branches": branch_list,
             "stats": {"files": len(source_files), "symbols": len(symbols),
-                      "calls": sum(counts.values()), "resolved": sum(counts[k] for k in ("resolved", "resolved-import", "resolved-self", "recursive")),
+                      "calls": sum(counts.values()), "resolved": sum(counts[k] for k in ("resolved", "resolved-import", "resolved-reexport", "resolved-self", "recursive")),
                       "candidates": counts["candidate"], "unresolved": counts["unresolved"],
                       "branches": len(branch_list)}}
 
