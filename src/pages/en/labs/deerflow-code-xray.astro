@@ -38,7 +38,7 @@ const edges = [
  {from:'once',to:'astream',kind:'call',line:1412,source:files.worker,description:'_stream_once() invokes LangGraph agent.astream(). Target is dynamically supplied.'},
  {from:'once',to:'publish',kind:'call',line:1428,source:files.worker,description:'The graph event loop awaits StreamBridge.publish().'},
  {from:'agent',to:'end',kind:'call',line:1933,source:files.worker,description:'Worker finalization awaits StreamBridge.publish_end().'},
- {from:'response',to:'consumer',kind:'call',line:1026,source:files.route,description:'StreamingResponse consumes the SSE async generator; the generator executes as a response stream.'},
+ {from:'stream',to:'consumer',kind:'call',line:1026,source:files.route,description:'stream_run() constructs sse_consumer(...) and passes its async generator into StreamingResponse; iteration happens later.'},
  {from:'consumer',to:'subscribe',kind:'call',line:2644,source:files.service,description:'sse_consumer() iterates bridge.subscribe().'},
  {from:'consumer',to:'format',kind:'call',line:2677,source:files.service,description:'sse_consumer() serializes stream messages using format_sse().'},
  {from:'publish',to:'subscribe',kind:'event',line:82,source:files.bridge,description:'Separate publish/subscribe sides of a StreamBridge contract; NOT a direct function call.'},
