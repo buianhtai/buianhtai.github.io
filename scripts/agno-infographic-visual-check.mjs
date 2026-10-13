@@ -29,6 +29,8 @@ try{
     assert.equal(await lab.count(),1,'Infographic mounted');
     assert.equal(await lab.getAttribute('data-ready'),'1','Infographic behavior loaded');
     assert.equal(await lab.locator('[data-node]').count(),18,'Every main component shown');
+    assert.equal(await lab.locator('.ai-node-icon').count(),18,'Every architecture node has a meaningful icon');
+    assert.match(await lab.locator('[data-node="postgres"] .ai-node-icon').getAttribute('href'),/database/);
     assert.equal(await lab.locator('[data-link]').count(),24,'Every explicit relation shown');
     assert.equal(await lab.locator('.ai-boundary').count(),5,'Distinct system boundaries');
     assert.equal(await lab.locator('#ai-region').count(),1,'Subsystem navigation available');
