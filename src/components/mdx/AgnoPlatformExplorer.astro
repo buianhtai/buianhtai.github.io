@@ -1,0 +1,240 @@
+---
+/**
+ * Interactive Agno / AgentOS reference architecture and illustrative
+ * execution trace. Source files were inspected at revision
+ * agno-agi/agno@1f2aac51eb28dc9c0970836d3b7ae046bae81bbb.
+ */
+const revision = '1f2aac51eb28dc9c0970836d3b7ae046bae81bbb';
+---
+<section class="al" id="agno-lab" aria-labelledby="agno-lab-heading">
+  <header class="al-header">
+    <div><p class="al-kicker">INTERACTIVE ARCHITECTURE LAB / AGNO</p><h3 id="agno-lab-heading">Explore the platform from request to runtime</h3><p>Architecture boundaries, run lifecycle, protocols, and verified source-code entry points.</p></div>
+    <span class="al-revision" title="Upstream repository revision">SOURCE · {revision.slice(0, 8)}</span>
+  </header>
+
+  <div class="al-bar" role="tablist" aria-label="Explorer views">
+    <button type="button" data-view="architecture" role="tab" aria-selected="true">01 / Architecture</button>
+    <button type="button" data-view="execution" role="tab" aria-selected="false">02 / Request lifecycle</button>
+    <button type="button" data-view="code" role="tab" aria-selected="false">03 / Code map</button>
+  </div>
+
+  <div class="al-scenario" aria-label="Illustrative request scenarios">
+    <span class="al-mini-label">TRACE SCENARIO</span>
+    <div class="al-scenario-buttons" role="group" aria-label="Choose a request">
+      <button type="button" data-scenario="direct" aria-pressed="true">Direct answer</button>
+      <button type="button" data-scenario="tools" aria-pressed="false">Tool loop</button>
+      <button type="button" data-scenario="team" aria-pressed="false">Team delegation</button>
+      <button type="button" data-scenario="failure" aria-pressed="false">Failure &amp; recovery</button>
+    </div>
+  </div>
+
+  <div class="al-view" data-pane="architecture">
+    <div class="al-grid">
+      <div class="al-diagram">
+        <div class="al-panel-top"><span>CONTAINER &amp; EXECUTION BOUNDARIES</span><span>SELECT A NODE · SCROLL ON MOBILE</span></div>
+        <div class="al-canvas" tabindex="0" aria-label="Scrollable interactive architecture diagram">
+          <svg id="al-svg" viewBox="0 0 970 472" aria-label="AgentOS architecture with clients, runtime, execution objects, and dependencies" role="group">
+            <defs><marker id="al-arrow" orient="auto" markerWidth="8" markerHeight="8" refX="6" refY="3"><path d="M0 0L6 3L0 6" fill="none" stroke="currentColor" stroke-width="1.2"/></marker></defs>
+            <g id="al-back"></g><g id="al-edges"></g><g id="al-nodes"></g>
+          </svg>
+        </div>
+        <div class="al-legend"><span><i class="al-dot al-api"></i>API / control</span><span><i class="al-dot al-exec"></i>Execution</span><span><i class="al-dot al-state"></i>Storage</span><span><i class="al-dot al-external"></i>External</span></div>
+      </div>
+      <aside class="al-inspector" aria-live="polite">
+        <p class="al-mini-label">COMPONENT INSPECTOR</p>
+        <h4 id="al-selected-title">AgentOS API</h4>
+        <p id="al-selected-desc">FastAPI entry point for registered agents, teams, and workflows.</p>
+        <dl><dt>Engineering boundary</dt><dd id="al-selected-why">The API handles request transport; application policy must still guard tools.</dd><dt>Underlying source</dt><dd id="al-selected-path">os/app.py</dd></dl>
+        <a id="al-selected-link" href="https://github.com/agno-agi/agno" target="_blank" rel="noopener noreferrer">Inspect implementation ↗</a>
+      </aside>
+    </div>
+  </div>
+
+  <div class="al-view" data-pane="execution" hidden>
+    <div class="al-execution-grid">
+      <div class="al-diagram">
+        <div class="al-panel-top"><span>PHYSICAL REQUEST / EVENT PATH</span><span>SELECT A STEP BELOW</span></div>
+        <div class="al-canvas" tabindex="0" aria-label="Scrollable request execution topology">
+          <svg id="al-svg-exec" viewBox="0 0 970 472" role="group" aria-label="Highlighted runtime execution path">
+            <defs><marker id="al-arrow-exec" orient="auto" markerWidth="8" markerHeight="8" refX="6" refY="3"><path d="M0 0L6 3L0 6" fill="none" stroke="currentColor" stroke-width="1.2"/></marker></defs>
+            <g id="al-back-exec"></g><g id="al-edges-exec"></g><g id="al-nodes-exec"></g>
+          </svg>
+        </div>
+      </div>
+      <aside class="al-inspector al-side-trace" aria-live="polite"><p class="al-mini-label">CURRENT STEP</p><h4 id="al-step-title">01 / HTTP request</h4><span class="al-protocol" id="al-protocol">HTTPS</span><p id="al-step-desc"></p><p class="al-mini-label">WHY THIS EXISTS</p><p id="al-step-why"></p><a id="al-step-source" target="_blank" rel="noopener noreferrer" href="https://github.com/agno-agi/agno">Open supporting source ↗</a></aside>
+    </div>
+  </div>
+
+  <div class="al-view" data-pane="code" hidden>
+    <div class="al-code-grid">
+      <div class="al-file-list" id="al-files" aria-label="Verified source files"></div>
+      <section class="al-file-detail" aria-live="polite">
+        <p class="al-mini-label">SOURCE CLASS / MODULE</p>
+        <h4 id="al-file-title">AgentOS runtime</h4>
+        <p id="al-file-desc"></p>
+        <pre id="al-file-snippet"></pre>
+        <a id="al-file-link" href="https://github.com/agno-agi/agno" target="_blank" rel="noopener noreferrer">Read source on GitHub ↗</a>
+      </section>
+    </div>
+    <p class="al-note">Code fragments are explanatory pseudocode, not verbatim excerpts. File paths are verified against the linked revision.</p>
+  </div>
+
+  <div class="al-timeline">
+    <div class="al-timeline-head"><div><p class="al-mini-label">EXECUTION SCRUBBER</p><strong id="al-scenario-heading">Direct answer — one model call</strong></div><div class="al-timeline-actions"><button type="button" id="al-prev" aria-label="Previous step">←</button><span id="al-counter" aria-live="polite">01 / 06</span><button type="button" id="al-next" aria-label="Next step">→</button><button type="button" id="al-play" aria-pressed="false">▶ Play</button></div></div>
+    <input id="al-range" type="range" min="0" max="5" value="0" step="1" aria-label="Scrub execution timeline"/>
+    <div class="al-step-list" id="al-step-list" aria-label="Execution steps"></div>
+    <div class="al-event"><div><span class="al-mini-label">PROTOCOL / EVENT</span><p id="al-event-description">Select a step to inspect the execution transition.</p></div><pre id="al-event-code"></pre></div>
+  </div>
+  <p class="al-disclaimer"><strong>How to read this:</strong> each scenario is an explanatory model, not a captured trace. SSE streaming may overlap execution and persistence; the step numbers are narrative checkpoints, not a guarantee of serialization. Durable recovery depends on explicit runtime and queue configuration.</p>
+</section>
+
+<style>
+.al{--al-bg:var(--color-surface,#111b27);--al-panel:var(--color-surface-2,#172536);--al-text:var(--color-text,#ecf1fa);--al-muted:var(--color-text-dim,#a9b6c7);--al-border:var(--color-border,#344155);--al-accent:var(--color-accent,#4dd6c9);--al-blue:#499fea;--al-exec:#24a890;--al-purple:#8c78d6;--al-orange:#df9b56;position:relative;left:50%;transform:translateX(-50%);width:min(1140px,calc(100vw - 32px));max-width:none!important;margin:2rem 0;color:var(--al-text);background:var(--al-bg);border:1px solid var(--al-border);border-radius:18px;overflow:hidden;font-family:inherit;box-shadow:0 15px 50px #00000010}
+.al *{box-sizing:border-box}.al button,.al input{font:inherit}.al a{color:var(--al-accent);text-decoration:none!important;border-bottom:1px solid currentColor}.al a:hover{opacity:.8}.al-header{padding:24px;display:flex;align-items:start;justify-content:space-between;gap:24px}.al-header h3{font-size:clamp(1.15rem,2.3vw,1.55rem)!important;line-height:1.3;margin:5px 0 7px;color:var(--al-text)}.al-header p:not(.al-kicker){font-size:.86rem;margin:0;color:var(--al-muted);line-height:1.6}.al-kicker,.al-mini-label,.al-panel-top,.al-revision{font:650 .69rem/1.5 ui-monospace,monospace!important;letter-spacing:.08em;color:var(--al-muted)}.al-kicker{color:var(--al-accent);margin:0}.al-revision{white-space:nowrap;border:1px solid var(--al-border);padding:7px;border-radius:6px}
+.al-bar{display:flex;flex-wrap:wrap;gap:0;padding:0 18px;border-top:1px solid var(--al-border);border-bottom:1px solid var(--al-border)}.al-bar button{padding:13px 15px;border:0;border-bottom:2px solid transparent;background:transparent;color:var(--al-muted);cursor:pointer;font-size:.8rem;font-weight:650}.al-bar button[aria-selected=true]{color:var(--al-accent);border-bottom-color:var(--al-accent)}.al-bar button:hover{color:var(--al-text)}
+.al-scenario{padding:14px 22px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;border-bottom:1px solid var(--al-border)}.al-scenario-buttons{display:flex;flex-wrap:wrap;gap:7px}.al-scenario-buttons button,.al-timeline-actions button{background:var(--al-panel);border:1px solid var(--al-border);color:var(--al-text);padding:8px 12px;border-radius:7px;font-size:.77rem;font-weight:600;cursor:pointer}.al-scenario-buttons button[aria-pressed=true]{background:color-mix(in srgb,var(--al-accent) 15%,var(--al-bg));border-color:var(--al-accent);color:var(--al-accent)}.al button:focus-visible,.al a:focus-visible,.al input:focus-visible{outline:2px solid var(--al-accent);outline-offset:3px}
+.al-view{padding:16px}.al-view[hidden]{display:none!important}.al-grid,.al-execution-grid{display:grid;grid-template-columns:minmax(0,1fr) 248px;gap:12px}.al-diagram,.al-inspector,.al-file-list,.al-file-detail{border:1px solid var(--al-border);background:var(--al-bg);border-radius:11px;min-width:0}.al-panel-top{display:flex;justify-content:space-between;gap:6px;padding:11px 14px}.al-canvas{overflow:auto;overscroll-behavior-x:contain;touch-action:pan-x pan-y}.al-canvas svg{width:100%;min-width:680px;height:auto;display:block;max-height:470px}.al-canvas .al-boundary{fill:var(--al-panel);fill-opacity:.5;stroke:var(--al-border);stroke-dasharray:5 4}.al-canvas .al-region{fill:var(--al-muted);font:700 11px ui-monospace,monospace;letter-spacing:1px}.al-canvas .al-edge{fill:none;stroke:var(--al-muted);stroke-width:1.3;opacity:.37}.al-canvas .al-edge.al-active{stroke:var(--al-accent);stroke-width:3;stroke-dasharray:8 6;opacity:1;animation:al-path .8s linear infinite}.al-canvas .al-node{cursor:pointer}.al-canvas .al-node rect{transition:stroke .2s,fill-opacity .2s}.al-canvas .al-node:focus-visible rect{stroke-width:3}.al-canvas .al-node-title{fill:var(--al-text);font:700 13px system-ui,sans-serif}.al-canvas .al-node-sub{fill:var(--al-muted);font:11px system-ui,sans-serif}.al-canvas .al-node.al-selected rect{stroke-width:2.8!important}.al-legend{display:flex;flex-wrap:wrap;gap:14px;padding:8px 15px 12px;color:var(--al-muted);font-size:.7rem}.al-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px}.al-api{background:var(--al-blue)}.al-exec{background:var(--al-exec)}.al-state{background:var(--al-purple)}.al-external{background:var(--al-orange)}@keyframes al-path{to{stroke-dashoffset:-28}}
+.al-inspector{padding:17px;display:flex;flex-direction:column;align-items:flex-start;gap:10px}.al-inspector .al-mini-label,.al-file-detail .al-mini-label{margin:0}.al-inspector h4,.al-file-detail h4{color:var(--al-text);font-size:1.13rem;line-height:1.3;margin:0}.al-inspector p,.al-file-detail p{font-size:.82rem;color:var(--al-muted);line-height:1.6;margin:0}.al-inspector dl{margin:4px 0;display:grid;gap:8px}.al-inspector dt{font-size:.66rem;font-weight:700;text-transform:uppercase;color:var(--al-muted);letter-spacing:.05em}.al-inspector dd{font-size:.79rem;margin:0;color:var(--al-text);line-height:1.55;overflow-wrap:anywhere}.al-inspector a,.al-file-detail a{font-size:.77rem;overflow-wrap:anywhere;margin-top:auto}.al-protocol{font:700 .69rem ui-monospace,monospace;color:var(--al-accent);background:var(--al-panel);padding:6px 8px;border-radius:5px}
+.al-timeline{padding:17px 22px;border-top:1px solid var(--al-border)}.al-timeline-head{display:flex;justify-content:space-between;gap:14px;align-items:center}.al-timeline-head .al-mini-label{margin:0 0 5px}.al-timeline-head strong{font-size:.94rem}.al-timeline-actions{display:flex;gap:5px;align-items:center}.al-timeline-actions button{padding:7px 9px}.al-timeline-actions span{font:.72rem ui-monospace,monospace;color:var(--al-muted);min-width:53px;text-align:center}.al-timeline input[type=range]{display:block;width:100%;accent-color:var(--al-accent);cursor:pointer;margin:19px 0 12px}.al-step-list{display:flex;gap:7px;overflow-x:auto;padding-bottom:7px;scroll-snap-type:x proximity}.al-step-list button{min-width:112px;flex:1;scroll-snap-align:start;cursor:pointer;text-align:left;padding:9px 10px;border-radius:8px;background:var(--al-panel);border:1px solid var(--al-border);color:var(--al-muted);font-size:.72rem;line-height:1.4}.al-step-list button strong{display:block;color:var(--al-text);font-size:.76rem;margin-top:4px}.al-step-list button[aria-pressed=true]{border-color:var(--al-accent);background:color-mix(in srgb,var(--al-accent) 11%,var(--al-panel))}.al-event{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;margin-top:13px}.al-event>div,.al-event pre,.al-file-detail pre{border:1px solid var(--al-border);border-radius:9px;background:var(--al-panel);padding:13px;margin:0}.al-event p{margin:10px 0 0;font-size:.81rem;line-height:1.65;color:var(--al-text)}.al-event pre,.al-file-detail pre{font: .73rem/1.65 ui-monospace,monospace;white-space:pre-wrap;word-break:break-word;color:var(--al-text);overflow:auto}.al-disclaimer,.al-note{font-size:.74rem!important;line-height:1.6;color:var(--al-muted);padding:0 22px 18px;margin:0!important}.al-code-grid{display:grid;grid-template-columns:300px minmax(0,1fr);gap:12px}.al-file-list{display:grid;gap:4px;padding:8px;max-height:390px;overflow:auto}.al-file-list button{text-align:left;border:1px solid transparent;background:none;color:var(--al-muted);padding:11px 10px;border-radius:7px;cursor:pointer;font-size:.74rem;overflow-wrap:anywhere}.al-file-list button[aria-pressed=true]{border-color:var(--al-accent);background:var(--al-panel);color:var(--al-text)}.al-file-list button span{display:block;color:var(--al-accent);font:.65rem ui-monospace,monospace;margin-bottom:5px}.al-file-detail{padding:18px;display:flex;flex-direction:column;align-items:start;gap:12px;min-height:310px}.al-file-detail pre{width:100%}.al-note{padding:10px 0 0!important}.al-side-trace{min-height:310px}
+@media(max-width:750px){.al{width:calc(100vw - 20px);border-radius:12px}.al-header{padding:17px;flex-direction:column;gap:10px}.al-revision{font-size:.63rem}.al-bar{padding:0 8px}.al-bar button{font-size:.72rem;padding:12px 8px}.al-scenario{padding:13px;gap:9px}.al-view{padding:10px}.al-grid,.al-execution-grid,.al-code-grid{grid-template-columns:minmax(0,1fr)}.al-inspector{min-height:0}.al-panel-top{font-size:.58rem!important}.al-timeline{padding:14px}.al-timeline-head{align-items:flex-start;flex-direction:column}.al-event{grid-template-columns:1fr}.al-disclaimer{padding:0 14px 14px}.al-canvas svg{min-width:750px}}
+@media(prefers-reduced-motion:reduce){.al-canvas .al-edge.al-active{animation:none}}
+</style>
+<script is:inline>
+(function () {
+  const root = document.getElementById('agno-lab');
+  if (!root || root.dataset.hydrated === '1') return;
+  root.dataset.hydrated = '1';
+  const $ = id => root.querySelector('#' + id);
+  const sha = '1f2aac51eb28dc9c0970836d3b7ae046bae81bbb';
+  const base = 'https://github.com/agno-agi/agno/blob/' + sha + '/libs/agno/agno/';
+  const files = [
+    {id:'os',name:'AgentOS API / FastAPI',path:'os/app.py',desc:'AgentOS assembles the application, registered execution objects and API surface. It is the transport/service boundary.',code:'agent_os = AgentOS(agents=[agent], db=db)\napp = agent_os.get_app()\nagent_os.serve(app=app)'},
+    {id:'agent',name:'Agent executor',path:'agent/agent.py',desc:'Agent implementation defines execution behavior, model integration, tool lifecycle, session context and streaming options.',code:'agent = Agent(model=..., tools=[...], db=db)\nresult = await agent.arun(message, stream=True)'},
+    {id:'run',name:'Run event contracts',path:'run/agent.py',desc:'Structured event types and run state, including RunStarted, RunContent, ToolCallStarted and RunCompleted.',code:'RunStartedEvent\nToolCallStartedEvent / ToolCallCompletedEvent\nRunContentEvent\nRunCompletedEvent'},
+    {id:'team',name:'Team orchestration',path:'team/team.py',desc:'Coordinates agents under a team execution model; dynamic delegation differs from an explicitly sequenced workflow.',code:'team = Team(members=[researcher, writer], ...)\n# Team owns delegation and response synthesis.'},
+    {id:'workflow',name:'Workflow orchestration',path:'workflow/workflow.py',desc:'Provides explicitly structured sequencing for components and functions; most suitable when the operation order matters.',code:'workflow = Workflow(steps=[...])\n# Deterministic structure; agent calls where useful.'},
+    {id:'tool',name:'Tool execution contract',path:'tools/function.py',desc:'Describes callable tool functions and invocation metadata. Business permissions still belong at trusted tool boundaries.',code:'def lookup_record(record_id: str):\n    return approved_read_only_service(record_id)'},
+    {id:'db',name:'Persistence interface',path:'db/base.py',desc:'Storage interface for persisted application data. Persistence configuration, retention and deployment semantics remain important.',code:'db = SqliteDb(db_file="agent.db")\n# Production: assess Postgres, retention and backup.'}
+  ];
+  const nodes = [
+    {id:'client',name:'Client / Web UI',sub:'HTTP + SSE consumer',x:26,y:95,w:188,h:60,type:'api',desc:'The browser or SDK submits run requests and consumes responses and events.',why:'Presentation owns interaction state, not permission checks or authoritative execution.',file:'os'},
+    {id:'control',name:'Control Plane',sub:'Inspect + operate',x:26,y:289,w:188,h:60,type:'api',desc:'Operational UI used to inspect runs and sessions and manage the deployed runtime.',why:'The management interface is not an obligatory middle hop for each model request.',file:'os'},
+    {id:'api',name:'AgentOS API',sub:'FastAPI / REST / SSE',x:252,y:95,w:199,h:60,type:'api',desc:'Network-facing API for registered agents, teams, and workflows.',why:'Transport, configured auth and run dispatch are separate from reasoning and tool authorization.',file:'os'},
+    {id:'registry',name:'Run dispatch',sub:'Agent / Team / Workflow',x:252,y:289,w:199,h:60,type:'api',desc:'Invocation selects an explicitly registered component and prepares the requested run.',why:'A general semantic router between arbitrary agents is not implied by selecting a registered endpoint.',file:'os'},
+    {id:'agent',name:'Agent',sub:'Model + tools + context',x:489,y:95,w:188,h:60,type:'exec',desc:'A model-driven unit of execution using configured instructions, state and tools.',why:'The model may choose to call a tool; application code runs it under trusted controls.',file:'agent'},
+    {id:'team',name:'Team',sub:'Specialist delegation',x:489,y:217,w:188,h:60,type:'exec',desc:'Coordinates multiple agents according to the configured team execution mode.',why:'Delegation adds cost and latency; use a team only if specialization helps.',file:'team'},
+    {id:'workflow',name:'Workflow',sub:'Explicit execution order',x:489,y:340,w:188,h:60,type:'exec',desc:'Predefined control flow combining steps, agents and functions.',why:'Use code for deterministic steps rather than asking an LLM to rediscover a known order.',file:'workflow'},
+    {id:'model',name:'Model provider',sub:'LLM inference',x:716,y:64,w:224,h:60,type:'external',desc:'External or hosted model endpoint providing inference and possible tool requests.',why:'Budget model requests, context tokens and provider rate limits separately.',file:'agent'},
+    {id:'tools',name:'Tool / MCP adapter',sub:'Validated side effects',x:716,y:217,w:224,h:60,type:'external',desc:'Invokes registered Python functions or integrations, including external APIs and MCP.',why:'A tool request is not permission to act. Authorize, validate, isolate and audit.',file:'tool'},
+    {id:'db',name:'Storage & traces',sub:'Runs / sessions / memory',x:716,y:371,w:224,h:60,type:'state',desc:'Configured persistent state and telemetry for run sessions and supporting data.',why:'Data persistence alone does not guarantee crash-safe execution recovery.',file:'db'}
+  ];
+  const edgeDefs = [['client','api'],['control','api'],['api','registry'],['registry','agent'],['registry','team'],['registry','workflow'],['agent','model'],['model','agent'],['agent','tools'],['tools','agent'],['agent','db'],['team','agent'],['workflow','agent'],['registry','db']];
+  const S = (title,from,to,proto,desc,why,code,file) => ({title,from,to,proto,desc,why,code,file});
+  const scenarios = {
+    direct:{title:'Direct answer — one model call',steps:[
+      S('HTTP request','client','api','HTTPS','Client submits a request to a registered AgentOS endpoint.','The client should never need direct access to the model credentials.','POST /agents/{agent_id}/runs\nstream=true','os'),
+      S('Dispatch','api','registry','IN-PROC','The API validates the request and resolves the chosen execution component.','An endpoint selects a known agent; model-driven routing is a different design choice.','AgentOS(agents=[agent])\nresolve registered agent','os'),
+      S('Load context','registry','db','DB','Configured session and history can be loaded before inference.','Session context, durable work state and traces have different lifecycles.','session_id → configured database','db'),
+      S('Invoke agent','registry','agent','PYTHON','The registered Agent begins its run.','Framework abstraction separates invocation from transport.','Agent.run(...) / Agent.arun(...)','agent'),
+      S('Model response','agent','model','HTTPS','The model produces a direct response without selecting a tool.','Tool execution is optional; not every request needs a tool loop.','Model request + configured context','agent'),
+      S('Stream result','api','client','SSE','Incremental run output or a final response reaches the client.','Streaming can occur during model inference, not only when the run has finished.','RunContent / RunCompleted','run')]},
+    tools:{title:'Tool loop — model, tool, continuation',steps:[
+      S('Receive request','client','api','HTTPS','The client invokes a registered agent through AgentOS.','A run ID links subsequent events.','POST /agents/{agent_id}/runs','os'),
+      S('Start agent','registry','agent','PYTHON','Execution constructs the model context and exposes approved tool schemas.','Only tools permitted by the application should be available.','Agent(model=..., tools=[...])','agent'),
+      S('Model chooses','agent','model','HTTPS','The model returns a tool request rather than a final answer.','A model selecting a tool is not itself executing the tool.','ToolCallStarted event','run'),
+      S('Tool invoked','agent','tools','PYTHON / HTTP','Application logic validates arguments and invokes a registered tool.','Enforce user scope, rate limits and idempotency at the tool boundary.','validated_tool(arguments)','tool'),
+      S('Result returned','tools','agent','RESULT','The tool returns an observation to the agent loop.','Failures and unknown side-effect outcomes require explicit policies.','ToolCallCompleted / ToolCallError','run'),
+      S('Model continues','agent','model','HTTPS','The agent may call the model again using the tool output.','One user request can involve multiple billable model calls.','context + tool result → model','agent'),
+      S('Emit response','api','client','SSE','Content and terminal run events reach the client as configured.','The client must understand terminal, error and cancellation states.','RunContent → RunCompleted','run')]},
+    team:{title:'Team delegation — leader and specialists',steps:[
+      S('Submit request','client','api','HTTPS','A client invokes a registered Team endpoint.','A team is a runnable component rather than a new network service.','POST /teams/{team_id}/runs','os'),
+      S('Select Team','registry','team','PYTHON','Execution enters the configured team behavior.','Coordination/routing models can add latency and token use.','Team(members=[...])','team'),
+      S('Delegate','team','agent','PYTHON','A team hands relevant work to a member agent.','Member calls should inherit appropriate context and authorization.','team member execution','team'),
+      S('Specialist inference','agent','model','HTTPS','The member agent handles its specialty with a model call.','Multiple specialists need not run if one agent can solve the request.','member → model inference','agent'),
+      S('Collect outcome','agent','team','RESULT','The coordinator receives member output for synthesis or further delegation.','The team owns the aggregate response, not the client.','member output → team result','team'),
+      S('Deliver answer','api','client','SSE','Results are returned through the runtime API.','The control plane is not on this request path.','run events → client','run')]},
+    failure:{title:'Failure & recovery — side-effect ambiguity',steps:[
+      S('Run admitted','client','api','HTTPS','The client starts an operation expected to involve an external write.','Write-capable tools require stronger guarantees than pure Q&A.','POST /agents/{id}/runs','os'),
+      S('Record execution','registry','db','DB','Configured persistence records run state.','Durable queues/checkpoints must be enabled and evaluated separately.','run_id + state (+ queue if enabled)','db'),
+      S('Invoke external tool','agent','tools','HTTP','A tool sends a write request to an external service.','Use idempotency keys and scoped credentials.','POST /external/resource\nIdempotency-Key: run:tool','tool'),
+      S('Response lost','tools','agent','TIMEOUT','The downstream write might have committed while the response was lost.','Blind retry can duplicate business effects.','status = OUTCOME_UNKNOWN\n# application-level classification','tool'),
+      S('Reconcile outcome','agent','db','DB','A recovery design should persist intent and reconcile with the external system.','Framework retries do not guarantee exactly-once side effects.','lookup(idempotency_key)\nreconcile before retry','db'),
+      S('Report final state','api','client','SSE','The application surfaces resolved outcome or escalates the ambiguity.','Never report success simply because a request was retried.','RunError / terminal status','run')]}
+  };
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const colors = {api:'#499fea',exec:'#24a890',state:'#8c78d6',external:'#df9b56'};
+  let scenario='direct',step=0,selected='api',file='os',view='architecture',timer=null;
+  function setText(id,text){const el=$(id);if(el)el.textContent=text;}
+  function sourceLink(id){const f=files.find(x=>x.id===id)||files[0];return base+f.path;}
+  function createSvg(name,attrs,text){const el=document.createElementNS(svgNS,name);Object.entries(attrs||{}).forEach(([key,value])=>el.setAttribute(key,String(value)));if(text!==undefined)el.textContent=text;return el;}
+  function findNode(id){return nodes.find(n=>n.id===id)||nodes[0];}
+  function edgePath(a,b){const u=findNode(a),v=findNode(b);let x1=u.x+u.w/2,y1=u.y+u.h/2,x2=v.x+v.w/2,y2=v.y+v.h/2;
+    if(u.x+u.w+5<v.x){x1=u.x+u.w;x2=v.x;}
+    else if(v.x+v.w+5<u.x){x1=u.x;x2=v.x+v.w;}
+    else if(y1<y2){y1=u.y+u.h;y2=v.y;}
+    else{y1=u.y;y2=v.y+v.h;}
+    return 'M'+x1+' '+y1+' C'+(x1+(x2-x1)*.52)+' '+y1+' '+(x2-(x2-x1)*.52)+' '+y2+' '+x2+' '+y2;
+  }
+  function renderMap(prefix){
+    const back=$('al-back'+prefix), edges=$('al-edges'+prefix), layer=$('al-nodes'+prefix);
+    back.replaceChildren();edges.replaceChildren();layer.replaceChildren();
+    [{x:12,w:215,label:'CLIENT / CONTROL'},{x:238,w:227,label:'AGENTOS RUNTIME'},{x:475,w:219,label:'EXECUTION'},{x:704,w:253,label:'DEPENDENCIES'}].forEach(o=>{
+      back.append(createSvg('rect',{x:o.x,y:13,width:o.w,height:444,rx:13,class:'al-boundary'}));
+      back.append(createSvg('text',{x:o.x+11,y:37,class:'al-region'},o.label));
+    });
+    const current=scenarios[scenario].steps[step];
+    edgeDefs.forEach(([a,b])=>{
+      const active=current.from===a&&current.to===b;
+      const p=createSvg('path',{d:edgePath(a,b),class:'al-edge'+(active?' al-active':''),'marker-end':'url(#al-arrow'+(prefix?'-exec':'')+')'});
+      edges.append(p);
+    });
+    nodes.forEach(n=>{
+      const active=selected===n.id;
+      const group=createSvg('g',{class:'al-node'+(active?' al-selected':''),role:'button',tabindex:0,'aria-label':'Inspect '+n.name});
+      const rect=createSvg('rect',{x:n.x,y:n.y,width:n.w,height:n.h,rx:9,fill:colors[n.type],'fill-opacity':active?.20:.11,stroke:colors[n.type],'stroke-width':active?2.8:1.2});
+      group.append(rect,createSvg('rect',{x:n.x+2,y:n.y+9,width:3,height:n.h-18,rx:1.5,fill:colors[n.type]}),createSvg('text',{x:n.x+14,y:n.y+25,class:'al-node-title'},n.name),createSvg('text',{x:n.x+14,y:n.y+44,class:'al-node-sub'},n.sub));
+      group.addEventListener('click',()=>{selected=n.id;renderAll();});
+      group.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();selected=n.id;renderAll();}});
+      layer.append(group);
+    });
+  }
+  function renderFile(){
+    const f=files.find(x=>x.id===file)||files[0];
+    setText('al-file-title',f.name);setText('al-file-desc',f.desc);setText('al-file-snippet',f.code);$('al-file-link').href=sourceLink(f.id);
+    $('al-files').replaceChildren();
+    files.forEach(it=>{const b=document.createElement('button');b.type='button';b.setAttribute('aria-pressed',String(it.id===file));const kicker=document.createElement('span');kicker.textContent=it.name;b.append(kicker,document.createTextNode(it.path));b.addEventListener('click',()=>{file=it.id;renderFile()});$('al-files').append(b);});
+  }
+  function renderAll(){
+    root.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.view===view)));
+    root.querySelectorAll('[data-pane]').forEach(p=>p.hidden=p.dataset.pane!==view);
+    root.querySelectorAll('[data-scenario]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.scenario===scenario)));
+    renderMap('');renderMap('-exec');
+    const n=findNode(selected),s=scenarios[scenario],current=s.steps[step];
+    setText('al-selected-title',n.name);setText('al-selected-desc',n.desc);setText('al-selected-why',n.why);
+    setText('al-selected-path',files.find(f=>f.id===n.file).path);$('al-selected-link').href=sourceLink(n.file);
+    setText('al-scenario-heading',s.title);setText('al-counter',String(step+1).padStart(2,'0')+' / '+String(s.steps.length).padStart(2,'0'));
+    $('al-range').max=String(s.steps.length-1);$('al-range').value=String(step);
+    setText('al-step-title',String(step+1).padStart(2,'0')+' / '+current.title);
+    setText('al-protocol',current.proto);setText('al-step-desc',current.desc);setText('al-step-why',current.why);
+    $('al-step-source').href=sourceLink(current.file);
+    setText('al-event-description',current.desc+' '+current.why);setText('al-event-code',current.code);
+    const row=$('al-step-list');row.replaceChildren();
+    s.steps.forEach((e,i)=>{const b=document.createElement('button');b.type='button';b.setAttribute('aria-pressed',String(i===step));b.innerHTML='<span>'+String(i+1).padStart(2,'0')+' · '+e.proto.replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</span><strong>'+e.title.replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</strong>';b.addEventListener('click',()=>{step=i;renderAll();});row.append(b);});
+    const activeStep=row.children[step];if(activeStep&&view==='execution')activeStep.scrollIntoView({block:'nearest',inline:'nearest'});
+    renderFile();
+  }
+  function advance(delta){const max=scenarios[scenario].steps.length;step=(step+delta+max)%max;selected=scenarios[scenario].steps[step].to;renderAll();}
+  function pause(){if(timer!==null){clearInterval(timer);timer=null;}$('al-play').textContent='▶ Play';$('al-play').setAttribute('aria-pressed','false');}
+  root.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>{view=b.dataset.view;renderAll();}));
+  root.querySelectorAll('[data-scenario]').forEach(b=>b.addEventListener('click',()=>{pause();scenario=b.dataset.scenario;step=0;selected=scenarios[scenario].steps[0].to;view='execution';renderAll();}));
+  $('al-next').addEventListener('click',()=>{pause();advance(1);});
+  $('al-prev').addEventListener('click',()=>{pause();advance(-1);});
+  $('al-play').addEventListener('click',()=>{if(timer!==null){pause();return;}view='execution';$('al-play').textContent='Ⅱ Pause';$('al-play').setAttribute('aria-pressed','true');timer=setInterval(()=>advance(1),1850);renderAll();});
+  $('al-range').addEventListener('input',e=>{pause();step=Number(e.target.value);selected=scenarios[scenario].steps[step].to;view='execution';renderAll();});
+  $('al-range').addEventListener('keydown',e=>{if(e.key==='Home'){step=0;renderAll();}if(e.key==='End'){step=scenarios[scenario].steps.length-1;renderAll();}});
+  $('al-step-list').addEventListener('keydown',e=>{if(e.key==='ArrowRight'){advance(1);}if(e.key==='ArrowLeft'){advance(-1);}});
+  let gestureX=null;$('al-step-list').addEventListener('pointerdown',e=>{gestureX=e.clientX});$('al-step-list').addEventListener('pointerup',e=>{if(gestureX!==null&&Math.abs(gestureX-e.clientX)>90)advance(e.clientX<gestureX?1:-1);gestureX=null});
+  window.addEventListener('pagehide',pause,{once:true});
+  renderAll();
+})();
+</script>
