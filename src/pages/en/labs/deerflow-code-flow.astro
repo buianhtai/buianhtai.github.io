@@ -1,0 +1,172 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+const rev = '1f15e0b43ca58b9601514f9f5c408fb032022833';
+---
+<BaseLayout title="DeerFlow Code Flow Lab — Control Paths & State Writes" description="Source-generated control paths, exception handlers, assignments and possible external effects in DeerFlow Python functions.">
+<main class="cf-page" data-codeflow data-upstream={'https://github.com/bytedance/deer-flow/blob/'+rev+'/'}>
+ <header class="cf-hero">
+  <a href="/en/labs/deerflow-source-atlas/">← Source Atlas</a>
+  <p class="cf-kicker">DEERFLOW / CODE EXECUTION ANATOMY</p>
+  <h1>Look <em>inside</em> a function.</h1>
+  <p>Explore source-derived decisions, exception handling, loop paths and state changes. Select a code node to see its exact source location. This is a structural AST diagram—not a fabricated runtime trace.</p>
+  <div class="cf-stats"><span><b data-total-flows>—</b> analyzed functions</span><span><b data-total-nodes>—</b> code nodes</span><span><b data-total-effects>—</b> writes / call hints</span><span>PINNED {rev.slice(0,10)}</span></div>
+ </header>
+ <section class="cf-studio">
+  <div class="cf-toolbar">
+   <div class="cf-selector"><label for="cf-function">SELECT IMPLEMENTATION</label><select id="cf-function" data-function><option value="">Loading source graph…</option></select></div>
+   <div class="cf-modes"><button type="button" data-mode="flow" aria-pressed="true">Control paths</button><button type="button" data-mode="effects" aria-pressed="false">State & effects</button></div>
+  </div>
+  <div class="cf-workspace">
+   <section class="cf-canvas">
+    <div class="cf-strip"><span data-diagram-type>STRUCTURAL CONTROL FLOW</span><span data-diagram-count>—</span></div>
+    <div class="cf-legend"><span><i class="normal"></i> Statements</span><span><i class="decision"></i> Decision</span><span><i class="exception"></i> Exception</span><span><i class="write"></i> Write / effect</span></div>
+    <div class="cf-controls">
+     <div class="cf-row"><label for="cf-filter">FOCUS</label><select id="cf-filter" data-focus><option value="all">All code nodes</option><option value="decisions">Decisions & exceptions</option><option value="writes">Assignments & state effects</option></select></div>
+     <label class="cf-toggle"><input type="checkbox" data-all-nodes /> Show complete function</label>
+    </div>
+    <div class="cf-diagram-window" data-window role="region" aria-label="Scrollable code control flow graph" tabindex="0">
+     <svg data-diagram viewBox="0 0 1000 700" aria-label="Source control-flow graph" role="group">
+       <defs><marker id="cf-arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0 L9 5 L0 10" fill="none" stroke="#8baec1" stroke-width="1.4"/></marker></defs>
+       <g data-guidelines></g><g data-connections></g><g data-boxes></g>
+     </svg>
+     <div class="cf-effects-graph" data-effects-view hidden></div>
+    </div>
+    <div class="cf-footnote" data-truncation>Scroll to trace execution · Tap a block to inspect.</div>
+   </section>
+   <aside class="cf-inspect">
+    <div class="cf-inspector-top"><span>CODE INSPECTOR</span><span data-confidence>AST VERIFIED</span></div>
+    <h2 data-title>Choose a code node</h2>
+    <p data-detail>Select a flow block, branch or state mutation.</p>
+    <div class="cf-inspect-group"><label>PINNED SOURCE</label><a data-source href="#" target="_blank" rel="noopener noreferrer"><span data-file>—</span><span data-line>↗</span></a></div>
+    <div class="cf-inspect-group"><label>SOURCE EXCERPT</label><pre><code data-code>Code appears here.</code></pre></div>
+    <div class="cf-inspect-group"><label>STATE / EXECUTION IMPLICATION</label><p data-interpretation>Assignment does not automatically mean persistence.</p></div>
+    <div class="cf-inspect-group"><label>CONNECTED PATHS</label><div data-relations class="cf-relations"></div></div>
+   </aside>
+  </div>
+ </section>
+ <section class="cf-method">
+  <p class="cf-kicker">READING GUIDE</p><h2>Why structural diagrams, not invented traces</h2>
+  <div class="cf-method-grid"><article><h3>Control branches</h3><p>True/false paths, loop iterations, return/raise exits, and possible exception handlers are extracted from Python's syntax tree. Exception edges aren't guaranteed runtime handler matches.</p></article><article><h3>Mutations</h3><p>Assignments to <code>record.status</code> or <code>self._runs[run_id]</code> are syntactic facts. A local binding does not prove a shared object changed.</p></article><article><h3>Possible effects</h3><p>Publishing, committing, scheduling and mutating method names are classified as heuristics. Actual persistence, retries and transactions require looking at the called implementation.</p></article></div>
+  <p>This release covers selected high-value functions from nine pinned Python modules. Finally-block exits, runtime dispatch, implicit exceptions, and actual database effects are not fully reconstructed by static analysis. The original <a href="/en/labs/deerflow-code-xray/">execution graph</a> explains cross-task events separately.</p>
+ </section>
+</main>
+<script is:inline>
+(()=>{
+ const root=document.querySelector('[data-codeflow]');if(!root)return;
+ const $=x=>root.querySelector(x), $$=x=>[...root.querySelectorAll(x)], ns='http://www.w3.org/2000/svg';
+ const repo=root.dataset.upstream;
+ const state={manifest:null,flow:null,mode:'flow',focus:'all',all:false,selected:null};
+ function text(q,value){const el=typeof q==='string'?$(q):q;if(el)el.textContent=String(value??'')}
+ function svg(tag,attrs={},title){const e=document.createElementNS(ns,tag);for(const [k,v] of Object.entries(attrs))e.setAttribute(k,String(v));if(title!=null)e.textContent=String(title);return e}
+ function url(path,line){return repo+path+'#L'+line}
+ function button(label,fn){const b=document.createElement('button');b.type='button';b.textContent=label;b.addEventListener('click',fn);return b}
+ function source(path,line){text('[data-file]',path);text('[data-line]','L'+line+' ↗');$('[data-source]').href=url(path,line)}
+ function inspector(kind,title,detail,code,path,line,interpretation,connections,certainty='AST VERIFIED'){
+   text('[data-title]',title);text('[data-detail]',detail);text('[data-code]',code||'');text('[data-confidence]',certainty);source(path,line);text('[data-interpretation]',interpretation);
+   const rel=$('[data-relations]');rel.replaceChildren();
+   for(const c of connections||[])rel.append(button(c.title,c.fn));
+ }
+ function clickNode(node){state.selected=node.id;const flow=state.flow;
+   const impacts=flow.effects.filter(e=>e.node===node.id);
+   const incoming=flow.edges.filter(e=>e.to===node.id),outgoing=flow.edges.filter(e=>e.from===node.id);
+   const view=[...incoming.map(e=>({title:'← '+e.kind+' from '+e.from,fn:()=>jump(e.from)})),...outgoing.map(e=>({title:e.kind+' → '+e.to,fn:()=>jump(e.to)}))].slice(0,12);
+   const interpretation=impacts.length?impacts.map(e=>e.kind+': '+e.target+' ('+e.certainty+')').join('\n'):'Source syntax / control structure. No direct state mutation identified in this statement.';
+   inspector(node.kind.toUpperCase(),node.label,'Source line '+node.line+' · nesting '+node.depth,node.excerpt,flow.path,node.line,interpretation,view);
+   $$('.cf-box').forEach(e=>e.classList.toggle('selected',e.dataset.id===node.id));
+ }
+ function clickEffect(effect){const node=state.flow.nodes.find(n=>n.id===effect.node);
+   const interp=effect.certainty==='syntactic'?'Syntactic write or binding. Does not prove durable storage.':'Heuristic call classification only; inspect its concrete target for actual external effects.';
+   inspector(effect.kind.toUpperCase(),effect.target,effect.evidence,node?.excerpt||effect.evidence,effect.path,effect.line,interp,[{title:'View enclosing code node',fn:()=>{state.mode='flow';viewMode();jump(effect.node)}}],effect.certainty.toUpperCase());
+ }
+ function bind(el,fn){el.setAttribute('tabindex','0');el.setAttribute('role','button');el.addEventListener('click',fn);el.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();fn()}})}
+ function visibleNodes(){
+   const f=state.flow;if(!f)return [];
+   const related=new Set(f.effects.map(e=>e.node));
+   const full=f.nodes.filter(n=>state.focus==='all'||(state.focus==='decisions'&&['if','loop','try','handler','match','raise','return','break','continue'].includes(n.kind))||(state.focus==='writes'&&(related.has(n.id)||n.kind==='write')));
+   return state.all?full:full.slice(0,75);
+ }
+ function nodeColor(n){return ['if','loop','match'].includes(n.kind)?'decision':['try','handler','raise'].includes(n.kind)?'exception':state.flow.effects.some(e=>e.node===n.id)?'write':'normal'}
+ function drawFlow(){
+   const flow=state.flow, all=visibleNodes(),ids=new Set(all.map(n=>n.id)),indexed=new Map(all.map((n,i)=>[n.id,i]));
+   const box=$('[data-boxes]'),lines=$('[data-connections]'),guides=$('[data-guidelines]');[box,lines,guides].forEach(g=>g.replaceChildren());
+   const space=94,height=Math.max(500,all.length*space+85),canvas=$('[data-diagram]');canvas.setAttribute('viewBox','0 0 1000 '+height);
+   canvas.style.height=height+'px';
+   // Indentation is a rendering hint, not a statement of task ordering.
+   for(let i=0;i<4;i++)guides.append(svg('line',{x1:70+i*190,y1:0,x2:70+i*190,y2:height,class:'cf-guide'}));
+   const coord=n=>({x:56+Math.min(3,n.depth)*185,y:50+indexed.get(n.id)*space});
+   for(const e of flow.edges){
+      if(!ids.has(e.from)||!ids.has(e.to))continue;
+      const a=flow.nodes.find(n=>n.id===e.from),b=flow.nodes.find(n=>n.id===e.to);if(!a||!b)continue;
+      const p=coord(a),q=coord(b),back=q.y<=p.y;
+      const startX=p.x+215,endX=q.x+215;
+      const d=back?'M'+startX+' '+(p.y+28)+' C '+(startX+92)+' '+(p.y+28)+', '+(endX+92)+' '+(q.y+28)+', '+endX+' '+(q.y+28):
+        'M'+startX+' '+(p.y+55)+' C '+(startX+25)+' '+(p.y+60)+', '+(endX+25)+' '+(q.y-10)+', '+endX+' '+(q.y+1);
+      const route=svg('path',{d,class:'cf-link '+(back?'back ':'')+e.kind.replace(/[^a-z-]/g,'-'),'marker-end':'url(#cf-arrow)'});
+      bind(route,()=>{clickNode(a);text('[data-detail]',e.kind.toUpperCase()+' edge: '+a.label+' → '+b.label)});
+      route.setAttribute('aria-label',e.kind+' from line '+a.line+' to '+b.line);
+      lines.append(route);
+   }
+   for(const n of all){const p=coord(n),type=nodeColor(n),g=svg('g',{class:'cf-box '+type,'data-id':n.id});
+      g.append(svg('rect',{x:p.x,y:p.y,width:216,height:60,rx:9}),svg('rect',{x:p.x+1,y:p.y+1,width:4,height:58,rx:2,class:'stripe'}),
+       svg('text',{x:p.x+14,y:p.y+22,class:'cf-box-name'},n.kind.toUpperCase()+' · L'+n.line),
+       svg('text',{x:p.x+14,y:p.y+42,class:'cf-box-sub'},n.label.length>29?n.label.slice(0,28)+'…':n.label));
+      bind(g,()=>clickNode(n));g.setAttribute('aria-label',n.label+' at line '+n.line);box.append(g);
+   }
+   const off=flow.nodes.length-all.length;
+   text('[data-diagram-count]',all.length+' nodes shown · '+flow.edges.length+' total edges');
+   text('[data-truncation]',off>0?off+' other nodes omitted by filter/limit. Enable "Show complete function" to include them. Edges beyond the visible selection are hidden.':'Full visible selection · scroll to examine · click a block for source evidence.');
+ }
+ function drawEffects(){
+   const f=state.flow,t=$('[data-effects-view]');t.replaceChildren();
+   const groups=[['OBJECT STATE',['attribute-write','container-write']],['LOCAL BINDINGS',['local-binding']],['POSSIBLE OUTSIDE EFFECTS',['event','persistence-candidate','concurrency','mutation-candidate']]];
+   const header=document.createElement('div');header.className='cf-effects-head';header.textContent='SOURCE ASSIGNMENTS → STATE TARGETS → POSSIBLE EXTERNAL EFFECTS';t.append(header);
+   let total=0;
+   for(const [title,kinds] of groups){const group=document.createElement('section');group.className='cf-effect-lane';
+      const h=document.createElement('h3');h.textContent=title;group.append(h);
+      const arr=f.effects.filter(e=>kinds.includes(e.kind));
+      for(const effect of arr.slice(0,state.all?1000:45)){const item=button('',()=>clickEffect(effect));item.className='cf-effect';
+        const loc=document.createElement('span');loc.className='cf-effect-line';loc.textContent='L'+effect.line;
+        const arrow=document.createElement('span');arrow.className='cf-effect-arrow';arrow.textContent='→';
+        const dest=document.createElement('span');dest.className='cf-effect-target';dest.textContent=effect.target;
+        const hint=document.createElement('small');hint.textContent=effect.kind+' · '+effect.certainty;
+        item.append(loc,arrow,dest,hint);group.append(item);total++}
+      if(!arr.length){const p=document.createElement('p');p.textContent='No matching AST evidence';group.append(p)}
+      t.append(group);
+   }
+   text('[data-diagram-count]',total+' classified writes/calls');
+   text('[data-truncation]','State writes are syntactic; call-based effects are heuristics, not proof of persistence or transaction commit.');
+ }
+ function jump(id){const n=state.flow.nodes.find(n=>n.id===id);if(!n)return;clickNode(n);const el=$('[data-id="'+id+'"]');if(el){const svgRoot=$('[data-diagram]');const y=Number(el.querySelector('rect')?.getAttribute('y')||0);$('[data-window]').scrollTo({top:Math.max(0,y-160),behavior:'smooth'});}}
+ function redraw(){if(!state.flow)return;const isFlow=state.mode==='flow';$('[data-diagram]').hidden=!isFlow;$('[data-effects-view]').hidden=isFlow;$('[data-focus]').disabled=!isFlow;
+   text('[data-diagram-type]',isFlow?'STRUCTURAL CODE PATHS':'STATE & EFFECT MAP');
+   if(isFlow)drawFlow();else drawEffects();
+ }
+ function viewMode(){for(const b of $$('[data-mode]'))b.setAttribute('aria-pressed',String(b.dataset.mode===state.mode));redraw()}
+ function choose(key){const f=state.manifest.flows[key];if(!f)return;state.flow=f;state.selected=null;$('[data-window]').scrollTop=0;redraw();const candidate=f.nodes.find(n=>n.kind==='if')||f.nodes[0];clickNode(candidate)}
+ $$('[data-mode]').forEach(b=>b.addEventListener('click',()=>{state.mode=b.dataset.mode;viewMode()}));
+ $('[data-function]').addEventListener('change',e=>choose(e.target.value));
+ $('[data-focus]').addEventListener('change',e=>{state.focus=e.target.value;redraw()});
+ $('[data-all-nodes]').addEventListener('change',e=>{state.all=e.target.checked;redraw()});
+ fetch('/data/deerflow-controlflow.generated.json').then(r=>{if(!r.ok)throw Error('HTTP '+r.status);return r.json()}).then(data=>{
+  if(!data.flows||!data.stats)throw Error('Malformed generated controlflow JSON');
+  state.manifest=data;
+  text('[data-total-flows]',data.stats.functions);text('[data-total-nodes]',data.stats.nodes.toLocaleString());text('[data-total-effects]',data.stats.effects.toLocaleString());
+  const select=$('[data-function]');select.replaceChildren();
+  const entries=Object.entries(data.flows).sort((a,b)=>a[1].name.localeCompare(b[1].name));
+  for(const [id,flow] of entries){const opt=document.createElement('option');opt.value=id;opt.textContent=flow.name+' · '+flow.nodes.length+' nodes · '+flow.path.split('/').pop();select.append(opt)}
+  const preset=new URLSearchParams(location.search).get('function')||'sse_consumer';
+  const initial=entries.find(([,v])=>v.name===preset)||entries.find(([,v])=>v.name==='sse_consumer')||entries[0];
+  select.value=initial[0];choose(initial[0]);
+ }).catch(err=>{text('[data-diagram-type]','CODE DATA UNAVAILABLE');text('[data-detail]',err.message)});
+})();
+</script>
+<style>
+.cf-page{--bg:#0b1827;--panel:#13283b;--surface:#1b344a;--stroke:#3c566c;--ink:#e9f4f9;--muted:#a9c1cf;--accent:#73dfc8;--blue:#86bce1;--amber:#e9bb76;--red:#efa4aa;background:var(--bg);color:var(--ink);min-height:100vh;padding:clamp(16px,3vw,48px);font-family:Inter,system-ui,sans-serif}.cf-page *{box-sizing:border-box}.cf-hero,.cf-studio,.cf-method{max-width:1510px;margin-inline:auto}.cf-hero>a,.cf-page a{color:var(--accent)}.cf-kicker{font:700 .68rem ui-monospace,monospace;letter-spacing:.12em;color:var(--accent);margin:28px 0 10px}.cf-hero h1{font-size:clamp(2.1rem,5vw,4.9rem);line-height:1.05;letter-spacing:-.06em;margin:13px 0}.cf-hero h1 em{color:var(--accent);font-style:normal}.cf-hero>p:not(.cf-kicker){color:var(--muted);line-height:1.7;max-width:900px}.cf-stats{display:flex;flex-wrap:wrap;gap:26px;padding:20px 0 30px;margin-top:24px;border-top:1px solid var(--stroke)}.cf-stats span{display:flex;gap:9px;align-items:baseline;color:var(--muted);font:.7rem ui-monospace,monospace}.cf-stats b{color:var(--ink);font-size:1.5rem}.cf-studio{background:var(--panel);border:1px solid var(--stroke);border-radius:16px;overflow:hidden}.cf-toolbar{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:17px;border-bottom:1px solid var(--stroke)}.cf-selector{display:grid;gap:8px;flex:1;max-width:600px}.cf-selector label,.cf-inspect-group label,.cf-row label{font:700 .62rem ui-monospace,monospace;color:var(--muted);letter-spacing:.07em}.cf-selector select,.cf-row select{background:var(--surface);color:var(--ink);border:1px solid var(--stroke);border-radius:8px;padding:10px;width:100%;min-width:0}.cf-modes{display:flex;gap:7px;align-items:end}.cf-modes button{background:var(--surface);border:1px solid var(--stroke);color:var(--ink);padding:12px 14px;border-radius:7px;cursor:pointer;font-size:.77rem}.cf-modes button[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:#102a32;font-weight:700}.cf-workspace{display:grid;grid-template-columns:minmax(0,1.8fr) minmax(285px,.8fr)}.cf-canvas{min-width:0;border-right:1px solid var(--stroke)}.cf-strip{display:flex;justify-content:space-between;gap:12px;padding:15px;color:var(--accent);font:700 .68rem ui-monospace,monospace;letter-spacing:.05em}.cf-legend{display:flex;gap:15px;flex-wrap:wrap;padding:0 15px 13px;color:var(--muted);font:.68rem ui-monospace,monospace}.cf-legend i{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--blue);margin-right:5px}.cf-legend .decision{background:var(--amber)}.cf-legend .exception{background:var(--red)}.cf-legend .write{background:var(--accent)}.cf-controls{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;border-top:1px solid var(--stroke);border-bottom:1px solid var(--stroke);flex-wrap:wrap}.cf-row{display:flex;align-items:center;gap:10px}.cf-row select{font-size:.72rem}.cf-toggle{display:flex;gap:7px;align-items:center;font-size:.73rem;color:var(--muted)}.cf-toggle input{accent-color:var(--accent)}.cf-diagram-window{max-height:690px;overflow:auto;background:radial-gradient(ellipse at 52% 32%,#18364b,#0b1b2c 82%);scrollbar-color:var(--stroke) transparent}.cf-diagram-window svg{width:100%;min-width:850px;display:block;height:auto}.cf-guide{stroke:#355169;stroke-width:1;stroke-dasharray:4 9}.cf-link{stroke:#8baec1;stroke-width:2;fill:none;cursor:pointer;opacity:.75}.cf-link.true,.cf-link.iteration{stroke:var(--accent)}.cf-link.false,.cf-link.done{stroke:var(--amber)}.cf-link.possible-exception,.cf-link.raises{stroke:var(--red);stroke-dasharray:6 5}.cf-link.back{stroke-dasharray:3 5}.cf-link:hover{stroke-width:4;opacity:1}.cf-box{cursor:pointer}.cf-box rect:first-child{fill:#203a4d;stroke:#688da1;stroke-width:1.6}.cf-box .stripe{fill:var(--blue)}.cf-box.decision rect:first-child{stroke:var(--amber)}.cf-box.decision .stripe{fill:var(--amber)}.cf-box.exception rect:first-child{stroke:var(--red)}.cf-box.exception .stripe{fill:var(--red)}.cf-box.write .stripe{fill:var(--accent)}.cf-box.selected rect:first-child{fill:#1c5b52;stroke:var(--accent);stroke-width:3}.cf-box-name{fill:#f4fafb;font:700 12px ui-monospace,monospace}.cf-box-sub{fill:#b3cad3;font:11px ui-monospace,monospace}.cf-footnote{border-top:1px solid var(--stroke);padding:13px;color:var(--muted);font:.67rem/1.6 ui-monospace,monospace}.cf-inspect{padding:21px;min-width:0}.cf-inspector-top{display:flex;justify-content:space-between;gap:8px;color:var(--muted);font:700 .64rem ui-monospace,monospace}.cf-inspector-top span:last-child{color:var(--accent)}.cf-inspect h2{font-size:clamp(1.3rem,2.5vw,2rem);letter-spacing:-.05em;overflow-wrap:anywhere;margin:22px 0 11px}.cf-inspect>p{font-size:.82rem;line-height:1.7;color:var(--muted)}.cf-inspect-group{border-top:1px solid var(--stroke);margin-top:20px;padding-top:18px}.cf-inspect-group>a{font:.71rem/1.7 ui-monospace,monospace;display:grid;gap:5px;overflow-wrap:anywhere}.cf-inspect-group pre{border:1px solid var(--stroke);border-radius:9px;background:#091827;color:#b8e9d7;padding:14px;overflow:auto;max-height:440px;font:11px/1.65 ui-monospace,monospace}.cf-inspect-group p{white-space:pre-line;color:var(--muted);font-size:.77rem;line-height:1.7}.cf-relations{display:grid;gap:6px}.cf-relations button{background:var(--surface);border:1px solid var(--stroke);border-radius:7px;padding:10px;text-align:left;color:var(--ink);font:.71rem ui-monospace,monospace;cursor:pointer}.cf-effects-graph{padding:20px;display:grid;gap:17px}.cf-effects-head{color:var(--muted);font:700 .71rem ui-monospace,monospace}.cf-effect-lane{background:var(--panel);border:1px dashed var(--stroke);border-radius:11px;padding:16px;display:grid;gap:8px}.cf-effect-lane h3{color:var(--accent);font:700 .7rem ui-monospace,monospace;letter-spacing:.08em;margin:0 0 7px}.cf-effect-lane p{color:var(--muted)}.cf-effect{display:flex;gap:9px;align-items:center;flex-wrap:wrap;width:100%;border:1px solid var(--stroke);border-radius:8px;background:var(--surface);color:var(--ink);text-align:left;padding:10px;cursor:pointer}.cf-effect-line{color:var(--muted);font:.67rem ui-monospace,monospace}.cf-effect-arrow{color:var(--accent)}.cf-effect-target{font:.74rem ui-monospace,monospace;overflow-wrap:anywhere}.cf-effect small{margin-left:auto;color:var(--muted);font:.6rem ui-monospace,monospace}.cf-method{padding:50px 0}.cf-method h2{font-size:clamp(1.6rem,3vw,2.6rem);letter-spacing:-.05em}.cf-method-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px}.cf-method article{background:var(--panel);border:1px solid var(--stroke);border-radius:11px;padding:20px}.cf-method article p,.cf-method>p:last-child{color:var(--muted);font-size:.82rem;line-height:1.75}.cf-method article h3{font-size:1rem}.cf-page :is(button,[role=button],a,select,input):focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+:global(html.theme-light) .cf-page{--bg:#f0f6f7;--panel:#fff;--surface:#e9f1f3;--stroke:#b8cdd2;--ink:#193847;--muted:#536e79;--accent:#087868;--blue:#397d9c;--amber:#94631f;--red:#a44254}
+:global(html.theme-light) .cf-diagram-window{background:radial-gradient(ellipse at 52% 32%,#e1f0f0,#c9dde1 85%)}
+:global(html.theme-light) .cf-box rect:first-child{fill:#d8e9ec;stroke:#83a6b2}
+:global(html.theme-light) .cf-box.selected rect:first-child{fill:#bdeade;stroke:var(--accent)}
+:global(html.theme-light) .cf-box-name{fill:#203e4a}
+:global(html.theme-light) .cf-box-sub{fill:#456775}
+@media(max-width:980px){.cf-workspace{grid-template-columns:1fr}.cf-canvas{border-right:0;border-bottom:1px solid var(--stroke)}.cf-inspect{padding:18px}}@media(max-width:650px){.cf-method-grid{grid-template-columns:1fr}.cf-diagram-window svg{min-width:920px}.cf-stats{gap:12px}.cf-modes button{padding:10px}.cf-controls{align-items:flex-start}}
+</style>
