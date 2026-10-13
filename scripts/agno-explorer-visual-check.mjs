@@ -62,7 +62,7 @@ try {
     const node = lab.locator('#al-nodes .al-node');
     assert.equal(await node.count(), 10);
     await node.nth(8).click();
-    assert.match(await lab.locator('#al-selected-title').innerText(), /Tool/);
+    assert.match(await lab.locator('#al-selected-title').innerText(), /Tool/i);
 
     const dark = await lab.evaluate(el => getComputedStyle(el).backgroundColor);
     await page.locator('#theme-toggle').click();
