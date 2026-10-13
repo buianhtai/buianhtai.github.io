@@ -21,6 +21,7 @@ const nodes=[
  {id:'nginx',x:326,y:132,name:'Nginx',sub:'Reverse proxy',tag:'EDGE',n:'02'},
  {id:'gateway',x:546,y:132,name:'FastAPI',sub:'Gateway',tag:'BACKEND',n:'03'},
  {id:'worker',x:806,y:132,name:'Run worker',sub:'LangGraph / async',tag:'RUNTIME',n:'04'},
+ {id:'tools',x:106,y:354,name:'Tool adapter',sub:'MCP / sandbox',tag:'INTEGRATIONS',n:'08'},
  {id:'bridge',x:326,y:354,name:'StreamBridge',sub:'Memory / Redis',tag:'EVENTS',n:'07'},
  {id:'db',x:546,y:354,name:'Application DB',sub:'Run records',tag:'SQL',n:'05'},
  {id:'model',x:806,y:354,name:'Model provider',sub:'LLM API',tag:'EXTERNAL',n:'06'},
@@ -33,6 +34,7 @@ const paths=[
  {id:'model',d:'M 806 179 V 305',label:'model call',x:853,y:244,color:'#928be4'},
  {id:'publish',d:'M 892 132 H 940 V 451 H 326 V 404',label:'publish()',x:675,y:438,color:'#169b89'},
  {id:'subscribe',d:'M 326 305 V 264 H 546 V 180',label:'subscribe()',x:432,y:251,color:'#169b89'},
+ {id:'toolcall',d:'M 720 154 H 686 V 436 H 106 V 404',label:'authorized tool',x:204,y:425,color:'#bb97e7'},
  {id:'sse',d:'M 546 84 V 48 H 106 V 84',label:'SSE / HTTP',x:320,y:37,color:'#169b89'},
 ];
 ---
@@ -53,15 +55,39 @@ const paths=[
    </nav>
    <section class="drawing" aria-label="Animated system diagram">
     <div class="drawing-top"><span><Icon name="lucide:component" size={16}/> ONE SYSTEM, REVEALED IN LAYERS</span><small>Positions stay fixed across scenes</small></div>
+    <div class="explorer-toolbar" aria-label="Diagram controls">
+     <div class="depth-modes" role="group" aria-label="Architecture detail level"><span>DETAIL LEVEL</span>
+      <button type="button" data-depth-button="overview" aria-pressed="false">Overview</button>
+      <button type="button" data-depth-button="components" aria-pressed="true">Components</button>
+      <button type="button" data-depth-button="code" aria-pressed="false">Code</button>
+     </div>
+     <div class="toolbar-actions"><button type="button" class="share-scene" data-share-view><Icon name="lucide:link" size={14}/> <span>Copy view link</span></button>
+      <details class="scenario-picker"><summary><Icon name="lucide:triangle-alert" size={14}/> Failure paths</summary><div class="scenario-options" role="group" aria-label="Choose a failure scenario">
+       <button type="button" data-failure-button="normal" aria-pressed="true">Normal request</button>
+       <button type="button" data-failure-button="disconnect" aria-pressed="false">SSE disconnect</button>
+       <button type="button" data-failure-button="denied" aria-pressed="false">Tool denied</button>
+       <button type="button" data-failure-button="crash" aria-pressed="false">Worker crash</button>
+      </div></details>
+     </div>
+    </div>
     <div class="map" aria-hidden="false">
      <svg viewBox="0 0 960 482" role="img" aria-labelledby="map-title map-description">
       <title id="map-title">DeerFlow runtime request and response map</title>
-      <desc id="map-description">Seven components occupy fixed locations. Selecting a scene reveals HTTP request, asynchronous admission, or model and SSE delivery paths.</desc>
+      <desc id="map-description">Eight components sit in marked frontend, edge, backend, persistence, transport, tool and external-model boundaries. Timeline events highlight actual conceptual communication paths.</desc>
       <defs>
        <pattern id="story-grid" width="24" height="24" patternUnits="userSpaceOnUse"><path d="M24 0 H0 V24" fill="none" stroke="currentColor" stroke-opacity=".07"/></pattern>
        {paths.map(p=><marker id={'arrow-'+p.id} markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6 Z" fill={p.color}/></marker>)}
       </defs>
       <rect width="960" height="482" fill="url(#story-grid)"/>
+      <g class="boundary-layer" aria-hidden="true">
+       <rect class="boundary-zone" x="8" y="55" width="195" height="156" rx="14"/><text class="boundary-label" x="18" y="72">FRONTEND · USER INTERFACE</text>
+       <rect class="boundary-zone" x="227" y="55" width="198" height="156" rx="14"/><text class="boundary-label" x="237" y="72">EDGE · REVERSE PROXY</text>
+       <rect class="boundary-zone" x="440" y="55" width="472" height="156" rx="14"/><text class="boundary-label" x="450" y="72">BACKEND · GATEWAY & RUNTIME</text>
+       <rect class="boundary-zone" x="8" y="282" width="195" height="135" rx="14"/><text class="boundary-label" x="18" y="298">TOOLS · EXTERNAL EFFECTS</text>
+       <rect class="boundary-zone" x="227" y="282" width="198" height="135" rx="14"/><text class="boundary-label" x="237" y="298">EVENT TRANSPORT</text>
+       <rect class="boundary-zone" x="440" y="282" width="214" height="135" rx="14"/><text class="boundary-label" x="450" y="298">PERSISTENCE</text>
+       <rect class="boundary-zone" x="697" y="282" width="215" height="135" rx="14"/><text class="boundary-label" x="707" y="298">EXTERNAL MODEL</text>
+      </g>
       <text x="18" y="23" class="zone">01 / CLIENT & EXECUTION</text>
       <text x="18" y="275" class="zone">02 / STATE & DEPENDENCIES</text>
       {paths.map(p=><g class:list={['wire',{'on':scenes[0].paths.includes(p.id)}]} data-wire={p.id}>
@@ -79,6 +105,9 @@ const paths=[
       </g>)}
      </svg>
     </div>
+    <div class="focus-callout" data-diagram-focus aria-live="polite"><span data-focus-index>EVENT 01 / 09</span><strong data-focus-title>React submits a run</strong><p data-focus-description>Browser → Nginx → FastAPI · HTTPS request</p></div>
+    <div class="implementation-focus" data-code-focus hidden><span>IMPLEMENTATION DETAIL</span><code data-code-line>POST /api/langgraph/threads/{id}/runs/stream</code><a data-code-source href={repo+'frontend/src/core/api/api-client.ts'} target="_blank" rel="noopener noreferrer">Open pinned source ↗</a></div>
+    <div class="failure-explanation" data-failure-explanation hidden role="status"><Icon name="lucide:shield-alert" size={19}/><div><strong data-failure-title></strong><p data-failure-description></p></div></div>
     <DeerFlowEditorialVignettes />
     <DeerFlowProtocolExamples />
     <div class="mobile-path">
