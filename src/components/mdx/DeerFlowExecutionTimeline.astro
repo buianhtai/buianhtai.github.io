@@ -1,0 +1,116 @@
+---
+/** Source-based, representative timeline: not a captured trace or benchmark.
+ * The five lanes are conceptual and timestamps are deliberately omitted.
+ */
+const events=[
+ {n:'01',lane:'HTTP',tag:'REQUEST',title:'React submits a run',detail:'The SDK sends POST /api/langgraph/threads/{thread_id}/runs/stream through Nginx into FastAPI.',payload:'POST /api/langgraph/threads/{id}/runs/stream\nContent-Type: application/json\n\n{ "input": { "messages": [ ... ] } }',source:'frontend/src/core/api/api-client.ts'},
+ {n:'02',lane:'RUNTIME',tag:'ADMISSION',title:'RunManager accepts ownership',detail:'The Gateway validates the request, checks for conflicting runs, and creates or reuses a RunRecord.',payload:'record = await run_mgr.create_or_reject(...)\n# Run identity and ownership are checked.',source:'backend/app/gateway/services.py'},
+ {n:'03',lane:'PERSIST',tag:'RUN RECORD',title:'Run metadata is stored (when configured)',detail:'A persistent RunStore can journal run status and events. This is not the graph checkpoint.',payload:'RunStore: run_id, status, owner, journal\n# SQL-backed mode is configuration-dependent.',source:'backend/packages/harness/deerflow/runtime/runs/manager.py'},
+ {n:'04',lane:'RUNTIME',tag:'START WORK',title:'Gateway starts an asyncio task',detail:'The normal execution path attaches a process-local asyncio.Task; it does not require a Kafka or RabbitMQ job queue.',payload:'record.task = asyncio.create_task(worker)\n# Same Gateway process; not external dispatch.',source:'backend/app/gateway/services.py'},
+ {n:'05',lane:'MODEL',tag:'AGENT LOOP',title:'LangGraph invokes the model',detail:'The worker streams graph updates. The model may respond immediately or propose one or more tool calls.',payload:'async for update in graph.astream(...):\n    publish(update)\n# Simplified, illustrative pseudocode.',source:'backend/packages/harness/deerflow/runtime/runs/worker.py'},
+ {n:'06',lane:'TOOLS',tag:'OPTIONAL',title:'A permitted tool executes',detail:'A model-proposed tool action is checked against execution-time authorization before an MCP or other adapter runs. A simple answer may skip this step.',payload:'model proposal → permission check → tool\n# Tool result returns to the graph.',source:'backend/packages/harness/deerflow/authz/enforcement.py'},
+ {n:'07',lane:'PERSIST',tag:'CHECKPOINT',title:'Graph state may be checkpointed',detail:'The configured LangGraph checkpointer preserves graph state separately from run metadata and StreamBridge event buffering.',payload:'Checkpointer → graph state / thread state\nRunStore → run status / journal\nStreamBridge → live event buffer',source:'backend/packages/harness/deerflow/runtime/runs/worker.py'},
+ {n:'08',lane:'SSE',tag:'DELIVER',title:'StreamBridge publishes browser events',detail:'The Gateway SSE consumer subscribes and forwards events. Event delivery can overlap model/tool work.',payload:'event: <stream mode>\nid: <event cursor>\ndata: <JSON payload>\n\n# Frame shown as representative format.',source:'backend/app/gateway/services.py'},
+ {n:'09',lane:'SSE',tag:'COMPLETE',title:'Browser receives the terminal signal',detail:'When the run completes, the stream ends. The UI reconciles rendered messages and durable state as needed.',payload:'event: end\ndata: null\n\n# A terminal stream is not an execution queue.',source:'backend/app/gateway/services.py'},
+];
+const lanes=[{name:'HTTP',label:'EDGE / CLIENT'},{name:'RUNTIME',label:'PYTHON WORKER'},{name:'MODEL',label:'MODEL SERVICE'},{name:'TOOLS',label:'MCP / ADAPTER'},{name:'PERSIST',label:'STATE STORAGE'},{name:'SSE',label:'STREAM DELIVERY'}];
+const pinned='https://github.com/bytedance/deer-flow/blob/1f15e0b43ca58b9601514f9f5c408fb032022833/';
+---
+<section class="trace-lab" data-trace-lab aria-label="Explore representative DeerFlow request execution timeline">
+ <header class="tl-header">
+  <div><span class="tl-kicker">TRACE EXPLAINER · SOURCE-GROUNDED</span><h2>Follow one request, event by event.</h2><p>Switch between the browser, worker, model, tools, persistence and SSE. See what each step does—and what it does not guarantee.</p></div>
+  <span class="tl-notice">Illustrative order · no measured timings</span>
+ </header>
+ <div class="tl-surface">
+  <div class="tl-lanes" aria-label="Runtime lanes">
+   {lanes.map(l=><span data-lane-pill={l.name}><strong>{l.name}</strong><small>{l.label}</small></span>)}
+  </div>
+  <div class="tl-track">
+   <div class="tl-track-heading"><span>EXECUTION EVENT INDEX</span><output data-trace-count>01 / 09</output></div>
+   <div class="tl-events" aria-label="Select execution event">
+    {events.map((e,i)=><button type="button" data-trace-event={i} class:list={['tl-event',{active:i===0}]} aria-pressed={i===0}><span class="tl-seq">{e.n}</span><span class="tl-event-text"><strong>{e.title}</strong><small>{e.tag}</small></span><span class="tl-lane">{e.lane}</span></button>)}
+   </div>
+  </div>
+  <div class="tl-inspect">
+   <div class="tl-inspect-head"><span>STEP INSPECTOR</span><span data-trace-step>01 / REQUEST</span></div>
+   {events.map((e,i)=><article data-trace-panel={i} hidden={i!==0}>
+    <span class="tl-panel-lane">{e.lane} · {e.tag}</span>
+    <h3>{e.title}</h3>
+    <p>{e.detail}</p>
+    <div class="tl-code-title">REPRESENTATIVE PAYLOAD / CONTROL FLOW</div>
+    <pre><code>{e.payload}</code></pre>
+    <a href={pinned+e.source} target="_blank" rel="noopener noreferrer">Read implementation source ↗ <small>{e.source}</small></a>
+   </article>)}
+   <div class="tl-steps"><button type="button" data-trace-back disabled>← Previous event</button><button type="button" data-trace-forward>Next event →</button></div>
+  </div>
+ </div>
+ <p class="tl-caveat"><strong>How to read this:</strong> Event order is a teaching path, not an exact distributed trace. SSE emission may overlap ongoing execution. A tool call is optional, SQL persistence depends on configuration, and graph checkpoints are not interchangeable with a live event buffer.</p>
+</section>
+<style>
+.trace-lab{--tl-accent:var(--accent,#83dfd1);--tl-ink:var(--ink,#ebf3f5);--tl-muted:var(--dim,#acc0c9);--tl-line:var(--line,#344d5a);margin:0 0 25px;color:var(--tl-ink);font-family:Inter,system-ui,sans-serif}
+.trace-lab [hidden]{display:none!important}
+.tl-header{padding:29px 26px 21px;display:flex;justify-content:space-between;align-items:end;gap:16px;flex-wrap:wrap}
+.tl-kicker,.tl-notice,.tl-track-heading,.tl-inspect-head,.tl-code-title{font:700 .61rem/1.5 var(--font-mono,monospace);letter-spacing:.075em;color:var(--tl-accent)}
+.tl-header h2{font-size:clamp(1.35rem,3.5vw,2.12rem);letter-spacing:-.05em;margin:9px 0 9px}
+.tl-header p{font-size:.82rem;line-height:1.7;max-width:67ch;color:var(--tl-muted);margin:0}
+.tl-notice{padding:7px 10px;border:1px solid var(--tl-line);border-radius:6px;color:var(--tl-muted);letter-spacing:0}
+.tl-surface{display:grid;grid-template-columns:minmax(230px,.9fr) minmax(295px,1.06fr);background:var(--stage,#192c39);border-top:1px solid var(--tl-line);border-bottom:1px solid var(--tl-line)}
+.tl-lanes{grid-column:1/-1;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:0;border-bottom:1px solid var(--tl-line)}
+.tl-lanes span{display:flex;flex-direction:column;gap:5px;align-items:center;padding:13px 5px;border-right:1px solid var(--tl-line);opacity:.42;transition:opacity .15s,background .15s}
+.tl-lanes span:last-child{border-right:0}.tl-lanes span.active{opacity:1;background:color-mix(in srgb,var(--tl-accent) 11%,transparent)}
+.tl-lanes strong{font:750 .67rem var(--font-mono,monospace);color:var(--tl-ink)}.tl-lanes small{font:550 .52rem var(--font-mono,monospace);color:var(--tl-muted);text-align:center}
+.tl-track{border-right:1px solid var(--tl-line);min-width:0}
+.tl-track-heading,.tl-inspect-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:16px;border-bottom:1px solid var(--tl-line)}
+.tl-track-heading output{color:var(--tl-muted)}
+.tl-events{display:flex;flex-direction:column;padding:8px}
+.tl-event{background:transparent;color:var(--tl-ink);border:1px solid transparent;border-radius:7px;text-align:left;padding:11px 9px;display:flex;align-items:center;gap:9px;cursor:pointer;font:inherit}
+.tl-event.active{background:color-mix(in srgb,var(--tl-accent) 11%,transparent);border-color:color-mix(in srgb,var(--tl-accent) 50%,var(--tl-line))}
+.tl-event:hover{background:color-mix(in srgb,var(--tl-accent) 6%,transparent)}
+.tl-seq{font:750 .76rem var(--font-mono,monospace);color:var(--tl-accent)}
+.tl-event-text{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}.tl-event-text strong{font-size:.76rem;line-height:1.35}.tl-event-text small{font:.58rem var(--font-mono,monospace);color:var(--tl-muted)}
+.tl-lane{font:650 .55rem var(--font-mono,monospace);border:1px solid var(--tl-line);border-radius:4px;padding:4px 5px;color:var(--tl-muted)}
+.tl-inspect{min-width:0;background:var(--card,#142431)}
+.tl-panel-lane{font:700 .62rem var(--font-mono,monospace);letter-spacing:.08em;color:var(--tl-accent)}
+.tl-inspect article{padding:23px 20px 15px}
+.tl-inspect h3{font-size:clamp(1.18rem,2vw,1.7rem);line-height:1.25;letter-spacing:-.04em;margin:12px 0}
+.tl-inspect article>p{font-size:.82rem;line-height:1.75;color:var(--tl-muted)}
+.tl-code-title{margin:24px 0 8px}
+.tl-inspect pre{background:var(--stage,#192c39);border:1px solid var(--tl-line);padding:15px;border-radius:8px;overflow:auto;max-width:100%;white-space:pre-wrap;overflow-wrap:anywhere}
+.tl-inspect code{font:550 .68rem/1.7 var(--font-mono,monospace);color:var(--tl-ink)}
+.tl-inspect article>a{display:flex;flex-direction:column;gap:5px;overflow-wrap:anywhere;color:var(--tl-accent);font-weight:700;font-size:.7rem;text-decoration:none}
+.tl-inspect article>a small{color:var(--tl-muted);font:500 .6rem/1.4 var(--font-mono,monospace)}
+.tl-steps{display:flex;gap:10px;justify-content:space-between;padding:16px 20px;border-top:1px solid var(--tl-line)}
+.tl-steps button{background:transparent;border:1px solid var(--tl-line);border-radius:7px;padding:10px 12px;color:var(--tl-ink);font-size:.72rem;font-weight:700;cursor:pointer}.tl-steps button:hover:not(:disabled){border-color:var(--tl-accent)}.tl-steps button:disabled{opacity:.35;cursor:default}
+.tl-caveat{padding:15px 25px 0;font-size:.72rem;line-height:1.8;color:var(--tl-muted)}.tl-caveat strong{color:var(--tl-ink)}
+.trace-lab button:focus-visible,.trace-lab a:focus-visible{outline:2px solid var(--tl-accent);outline-offset:3px}
+@media(max-width:760px){.tl-lanes{grid-template-columns:repeat(3,minmax(0,1fr))}.tl-lanes span:nth-child(3){border-right:0}.tl-lanes span:nth-child(-n+3){border-bottom:1px solid var(--tl-line)}.tl-surface{grid-template-columns:1fr}.tl-track{border-right:0;border-bottom:1px solid var(--tl-line)}.tl-events{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;padding:8px}.tl-event{padding:8px 6px;display:flex;flex-direction:column;align-items:flex-start;gap:7px}.tl-event-text strong{font-size:.66rem}.tl-event-text small{font-size:.52rem}.tl-lane{font-size:.48rem}.tl-header{padding:21px 16px 17px}.tl-caveat{padding:12px 16px}}
+@media(max-width:440px){.tl-events{grid-template-columns:repeat(2,minmax(0,1fr))}.tl-event-text strong{font-size:.67rem}.tl-inspect article{padding:17px 14px}.tl-steps{padding:12px 14px}.tl-steps button{font-size:.66rem}.tl-lanes strong{font-size:.58rem}.tl-lanes small{font-size:.47rem}}
+@media(prefers-reduced-motion:reduce){.trace-lab *{animation:none!important;transition:none!important}}
+</style>
+<script>
+ for(const root of document.querySelectorAll<HTMLElement>('[data-trace-lab]')){
+  const buttons=[...root.querySelectorAll<HTMLButtonElement>('[data-trace-event]')];
+  const panels=[...root.querySelectorAll<HTMLElement>('[data-trace-panel]')];
+  const pills=[...root.querySelectorAll<HTMLElement>('[data-lane-pill]')];
+  const back=root.querySelector<HTMLButtonElement>('[data-trace-back]');
+  const forward=root.querySelector<HTMLButtonElement>('[data-trace-forward]');
+  const counter=root.querySelector<HTMLOutputElement>('[data-trace-count]');
+  const step=root.querySelector<HTMLElement>('[data-trace-step]');
+  if(!back||!forward||!counter||!step)return;
+  let index=0;
+  const show=(i:number)=>{
+   index=Math.max(0,Math.min(buttons.length-1,i));
+   buttons.forEach((b,j)=>{b.classList.toggle('active',index===j);b.setAttribute('aria-pressed',String(index===j));});
+   panels.forEach((p,j)=>{p.hidden=index!==j;});
+   const lane=buttons[index]?.querySelector<HTMLElement>('.tl-lane')?.textContent?.trim();
+   pills.forEach(p=>p.classList.toggle('active',p.dataset.lanePill===lane));
+   counter.textContent=String(index+1).padStart(2,'0')+' / 09';
+   step.textContent=String(index+1).padStart(2,'0')+' / '+(buttons[index]?.querySelector('.tl-event-text small')?.textContent||'EVENT');
+   back.disabled=index===0;forward.disabled=index===buttons.length-1;
+  };
+  buttons.forEach((b,i)=>b.addEventListener('click',()=>show(i)));
+  back.addEventListener('click',()=>show(index-1));
+  forward.addEventListener('click',()=>show(index+1));
+  show(0);
+ }
+</script>
