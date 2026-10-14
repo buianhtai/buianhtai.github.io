@@ -100,6 +100,36 @@ function line(a,b){
       <button id="ai-clear" aria-label="Clear component focus" type="button">Reset</button>
     </div>
   </div>
+  <div class="ai-story" id="ai-guided">
+    <div class="ai-story-head"><span>GUIDED ARCHITECTURE WALKTHROUGH <b class="ai-new">INTERACTIVE</b></span><small>Illustrative control/data paths · tied to pinned source</small></div>
+    <div class="ai-scenarios" role="group" aria-label="Architecture scenarios">
+      {[
+        {id:'overview',name:'All connections'},
+        {id:'answer',name:'Direct answer'},
+        {id:'tools',name:'Tool execution'},
+        {id:'queue',name:'Durable background'},
+        {id:'resume',name:'Reconnect / SSE'},
+        {id:'failure',name:'Worker recovery'}
+      ].map((s,i)=><button type="button" data-scenario={s.id} aria-pressed={i===0}>{s.name}</button>)}
+    </div>
+    <div class="ai-flow-row">
+      <button type="button" id="ai-prev" aria-label="Previous execution step">←</button>
+      <div class="ai-story-copy"><strong id="ai-story-title">Explore the entire topology</strong><span id="ai-story-description">Select a scenario to highlight ordered relationships; select any component to inspect its code and dependencies.</span></div>
+      <div class="ai-stepcounter" id="ai-step-count">—</div>
+      <button type="button" id="ai-next" aria-label="Next execution step">→</button>
+    </div>
+    <div class="ai-play-controls">
+      <button type="button" id="ai-play" aria-label="Play guided execution" aria-pressed="false">▶ Play walkthrough</button>
+      <label for="ai-scrub">Step</label>
+      <input id="ai-scrub" type="range" min="0" max="0" value="0" disabled aria-label="Scrub execution steps"/>
+      <label class="ai-follow-label"><input id="ai-follow" type="checkbox" checked/> Focus active relation</label>
+    </div>
+    <div class="ai-runtime-inspector" aria-live="polite">
+      <div><small>CONNECTION / PROTOCOL</small><strong id="ai-runtime-protocol">Choose a flow to explore.</strong><code id="ai-runtime-payload">HTTP · SSE · in-process calls · database state</code></div>
+      <div><small>STATE / EXECUTION CONSEQUENCE</small><p id="ai-runtime-state">Every step describes the active component, its relationship and what persists. This is a simulated walkthrough, not production telemetry.</p></div>
+      <div><small>IMPLEMENTATION EVIDENCE</small><a id="ai-runtime-source" target="_blank" rel="noopener noreferrer" href={'https://github.com/agno-agi/agno/tree/'+revision}>Pinned source ↗</a><span id="ai-runtime-proof">Select a scenario to inspect the relevant implementation.</span></div>
+    </div>
+  </div>
   <div class="ai-reader" aria-label="Architecture navigation">
     <div class="ai-reader-message"><strong>Explore the system by subsystem.</strong><span>Start with the whole platform, then magnify a boundary to read the component labels and connections.</span></div>
     <label for="ai-region">View architecture area
@@ -195,25 +225,6 @@ function line(a,b){
       <a id="ai-source" href={'https://github.com/agno-agi/agno/tree/'+revision} target="_blank" rel="noopener noreferrer">Browse pinned Agno source ↗</a>
     </aside>
   </div>
-  <div class="ai-story">
-    <div class="ai-story-head"><span>TRACE A RELATIONSHIP PATH</span><small>Scenarios highlight illustrative routing, not captured request traces.</small></div>
-    <div class="ai-scenarios" role="group" aria-label="Architecture scenarios">
-      {[
-        {id:'overview',name:'All connections'},
-        {id:'answer',name:'Direct answer'},
-        {id:'tools',name:'Tool execution'},
-        {id:'queue',name:'Durable background'},
-        {id:'resume',name:'Reconnect / SSE'},
-        {id:'failure',name:'Worker recovery'}
-      ].map((s,i)=><button type="button" data-scenario={s.id} aria-pressed={i===0}>{s.name}</button>)}
-    </div>
-    <div class="ai-flow-row">
-      <button type="button" id="ai-prev" aria-label="Previous relation">←</button>
-      <div class="ai-story-copy"><strong id="ai-story-title">Explore the entire topology</strong><span id="ai-story-description">Select a scenario to highlight ordered relationships; select any component to inspect its code and dependencies.</span></div>
-      <div class="ai-stepcounter" id="ai-step-count">—</div>
-      <button type="button" id="ai-next" aria-label="Next relation">→</button>
-    </div>
-  </div>
   <div class="ai-legend">
     <span><i class="ai-key ai-k-http"></i> HTTP / API</span>
     <span><i class="ai-key ai-k-invoke"></i> In-process call</span>
@@ -240,7 +251,23 @@ function line(a,b){
 #ai-step-annotation rect{fill:var(--a-bg);stroke:var(--a-accent);stroke-width:1.5;filter:drop-shadow(0 2px 4px #0005)}#ai-step-annotation text{font:700 11px system-ui;fill:var(--a-text)}
 .ai button{cursor:pointer;color:var(--a-text)}.ai button:focus-visible,.ai a:focus-visible,.ai [role=button]:focus-visible{outline:2px solid var(--a-accent);outline-offset:3px}.ai-header{display:flex;justify-content:space-between;gap:16px;align-items:start;padding:24px 26px 16px;background:linear-gradient(115deg,color-mix(in srgb,var(--a-accent) 8%,var(--a-bg)),var(--a-bg) 60%)}.ai-overline{font:700 .66rem ui-monospace,monospace!important;letter-spacing:.16em;color:var(--a-accent)!important;margin:0!important}.ai-header h3{font-size:1.65rem;line-height:1.2;margin:8px 0 9px}.ai-header p{color:var(--a-muted);font-size:.82rem;line-height:1.6;margin:0}.ai-header em{font-style:normal;color:var(--a-text)}.ai-rev{font:.64rem ui-monospace,monospace;color:var(--a-muted);white-space:nowrap;border:1px solid var(--a-border);padding:9px;border-radius:7px}.ai-rev strong{color:var(--a-accent)}.ai-stats{display:flex;align-items:center;flex-wrap:wrap;gap:11px 19px;padding:12px 26px;background:var(--a-panel);border-block:1px solid var(--a-border);font-size:.76rem;color:var(--a-muted)}.ai-stats b{color:var(--a-text);font-size:.93rem}.ai-stats-note{margin-left:auto;font:.68rem ui-monospace,monospace}.ai-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 16px}.ai-filter,.ai-zoom,.ai-scenarios{display:flex;gap:5px;flex-wrap:wrap}.ai-filter button,.ai-zoom button,.ai-scenarios button,.ai-canvas-foot button,.ai-flow-row>button{background:var(--a-panel);border:1px solid var(--a-border);padding:8px 10px;border-radius:7px;font:600 .72rem system-ui;color:var(--a-muted)}.ai-filter button[aria-pressed=true],.ai-scenarios button[aria-pressed=true]{color:var(--a-accent);border-color:var(--a-accent);background:color-mix(in srgb,var(--a-accent) 10%,var(--a-bg))}.ai-zoom button{font-size:.84rem;color:var(--a-text);min-width:33px}.ai-zoom #ai-lines{font-size:.7rem}.ai-zoom #ai-lines[aria-pressed=true]{border-color:var(--a-accent);color:var(--a-accent)}.ai-workspace{display:grid;grid-template-columns:minmax(0,1fr) 259px;gap:12px;padding:0 15px 14px}.ai-map{border:1px solid var(--a-border);border-radius:12px;background:var(--a-panel);overflow:hidden;min-width:0}.ai-canvas{overflow:auto;overscroll-behavior:contain;background:var(--a-bg)}.ai-canvas svg{display:block;width:100%;min-width:870px;height:auto;user-select:none;cursor:grab;max-height:650px;touch-action:pan-y}.ai-canvas svg.ai-grabbing{cursor:grabbing;touch-action:none}.ai-canvas.is-fit svg{min-width:0}.ai-base{fill:var(--a-bg)}.ai-dot{fill:var(--a-muted);opacity:.14}.ai-boundary rect{fill:var(--a-panel);stroke:var(--a-border);stroke-width:1.3}.ai-boundary-runtime rect{fill:color-mix(in srgb,var(--a-call) 4%,var(--a-panel));stroke:color-mix(in srgb,var(--a-call) 45%,var(--a-border))}.ai-boundary-external rect{fill:color-mix(in srgb,var(--a-link) 3%,var(--a-panel))}.ai-boundary-data rect{fill:color-mix(in srgb,var(--a-db) 5%,var(--a-panel));stroke:color-mix(in srgb,var(--a-db) 35%,var(--a-border))}.ai-boundary-ops rect{fill:color-mix(in srgb,var(--a-event) 4%,var(--a-panel))}.ai-boundary-title{fill:var(--a-text);font:700 10px ui-monospace,monospace;letter-spacing:1px}.ai-boundary-sub{fill:var(--a-muted);font:10px system-ui}.ai-node{cursor:pointer;transition:opacity .17s}.ai-node-rect{fill:var(--a-bg);stroke:var(--a-border);stroke-width:1.3}.ai-node-icon{fill:none;stroke:var(--a-link);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .ai-node-runtime .ai-node-icon{stroke:var(--a-call)}.ai-node-data .ai-node-icon{stroke:var(--a-db)}.ai-node-ops .ai-node-icon{stroke:var(--a-event)}
-.ai-node-symbol{fill:color-mix(in srgb,var(--a-link) 14%,var(--a-bg))}.ai-node-symbol-text{fill:var(--a-link);font:800 12px ui-monospace,monospace}.ai-node-runtime .ai-node-symbol{fill:color-mix(in srgb,var(--a-call) 14%,var(--a-bg))}.ai-node-runtime .ai-node-symbol-text{fill:var(--a-call)}.ai-node-data .ai-node-symbol{fill:color-mix(in srgb,var(--a-db) 15%,var(--a-bg))}.ai-node-data .ai-node-symbol-text{fill:var(--a-db)}.ai-node-ops .ai-node-symbol{fill:color-mix(in srgb,var(--a-event) 14%,var(--a-bg))}.ai-node-ops .ai-node-symbol-text{fill:var(--a-event)}.ai-node-label{fill:var(--a-text);font:700 12px system-ui}.ai-node-sub{fill:var(--a-muted);font:10px system-ui}.ai-node.is-focused .ai-node-rect,.ai-node:focus-visible .ai-node-rect{stroke:var(--a-accent);stroke-width:3}.ai-node.is-adjacent .ai-node-rect{stroke:var(--a-accent);stroke-opacity:.65}.ai-node.is-dimmed{opacity:.24}.ai-arrow-head{fill:var(--a-muted);opacity:.8}.ai-edge{fill:none;stroke-width:1.5;opacity:.23;pointer-events:none;transition:opacity .18s,stroke-width .18s}.ai-edge-http{stroke:var(--a-link)}.ai-edge-invoke{stroke:var(--a-call)}.ai-edge-data{stroke:var(--a-db)}.ai-edge-event{stroke:var(--a-event)}.ai-edge-policy{stroke:var(--a-policy)}.ai-edge.is-active{opacity:1;stroke-width:3;filter:drop-shadow(0 0 2px var(--a-bg))}.ai-edge.is-past{opacity:.6;stroke-width:2}.ai-canvas-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 12px;border-top:1px solid var(--a-border);color:var(--a-muted);font-size:.68rem}.ai-canvas-foot button{font-size:.68rem;padding:6px 9px;white-space:nowrap}.ai-aside{border:1px solid var(--a-border);border-radius:12px;padding:18px;background:var(--a-panel);display:flex;align-items:flex-start;flex-direction:column;gap:14px;min-width:0}.ai-inspector-kicker,.ai-section-label{font:700 .65rem ui-monospace,monospace;letter-spacing:.09em;color:var(--a-accent);margin:0}.ai-aside h4{font-size:1.15rem;line-height:1.25;margin:0}.ai-aside p{font-size:.78rem;line-height:1.65;color:var(--a-muted);margin:0}.ai-inspector-section{width:100%;border-top:1px solid var(--a-border);padding-top:12px}.ai-inspector-section .ai-section-label{display:block;margin-bottom:8px}.ai-placeholder{font-style:italic}#ai-relations{display:grid;gap:7px}.ai :global(.ai-rel-link){display:flex;justify-content:space-between;gap:7px;width:100%;align-items:center;text-align:left;border:1px solid var(--a-border);background:var(--a-bg);border-radius:7px;padding:9px 8px;color:var(--a-text)!important;font-size:.7rem}.ai :global(.ai-rel-link) :global(small){color:var(--a-muted);font-size:.64rem}.ai-aside>a{font-size:.73rem;color:var(--a-accent);text-decoration:underline;text-underline-offset:3px;margin-top:auto;overflow-wrap:anywhere}.ai-story{border-top:1px solid var(--a-border);padding:16px 22px}.ai-story-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:11px}.ai-story-head span{font:700 .67rem ui-monospace,monospace;letter-spacing:.09em;color:var(--a-accent)}.ai-story-head small{font-size:.71rem;color:var(--a-muted)}.ai-flow-row{display:flex;align-items:center;gap:12px;border:1px solid var(--a-border);padding:11px 12px;border-radius:9px;background:var(--a-panel);margin-top:11px}.ai-flow-row>button{font-size:.9rem;min-width:39px;align-self:stretch}.ai-story-copy{flex:1;display:grid;gap:5px}.ai-story-copy strong{font-size:.83rem}.ai-story-copy span{font-size:.73rem;line-height:1.45;color:var(--a-muted)}.ai-stepcounter{font:.7rem ui-monospace,monospace;color:var(--a-muted);white-space:nowrap}.ai-legend{display:flex;gap:16px;flex-wrap:wrap;padding:12px 22px;border-top:1px solid var(--a-border);font-size:.72rem;color:var(--a-muted)}.ai-legend span{display:flex;align-items:center;gap:6px}.ai-key{height:3px;width:17px;display:inline-block;border-radius:4px}.ai-k-http{background:var(--a-link)}.ai-k-invoke{background:var(--a-call)}.ai-k-data{background:var(--a-db)}.ai-k-event{background:var(--a-event)}.ai-k-policy{background:var(--a-policy)}.ai-foot{font-size:.74rem;line-height:1.65;color:var(--a-muted);padding:14px 22px;border-top:1px solid var(--a-border)}.ai-foot a{color:var(--a-accent)}@media(max-width:900px){.ai-reader{grid-template-columns:repeat(2,minmax(0,1fr))}.ai-reader-message{grid-column:1/-1}.ai-workspace{grid-template-columns:1fr}.ai-aside{min-height:220px}.ai-header{flex-wrap:wrap}.ai-stats-note{margin-left:0}}@media(max-width:500px){.ai-reader{margin:0 9px 9px;gap:9px;padding:10px}.ai-reader select{font-size:.7rem}.ai-canvas.is-fit svg{min-width:0!important}.ai-header{padding:17px}.ai-header h3{font-size:1.35rem}.ai-toolbar{padding:10px}.ai-filter{overflow-x:auto;flex-wrap:nowrap;max-width:100%}.ai-filter button{white-space:nowrap}.ai-workspace{padding:0 9px 10px}.ai-story{padding:13px}.ai-story-copy strong{font-size:.75rem}.ai-canvas-foot>span{max-width:73%}}@media(prefers-reduced-motion:reduce){.ai-node,.ai-edge{transition:none}}
+.ai-node-symbol{fill:color-mix(in srgb,var(--a-link) 14%,var(--a-bg))}.ai-node-symbol-text{fill:var(--a-link);font:800 12px ui-monospace,monospace}.ai-node-runtime .ai-node-symbol{fill:color-mix(in srgb,var(--a-call) 14%,var(--a-bg))}.ai-node-runtime .ai-node-symbol-text{fill:var(--a-call)}.ai-node-data .ai-node-symbol{fill:color-mix(in srgb,var(--a-db) 15%,var(--a-bg))}.ai-node-data .ai-node-symbol-text{fill:var(--a-db)}.ai-node-ops .ai-node-symbol{fill:color-mix(in srgb,var(--a-event) 14%,var(--a-bg))}.ai-node-ops .ai-node-symbol-text{fill:var(--a-event)}.ai-node-label{fill:var(--a-text);font:700 12px system-ui}.ai-node-sub{fill:var(--a-muted);font:10px system-ui}.ai-node.is-focused .ai-node-rect,.ai-node:focus-visible .ai-node-rect{stroke:var(--a-accent);stroke-width:3}.ai-node.is-adjacent .ai-node-rect{stroke:var(--a-accent);stroke-opacity:.65}.ai-node.is-dimmed{opacity:.24}.ai-arrow-head{fill:var(--a-muted);opacity:.8}.ai-edge{fill:none;stroke-width:1.5;opacity:.23;pointer-events:none;transition:opacity .18s,stroke-width .18s}.ai-edge-http{stroke:var(--a-link)}.ai-edge-invoke{stroke:var(--a-call)}.ai-edge-data{stroke:var(--a-db)}.ai-edge-event{stroke:var(--a-event)}.ai-edge-policy{stroke:var(--a-policy)}.ai-edge.is-active{opacity:1;stroke-width:3;filter:drop-shadow(0 0 2px var(--a-bg))}.ai-edge.is-past{opacity:.6;stroke-width:2}.ai-canvas-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 12px;border-top:1px solid var(--a-border);color:var(--a-muted);font-size:.68rem}.ai-canvas-foot button{font-size:.68rem;padding:6px 9px;white-space:nowrap}.ai-aside{border:1px solid var(--a-border);border-radius:12px;padding:18px;background:var(--a-panel);display:flex;align-items:flex-start;flex-direction:column;gap:14px;min-width:0}.ai-inspector-kicker,.ai-section-label{font:700 .65rem ui-monospace,monospace;letter-spacing:.09em;color:var(--a-accent);margin:0}.ai-aside h4{font-size:1.15rem;line-height:1.25;margin:0}.ai-aside p{font-size:.78rem;line-height:1.65;color:var(--a-muted);margin:0}.ai-inspector-section{width:100%;border-top:1px solid var(--a-border);padding-top:12px}.ai-inspector-section .ai-section-label{display:block;margin-bottom:8px}.ai-placeholder{font-style:italic}#ai-relations{display:grid;gap:7px}.ai :global(.ai-rel-link){display:flex;justify-content:space-between;gap:7px;width:100%;align-items:center;text-align:left;border:1px solid var(--a-border);background:var(--a-bg);border-radius:7px;padding:9px 8px;color:var(--a-text)!important;font-size:.7rem}.ai :global(.ai-rel-link) :global(small){color:var(--a-muted);font-size:.64rem}.ai-aside>a{font-size:.73rem;color:var(--a-accent);text-decoration:underline;text-underline-offset:3px;margin-top:auto;overflow-wrap:anywhere}.ai-story{margin:0 15px 14px;padding:16px 18px;border:1px solid var(--a-border);border-radius:12px;background:linear-gradient(115deg,color-mix(in srgb,var(--a-call) 7%,var(--a-panel)),var(--a-panel))}
+.ai-story-head .ai-new{font:700 .6rem ui-monospace,monospace;padding:3px 6px;border:1px solid var(--a-accent);color:var(--a-accent);border-radius:5px;margin-left:8px;letter-spacing:0}
+.ai-play-controls{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:11px}
+.ai-play-controls>button{border-radius:8px;padding:10px 14px;border:1px solid var(--a-accent);background:color-mix(in srgb,var(--a-accent) 12%,var(--a-bg));font-size:.76rem;font-weight:700;color:var(--a-accent)}
+.ai-play-controls>button:disabled{opacity:.35}
+.ai-play-controls>button[aria-pressed=true]{background:color-mix(in srgb,var(--a-accent) 20%,var(--a-bg))}
+.ai-play-controls>label{font-size:.7rem;color:var(--a-muted)}
+.ai-play-controls>input[type=range]{min-width:75px;flex:1;accent-color:var(--a-accent)}
+.ai-follow-label{display:flex;align-items:center;gap:6px;white-space:nowrap}.ai-follow-label input{accent-color:var(--a-accent)}
+.ai-runtime-inspector{display:grid;grid-template-columns:1fr 1.2fr 1fr;gap:9px;margin-top:12px}
+.ai-runtime-inspector>div{display:flex;flex-direction:column;gap:5px;min-width:0;padding:12px;border:1px solid var(--a-border);border-radius:9px;background:var(--a-bg)}
+.ai-runtime-inspector small{font:700 .59rem ui-monospace,monospace;letter-spacing:.08em;color:var(--a-accent)}
+.ai-runtime-inspector strong,.ai-runtime-inspector p{font-size:.76rem;line-height:1.5;color:var(--a-text);margin:0}
+.ai-runtime-inspector code{font-size:.66rem;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--a-muted)}
+.ai-runtime-inspector a{font-size:.76rem;color:var(--a-accent);overflow-wrap:anywhere}
+.ai-runtime-inspector span{font-size:.68rem;color:var(--a-muted);line-height:1.5}
+.ai-story-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:11px}.ai-story-head span{font:700 .67rem ui-monospace,monospace;letter-spacing:.09em;color:var(--a-accent)}.ai-story-head small{font-size:.71rem;color:var(--a-muted)}.ai-flow-row{display:flex;align-items:center;gap:12px;border:1px solid var(--a-border);padding:11px 12px;border-radius:9px;background:var(--a-panel);margin-top:11px}.ai-flow-row>button{font-size:.9rem;min-width:39px;align-self:stretch}.ai-story-copy{flex:1;display:grid;gap:5px}.ai-story-copy strong{font-size:.83rem}.ai-story-copy span{font-size:.73rem;line-height:1.45;color:var(--a-muted)}.ai-stepcounter{font:.7rem ui-monospace,monospace;color:var(--a-muted);white-space:nowrap}.ai-legend{display:flex;gap:16px;flex-wrap:wrap;padding:12px 22px;border-top:1px solid var(--a-border);font-size:.72rem;color:var(--a-muted)}.ai-legend span{display:flex;align-items:center;gap:6px}.ai-key{height:3px;width:17px;display:inline-block;border-radius:4px}.ai-k-http{background:var(--a-link)}.ai-k-invoke{background:var(--a-call)}.ai-k-data{background:var(--a-db)}.ai-k-event{background:var(--a-event)}.ai-k-policy{background:var(--a-policy)}.ai-foot{font-size:.74rem;line-height:1.65;color:var(--a-muted);padding:14px 22px;border-top:1px solid var(--a-border)}.ai-foot a{color:var(--a-accent)}@media(max-width:900px){.ai-runtime-inspector{grid-template-columns:1fr 1fr}.ai-runtime-inspector>div:last-child{grid-column:1/-1}.ai-reader{grid-template-columns:repeat(2,minmax(0,1fr))}.ai-reader-message{grid-column:1/-1}.ai-workspace{grid-template-columns:1fr}.ai-aside{min-height:220px}.ai-header{flex-wrap:wrap}.ai-stats-note{margin-left:0}}@media(max-width:500px){.ai-story{margin:0 9px 12px;padding:12px}.ai-runtime-inspector{grid-template-columns:1fr}.ai-runtime-inspector>div:last-child{grid-column:auto}.ai-play-controls{gap:8px}.ai-follow-label{width:100%}.ai-reader{margin:0 9px 9px;gap:9px;padding:10px}.ai-reader select{font-size:.7rem}.ai-canvas.is-fit svg{min-width:0!important}.ai-header{padding:17px}.ai-header h3{font-size:1.35rem}.ai-toolbar{padding:10px}.ai-filter{overflow-x:auto;flex-wrap:nowrap;max-width:100%}.ai-filter button{white-space:nowrap}.ai-workspace{padding:0 9px 10px}.ai-story{padding:13px}.ai-story-copy strong{font-size:.75rem}.ai-canvas-foot>span{max-width:73%}}@media(prefers-reduced-motion:reduce){.ai-node,.ai-edge{transition:none}}
 </style>
 <script>
 (()=>{
@@ -257,7 +284,52 @@ const scenarios={
  resume:{title:'Cross-replica SSE — client reconnect',description:'When shared Redis events are configured, a different replica can replay/tail retained events.',edges:['api-queue','queue-postgres','worker-postgres','worker-agent','worker-redis','redis-sse','sse-edge']},
  failure:{title:'Worker crash — claim, sweep and fence',description:'After lease expiry, a stale ticket can be failed or reclaimed by retry policy; external effects are not rolled back.',edges:['api-queue','queue-postgres','worker-postgres','worker-agent','worker-postgres','worker-redis','redis-sse']}
 };
-let focused=null,layer='all',scenario='overview',step=-1,showAll=false;
+let focused=null,layer='all',scenario='overview',step=-1,showAll=false,playTimer=null;
+const evidence={
+ 'client-edge':['HTTPS · browser → ingress','Client sends a request to the application gateway.','Ingress does not own agent run state.','os/routers/agents/router.py'],
+ 'edge-api':['HTTP · gateway → FastAPI','Request arrives at the selected AgentOS router.','The route chooses the configured execution mode.','os/routers/agents/router.py'],
+ 'api-auth':['Authorization · caller scope','Configured authentication and authorization checks run.','Never trust a client-supplied user ID as an access check.','os/auth.py'],
+ 'api-registry':['Python · resolve component','Registered agent/team/workflow is resolved.','Normally an in-process call, not an extra microservice hop.','os/app.py'],
+ 'registry-agent':['Python · agent.arun','AgentOS invokes the configured asynchronous agent.','Inline SSE may stop if the client disconnects.','os/routers/agents/router.py'],
+ 'agent-model':['Inference API · model','Model provider executes a generation request.','External quotas and latency can dominate throughput.','agent/agent.py'],
+ 'agent-tools':['Python · invoke tool','Agent executes a configured tool implementation.','Side-effecting tools need permissions and idempotency.','agent/agent.py'],
+ 'tools-ext':['Connector · external API','Tool executes against a downstream business service.','A timeout does not prove the downstream write failed.','agent/agent.py'],
+ 'agent-sse':['Event · run stream','Agent emits an SSE-formatted event.','A transient event is not a durable job record.','os/routers/agents/router.py'],
+ 'sse-edge':['SSE · client response','Gateway forwards event stream to the client.','Client disconnect is separate from durable worker ownership.','os/routers/agents/router.py'],
+ 'api-queue':['Queue · durable admission','HTTP request submits a durable queue ticket.','Committed ticket precedes durable acceptance response.','os/job_queue.py'],
+ 'queue-postgres':['PostgreSQL · job ticket','QueuedJob records an accepted run and retry metadata.','Database ticket drives worker claim and ownership.','db/schemas/jobs.py'],
+ 'worker-postgres':['PostgreSQL · claim / lease','Worker claims ticket and maintains lease heartbeat.','Attempt fencing rejects stale completion writes.','os/job_queue.py'],
+ 'worker-agent':['Python · execute agent','Worker resolves and executes the configured component.','External tool effects are outside the queue transaction.','os/job_queue.py'],
+ 'agent-postgres':['PostgreSQL · run state','Run/session status and output are persisted.','Final result outlives ephemeral Redis streaming keys.','db/postgres/schemas.py'],
+ 'worker-redis':['Redis Stream · XADD','Worker publishes run events to shared Redis stream.','Replay is time/length bounded, not indefinite.','os/event_streams/redis.py'],
+ 'redis-sse':['Redis Stream · XRANGE / XREAD','A replica replays or tails retained per-run events.','After expiry, clients need persisted terminal-state fallback.','os/event_streams/redis.py']
+};
+function stopPlayback(){if(playTimer!==null){clearInterval(playTimer);playTimer=null}get('ai-play').setAttribute('aria-pressed','false');get('ai-play').textContent='▶ Play walkthrough'}
+function updateEvidence(edge){
+ if(!edge){
+  get('ai-runtime-protocol').textContent='Choose an execution scenario';
+  get('ai-runtime-payload').textContent='HTTP · SSE · Python calls · database state';
+  get('ai-runtime-state').textContent='No execution step selected. This map is explanatory, not production telemetry.';
+  get('ai-runtime-source').href='https://github.com/agno-agi/agno/tree/'+revision;
+  get('ai-runtime-proof').textContent='Each selected relationship links to pinned source.';
+  return
+ }
+ const e=evidence[edge.dataset.link],a=nodeMap[edge.dataset.from],b=nodeMap[edge.dataset.to];
+ get('ai-runtime-protocol').textContent=e?e[0]:edge.dataset.kind.toUpperCase()+' · '+edge.dataset.label;
+ get('ai-runtime-payload').textContent=a.dataset.label+' → '+b.dataset.label+'\n'+(e?e[1]:'Conceptual relationship; not captured protocol traffic.');
+ get('ai-runtime-state').textContent=e?e[2]:a.dataset.detail;
+ const path=e?e[3]:a.dataset.source;
+ get('ai-runtime-source').href='https://github.com/agno-agi/agno/blob/'+revision+'/libs/agno/agno/'+path;
+ get('ai-runtime-proof').textContent='Pinned implementation · '+path;
+}
+function followEdge(edge){
+ if(!edge||!get('ai-follow').checked)return;
+ const to=nodeMap[edge.dataset.to].getBBox();
+ const centerX=to.x+to.width/2,centerY=to.y+to.height/2;
+ const small=window.matchMedia('(max-width:700px)').matches,w=small?355:650,h=small?315:470;
+ view={x:centerX-w/2,y:centerY-h/2,w,h};updateView();canvas.classList.add('is-fit');
+ get('ai-region').value='all';get('ai-view-status').textContent='Following active execution';
+}
 const majorEdges=new Set(['client-edge','edge-api','api-registry','registry-agent','agent-model','agent-tools','agent-postgres','agent-sse','sse-edge','worker-postgres','worker-agent','worker-redis','redis-sse']);
 function connected(id){return edgeEls.filter(e=>e.dataset.from===id||e.dataset.to===id)}
 function set(el,txt){el.textContent=txt}
@@ -288,7 +360,7 @@ function paint(){
  });
 }
 function scenarioText(){
- const s=scenarios[scenario],ids=s.edges; if(scenario==='overview'){get('ai-step-annotation').setAttribute('visibility','hidden');set(get('ai-story-title'),s.title);set(get('ai-story-description'),s.description);set(get('ai-step-count'),'—');return}
+ const s=scenarios[scenario],ids=s.edges; if(scenario==='overview'){get('ai-step-annotation').setAttribute('visibility','hidden');set(get('ai-story-title'),s.title);set(get('ai-story-description'),s.description);set(get('ai-step-count'),'—');get('ai-play').disabled=true;get('ai-scrub').disabled=true;get('ai-scrub').max=0;get('ai-scrub').value=0;updateEvidence(null);return}
  const edge=edgeEls.find(e=>e.dataset.link===ids[step]);
  const from=edge?nodeMap[edge.dataset.from]?.dataset.label:'',to=edge?nodeMap[edge.dataset.to]?.dataset.label:'';
  if(edge){
@@ -303,13 +375,32 @@ function scenarioText(){
  set(get('ai-story-title'),edge?from+' → '+to:s.title);
  set(get('ai-story-description'),edge?edge.dataset.label+' · '+s.description:s.description);
  set(get('ai-step-count'),String(step+1).padStart(2,'0')+' / '+String(ids.length).padStart(2,'0'));
+ get('ai-play').disabled=false;get('ai-scrub').disabled=false;get('ai-scrub').max=ids.length-1;get('ai-scrub').value=step;
+ updateEvidence(edge);followEdge(edge);
 }
-nodeEls.forEach(el=>{const activate=()=>setFocus(el.dataset.node);el.addEventListener('click',activate);el.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();activate()}})});
+nodeEls.forEach(el=>{const activate=()=>{stopPlayback();setFocus(el.dataset.node)};el.addEventListener('click',activate);el.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();activate()}})});
 get('ai-lines').addEventListener('click',()=>{showAll=!showAll;get('ai-lines').setAttribute('aria-pressed',String(showAll));get('ai-lines').textContent=showAll?'Essential links':'Show all links';paint()});
 root.querySelectorAll('.ai-filter [data-layer]').forEach(b=>b.addEventListener('click',()=>{layer=b.dataset.layer;root.querySelectorAll('.ai-filter [data-layer]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));paint()}));
-root.querySelectorAll('[data-scenario]').forEach(b=>b.addEventListener('click',()=>{scenario=b.dataset.scenario;step=scenario==='overview'?-1:0;focused=null;root.querySelectorAll('[data-scenario]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));setFocus(null);scenarioText()}));
+root.querySelectorAll('[data-scenario]').forEach(b=>b.addEventListener('click',()=>{stopPlayback();scenario=b.dataset.scenario;step=scenario==='overview'?-1:0;focused=null;root.querySelectorAll('[data-scenario]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));setFocus(null);scenarioText()}));
 function go(delta){const length=scenarios[scenario].edges.length;if(!length)return;step=Math.max(0,Math.min(length-1,step+delta));focused=null;setFocus(null);scenarioText()}
-get('ai-prev').addEventListener('click',()=>go(-1));get('ai-next').addEventListener('click',()=>go(1));get('ai-clear').addEventListener('click',()=>{scenario='overview';step=-1;layer='all';root.querySelectorAll('[data-scenario]').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.scenario==='overview')));root.querySelectorAll('.ai-filter [data-layer]').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.layer==='all')));setFocus(null);scenarioText()});
+get('ai-prev').addEventListener('click',()=>{stopPlayback();go(-1)});get('ai-next').addEventListener('click',()=>{stopPlayback();go(1)});
+get('ai-scrub').addEventListener('input',e=>{stopPlayback();step=Number(e.target.value);focused=null;setFocus(null);scenarioText()});
+get('ai-play').addEventListener('click',()=>{
+ if(playTimer!==null){stopPlayback();return}
+ if(scenario==='overview')return;
+ if(step===scenarios[scenario].edges.length-1){step=0;focused=null;setFocus(null);scenarioText()}
+ get('ai-play').setAttribute('aria-pressed','true');get('ai-play').textContent='Ⅱ Pause walkthrough';
+ playTimer=setInterval(()=>{
+  if(step>=scenarios[scenario].edges.length-1){stopPlayback();return}
+  go(1)
+ },1700)
+});
+get('ai-follow').addEventListener('change',()=>{
+ if(get('ai-follow').checked&&scenario!=='overview'){
+  const e=edgeEls.find(e=>e.dataset.link===scenarios[scenario].edges[step]);followEdge(e)
+ }
+});
+get('ai-clear').addEventListener('click',()=>{stopPlayback();scenario='overview';step=-1;layer='all';root.querySelectorAll('[data-scenario]').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.scenario==='overview')));root.querySelectorAll('.ai-filter [data-layer]').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.layer==='all')));setFocus(null);scenarioText()});
 let view={x:0,y:0,w:1200,h:762};
 const regions={
  all:{x:0,y:0,w:1200,h:762,label:'Complete architecture'},
