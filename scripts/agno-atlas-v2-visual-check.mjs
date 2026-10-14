@@ -54,6 +54,7 @@ try{
   await atlas.locator('[data-symbol="QueueWorker"]').click();
   assert.match(await atlas.locator('#atlas-code-path').innerText(),/os\/job_queue.py/);
   await atlas.locator('[data-tab="walkthrough"]').click();
+  await atlas.locator('[data-example="answer"]').click();
   await atlas.locator('#atlas-present').click();
   assert.equal(await atlas.evaluate(x=>x.classList.contains('is-presenting')),true);
   await page.keyboard.press('ArrowRight');
