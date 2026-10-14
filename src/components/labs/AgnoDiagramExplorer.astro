@@ -123,7 +123,7 @@ function connection(scene,edge){
    <h2 id="de-inspect-title">Select a node</h2>
    <p id="de-inspect-detail">Choose a component in the diagram to see what it does, how it connects, and where its implementation lives.</p>
    <div class="de-source"><strong>SOURCE FILE</strong><a id="de-inspect-source" target="_blank" rel="noopener noreferrer" href={'https://github.com/agno-agi/agno/tree/'+revision}>Browse pinned source ↗</a></div>
-   <p class="de-inspect-meta" id="de-inspect-meta">Diagram components are grouped by ownership and deployment boundary.</p>
+   <div class="de-relations"><strong>CONNECTED RELATIONSHIPS</strong><div id="de-relationships"><p>Click a node to reveal connected components and direction.</p></div></div><p class="de-inspect-meta" id="de-inspect-meta">Diagram components are grouped by ownership and deployment boundary.</p>
   </aside>
  </div>
  <footer class="de-lower">
@@ -152,6 +152,8 @@ os.serve(app="app:app")</code></pre><small>Queue, Redis, tracing and MCP are opt
 .de-canvas-controls{position:absolute;bottom:13px;left:13px;display:flex;gap:6px;padding:5px;background:#102033e5;border:1px solid var(--dline);border-radius:9px}.de-canvas-controls button{min-width:38px}
 .de-legend{position:absolute;bottom:13px;right:13px;display:flex;gap:9px;flex-wrap:wrap;background:#102033e5;border:1px solid var(--dline);border-radius:8px;padding:10px}.de-legend span{display:flex;gap:5px;align-items:center;font-size:.65rem;color:var(--dm)}.de-legend i{width:17px;height:3px;display:inline-block}.de-http{background:#64a5ec}.de-call{background:#5edacb}.de-data{background:#bb98ed}.de-event{background:#e6ae62}
 .de-inspector{background:var(--db);border:1px solid var(--dline);border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:13px;min-width:0}.de-inspector>span,.de-source>strong,.de-example>span{font:700 .64rem ui-monospace,monospace;letter-spacing:.08em;color:var(--dteal)}.de-inspector h2{font-size:1.22rem;margin:0;line-height:1.3}.de-inspector>p{font-size:.82rem;line-height:1.65;color:var(--dm);margin:0}.de-source{display:grid;gap:8px;border-top:1px solid var(--dline);padding-top:15px;margin-top:auto}.de-source a{color:var(--dteal);overflow-wrap:anywhere;font-size:.73rem}.de-inspect-meta{font-size:.73rem!important}
+.de-relations{padding-top:12px;border-top:1px solid var(--dline);display:grid;gap:9px}.de-relations>strong{font:700 .64rem ui-monospace,monospace;letter-spacing:.06em;color:var(--dteal)}.de-relations>div{display:grid;gap:7px}.de-relations p{font-size:.71rem;line-height:1.5;color:var(--dm);margin:0}
+.de-relations :global(button){text-align:left;background:#23364b;border:1px solid #405671;border-radius:8px;padding:9px;color:var(--dk);font:650 .73rem system-ui}.de-relations :global(button) :global(small){display:block;font:.63rem ui-monospace,monospace;color:var(--dm);margin-top:5px}
 .de-lower{display:grid;grid-template-columns:1fr minmax(260px,450px);gap:18px;padding:14px 20px 24px}.de-explain{max-width:770px}.de-explain strong{font-size:1rem}.de-explain p{font-size:.85rem;color:var(--dm);line-height:1.7}.de-explain code{color:var(--dteal)}.de-example{background:var(--db);padding:14px;border:1px solid var(--dline);border-radius:9px}.de-example pre{overflow-x:auto;font:700 .76rem/1.6 ui-monospace,monospace;color:var(--dk);margin:8px 0}.de-example small{font-size:.68rem;color:var(--dm)}
 .de-note{font:.73rem/1.6 system-ui;color:var(--dm);padding:0 20px 20px;margin:0}.de-note a{color:var(--dteal)}
 .de.is-only .de-heading,.de.is-only .de-inspector,.de.is-only .de-lower,.de.is-only .de-note{display:none!important}
@@ -173,7 +175,7 @@ os.serve(app="app:app")</code></pre><small>Queue, Redis, tracing and MCP are opt
  function update(){svg()?.setAttribute('viewBox',[view.x,view.y,view.w,view.h].join(' '))}
  function reset(){
   const ratio=stage.clientWidth/stage.clientHeight;
-  if(stage.clientWidth<620){view={x:0,y:75,w:635,h:Math.round(635/ratio)}}
+  if(stage.clientWidth<620){view={x:0,y:80,w:500,h:Math.round(500/ratio)}}
   else view={x:0,y:0,w:1300,h:650};
   update()
  }
@@ -184,7 +186,7 @@ os.serve(app="app:app")</code></pre><small>Queue, Redis, tracing and MCP are opt
   $('#de-heading-label').textContent=String(tabs.indexOf(tab)+1).padStart(2,'0')+' / '+tab.querySelector('strong').textContent.toUpperCase();
   $('#de-heading-title').textContent=tab.querySelector('small').textContent;
   $('#de-summary').textContent={system:'AgentOS is a configurable FastAPI app; databases, providers and tools are configured dependencies.',assembly:'Agent definitions → AgentOS(...) → get_app() → routes + lifespans → serve().',request:'Router → agent.arun() → model/tools → SSE events.',durable:'Optional queue admission → persisted ticket → worker lease → agent run → optional event replay.'}[name];
-  $('#de-inspect-title').textContent='Select a node';$('#de-inspect-detail').textContent='Choose a component to inspect the real implementation.';$('#de-inspect-source').href=defaultSource;
+  $('#de-inspect-title').textContent='Select a node';$('#de-inspect-detail').textContent='Choose a component to inspect the real implementation.';$('#de-inspect-source').href=defaultSource;$('#de-relationships').replaceChildren();
   $$('.de-node').forEach(n=>n.classList.remove('is-selected','is-muted'));$$('.de-edge').forEach(n=>n.classList.remove('is-focused','is-muted'));
   reset()
  }
@@ -197,6 +199,16 @@ os.serve(app="app:app")</code></pre><small>Queue, Redis, tracing and MCP are opt
   $('#de-inspect-title').textContent=n.dataset.title;$('#de-inspect-detail').textContent=n.dataset.detail;
   $('#de-inspect-meta').textContent='Boundaries: '+n.dataset.kind+'. Select another node to follow its relations.';
   $('#de-inspect-source').href='https://github.com/agno-agi/agno/blob/1f2aac51eb28dc9c0970836d3b7ae046bae81bbb/libs/agno/agno/'+n.dataset.source;
+  const relationships=$('#de-relationships');relationships.replaceChildren();
+  scene.querySelectorAll('.de-edge').forEach(edge=>{
+   if(edge.dataset.from!==id&&edge.dataset.to!==id)return;
+   const incoming=edge.dataset.to===id,otherId=incoming?edge.dataset.from:edge.dataset.to;
+   const other=scene.querySelector('[data-node="'+otherId+'"]');
+   const btn=document.createElement('button');btn.type='button';
+   btn.textContent=(incoming?'← From ':'→ To ')+(other?.dataset.title||otherId);
+   const hint=document.createElement('small');hint.textContent=edge.dataset.type.toUpperCase()+' · '+edge.querySelector('title')?.textContent.split(': ').pop();
+   btn.append(hint);btn.addEventListener('click',()=>{if(other)inspect(other)});relationships.append(btn);
+  });
   if(only){$('#de-only').title=n.dataset.title+' · source linked in inspector (exit diagram-only to read)'}
  }
  function zoom(f,cx=stage.clientWidth/2,cy=stage.clientHeight/2){
