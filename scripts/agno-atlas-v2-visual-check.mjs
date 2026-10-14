@@ -53,6 +53,9 @@ try{
   assert.notEqual(await flow.locator('[data-flow-edge="submit"]').getAttribute('d'),edgeBeforeDrag,'Connection reroutes live after moving node');
   await flow.locator('#ag-flow-reset').click();
   assert.equal(await draggable.evaluate(el=>parseFloat(el.style.left)),originX,'Reset restores diagram node geometry');
+  await page.waitForTimeout(100);
+  await draggable.evaluate(el=>el.click());
+  assert.match(await flow.locator('#ag-flow-inspect-title').innerText(),/Client \/ SDK/i,'Clicking after drag still inspects a node');
   await flow.locator('#ag-flow-expand').click();
   assert.equal(await flow.locator('#ag-flow-layout').evaluate(el=>el.classList.contains('is-expanded')),true,'Architecture fullscreen expands');
   await flow.locator('#ag-flow-stage').screenshot({path:out+'/expanded-'+width+'-dark.png',animations:'disabled'});
