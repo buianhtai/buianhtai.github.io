@@ -32,6 +32,8 @@ This article is a **technical architecture walkthrough**, with an interactive ex
   **Mental model:** The SDK defines *what can execute*. AgentOS exposes and runs those objects through an application service. The Control Plane lets operators *inspect and manage* that service. The browser is not the execution engine, and the Control Plane is not automatically in the path of every user request.
 </Callout>
 
+**Want the full-page, DeerFlow-style interaction?** [Open the Agno Architecture Lab →](/en/labs/agno-architecture/) for animated request paths, source-linked protocol/state inspectors, zoomable service boundaries, and a code-level explorer. The embedded diagram below is the introductory view.
+
 ## <Label color="teal">01</Label> Start with the interactive architecture
 
 Try the explorer before reading further. Select **Tool loop**, step through **Model chooses → Tool invoked → Model continues**, and open the linked implementation files. Then choose **Failure & recovery** to see why a timed-out tool cannot always be safely retried.
