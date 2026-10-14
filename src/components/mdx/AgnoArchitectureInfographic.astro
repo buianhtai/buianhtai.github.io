@@ -82,7 +82,11 @@ function line(a,b){
       <h3 id="ai-heading">One platform. All the important connections.</h3>
       <p>Select any component to illuminate its dependencies. Switch execution paths to see <em>why</em> each relationship exists.</p>
     </div>
-    <span class="ai-rev">SOURCE SNAPSHOT <strong>{revision.slice(0, 8)}</strong></span>
+    <div class="ai-display-modes" role="group" aria-label="Architecture viewing modes">
+      <button type="button" id="ai-fullscreen" aria-pressed="false" title="Expand diagram to fill the screen (F)">⛶ Full screen</button>
+      <button type="button" id="ai-presentation" aria-pressed="false" title="Present architecture in guided slides (P)">▣ Present</button>
+      <span class="ai-rev">SOURCE SNAPSHOT <strong>{revision.slice(0, 8)}</strong></span>
+    </div>
   </header>
   <div class="ai-stats" aria-label="Architecture metadata">
     <span><b>{nodes.length}</b> components</span><span><b>{edges.length}</b> modeled relationships</span><span><b>{bounds.length}</b> bounded areas</span>
@@ -98,6 +102,18 @@ function line(a,b){
       <button id="ai-zoom-in" aria-label="Zoom in" type="button">+</button>
       <button id="ai-fit" aria-label="Fit entire diagram" type="button">Fit</button>
       <button id="ai-clear" aria-label="Clear component focus" type="button">Reset</button>
+    </div>
+  </div>
+  <div class="ai-presenter" aria-live="polite" aria-label="Presentation slide">
+    <div class="ai-presenter-copy">
+      <span id="ai-slide-number">01 / 06 · ARCHITECTURE STORY</span>
+      <h4 id="ai-slide-title">The complete AgentOS system</h4>
+      <p id="ai-slide-text">Start with the full system: clients, an AgentOS application, shared persistence, external systems and operations.</p>
+    </div>
+    <div class="ai-presenter-actions">
+      <button type="button" id="ai-slide-prev" aria-label="Previous presentation slide">← Previous</button>
+      <div id="ai-slide-dots" role="group" aria-label="Presentation slides"></div>
+      <button type="button" id="ai-slide-next" aria-label="Next presentation slide">Next →</button>
     </div>
   </div>
   <div class="ai-story" id="ai-guided">
