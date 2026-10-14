@@ -30,7 +30,10 @@ try{
   assert.equal(await atlas.locator('.atlas-bound').count(),4,'Clear deployment/process/data boundaries');
   assert.equal(await atlas.locator('[data-panel="overview"]').isVisible(),true,'Overview is the start view');
   assert.equal(await atlas.locator('[data-panel="walkthrough"]').isVisible(),false,'Walkthrough does not compete with overview');
+  const initialDiagramBounds=await atlas.locator('#atlas-diagram').boundingBox();
+  assert(initialDiagramBounds&&initialDiagramBounds.y<(width===390?760:680),'Architecture begins in the initial viewport: '+initialDiagramBounds?.y);
   await page.screenshot({path:out+'/overview-'+width+'-dark.png',fullPage:false});
+  await atlas.locator('#atlas-diagram').screenshot({path:out+'/diagram-'+width+'-dark.png',animations:'disabled'});
   await atlas.locator('[data-node="postgres"]').click();
   assert.match(await atlas.locator('#atlas-component-title').innerText(),/PostgreSQL/i);
   assert.match(await atlas.locator('#atlas-component-source').getAttribute('href'),/db\/postgres\/schemas.py$/);
@@ -48,6 +51,7 @@ try{
   assert.match(await atlas.locator('#atlas-step-to').innerText(),/PostgreSQL/);
   assert.equal(await atlas.locator('.atlas-wire.is-active').count(),1,'No spaghetti: only the selected connection is active');
   await page.screenshot({path:out+'/walkthrough-'+width+'-dark.png',fullPage:false});
+  await atlas.locator('#atlas-walkthrough').screenshot({path:out+'/journey-panel-'+width+'-dark.png',animations:'disabled'});
   await atlas.locator('#atlas-open-code').click();
   assert.equal(await atlas.locator('[data-panel="code"]').isVisible(),true);
   assert.match(await atlas.locator('#atlas-code-open').getAttribute('href'),/agno-agi\/agno\/blob\/1f2aac51eb28dc9c0970836d3b7ae046bae81bbb/);
