@@ -712,6 +712,7 @@ document.addEventListener('fullscreenchange',()=>{
 document.addEventListener('keydown',e=>{
  const tag=e.target&&e.target.tagName;
  if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT'||e.ctrlKey||e.metaKey||e.altKey)return;
+ if(viewMode==='normal'&&!root.contains(document.activeElement)&&!root.matches(':hover'))return;
  const k=e.key.toLowerCase();
  if(k==='f'&&!e.repeat){e.preventDefault();if(viewMode==='fullscreen')leaveView();else enterView('fullscreen');return}
  if(k==='p'&&!e.repeat){e.preventDefault();if(viewMode==='presentation')leaveView();else enterView('presentation');return}
