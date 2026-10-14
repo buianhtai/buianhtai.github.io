@@ -201,6 +201,34 @@ const code=[
 @media(max-width:900px){.atlas-walk-layout,.atlas-code-layout{grid-template-columns:1fr}.atlas-hero{grid-template-columns:1fr}.atlas-hero-mark{display:none}.atlas-inspector{align-items:flex-start}.atlas-panel{padding:24px}.atlas-diagram-scroll svg{min-width:750px}}
 @media(max-width:620px){.atlas-hero{padding:25px 20px}.atlas-hero h1{font-size:2.05rem}.atlas-intro{font-size:.87rem}.atlas-nav button{padding:13px 9px;grid-template-columns:1fr;gap:4px}.atlas-nav button>span{grid-row:auto;font-size:.62rem}.atlas-nav strong{font-size:.75rem}.atlas-nav small{display:none}.atlas-panel{padding:18px 13px}.atlas-diagram-scroll svg{min-width:810px}.atlas-inspector{flex-direction:column}.atlas-editorial-notes{grid-template-columns:1fr}.atlas-section-title>div>span{font-size:.78rem}.atlas-travel{grid-template-columns:1fr;gap:4px}.atlas-travel>.atlas-transfer{flex-direction:row;padding:2px 0}.atlas-transfer b{transform:rotate(90deg)}.atlas-travel strong{font-size:1rem}.atlas-travel>div:first-child,.atlas-travel>div:last-child{padding:13px}.atlas-stepboard,.atlas-step-detail{padding:15px}.atlas.is-presenting .atlas-panel{padding:12px}.atlas.is-presenting .atlas-stepboard{padding:14px}.atlas.is-presenting .atlas-step-detail{padding:14px}.atlas-footer{flex-direction:column;align-items:start}}
 @media(prefers-reduced-motion:reduce){.atlas *{scroll-behavior:auto!important}}
+
+/* Design-review correction: prioritize architecture content above decorative hero. */
+.atlas-hero{padding:23px 30px 20px;grid-template-columns:minmax(0,1fr) 100px;gap:14px}
+.atlas-hero h1{font-size:clamp(1.65rem,3vw,2.55rem);line-height:1.13;margin:7px 0 10px!important}
+.atlas-intro{font-size:.86rem;max-width:800px;line-height:1.55}
+.atlas-revision{margin:10px 0 0!important;font-size:.64rem}
+.atlas-hero-mark{gap:5px;font-size:.56rem}
+.atlas-mark-square{height:74px;width:74px;border-radius:17px}
+.atlas-mark-square b{font-size:2.7rem}
+.atlas-mark-square i{width:8px;height:8px;top:22px;right:-4px}
+.atlas-mark-square i:last-child{top:48px;left:-4px}
+.atlas-nav button{padding:12px 17px}
+.atlas-panel{padding:23px 28px}
+.atlas-section-title{margin-bottom:12px}
+.atlas-section-title h2{font-size:clamp(1.25rem,2vw,1.75rem);margin:4px 0 5px}
+.atlas-section-title>div>span{font-size:.79rem}
+@media(max-width:620px){
+ .atlas-hero{padding:16px 16px 14px;gap:0}
+ .atlas-hero h1{font-size:1.48rem;line-height:1.17;margin:8px 0!important}
+ .atlas-intro{font-size:.77rem;line-height:1.52}
+ .atlas-revision{font-size:.6rem;margin:10px 0 0!important}
+ .atlas-nav button{padding:10px 8px}
+ .atlas-panel{padding:15px 12px}
+ .atlas-section-title{margin-bottom:11px}
+ .atlas-section-title h2{font-size:1.19rem;line-height:1.28}
+ .atlas-section-title>div>span{font-size:.73rem}
+ .atlas-section-title .atlas-primary{padding:9px 11px;font-size:.74rem}
+}
 </style>
 <script>
 (()=>{
