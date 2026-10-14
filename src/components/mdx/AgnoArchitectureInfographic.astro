@@ -338,11 +338,11 @@ function line(a,b){
 .ai-presenter-copy h4{font-size:clamp(1.1rem,2vw,1.65rem);margin:7px 0}
 .ai-presenter-copy p{color:var(--a-muted);font-size:.81rem;line-height:1.48;margin:0;max-width:720px}
 .ai-presenter-actions{display:flex;align-items:center;gap:8px}
-.ai-presenter-actions>button,.ai-presenter-actions #ai-slide-dots button{background:var(--a-bg);border:1px solid var(--a-border);color:var(--a-text);border-radius:8px;padding:9px;font:700 .72rem system-ui}
+.ai-presenter-actions>button,.ai-presenter-actions #ai-slide-dots :global(button){background:var(--a-bg);border:1px solid var(--a-border);color:var(--a-text);border-radius:8px;padding:9px;font:700 .72rem system-ui}
 .ai-presenter-actions>button:disabled{opacity:.3;cursor:default}
 #ai-slide-dots{display:flex;align-items:center;gap:5px}
-.ai-presenter-actions #ai-slide-dots button{width:12px;height:12px;border-radius:999px;padding:0;background:var(--a-muted);opacity:.45}
-.ai-presenter-actions #ai-slide-dots button[aria-current=step]{background:var(--a-accent);opacity:1;border-color:var(--a-accent);width:25px}
+.ai-presenter-actions #ai-slide-dots :global(button){width:12px;height:12px;border-radius:999px;padding:0;background:var(--a-muted);opacity:.45}
+.ai-presenter-actions #ai-slide-dots :global(button)[aria-current=step]{background:var(--a-accent);opacity:1;border-color:var(--a-accent);width:25px}
 .ai.is-presenting{display:flex!important;flex-direction:column}
 .ai.is-presenting .ai-header{order:0;padding:12px 22px}
 .ai.is-presenting .ai-header p:not(.ai-overline){display:none}
@@ -384,8 +384,8 @@ function line(a,b){
  .ai.is-presenting .ai-story{margin:0 8px 8px;padding:9px}
  .ai.is-presenting .ai-runtime-inspector{grid-template-columns:1fr 1fr}
  .ai.is-presenting .ai-runtime-inspector>div:last-child{display:none}
- .ai-presenter-actions #ai-slide-dots button{width:9px;height:9px}
- .ai-presenter-actions #ai-slide-dots button[aria-current=step]{width:18px}
+ .ai-presenter-actions #ai-slide-dots :global(button){width:9px;height:9px}
+ .ai-presenter-actions #ai-slide-dots :global(button)[aria-current=step]{width:18px}
 }
 
 .ai{--a-bg:var(--color-surface,#0c1726);--a-panel:var(--color-surface-2,#142337);--a-text:var(--color-text,#eff6fc);--a-muted:var(--color-text-dim,#a4b7c8);--a-border:var(--color-border,#3c5066);--a-accent:var(--color-accent,#51d7ba);--a-link:#67a9ef;--a-call:#4cbca8;--a-db:#ad8ff3;--a-event:#dc9e58;--a-policy:#e38e95;position:relative;left:50%;transform:translateX(-50%);width:min(1190px,calc(100vw - 20px));max-width:none!important;margin:2.5rem 0;background:var(--a-bg);color:var(--a-text);border:1px solid var(--a-border);border-radius:20px;overflow:hidden;font-family:inherit;box-shadow:0 16px 52px #00000016}
