@@ -1,0 +1,35 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import AgnoArchitectureAtlasV2 from '../../../components/labs/AgnoArchitectureAtlasV2.astro';
+---
+<BaseLayout
+  title="Agno AgentOS — Architecture Atlas V2 Prototype"
+  description="A source-grounded, illustrated engineering atlas for understanding Agno AgentOS architecture, request journeys and code."
+  noindex={true}
+>
+  <main class="atlas-page">
+    <nav class="atlas-breadcrumbs" aria-label="Lab comparison">
+      <a href="/en/blog/agno-agentos-distributed-systems-data-architecture/">← Agno technical deep dive</a>
+      <a href="/en/labs/agno-architecture/">Compare previous interactive lab ↗</a>
+    </nav>
+    <AgnoArchitectureAtlasV2 />
+    <section class="atlas-feedback">
+      <div>
+        <span>DESIGN REVIEW / READER-FIRST PROTOTYPE</span>
+        <h2>What is deliberately different?</h2>
+        <p>The diagram focuses on system boundaries and deliberately routed connections. Request journeys never compete with slide navigation; code details live in their own view. This preview does not replace or remove the existing Agno article or lab.</p>
+      </div>
+    </section>
+  </main>
+</BaseLayout>
+<style>
+.atlas-page{width:min(1340px,calc(100vw - 28px));margin:0 auto;padding:31px 0 72px}
+.atlas-breadcrumbs{display:flex;justify-content:space-between;align-items:center;gap:18px;flex-wrap:wrap;margin:0 0 22px}
+.atlas-breadcrumbs a{color:var(--color-accent);text-decoration:none;font-size:.78rem;font-weight:650}
+.atlas-breadcrumbs a:hover{text-decoration:underline;text-underline-offset:4px}
+.atlas-feedback{margin:28px 0;border-left:3px solid var(--color-accent);padding:10px 24px;max-width:800px}
+.atlas-feedback span{font:.67rem ui-monospace,monospace;color:var(--color-accent);letter-spacing:.1em}
+.atlas-feedback h2{font-size:1.3rem;margin:10px 0}
+.atlas-feedback p{font-size:.85rem;color:var(--color-text-dim);line-height:1.75;margin:0}
+@media(max-width:620px){.atlas-page{width:min(100%,calc(100vw - 16px));padding:16px 0 50px}.atlas-breadcrumbs{gap:8px;margin-bottom:14px}.atlas-breadcrumbs a{font-size:.7rem}}
+</style>

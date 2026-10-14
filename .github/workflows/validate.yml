@@ -229,6 +229,9 @@ jobs:
       - name: Verify Agno source execution and failure explorer
         timeout-minutes: 3
         run: node scripts/agno-source-lab-visual-check.mjs
+      - name: Verify Agno Atlas V2 reader tasks and responsive design
+        timeout-minutes: 3
+        run: node scripts/agno-atlas-v2-visual-check.mjs
       - name: Render DeerFlow article diagrams and capture responsive screenshots
         timeout-minutes: 3
         run: node scripts/deerflow-diagram-visual-check.mjs
@@ -244,6 +247,14 @@ jobs:
       - name: Render C4 architecture diagrams in Chromium
         timeout-minutes: 5
         run: node scripts/eventcatalog-diagram-smoke.mjs
+
+      - name: Upload Atlas V2 visual review screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agno-atlas-v2-review
+          path: artifacts/agno-atlas-v2/
+          if-no-files-found: warn
 
       - name: Upload Agno infographic UX screenshots
         if: always()
