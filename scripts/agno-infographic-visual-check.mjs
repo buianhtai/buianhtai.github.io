@@ -75,7 +75,7 @@ try{
     await lab.locator('#ai-next').click();
     assert((await lab.locator('.ai-edge.is-active').count())>=count,'Scenario path advances');
     assert.match(await lab.locator('#ai-step-count').innerText(),/02/);
-    assert.match(await lab.locator('#ai-journey-heading').innerText(),/Step 2/,'Simple journey follows selected execution step');
+    assert.match(await lab.locator('#ai-journey-heading').innerText(),/Step 2/i,'Simple journey follows selected execution step');
     assert.match(await lab.locator('#ai-from').innerText(),/AgentOS API/i);
     assert.match(await lab.locator('#ai-to').innerText(),/Queue Configuration/i);
     assert.match(await lab.locator('#ai-journey-protocol').innerText(),/INVOKE|Enqueue/i);
