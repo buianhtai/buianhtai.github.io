@@ -273,12 +273,13 @@ const edges=[
   if(expanded){exitExpand();return}
   expanded=true;storedOverflow=document.body.style.overflow;document.body.style.overflow='hidden';layout.classList.add('is-expanded');
   $('ag-flow-expand').setAttribute('aria-pressed','true');$('ag-flow-expand').textContent='✕';
-  if(layout.requestFullscreen){try{await layout.requestFullscreen()}catch{/* CSS immersive fallback */}}
   if(stage.clientWidth<650){
     scale=Math.max(scale,.78);
     panX=24-60*scale;
     panY=140-206*scale;
   }
+  place();
+  if(layout.requestFullscreen){try{await layout.requestFullscreen()}catch{/* CSS immersive fallback */}}
   place()
  });
  document.addEventListener('fullscreenchange',()=>{if(expanded&&!document.fullscreenElement)exitExpand()});
