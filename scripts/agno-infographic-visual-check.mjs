@@ -86,7 +86,7 @@ try{
     assert.equal(await lab.locator('#ai-play').getAttribute('aria-pressed'),'true','Playback starts');
     await lab.locator('#ai-play').click();
     assert.equal(await lab.locator('#ai-play').getAttribute('aria-pressed'),'false','Playback pauses');
-    assert.match(await lab.locator('#ai-step-label').textContent(),/2 ·/,'Selected relationship is annotated on map');
+    assert.match(await lab.locator('#ai-step-label').textContent(),/4 ·/,'Selected relationship is annotated on map');
     assert.equal(await lab.locator('#ai-step-annotation').getAttribute('visibility'),'visible');
 
     const initial=await lab.locator('#ai-svg').getAttribute('viewBox');
