@@ -131,6 +131,7 @@ try{
     await standalone.screenshot({path:out+'/fullscreen-'+width+'.png',fullPage:false});
     await standaloneLab.locator('#ai-fullscreen').click();
     assert.equal(await standaloneLab.evaluate(el=>el.classList.contains('is-immersive')),false,'Fullscreen exits');
+    await standalone.waitForFunction(()=>document.fullscreenElement===null,'',{timeout:4000});
     await standaloneLab.locator('#ai-presentation').click();
     assert.equal(await standaloneLab.evaluate(el=>el.classList.contains('is-presenting')),true,'Presentation enters');
     assert.match(await standaloneLab.locator('#ai-slide-title').innerText(),/whole system/i);
