@@ -53,7 +53,7 @@ const edges=[
   <button type="button" data-mode="all" aria-pressed="false"><b>04</b> All connections</button>
   <span class="ag-flow-mode-hint" id="ag-flow-mode-hint">Core: user → API → agent → model + output</span>
  </div>
- <div class="ag-flow-layout">
+ <div class="ag-flow-layout" id="ag-flow-layout">
   <div class="ag-flow-stage" id="ag-flow-stage" aria-label="Pannable and zoomable node and edge diagram" tabindex="0">
    <div class="ag-flow-world" id="ag-flow-world" style="width:1500px;height:850px">
     {groups.map(g=><div class={'ag-flow-group ag-flow-group-'+g.id} data-group={g.id} style={'left:'+g.x+'px;top:'+g.y+'px;width:'+g.w+'px;height:'+g.h+'px'}>
@@ -79,6 +79,7 @@ const edges=[
     <button type="button" id="ag-flow-plus" aria-label="Zoom in">+</button>
     <button type="button" id="ag-flow-minus" aria-label="Zoom out">−</button>
     <button type="button" id="ag-flow-fit" aria-label="Fit full architecture">Fit</button>
+    <button type="button" id="ag-flow-expand" aria-label="Expand architecture fullscreen" aria-pressed="false" title="Fullscreen">⛶</button>
     <button type="button" id="ag-flow-reset" aria-label="Reset node positions">Reset</button>
    </div>
    <div class="ag-flow-map" id="ag-flow-map" aria-label="Architecture minimap">
@@ -117,6 +118,10 @@ const edges=[
 .ag-flow-modes button[aria-pressed=true]{border-color:var(--af-accent);background:color-mix(in srgb,var(--af-accent) 9%,var(--af-bg));color:var(--af-text)}
 .ag-flow-mode-hint{margin-left:auto;color:var(--af-sub);font-size:.69rem}
 .ag-flow-layout{display:grid;grid-template-columns:minmax(0,1fr) 268px;min-height:580px}
+.ag-flow-layout.is-expanded,.ag-flow-layout:fullscreen{position:fixed!important;inset:0!important;z-index:2147482600;background:var(--af-bg);width:100vw;height:100dvh;max-width:none;grid-template-columns:minmax(0,1fr) minmax(260px,330px);overflow:auto}
+.ag-flow-layout.is-expanded .ag-flow-stage,.ag-flow-layout:fullscreen .ag-flow-stage{height:100dvh;min-height:0}
+.ag-flow-layout.is-expanded .ag-flow-inspector,.ag-flow-layout:fullscreen .ag-flow-inspector{min-height:100%;overflow-y:auto}
+.ag-flow-layout #ag-flow-expand[aria-pressed=true]{background:var(--af-accent);color:var(--af-bg)}
 .ag-flow-stage{position:relative;min-width:0;min-height:580px;height:600px;overflow:hidden;cursor:grab;background:radial-gradient(circle,var(--af-line) .85px,transparent 1.2px);background-size:20px 20px;touch-action:none;user-select:none;isolation:isolate}
 .ag-flow-stage.is-panning{cursor:grabbing}.ag-flow-world{position:absolute;top:0;left:0;transform-origin:0 0;will-change:transform}
 .ag-flow-group{position:absolute;background:color-mix(in srgb,var(--af-panel) 84%,transparent);border:1.5px solid var(--af-line);border-radius:18px;display:flex;flex-direction:column;align-items:flex-start;gap:8px;padding:16px 18px;pointer-events:none}
@@ -159,14 +164,19 @@ const edges=[
 .ag-flow-legend i{height:3px;width:20px;display:inline-block;border-radius:5px}.ag-flow-legend .l-http{background:var(--af-http)}.ag-flow-legend .l-call{background:var(--af-call)}.ag-flow-legend .l-data{background:var(--af-data)}.ag-flow-legend .l-event{background:var(--af-event)}
 .ag-flow-footer p{font-size:.67rem;color:var(--af-sub);margin:0;line-height:1.5}
 @media(max-width:1000px){.ag-flow-layout{grid-template-columns:1fr}.ag-flow-inspector{border-left:0;border-top:1px solid var(--af-line);gap:9px}.ag-flow-inspector .ag-flow-note{display:none}.ag-flow-stage{height:565px;min-height:565px}.ag-flow-inspector{display:grid;grid-template-columns:1fr 1fr;align-items:start}.ag-flow-inspector .ag-flow-inspector-top,.ag-flow-inspector #ag-flow-inspect-title,.ag-flow-inspector #ag-flow-inspect-detail{grid-column:1}.ag-flow-neighbors{grid-column:2;grid-row:1 / span 4;border-top:0;padding-top:0}.ag-flow-inspector>a{grid-column:1}}
-@media(max-width:620px){.ag-flow-top{padding:13px 14px}.ag-flow-top h3{font-size:1.08rem!important}.ag-flow-top p{font-size:.71rem!important}.ag-flow-revision{display:none}.ag-flow-modes{padding:8px 10px;flex-wrap:nowrap;overflow-x:auto}.ag-flow-modes button{white-space:nowrap;padding:8px;font-size:.65rem}.ag-flow-mode-hint{display:none}.ag-flow-stage{height:480px;min-height:480px}.ag-flow-map{width:120px;right:8px;bottom:8px}.ag-flow-canvas-tools{left:8px;bottom:8px}.ag-flow-canvas-tools button{padding:7px;min-width:31px}.ag-flow-stage-tip{font-size:.6rem;max-width:74%}.ag-flow-inspector{display:flex;gap:8px;padding:13px}.ag-flow-neighbors{border-top:1px solid var(--af-line);padding-top:10px}}
+@media(max-width:620px){
+ .ag-flow-layout.is-expanded,.ag-flow-layout:fullscreen{display:flex;flex-direction:column}
+ .ag-flow-layout.is-expanded .ag-flow-stage,.ag-flow-layout:fullscreen .ag-flow-stage{height:70dvh;min-height:70dvh;flex:none}
+ .ag-flow-layout.is-expanded .ag-flow-inspector,.ag-flow-layout:fullscreen .ag-flow-inspector{overflow:visible;min-height:0}
+ .ag-flow-top{padding:13px 14px}.ag-flow-top h3{font-size:1.08rem!important}.ag-flow-top p{font-size:.71rem!important}.ag-flow-revision{display:none}.ag-flow-modes{padding:8px 10px;flex-wrap:nowrap;overflow-x:auto}.ag-flow-modes button{white-space:nowrap;padding:8px;font-size:.65rem}.ag-flow-mode-hint{display:none}.ag-flow-stage{height:480px;min-height:480px}.ag-flow-map{width:120px;right:8px;bottom:8px}.ag-flow-canvas-tools{left:8px;bottom:8px}.ag-flow-canvas-tools button{padding:7px;min-width:31px}.ag-flow-stage-tip{font-size:.6rem;max-width:74%}.ag-flow-inspector{display:flex;gap:8px;padding:13px}.ag-flow-neighbors{border-top:1px solid var(--af-line);padding-top:10px}}
 @media(prefers-reduced-motion:reduce){.ag-flow-edge{transition:none}}
 </style>
 <script>
 (()=>{
  const root=document.querySelector('#agno-flow-canvas');if(!root||root.dataset.ready==='1')return;root.dataset.ready='1';
  const $=id=>root.querySelector('#'+id);
- const stage=$('ag-flow-stage'),world=$('ag-flow-world'),mini=$('ag-flow-mini-svg');
+ const stage=$('ag-flow-stage'),world=$('ag-flow-world'),mini=$('ag-flow-mini-svg'),layout=$('ag-flow-layout');
+ let expanded=false,storedOverflow='';
  const parts=[...root.querySelectorAll('[data-flow-node]')],links=[...root.querySelectorAll('[data-flow-edge]')];
  const nodes=Object.fromEntries(parts.map(el=>[el.dataset.flowNode,{el,id:el.dataset.flowNode,x:parseFloat(el.style.left),y:parseFloat(el.style.top),w:Number(el.dataset.w),h:Number(el.dataset.h)}]));
  const names=Object.fromEntries(parts.map(el=>[el.dataset.flowNode,el.dataset.title]));
@@ -252,6 +262,22 @@ const edges=[
  $('ag-flow-plus').addEventListener('click',()=>zoom(1.25));$('ag-flow-minus').addEventListener('click',()=>zoom(.8));$('ag-flow-fit').addEventListener('click',fit);
  $('ag-flow-reset').addEventListener('click',()=>{root.querySelectorAll('[data-flow-node]').forEach(p=>{const n=nodes[p.dataset.flowNode];const def=defaults[p.dataset.flowNode];n.x=def.x;n.y=def.y;p.style.left=n.x+'px';p.style.top=n.y+'px'});draw();fit()});
  const defaults=Object.fromEntries(Object.values(nodes).map(n=>[n.id,{x:n.x,y:n.y}]));
+ function exitExpand(){
+  if(!expanded)return;expanded=false;layout.classList.remove('is-expanded');
+  $('ag-flow-expand').setAttribute('aria-pressed','false');$('ag-flow-expand').textContent='⛶';
+  document.body.style.overflow=storedOverflow;
+  if(document.fullscreenElement===layout&&document.exitFullscreen)document.exitFullscreen().catch(()=>{});
+  place()
+ }
+ $('ag-flow-expand').addEventListener('click',async()=>{
+  if(expanded){exitExpand();return}
+  expanded=true;storedOverflow=document.body.style.overflow;document.body.style.overflow='hidden';layout.classList.add('is-expanded');
+  $('ag-flow-expand').setAttribute('aria-pressed','true');$('ag-flow-expand').textContent='✕';
+  if(layout.requestFullscreen){try{await layout.requestFullscreen()}catch{/* CSS immersive fallback */}}
+  place()
+ });
+ document.addEventListener('fullscreenchange',()=>{if(expanded&&!document.fullscreenElement)exitExpand()});
+ document.addEventListener('keydown',e=>{if(expanded&&e.key==='Escape'){e.preventDefault();exitExpand()}});
  stage.addEventListener('wheel',e=>{if(e.target.closest('.ag-flow-canvas-tools,.ag-flow-map'))return;e.preventDefault();const b=stage.getBoundingClientRect();zoom(e.deltaY<0?1.12:.89,e.clientX-b.left,e.clientY-b.top)},{passive:false});
  const activePointers=new Map();let pinchDistance=0;
  function pointerDown(e){
