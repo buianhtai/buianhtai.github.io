@@ -284,7 +284,52 @@ const scenarios={
  resume:{title:'Cross-replica SSE — client reconnect',description:'When shared Redis events are configured, a different replica can replay/tail retained events.',edges:['api-queue','queue-postgres','worker-postgres','worker-agent','worker-redis','redis-sse','sse-edge']},
  failure:{title:'Worker crash — claim, sweep and fence',description:'After lease expiry, a stale ticket can be failed or reclaimed by retry policy; external effects are not rolled back.',edges:['api-queue','queue-postgres','worker-postgres','worker-agent','worker-postgres','worker-redis','redis-sse']}
 };
-let focused=null,layer='all',scenario='overview',step=-1,showAll=false;
+let focused=null,layer='all',scenario='overview',step=-1,showAll=false,playTimer=null;
+const evidence={
+ 'client-edge':['HTTPS · browser → ingress','Client sends a request to the application gateway.','Ingress does not own agent run state.','os/routers/agents/router.py'],
+ 'edge-api':['HTTP · gateway → FastAPI','Request arrives at the selected AgentOS router.','The route chooses the configured execution mode.','os/routers/agents/router.py'],
+ 'api-auth':['Authorization · caller scope','Configured authentication and authorization checks run.','Never trust a client-supplied user ID as an access check.','os/auth.py'],
+ 'api-registry':['Python · resolve component','Registered agent/team/workflow is resolved.','Normally an in-process call, not an extra microservice hop.','os/app.py'],
+ 'registry-agent':['Python · agent.arun','AgentOS invokes the configured asynchronous agent.','Inline SSE may stop if the client disconnects.','os/routers/agents/router.py'],
+ 'agent-model':['Inference API · model','Model provider executes a generation request.','External quotas and latency can dominate throughput.','agent/agent.py'],
+ 'agent-tools':['Python · invoke tool','Agent executes a configured tool implementation.','Side-effecting tools need permissions and idempotency.','agent/agent.py'],
+ 'tools-ext':['Connector · external API','Tool executes against a downstream business service.','A timeout does not prove the downstream write failed.','agent/agent.py'],
+ 'agent-sse':['Event · run stream','Agent emits an SSE-formatted event.','A transient event is not a durable job record.','os/routers/agents/router.py'],
+ 'sse-edge':['SSE · client response','Gateway forwards event stream to the client.','Client disconnect is separate from durable worker ownership.','os/routers/agents/router.py'],
+ 'api-queue':['Queue · durable admission','HTTP request submits a durable queue ticket.','Committed ticket precedes durable acceptance response.','os/job_queue.py'],
+ 'queue-postgres':['PostgreSQL · job ticket','QueuedJob records an accepted run and retry metadata.','Database ticket drives worker claim and ownership.','db/schemas/jobs.py'],
+ 'worker-postgres':['PostgreSQL · claim / lease','Worker claims ticket and maintains lease heartbeat.','Attempt fencing rejects stale completion writes.','os/job_queue.py'],
+ 'worker-agent':['Python · execute agent','Worker resolves and executes the configured component.','External tool effects are outside the queue transaction.','os/job_queue.py'],
+ 'agent-postgres':['PostgreSQL · run state','Run/session status and output are persisted.','Final result outlives ephemeral Redis streaming keys.','db/postgres/schemas.py'],
+ 'worker-redis':['Redis Stream · XADD','Worker publishes run events to shared Redis stream.','Replay is time/length bounded, not indefinite.','os/event_streams/redis.py'],
+ 'redis-sse':['Redis Stream · XRANGE / XREAD','A replica replays or tails retained per-run events.','After expiry, clients need persisted terminal-state fallback.','os/event_streams/redis.py']
+};
+function stopPlayback(){if(playTimer!==null){clearInterval(playTimer);playTimer=null}get('ai-play').setAttribute('aria-pressed','false');get('ai-play').textContent='▶ Play walkthrough'}
+function updateEvidence(edge){
+ if(!edge){
+  get('ai-runtime-protocol').textContent='Choose an execution scenario';
+  get('ai-runtime-payload').textContent='HTTP · SSE · Python calls · database state';
+  get('ai-runtime-state').textContent='No execution step selected. This map is explanatory, not production telemetry.';
+  get('ai-runtime-source').href='https://github.com/agno-agi/agno/tree/'+revision;
+  get('ai-runtime-proof').textContent='Each selected relationship links to pinned source.';
+  return
+ }
+ const e=evidence[edge.dataset.link],a=nodeMap[edge.dataset.from],b=nodeMap[edge.dataset.to];
+ get('ai-runtime-protocol').textContent=e?e[0]:edge.dataset.kind.toUpperCase()+' · '+edge.dataset.label;
+ get('ai-runtime-payload').textContent=a.dataset.label+' → '+b.dataset.label+'\n'+(e?e[1]:'Conceptual relationship; not captured protocol traffic.');
+ get('ai-runtime-state').textContent=e?e[2]:a.dataset.detail;
+ const path=e?e[3]:a.dataset.source;
+ get('ai-runtime-source').href='https://github.com/agno-agi/agno/blob/'+revision+'/libs/agno/agno/'+path;
+ get('ai-runtime-proof').textContent='Pinned implementation · '+path;
+}
+function followEdge(edge){
+ if(!edge||!get('ai-follow').checked)return;
+ const to=nodeMap[edge.dataset.to].getBBox();
+ const centerX=to.x+to.width/2,centerY=to.y+to.height/2;
+ const small=window.matchMedia('(max-width:700px)').matches,w=small?355:650,h=small?315:470;
+ view={x:centerX-w/2,y:centerY-h/2,w,h};updateView();canvas.classList.add('is-fit');
+ get('ai-region').value='all';get('ai-view-status').textContent='Following active execution';
+}
 const majorEdges=new Set(['client-edge','edge-api','api-registry','registry-agent','agent-model','agent-tools','agent-postgres','agent-sse','sse-edge','worker-postgres','worker-agent','worker-redis','redis-sse']);
 function connected(id){return edgeEls.filter(e=>e.dataset.from===id||e.dataset.to===id)}
 function set(el,txt){el.textContent=txt}
@@ -315,7 +360,7 @@ function paint(){
  });
 }
 function scenarioText(){
- const s=scenarios[scenario],ids=s.edges; if(scenario==='overview'){get('ai-step-annotation').setAttribute('visibility','hidden');set(get('ai-story-title'),s.title);set(get('ai-story-description'),s.description);set(get('ai-step-count'),'—');return}
+ const s=scenarios[scenario],ids=s.edges; if(scenario==='overview'){get('ai-step-annotation').setAttribute('visibility','hidden');set(get('ai-story-title'),s.title);set(get('ai-story-description'),s.description);set(get('ai-step-count'),'—');get('ai-play').disabled=true;get('ai-scrub').disabled=true;get('ai-scrub').max=0;get('ai-scrub').value=0;updateEvidence(null);return}
  const edge=edgeEls.find(e=>e.dataset.link===ids[step]);
  const from=edge?nodeMap[edge.dataset.from]?.dataset.label:'',to=edge?nodeMap[edge.dataset.to]?.dataset.label:'';
  if(edge){
@@ -330,13 +375,32 @@ function scenarioText(){
  set(get('ai-story-title'),edge?from+' → '+to:s.title);
  set(get('ai-story-description'),edge?edge.dataset.label+' · '+s.description:s.description);
  set(get('ai-step-count'),String(step+1).padStart(2,'0')+' / '+String(ids.length).padStart(2,'0'));
+ get('ai-play').disabled=false;get('ai-scrub').disabled=false;get('ai-scrub').max=ids.length-1;get('ai-scrub').value=step;
+ updateEvidence(edge);followEdge(edge);
 }
-nodeEls.forEach(el=>{const activate=()=>setFocus(el.dataset.node);el.addEventListener('click',activate);el.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();activate()}})});
+nodeEls.forEach(el=>{const activate=()=>{stopPlayback();setFocus(el.dataset.node)};el.addEventListener('click',activate);el.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();activate()}})});
 get('ai-lines').addEventListener('click',()=>{showAll=!showAll;get('ai-lines').setAttribute('aria-pressed',String(showAll));get('ai-lines').textContent=showAll?'Essential links':'Show all links';paint()});
 root.querySelectorAll('.ai-filter [data-layer]').forEach(b=>b.addEventListener('click',()=>{layer=b.dataset.layer;root.querySelectorAll('.ai-filter [data-layer]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));paint()}));
-root.querySelectorAll('[data-scenario]').forEach(b=>b.addEventListener('click',()=>{scenario=b.dataset.scenario;step=scenario==='overview'?-1:0;focused=null;root.querySelectorAll('[data-scenario]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));setFocus(null);scenarioText()}));
+root.querySelectorAll('[data-scenario]').forEach(b=>b.addEventListener('click',()=>{stopPlayback();scenario=b.dataset.scenario;step=scenario==='overview'?-1:0;focused=null;root.querySelectorAll('[data-scenario]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));setFocus(null);scenarioText()}));
 function go(delta){const length=scenarios[scenario].edges.length;if(!length)return;step=Math.max(0,Math.min(length-1,step+delta));focused=null;setFocus(null);scenarioText()}
-get('ai-prev').addEventListener('click',()=>go(-1));get('ai-next').addEventListener('click',()=>go(1));get('ai-clear').addEventListener('click',()=>{scenario='overview';step=-1;layer='all';root.querySelectorAll('[data-scenario]').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.scenario==='overview')));root.querySelectorAll('.ai-filter [data-layer]').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.layer==='all')));setFocus(null);scenarioText()});
+get('ai-prev').addEventListener('click',()=>{stopPlayback();go(-1)});get('ai-next').addEventListener('click',()=>{stopPlayback();go(1)});
+get('ai-scrub').addEventListener('input',e=>{stopPlayback();step=Number(e.target.value);focused=null;setFocus(null);scenarioText()});
+get('ai-play').addEventListener('click',()=>{
+ if(playTimer!==null){stopPlayback();return}
+ if(scenario==='overview')return;
+ if(step===scenarios[scenario].edges.length-1){step=0;focused=null;setFocus(null);scenarioText()}
+ get('ai-play').setAttribute('aria-pressed','true');get('ai-play').textContent='Ⅱ Pause walkthrough';
+ playTimer=setInterval(()=>{
+  if(step>=scenarios[scenario].edges.length-1){stopPlayback();return}
+  go(1)
+ },1700)
+});
+get('ai-follow').addEventListener('change',()=>{
+ if(get('ai-follow').checked&&scenario!=='overview'){
+  const e=edgeEls.find(e=>e.dataset.link===scenarios[scenario].edges[step]);followEdge(e)
+ }
+});
+get('ai-clear').addEventListener('click',()=>{stopPlayback();scenario='overview';step=-1;layer='all';root.querySelectorAll('[data-scenario]').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.scenario==='overview')));root.querySelectorAll('.ai-filter [data-layer]').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.layer==='all')));setFocus(null);scenarioText()});
 let view={x:0,y:0,w:1200,h:762};
 const regions={
  all:{x:0,y:0,w:1200,h:762,label:'Complete architecture'},
