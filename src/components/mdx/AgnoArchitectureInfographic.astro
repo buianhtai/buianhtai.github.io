@@ -635,6 +635,93 @@ svg.addEventListener('touchmove',e=>{
 svg.addEventListener('touchend',()=>{pinchDistance=null});
 svg.addEventListener('keydown',e=>{if(e.target!==svg)return;if(e.key==='+'){e.preventDefault();zoom(.85)}else if(e.key==='-'){e.preventDefault();zoom(1.15)}else if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)){e.preventDefault();view.x+=(e.key==='ArrowLeft'?-.08:e.key==='ArrowRight'?.08:0)*view.w;view.y+=(e.key==='ArrowUp'?-.08:e.key==='ArrowDown'?.08:0)*view.h;updateView()}});
 if(window.matchMedia('(max-width:700px)').matches)frameRegion('all');
+
+const slides=[
+ {scenario:'overview',title:'Understand the whole system',text:'Five logical boundaries: client and ingress; AgentOS runtime; state; integrations; operations. These are not five mandatory microservices.'},
+ {scenario:'answer',title:'How a direct answer works',text:'Trace a user request to FastAPI, the registered agent and its model, then follow the SSE response back.'},
+ {scenario:'tools',title:'When an agent invokes a tool',text:'Follow model selection, tool execution and an optional external API write. A timeout does not prove a business operation failed.'},
+ {scenario:'queue',title:'When execution becomes durable',text:'The committed queue ticket, worker lease and persisted run state have different owners and failure semantics.'},
+ {scenario:'resume',title:'When the client reconnects',text:'Watch events move through Redis Streams and return through an SSE listener on another replica.'},
+ {scenario:'failure',title:'When a worker crashes',text:'Lease expiry, retry policy and fencing protect persisted state; external side effects still require reconciliation.'}
+];
+let viewMode='normal',slideIndex=0,savedOverflow='',nativeFullscreen=false;
+function drawSlides(){
+ const slide=slides[slideIndex];
+ get('ai-slide-number').textContent=String(slideIndex+1).padStart(2,'0')+' / '+String(slides.length).padStart(2,'0')+' · ARCHITECTURE STORY';
+ get('ai-slide-title').textContent=slide.title;get('ai-slide-text').textContent=slide.text;
+ get('ai-slide-prev').disabled=slideIndex===0;get('ai-slide-next').disabled=slideIndex===slides.length-1;
+ const dots=get('ai-slide-dots');dots.replaceChildren();
+ slides.forEach((s,i)=>{
+  const btn=document.createElement('button');btn.type='button';
+  btn.setAttribute('aria-label','Presentation slide '+(i+1)+': '+s.title);
+  btn.setAttribute('aria-current',String(i===slideIndex?'step':'false'));
+  btn.addEventListener('click',()=>chooseSlide(i));dots.append(btn)
+ });
+}
+function chooseSlide(index){
+ slideIndex=Math.max(0,Math.min(slides.length-1,index));const s=slides[slideIndex];
+ const btn=root.querySelector('.ai-scenarios [data-scenario="'+s.scenario+'"]');
+ if(btn)btn.click();
+ if(s.scenario==='overview')frameRegion('all');
+ else{step=0;setFocus(null);scenarioText()}
+ drawSlides();
+}
+function syncViewMode(){
+ const immersive=viewMode!=='normal',presenting=viewMode==='presentation';
+ root.classList.toggle('is-immersive',immersive);root.classList.toggle('is-presenting',presenting);
+ get('ai-fullscreen').setAttribute('aria-pressed',String(viewMode==='fullscreen'));
+ get('ai-presentation').setAttribute('aria-pressed',String(presenting));
+ get('ai-fullscreen').textContent=viewMode==='fullscreen'?'✕ Exit full screen':'⛶ Full screen';
+ get('ai-presentation').textContent=presenting?'✕ End presentation':'▣ Present';
+ if(immersive){
+  if(viewMode==='normal')return;
+  if(!savedOverflow)savedOverflow=document.body.style.overflow||'';
+  document.body.style.overflow='hidden';root.scrollTop=0;
+ }else{
+  document.body.style.overflow=savedOverflow;savedOverflow='';
+ }
+}
+function leaveView(){
+ if(viewMode==='normal')return;
+ stopPlayback();viewMode='normal';syncViewMode();frameRegion('all');
+ if(document.fullscreenElement===root&&document.exitFullscreen)document.exitFullscreen().catch(()=>{});
+ nativeFullscreen=false;
+}
+async function enterView(next){
+ if(viewMode===next){leaveView();return}
+ stopPlayback();viewMode=next;syncViewMode();
+ if(next==='presentation')chooseSlide(0);
+ else frameRegion('all');
+ if(document.fullscreenElement!==root&&typeof root.requestFullscreen==='function'){
+  try{await root.requestFullscreen()}catch{ /* CSS fullscreen fallback still works (iOS/iframe). */ }
+ }
+ nativeFullscreen=document.fullscreenElement===root;
+}
+get('ai-fullscreen').addEventListener('click',()=>{if(viewMode==='presentation'){enterView('fullscreen')}else if(viewMode==='fullscreen'){leaveView()}else{enterView('fullscreen')}});
+get('ai-presentation').addEventListener('click',()=>{if(viewMode==='presentation')leaveView();else enterView('presentation')});
+get('ai-slide-prev').addEventListener('click',()=>chooseSlide(slideIndex-1));
+get('ai-slide-next').addEventListener('click',()=>chooseSlide(slideIndex+1));
+document.addEventListener('fullscreenchange',()=>{
+ if(viewMode!=='normal'&&nativeFullscreen&&document.fullscreenElement!==root)leaveView();
+});
+document.addEventListener('keydown',e=>{
+ if(viewMode==='normal')return;
+ const tag=e.target&&e.target.tagName;
+ if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT')return;
+ if(e.key==='Escape'){e.preventDefault();leaveView();return}
+ if(viewMode!=='presentation')return;
+ if(e.key==='ArrowRight'||e.key==='PageDown'||e.key===' '){
+  e.preventDefault();
+  if(scenario!=='overview'&&step<scenarios[scenario].edges.length-1){stopPlayback();go(1)}
+  else chooseSlide(slideIndex+1);
+ }else if(e.key==='ArrowLeft'||e.key==='PageUp'){
+  e.preventDefault();
+  if(scenario!=='overview'&&step>0){stopPlayback();go(-1)}
+  else chooseSlide(slideIndex-1);
+ }
+});
+drawSlides();
+
 setFocus(null);scenarioText();paint();
 })();
 </script>
