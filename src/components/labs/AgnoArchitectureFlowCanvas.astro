@@ -308,7 +308,7 @@ const edges=[
   if(!activePointers.has(e.pointerId))return;activePointers.delete(e.pointerId);
   if(activePointers.size<2)pinchDistance=0;
   if(capture&&capture.id===e.pointerId){
-   if(capture.node){if(capture.moved){skipClick=capture.node.id}else inspect(capture.node.id)}
+   if(capture.node){if(capture.moved){skipClick=capture.node.id;const draggedId=skipClick;setTimeout(()=>{if(skipClick===draggedId)skipClick=null},60)}else inspect(capture.node.id)}
    else if(!capture.moved&&e.target===stage)inspect(null);
    capture=null;
   }
