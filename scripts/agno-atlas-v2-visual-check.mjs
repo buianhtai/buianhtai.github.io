@@ -31,6 +31,9 @@ try{
   assert.equal(await flow.locator('[data-flow-edge]').count(),12,'12 dynamic routed edges');
   assert.equal(await flow.locator('.ag-flow-group').count(),4,'Four logical/deployment boundaries');
   assert.equal(await flow.locator('.ag-flow-edge.is-visible').count(),6,'Core request edges highlighted by default');
+  const initialClient=await flow.locator('[data-flow-node="client"]').boundingBox();
+  assert(initialClient&&initialClient.width>=150,'First render uses readable nodes, not tiny fit-to-width cards');
+  await flow.locator('#ag-flow-stage').screenshot({path:out+'/initial-'+width+'-dark.png',animations:'disabled'});
   const firstPath=await flow.locator('[data-flow-edge="submit"]').getAttribute('d');
   assert.match(firstPath,/^M[0-9]/,'Routed SVG connection is calculated');
   const beforeZoom=await flow.locator('#ag-flow-world').getAttribute('style');
@@ -58,6 +61,10 @@ try{
   assert.match(await flow.locator('#ag-flow-inspect-title').innerText(),/Client \/ SDK/i,'Clicking after drag still inspects a node');
   await flow.locator('#ag-flow-expand').click();
   assert.equal(await flow.locator('#ag-flow-layout').evaluate(el=>el.classList.contains('is-expanded')),true,'Architecture fullscreen expands');
+  if(width===390){
+    const zoomedClient=await flow.locator('[data-flow-node="client"]').boundingBox();
+    assert(zoomedClient&&zoomedClient.width>=150,'Mobile fullscreen shows readable nodes, not full-system thumbnail');
+  }
   await flow.locator('#ag-flow-stage').screenshot({path:out+'/expanded-'+width+'-dark.png',animations:'disabled'});
   await flow.locator('#ag-flow-expand').click();
   await page.waitForFunction(()=>document.fullscreenElement===null);
