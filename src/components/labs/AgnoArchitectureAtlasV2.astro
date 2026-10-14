@@ -1,0 +1,308 @@
+---
+/**
+ * An opt-in design prototype: a single readable system map, guided execution
+ * and separately navigable code evidence. No dependency on the old atlas.
+ */
+const revision='1f2aac51eb28dc9c0970836d3b7ae046bae81bbb';
+const base='https://github.com/agno-agi/agno/blob/'+revision+'/libs/agno/agno/';
+const boundaries=[
+ {name:'CLIENT + INGRESS',x:20,y:78,w:446,h:478,description:'Your application and deployment edge',tone:'edge'},
+ {name:'AGENTOS APPLICATION',x:485,y:78,w:388,h:478,description:'Python modules inside the same logical process',tone:'runtime'},
+ {name:'CONFIGURED INTEGRATIONS',x:894,y:78,w:288,h:478,description:'Outside AgentOS: providers and systems',tone:'external'},
+ {name:'OPERATIONAL STATE',x:485,y:581,w:388,h:146,description:'Persistent job/run state and optional coordination',tone:'state'}
+];
+const nodes=[
+ {id:'client',name:'App / SDK',sub:'Browser · HTTP client',x:60,y:252,w:170,h:78,tone:'edge',kind:'External client',desc:'Creates an agent run request and consumes the streamed response. Authentication is the application’s responsibility.',file:'os/routers/agents/router.py'},
+ {id:'gateway',name:'Ingress',sub:'Reverse proxy / LB',x:272,y:252,w:170,h:78,tone:'edge',kind:'Deployment infrastructure',desc:'Optional routing infrastructure terminates TLS and forwards requests to AgentOS. This is not an Agno microservice.',file:'os/app.py'},
+ {id:'api',name:'AgentOS API',sub:'FastAPI endpoint',x:506,y:164,w:156,h:84,tone:'runtime',kind:'HTTP interface',desc:'AgentOS exposes routes for agents, teams, workflows and run/event operations.',file:'os/app.py'},
+ {id:'registry',name:'Registry',sub:'Agents · Teams · Flows',x:692,y:164,w:156,h:84,tone:'runtime',kind:'In-process resolution',desc:'Configured components are registered and resolved in the application. A registry is not an independent service hop.',file:'os/app.py'},
+ {id:'worker',name:'Queue worker',sub:'Claim · lease · retry',x:506,y:322,w:156,h:84,tone:'runtime',kind:'Optional background execution',desc:'The durable worker claims jobs using leases and attempt fencing. Automatic replay requires a deliberate policy.',file:'os/job_queue.py'},
+ {id:'agent',name:'Agent runtime',sub:'Model + tool loop',x:692,y:322,w:156,h:84,tone:'runtime',kind:'Python execution',desc:'The agent builds context, calls a model, executes configured tools and produces run events.',file:'agent/agent.py'},
+ {id:'events',name:'Run event delivery',sub:'SSE · stream adapter',x:506,y:464,w:342,h:62,tone:'runtime',kind:'Output transport',desc:'Streams generated run events to the client; SSE is not a durable job queue.',file:'os/routers/agents/router.py'},
+ {id:'model',name:'LLM provider',sub:'Inference API',x:919,y:159,w:236,h:85,tone:'external',kind:'External provider',desc:'Configured model implementation runs inference. The provider is not deployed automatically by AgentOS.',file:'agent/agent.py'},
+ {id:'tools',name:'Tool integrations',sub:'Python · API · MCP',x:919,y:319,w:236,h:85,tone:'external',kind:'External effects possible',desc:'Tools may invoke local or remote services. Side-effecting operations require authorization and idempotency.',file:'agent/agent.py'},
+ {id:'knowledge',name:'Retrieval / knowledge',sub:'Optional vector / search',x:919,y:464,w:236,h:62,tone:'external',kind:'Optional retrieval',desc:'Knowledge backends add retrieved context when configured; the actual store is a separate integration.',file:'knowledge/knowledge.py'},
+ {id:'postgres',name:'PostgreSQL',sub:'Runs · sessions · jobs',x:506,y:633,w:156,h:70,tone:'state',kind:'Configured persistent store',desc:'Stores run/session records and durable queue tickets when the PostgreSQL adapter is used.',file:'db/postgres/schemas.py'},
+ {id:'redis',name:'Redis / Valkey',sub:'Streams · coordination',x:692,y:633,w:156,h:70,tone:'state',kind:'Optional coordination',desc:'Coordinates retained events and signals in multi-replica streaming modes. It does not replace persistent final state.',file:'os/event_streams/redis.py'}
+];
+const lines=[
+ {id:'submit',from:'client',to:'gateway',kind:'http',route:'M230 290 H272'},
+ {id:'route',from:'gateway',to:'api',kind:'http',route:'M442 290 H462 V206 H506'},
+ {id:'resolve',from:'api',to:'registry',kind:'call',route:'M662 205 H692'},
+ {id:'enqueue',from:'api',to:'worker',kind:'call',route:'M584 248 V322'},
+ {id:'dispatch',from:'registry',to:'agent',kind:'call',route:'M770 248 V322'},
+ {id:'execute',from:'worker',to:'agent',kind:'call',route:'M662 362 H692'},
+ {id:'inference',from:'agent',to:'model',kind:'http',route:'M848 350 H883 V203 H919'},
+ {id:'tool',from:'agent',to:'tools',kind:'http',route:'M848 362 H919'},
+ {id:'retrieve',from:'agent',to:'knowledge',kind:'data',route:'M848 380 H884 V494 H919'},
+ {id:'run-events',from:'agent',to:'events',kind:'event',route:'M770 406 V464'},
+ {id:'persist',from:'worker',to:'postgres',kind:'data',route:'M506 380 H480 V668 H506'},
+ {id:'replay',from:'events',to:'redis',kind:'event',route:'M770 526 V633'}
+];
+const byId=Object.fromEntries(nodes.map(n=>[n.id,n]));
+const story=[
+ {id:'answer',title:'Ask a question',summary:'The simplest synchronous request: HTTP ingress → in-process agent → provider → stream.',links:['submit','route','resolve','dispatch','inference','run-events'],captions:['The client submits a run request.','Ingress forwards the HTTP request to AgentOS.','The API resolves a registered component.','The registered agent begins executing in Python.','The agent calls the configured model provider.','Run events are streamed as the answer is produced.']},
+ {id:'background',title:'Run in background',summary:'A durable ticket makes worker execution independent of a client socket.',links:['route','enqueue','persist','execute','inference','run-events'],captions:['AgentOS receives a background request.','The request is admitted to the durable queue.','The queue ticket is persisted for claim and recovery.','A worker runs the resolved agent.','The agent invokes the configured model.','Run output is emitted; persistence and event delivery are separate concerns.']},
+ {id:'tools',title:'Use an external tool',summary:'A tool call can cross a security boundary and cause a side effect.',links:['route','resolve','dispatch','inference','tool','run-events'],captions:['API receives a run request.','The registered agent is selected.','Execution enters the agent runtime.','The model may request a tool call.','The tool executes against a configured external integration.','Output is returned through run-event transport.']}
+];
+const code=[
+ {symbol:'AgentOS.get_app()',label:'Application composition',where:'os/app.py',detail:'How FastAPI routes and runtime components are wired. Start here to separate modules from processes.',related:'api'},
+ {symbol:'agent_response_streamer',label:'Request / SSE',where:'os/routers/agents/router.py',detail:'Streams an inline agent run and handles the response connection.',related:'events'},
+ {symbol:'agent.arun()',label:'Agent execution',where:'agent/agent.py',detail:'Agent invocation, context preparation and model/tool execution.',related:'agent'},
+ {symbol:'QueueWorker',label:'Durable execution',where:'os/job_queue.py',detail:'Worker claim, lease, heartbeat, cancellation and attempt fencing.',related:'worker'},
+ {symbol:'QueuedJob',label:'Job persistence',where:'db/schemas/jobs.py',detail:'Queue ticket and its persisted execution metadata.',related:'postgres'},
+ {symbol:'Redis event streams',label:'Event coordination',where:'os/event_streams/redis.py',detail:'Optional retained stream events for cross-replica readers.',related:'redis'}
+];
+---
+<section id="agno-atlas-v2" class="atlas" aria-labelledby="atlas-title">
+  <header class="atlas-hero">
+    <div class="atlas-hero-copy">
+      <p class="atlas-kicker">SYSTEM DESIGN FIELD GUIDE / AGENTOS</p>
+      <h1 id="atlas-title">From a question to an answer.<br/><span>Inside the agent runtime.</span></h1>
+      <p class="atlas-intro">Understand the system in three passes: see its boundaries, follow one request, and open the implementation. No tangled line network or competing navigation systems.</p>
+      <p class="atlas-revision">Grounded in <a href={'https://github.com/agno-agi/agno/tree/'+revision} target="_blank" rel="noopener noreferrer">Agno source {revision.slice(0,8)}</a> · annotated architecture, not a captured production trace</p>
+    </div>
+    <div class="atlas-hero-mark" aria-hidden="true"><span>01</span><div class="atlas-mark-square"><b>A</b><i></i><i></i></div><span>AGENTOS</span></div>
+  </header>
+  <div class="atlas-nav" role="tablist" aria-label="Explore Agno architecture">
+    <button type="button" role="tab" id="atlas-tab-overview" aria-controls="atlas-overview" aria-selected="true" data-tab="overview"><span>01</span><strong>Architecture</strong><small>System boundaries</small></button>
+    <button type="button" role="tab" id="atlas-tab-walkthrough" aria-controls="atlas-walkthrough" aria-selected="false" tabindex="-1" data-tab="walkthrough"><span>02</span><strong>Request journey</strong><small>Explain each hop</small></button>
+    <button type="button" role="tab" id="atlas-tab-code" aria-controls="atlas-code" aria-selected="false" tabindex="-1" data-tab="code"><span>03</span><strong>Code explorer</strong><small>Find implementation</small></button>
+  </div>
+  <section class="atlas-panel" role="tabpanel" id="atlas-overview" aria-labelledby="atlas-tab-overview" data-panel="overview">
+    <div class="atlas-section-title"><div><p>01 / ARCHITECTURE</p><h2>The entire system, without the spaghetti</h2><span>Distinct boundaries first. Open a component to see its purpose and source.</span></div><div class="atlas-actions"><button type="button" id="atlas-open-walk" class="atlas-primary">Follow a request <span aria-hidden="true">→</span></button></div></div>
+    <div class="atlas-diagram-shell">
+      <div class="atlas-diagram-scroll">
+        <svg id="atlas-diagram" viewBox="0 0 1200 752" role="img" aria-label="Interactive system boundary diagram: client and ingress connect to AgentOS application, state and external providers">
+          <defs><pattern id="atlas-dot-grid" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r=".75" fill="currentColor" opacity=".16"/></pattern><marker id="atlas-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 4 L0 8Z" fill="context-stroke"/></marker></defs>
+          <rect width="1200" height="752" class="atlas-surface"/>
+          <rect width="1200" height="752" fill="url(#atlas-dot-grid)" class="atlas-grid"/>
+          <g>
+            {boundaries.map(b=><g class={'atlas-bound atlas-bound-'+b.tone}><rect x={b.x} y={b.y} width={b.w} height={b.h} rx="16"/><text x={b.x+18} y={b.y+31} class="atlas-bound-title">{b.name}</text><text x={b.x+18} y={b.y+51} class="atlas-bound-sub">{b.description}</text></g>)}
+          </g>
+          <g>
+            {lines.map(l=><path class={'atlas-wire atlas-wire-'+l.kind} data-wire={l.id} data-source={l.from} data-target={l.to} data-kind={l.kind} d={l.route} marker-end="url(#atlas-arrow)" vector-effect="non-scaling-stroke"><title>{byId[l.from].name+' → '+byId[l.to].name+' ('+l.kind+')'}</title></path>)}
+          </g>
+          <g>
+            {nodes.map(n=><g class={'atlas-node atlas-node-'+n.tone} data-node={n.id} data-component={n.id} data-title={n.name} data-detail={n.desc} data-kind={n.kind} data-file={n.file} role="button" tabindex="0" aria-label={'Inspect '+n.name}>
+              <rect x={n.x} y={n.y} width={n.w} height={n.h} rx="10" class="atlas-node-rect"/>
+              <rect x={n.x+10} y={n.y+12} width="6" height={n.h-24} rx="3" class="atlas-node-accent"/>
+              <text x={n.x+26} y={n.y+32} class="atlas-node-name">{n.name}</text>
+              <text x={n.x+26} y={n.y+53} class="atlas-node-sub">{n.sub}</text>
+              <title>{n.desc}</title>
+            </g>)}
+          </g>
+          <text x="40" y="737" class="atlas-diagram-foot">Representative topology · lines are logical dependencies, not guaranteed individual network services</text>
+        </svg>
+      </div>
+      <div class="atlas-diagram-bar"><div><span class="atlas-legend"><i class="atlas-legend-http"></i>HTTP</span><span class="atlas-legend"><i class="atlas-legend-call"></i>In-process</span><span class="atlas-legend"><i class="atlas-legend-data"></i>Persistence / retrieval</span><span class="atlas-legend"><i class="atlas-legend-event"></i>Events</span></div><small>Tap a component to inspect it</small></div>
+    </div>
+    <aside class="atlas-inspector" id="atlas-inspector" aria-live="polite">
+      <div><span class="atlas-inspector-tag" id="atlas-component-kind">START HERE</span><h3 id="atlas-component-title">A system boundary is not a microservice</h3><p id="atlas-component-description">AgentOS composes HTTP routes, agent execution and optional queue workers in the application. PostgreSQL, Redis and model providers are configured dependencies, not necessarily bundled services.</p></div>
+      <div class="atlas-inspector-actions"><a id="atlas-component-source" href={'https://github.com/agno-agi/agno/tree/'+revision} target="_blank" rel="noopener noreferrer">Explore source <span aria-hidden="true">↗</span></a></div>
+    </aside>
+    <div class="atlas-editorial-notes"><div><span>DEPLOYMENT</span><h3>One application can contain many modules.</h3><p>Agent, team, workflow and router boundaries are primarily programming concepts. Independent scaling needs an explicit deployment decision.</p></div><div><span>STATE</span><h3>Connections are not always durable.</h3><p>An SSE stream, a persisted run and a queue ticket solve different problems. The failure walkthrough explains where recovery lives.</p></div></div>
+  </section>
+  <section class="atlas-panel" role="tabpanel" id="atlas-walkthrough" aria-labelledby="atlas-tab-walkthrough" data-panel="walkthrough" hidden>
+    <div class="atlas-section-title"><div><p>02 / REQUEST JOURNEY</p><h2>One request. One connection at a time.</h2><span>Choose a scenario. Use the numbered steps to see exactly which part of the architecture is involved.</span></div></div>
+    <div class="atlas-walk-head">
+      <div class="atlas-examples" role="group" aria-label="Choose request scenario">
+        {story.map((s,i)=><button type="button" data-example={s.id} aria-pressed={i===0}>{s.title}</button>)}
+      </div>
+      <button type="button" class="atlas-present" id="atlas-present" aria-pressed="false">Presentation view <span aria-hidden="true">↗</span></button>
+    </div>
+    <p class="atlas-scenario-summary" id="atlas-scenario-summary">The simplest synchronous request: HTTP ingress → in-process agent → provider → stream.</p>
+    <div class="atlas-walk-layout">
+      <div class="atlas-stepboard">
+        <div class="atlas-step-head"><span>REQUEST EXECUTION</span><strong id="atlas-step-counter">01 / 06</strong></div>
+        <div class="atlas-travel" aria-live="polite">
+          <div><small>FROM</small><strong id="atlas-step-from">App / SDK</strong><p id="atlas-step-from-desc">Browser · HTTP client</p></div>
+          <div class="atlas-transfer"><span id="atlas-step-protocol">HTTP</span><b aria-hidden="true">→</b><small>RELATION</small></div>
+          <div><small>TO</small><strong id="atlas-step-to">Ingress</strong><p id="atlas-step-to-desc">Reverse proxy / LB</p></div>
+        </div>
+        <div class="atlas-step-text"><span>WHAT HAPPENS HERE</span><p id="atlas-step-message">The client submits a run request.</p></div>
+        <div class="atlas-step-trail" id="atlas-step-trail" role="group" aria-label="Request sequence stages"></div>
+        <div class="atlas-step-footer"><button type="button" id="atlas-back">← Back</button><span id="atlas-step-progress">1 of 6</span><button type="button" class="atlas-primary" id="atlas-forward">Next step →</button></div>
+      </div>
+      <aside class="atlas-step-detail">
+        <p class="atlas-pane-eyebrow">WHY THIS STEP MATTERS</p><h3 id="atlas-why-title">What the connection means</h3><p id="atlas-why-description">Follow the request one hop at a time instead of interpreting a large graph.</p>
+        <div class="atlas-step-mini" aria-label="Current connection"><span id="atlas-mini-from">App / SDK</span><b>→</b><span id="atlas-mini-to">Ingress</span></div>
+        <div class="atlas-source-note"><span>IMPLEMENTATION</span><a id="atlas-step-source" href={base+'os/routers/agents/router.py'} target="_blank" rel="noopener noreferrer">Inspect pinned source ↗</a></div>
+        <button type="button" class="atlas-secondary" id="atlas-open-code">Explore code behind this step →</button>
+      </aside>
+    </div>
+    <p class="atlas-lab-note">Educational flow. Durability, stream replay, and external side effects depend on deployment configuration; examples are not recorded packets or measured traces.</p>
+  </section>
+  <section class="atlas-panel" role="tabpanel" id="atlas-code" aria-labelledby="atlas-tab-code" data-panel="code" hidden>
+    <div class="atlas-section-title"><div><p>03 / SOURCE IMPLEMENTATION</p><h2>From the diagram to the real repository.</h2><span>Verified source landmarks, without pretending a hand-authored diagram is an AST call graph.</span></div></div>
+    <div class="atlas-code-layout">
+      <div class="atlas-code-list" role="group" aria-label="Source entry points">
+        {code.map((item,i)=><button type="button" class="atlas-code-choice" data-symbol={item.symbol} data-path={item.where} data-description={item.detail} data-label={item.label} data-related={item.related} aria-pressed={i===0}><span>{item.label}</span><strong>{item.symbol}</strong><small>{item.where}</small></button>)}
+      </div>
+      <div class="atlas-code-content">
+        <p class="atlas-pane-eyebrow">SOURCE MAP / AGNO</p><h3 id="atlas-code-label">Application composition</h3><code id="atlas-code-symbol">AgentOS.get_app()</code><p id="atlas-code-description">How FastAPI routes and runtime components are wired. Start here to separate modules from processes.</p>
+        <div class="atlas-code-file"><span>FILE IN PINNED REPOSITORY</span><code id="atlas-code-path">libs/agno/agno/os/app.py</code></div>
+        <a id="atlas-code-open" class="atlas-primary atlas-code-link" href={base+'os/app.py'} target="_blank" rel="noopener noreferrer">Open source file ↗</a>
+        <div class="atlas-code-footer"><strong>Architecture link</strong><p id="atlas-code-linked">AgentOS API is an application module, not necessarily an individually deployed microservice.</p></div>
+      </div>
+    </div>
+  </section>
+  <footer class="atlas-footer"><span>PROTOTYPE / v2</span><p>A reader-first alternative to the current Agno lab. Source-linked and intentionally limited to three views; the existing lab remains available for comparison.</p></footer>
+</section>
+<style>
+.atlas{--ink:var(--color-text,#152538);--muted:var(--color-text-dim,#52667e);--quiet:var(--color-text-muted,#7f93aa);--surface:var(--color-surface,#fff);--subtle:var(--color-surface-2,#f0f4f8);--border:var(--color-border,#dfe6ef);--teal:var(--color-accent,#087e79);--blue:#4e86da;--violet:#9581dd;--amber:#d7a451;color:var(--ink);width:100%;margin:0 auto;font-family:inherit;min-width:0}
+.atlas *{box-sizing:border-box}.atlas button{cursor:pointer}.atlas button:focus-visible,.atlas a:focus-visible,.atlas [role=button]:focus-visible{outline:2px solid var(--teal);outline-offset:3px}.atlas [hidden]{display:none!important}
+.atlas-hero{display:grid;grid-template-columns:minmax(0,1fr) 160px;gap:26px;align-items:center;padding:44px 42px 38px;border:1px solid var(--border);border-radius:18px 18px 0 0;background:radial-gradient(circle at 92% 12%,color-mix(in srgb,var(--teal) 9%,var(--surface)),var(--surface) 45%)}
+.atlas-kicker,.atlas-section-title>div>p,.atlas-pane-eyebrow{color:var(--teal);font:750 .68rem/1.4 ui-monospace,monospace;letter-spacing:.11em!important;margin:0!important}
+.atlas-hero h1{font-size:clamp(2rem,4vw,3.35rem);line-height:1.13;letter-spacing:-.055em;margin:12px 0 18px!important;font-weight:770}
+.atlas-hero h1 span{color:var(--teal)}.atlas-intro{font-size:.99rem;color:var(--muted);line-height:1.7;max-width:645px;margin:0!important}
+.atlas-revision{font:.69rem/1.6 ui-monospace,monospace;color:var(--quiet);margin:24px 0 0!important}.atlas-revision a{color:var(--teal);text-decoration:underline;text-underline-offset:3px}
+.atlas-hero-mark{display:grid;justify-items:center;gap:13px;font:800 .62rem ui-monospace,monospace;letter-spacing:.16em;color:var(--quiet)}
+.atlas-mark-square{height:114px;width:114px;border:1px solid var(--border);border-radius:24px;position:relative;background:var(--subtle);display:grid;place-items:center}
+.atlas-mark-square b{font-size:3.8rem;font-weight:780;letter-spacing:-.09em;color:var(--teal)}.atlas-mark-square i{position:absolute;width:11px;height:11px;border:2px solid var(--teal);border-radius:50%;background:var(--surface);right:-6px;top:33px}.atlas-mark-square i:last-child{left:-5px;right:auto;top:73px;border-color:var(--blue)}
+.atlas-nav{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));background:var(--surface);border:1px solid var(--border);border-top:0}
+.atlas-nav button{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:start;gap:0 10px;padding:18px 24px;border:0;border-right:1px solid var(--border);border-bottom:3px solid transparent;background:transparent;color:var(--ink);text-align:left}
+.atlas-nav button:last-child{border-right:0}.atlas-nav button[aria-selected=true]{background:color-mix(in srgb,var(--teal) 5%,var(--surface));border-bottom-color:var(--teal)}.atlas-nav button>span{grid-row:span 2;font:750 .68rem ui-monospace,monospace;color:var(--teal);margin-top:2px}
+.atlas-nav strong{font-size:.95rem}.atlas-nav small{font-size:.7rem;color:var(--muted);margin-top:5px}
+.atlas-panel{border:1px solid var(--border);border-top:0;padding:34px;background:var(--surface);min-width:0}
+.atlas-section-title{display:flex;align-items:end;justify-content:space-between;flex-wrap:wrap;gap:14px;margin-bottom:21px}.atlas-section-title h2{font-size:clamp(1.35rem,2.5vw,2rem);line-height:1.25;letter-spacing:-.04em;margin:7px 0 8px}.atlas-section-title>div>span{font-size:.84rem;color:var(--muted);line-height:1.6}.atlas-primary,.atlas-secondary{display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:8px;padding:10px 16px;font:750 .78rem system-ui;text-decoration:none!important;white-space:nowrap}
+.atlas-primary{background:var(--teal)!important;color:var(--surface)!important;border:1px solid var(--teal)!important}.atlas-secondary{background:var(--surface);color:var(--teal);border:1px solid var(--border)}.atlas-primary:hover{filter:brightness(1.1)}.atlas-diagram-shell{border:1px solid var(--border);background:var(--subtle);border-radius:13px;overflow:hidden}
+.atlas-diagram-scroll{overflow-x:auto}.atlas-diagram-scroll svg{display:block;width:100%;min-width:830px;height:auto;max-height:680px;cursor:default}
+.atlas-surface{fill:var(--surface)}.atlas-grid{color:var(--border)}.atlas-bound rect{fill:var(--subtle);stroke:var(--border);stroke-width:1.6}.atlas-bound-runtime rect{fill:color-mix(in srgb,var(--teal) 5%,var(--subtle));stroke:color-mix(in srgb,var(--teal) 40%,var(--border))}.atlas-bound-state rect{fill:color-mix(in srgb,var(--violet) 5%,var(--subtle))}
+.atlas-bound-title{font:750 11px ui-monospace,monospace;letter-spacing:1px;fill:var(--ink)}.atlas-bound-sub{font:11px system-ui;fill:var(--muted)}
+.atlas-wire{fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;stroke:var(--blue);opacity:.43;pointer-events:none}.atlas-wire-call{stroke:var(--teal)}.atlas-wire-data{stroke:var(--violet)}.atlas-wire-event{stroke:var(--amber)}.atlas-wire.is-active{opacity:1;stroke-width:4;filter:drop-shadow(0 0 2px var(--surface))}.atlas-wire.is-dimmed{opacity:.065}
+.atlas-node{cursor:pointer}.atlas-node-rect{fill:var(--surface);stroke:var(--border);stroke-width:1.7}.atlas-node-accent{fill:var(--blue)}.atlas-node-runtime .atlas-node-accent{fill:var(--teal)}.atlas-node-state .atlas-node-accent{fill:var(--violet)}.atlas-node-external .atlas-node-accent{fill:var(--amber)}.atlas-node-name{font:740 15px system-ui;fill:var(--ink)}.atlas-node-sub{font:11px system-ui;fill:var(--muted)}.atlas-node.is-selected .atlas-node-rect,.atlas-node:focus-visible .atlas-node-rect{stroke:var(--teal);stroke-width:3}.atlas-node.is-dimmed{opacity:.38}.atlas-diagram-foot{font:10px ui-monospace,monospace;fill:var(--muted)}
+.atlas-diagram-bar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;border-top:1px solid var(--border);padding:11px 15px;background:var(--surface)}.atlas-diagram-bar>div{display:flex;gap:16px;flex-wrap:wrap}.atlas-diagram-bar small{color:var(--quiet);font-size:.7rem}
+.atlas-legend{font-size:.7rem;color:var(--muted);display:inline-flex;align-items:center;gap:6px}.atlas-legend i{width:17px;height:3px;display:inline-block;border-radius:9px}.atlas-legend-http{background:var(--blue)}.atlas-legend-call{background:var(--teal)}.atlas-legend-data{background:var(--violet)}.atlas-legend-event{background:var(--amber)}
+.atlas-inspector{display:flex;justify-content:space-between;align-items:center;gap:20px;padding:18px 20px;border:1px solid var(--border);border-radius:12px;margin-top:13px;background:var(--subtle)}.atlas-inspector>div:first-child{max-width:800px}.atlas-inspector-tag,.atlas-step-text>span,.atlas-source-note>span{font:750 .66rem ui-monospace,monospace;letter-spacing:.1em;color:var(--teal)}.atlas-inspector h3{font-size:1.05rem;margin:6px 0}.atlas-inspector p{font-size:.8rem;line-height:1.65;color:var(--muted);margin:0!important}.atlas-inspector-actions a{color:var(--teal);font-weight:700;font-size:.77rem;white-space:nowrap}.atlas-editorial-notes{display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-top:16px}.atlas-editorial-notes>div{border-left:3px solid var(--teal);padding:6px 14px}.atlas-editorial-notes>div:last-child{border-color:var(--violet)}.atlas-editorial-notes span{font:750 .63rem ui-monospace,monospace;color:var(--teal)}.atlas-editorial-notes h3{font-size:.94rem;margin:7px 0}.atlas-editorial-notes p{font-size:.77rem;color:var(--muted);line-height:1.6;margin:0}
+.atlas-walk-head{display:flex;align-items:center;justify-content:space-between;gap:13px;flex-wrap:wrap}.atlas-examples{display:flex;gap:7px;flex-wrap:wrap}.atlas-examples button,.atlas-present{font:.77rem system-ui;font-weight:700;padding:9px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--muted)}.atlas-examples button[aria-pressed=true]{color:var(--teal);border-color:var(--teal);background:color-mix(in srgb,var(--teal) 7%,var(--surface))}
+.atlas-scenario-summary{font-size:.79rem;color:var(--muted);margin:15px 0 18px!important;line-height:1.6}.atlas-walk-layout{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(270px,.75fr);gap:14px}
+.atlas-stepboard{border:1px solid var(--border);border-radius:13px;padding:19px;background:var(--subtle);min-width:0}.atlas-step-head{display:flex;justify-content:space-between;gap:8px;color:var(--muted);font:.69rem ui-monospace,monospace;letter-spacing:.08em}.atlas-step-head strong{color:var(--teal)}
+.atlas-travel{display:grid;grid-template-columns:minmax(0,1fr) 100px minmax(0,1fr);gap:8px;align-items:stretch;margin-top:19px}
+.atlas-travel>div:first-child,.atlas-travel>div:last-child{border-radius:10px;border:1px solid var(--border);border-left:4px solid var(--blue);padding:16px;background:var(--surface);min-width:0}
+.atlas-travel>div:last-child{border-left-color:var(--teal)}.atlas-travel small{font:.66rem ui-monospace,monospace;color:var(--muted);letter-spacing:.06em}.atlas-travel strong{display:block;font-size:1.1rem;margin:7px 0;line-height:1.3;overflow-wrap:anywhere}.atlas-travel p{margin:0;font-size:.73rem;line-height:1.4;color:var(--muted)}
+.atlas-travel>.atlas-transfer{background:none;border:0;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:0;gap:6px;text-align:center}.atlas-transfer>span{font:.69rem ui-monospace,monospace;font-weight:700;color:var(--teal)}.atlas-transfer b{font-size:2.25rem;color:var(--teal);font-weight:600;line-height:1}.atlas-transfer small{font:.61rem ui-monospace,monospace}
+.atlas-step-text{margin-top:14px;border-radius:9px;border:1px solid var(--border);padding:13px 16px;background:var(--surface)}.atlas-step-text p{font-size:.9rem;line-height:1.6;margin:5px 0 0;color:var(--ink)}
+.atlas-step-trail{display:flex;gap:6px;margin-top:14px;overflow:auto;scrollbar-width:thin;padding-bottom:4px}.atlas-step-trail button{flex:0 0 auto;border:1px solid var(--border);padding:7px 10px;border-radius:7px;font:700 .71rem ui-monospace,monospace;background:var(--surface);color:var(--muted)}.atlas-step-trail button[aria-current=step]{border-color:var(--teal);color:var(--teal);background:color-mix(in srgb,var(--teal) 6%,var(--surface))}
+.atlas-step-footer{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:12px}.atlas-step-footer button:not(.atlas-primary){font-size:.76rem;color:var(--ink);border:1px solid var(--border);padding:9px 13px;border-radius:8px;background:var(--surface)}.atlas-step-footer button:disabled{opacity:.3;cursor:default}.atlas-step-footer>span{font:.7rem ui-monospace,monospace;color:var(--muted)}
+.atlas-step-detail{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:20px;display:flex;flex-direction:column;align-items:start;gap:13px}
+.atlas-step-detail h3{font-size:1.17rem;margin:0}.atlas-step-detail>p:not(.atlas-pane-eyebrow){font-size:.86rem;line-height:1.7;color:var(--muted);margin:0}.atlas-step-mini{display:flex;align-items:center;gap:9px;flex-wrap:wrap;background:var(--subtle);border:1px solid var(--border);border-radius:9px;padding:10px;width:100%;font:.73rem ui-monospace,monospace;color:var(--ink)}.atlas-step-mini b{color:var(--teal)}.atlas-source-note{display:grid;gap:8px}.atlas-source-note a{font:.75rem ui-monospace,monospace;color:var(--teal);overflow-wrap:anywhere}.atlas-step-detail .atlas-secondary{margin-top:auto}.atlas-lab-note{font:.73rem/1.65 system-ui;color:var(--muted);margin:14px 0 0}
+.atlas-code-layout{display:grid;grid-template-columns:minmax(240px,.75fr) minmax(0,1.25fr);gap:14px}.atlas-code-list{display:grid;gap:7px;align-content:start}.atlas-code-choice{display:grid;gap:5px;text-align:left;border:1px solid var(--border);border-radius:10px;background:var(--subtle);color:var(--ink);padding:13px 15px}.atlas-code-choice[aria-pressed=true]{border-color:var(--teal);background:color-mix(in srgb,var(--teal) 7%,var(--surface))}
+.atlas-code-choice span{font:.64rem ui-monospace,monospace;color:var(--teal);letter-spacing:.08em}.atlas-code-choice strong{font:.87rem ui-monospace,monospace;overflow-wrap:anywhere}.atlas-code-choice small{font:.68rem ui-monospace,monospace;color:var(--muted);overflow-wrap:anywhere}
+.atlas-code-content{border:1px solid var(--border);background:var(--subtle);padding:27px;border-radius:13px;display:flex;flex-direction:column;align-items:flex-start;gap:17px}.atlas-code-content h3{font-size:1.5rem;margin:0}.atlas-code-content>code{font:.96rem ui-monospace,monospace;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:11px 13px;max-width:100%;overflow-wrap:anywhere}.atlas-code-content>p{font-size:.86rem;line-height:1.7;color:var(--muted);margin:0}
+.atlas-code-file{display:grid;gap:7px;padding:15px;background:var(--surface);border:1px solid var(--border);border-radius:9px;width:100%}.atlas-code-file span{font:.63rem ui-monospace,monospace;color:var(--teal)}.atlas-code-file code{font:.77rem ui-monospace,monospace;overflow-wrap:anywhere}.atlas-code-footer{border-top:1px solid var(--border);padding-top:15px;margin-top:8px;width:100%}.atlas-code-footer strong{font:.75rem ui-monospace,monospace;color:var(--teal)}.atlas-code-footer p{font-size:.8rem;line-height:1.65;color:var(--muted)}
+.atlas-footer{padding:18px 26px;border:1px solid var(--border);border-top:0;border-radius:0 0 18px 18px;display:flex;align-items:center;justify-content:space-between;gap:18px;background:var(--subtle)}.atlas-footer span{font:.67rem ui-monospace,monospace;color:var(--teal);white-space:nowrap}.atlas-footer p{font-size:.76rem;line-height:1.5;color:var(--muted);margin:0!important;max-width:720px}
+.atlas.is-presenting{position:fixed!important;inset:0!important;z-index:2147482900;background:var(--surface);width:100vw;height:100dvh;max-width:none;padding:0;overflow:auto}
+.atlas.is-presenting .atlas-hero,.atlas.is-presenting .atlas-nav,.atlas.is-presenting .atlas-footer{display:none}
+.atlas.is-presenting .atlas-panel{border:none;padding:22px;max-width:1480px;margin:auto;min-height:100dvh}
+.atlas.is-presenting #atlas-walkthrough{display:block!important}.atlas.is-presenting .atlas-section-title,.atlas.is-presenting .atlas-lab-note{display:none}
+.atlas.is-presenting .atlas-stepboard{padding:28px}.atlas.is-presenting .atlas-step-detail{padding:27px}
+.atlas.is-presenting #atlas-present{border-color:var(--teal);color:var(--teal)}
+@media(max-width:900px){.atlas-walk-layout,.atlas-code-layout{grid-template-columns:1fr}.atlas-hero{grid-template-columns:1fr}.atlas-hero-mark{display:none}.atlas-inspector{align-items:flex-start}.atlas-panel{padding:24px}.atlas-diagram-scroll svg{min-width:750px}}
+@media(max-width:620px){.atlas-hero{padding:25px 20px}.atlas-hero h1{font-size:2.05rem}.atlas-intro{font-size:.87rem}.atlas-nav button{padding:13px 9px;grid-template-columns:1fr;gap:4px}.atlas-nav button>span{grid-row:auto;font-size:.62rem}.atlas-nav strong{font-size:.75rem}.atlas-nav small{display:none}.atlas-panel{padding:18px 13px}.atlas-diagram-scroll svg{min-width:810px}.atlas-inspector{flex-direction:column}.atlas-editorial-notes{grid-template-columns:1fr}.atlas-section-title>div>span{font-size:.78rem}.atlas-travel{grid-template-columns:1fr;gap:4px}.atlas-travel>.atlas-transfer{flex-direction:row;padding:2px 0}.atlas-transfer b{transform:rotate(90deg)}.atlas-travel strong{font-size:1rem}.atlas-travel>div:first-child,.atlas-travel>div:last-child{padding:13px}.atlas-stepboard,.atlas-step-detail{padding:15px}.atlas.is-presenting .atlas-panel{padding:12px}.atlas.is-presenting .atlas-stepboard{padding:14px}.atlas.is-presenting .atlas-step-detail{padding:14px}.atlas-footer{flex-direction:column;align-items:start}}
+@media(prefers-reduced-motion:reduce){.atlas *{scroll-behavior:auto!important}}
+</style>
+<script>
+(()=>{
+ const root=document.querySelector('#agno-atlas-v2');if(!root||root.dataset.ready==='1')return;root.dataset.ready='1';
+ const $=s=>root.querySelector(s),$$=s=>[...root.querySelectorAll(s)];
+ const base='https://github.com/agno-agi/agno/blob/1f2aac51eb28dc9c0970836d3b7ae046bae81bbb/libs/agno/agno/';
+ const wire=$$('[data-wire]'),node=$$('[data-node]'),nodeMap=Object.fromEntries(node.map(n=>[n.dataset.node,n])),edgeMap=Object.fromEntries(wire.map(e=>[e.dataset.wire,e]));
+ const explain={
+ submit:'A client calls your ingress over HTTP. The gateway is deployment infrastructure, not another agent.',
+ route:'The gateway forwards the request to a FastAPI route in the AgentOS process.',
+ resolve:'The API resolves a configured agent or team from the in-process registry.',
+ dispatch:'The selected agent executes in Python using the configured runtime.',
+ inference:'The agent invokes an external model provider; generation latency belongs to this integration.',
+ 'run-events':'Events are streamed from the run. SSE is not durable queue storage.',
+ enqueue:'The API accepts a durable job ticket rather than relying on the client socket.',
+ persist:'The queue ticket persists in PostgreSQL and can be claimed under a lease.',
+ execute:'The worker executes the registered agent and must fence stale attempts.',
+ tool:'A tool may cause an external side effect; retries need idempotency.',
+ retrieve:'Knowledge backend lookups depend on configured retrieval integration.',
+ replay:'Shared retained events can be used for cross-replica SSE reconnect.'
+ };
+ const refs={
+ submit:'os/routers/agents/router.py',route:'os/routers/agents/router.py',resolve:'os/app.py',dispatch:'agent/agent.py',
+ inference:'agent/agent.py','run-events':'os/routers/agents/router.py',enqueue:'os/job_queue.py',persist:'db/schemas/jobs.py',execute:'os/job_queue.py',
+ tool:'agent/agent.py',retrieve:'knowledge/knowledge.py',replay:'os/event_streams/redis.py'
+ };
+ const stories={
+ answer:{summary:'The simplest synchronous request: HTTP ingress → in-process agent → provider → stream.',links:['submit','route','resolve','dispatch','inference','run-events'],captions:['The client submits a run request.','Ingress forwards the HTTP request to AgentOS.','The API resolves a registered component.','The registered agent begins executing in Python.','The agent calls the configured model provider.','Run events are streamed as the answer is produced.']},
+ background:{summary:'A durable ticket makes worker execution independent of a client socket.',links:['route','enqueue','persist','execute','inference','run-events'],captions:['AgentOS receives a background request.','The request is admitted to the durable queue.','The queue ticket is persisted for claim and recovery.','A worker runs the resolved agent.','The agent invokes the configured model.','Run output is emitted; persistence and event delivery are separate concerns.']},
+ tools:{summary:'A tool call can cross a security boundary and cause a side effect.',links:['route','resolve','dispatch','inference','tool','run-events'],captions:['API receives a run request.','The registered agent is selected.','Execution enters the agent runtime.','The model may request a tool call.','The tool executes against a configured external integration.','Output is returned through run-event transport.']}
+ };
+ let tab='overview',scenario='answer',step=0,presenting=false,savedOverflow='';
+ function updateSource(nodeId){
+  const n=nodeMap[nodeId];if(!n)return;
+  $('#atlas-component-kind').textContent=n.dataset.kind;$('#atlas-component-title').textContent=n.dataset.title;
+  $('#atlas-component-description').textContent=n.dataset.detail;
+  $('#atlas-component-source').href=base+n.dataset.file;
+  node.forEach(el=>el.classList.toggle('is-selected',el===n));
+  wire.forEach(el=>el.classList.toggle('is-active',el.dataset.source===nodeId||el.dataset.target===nodeId));
+ }
+ function selectTab(name){
+  if(!['overview','walkthrough','code'].includes(name))return;
+  tab=name;
+  $$('[data-tab]').forEach(b=>{const active=b.dataset.tab===name;b.setAttribute('aria-selected',String(active));b.tabIndex=active?0:-1});
+  $$('[data-panel]').forEach(el=>el.hidden=el.dataset.panel!==name);
+  if(name==='walkthrough')showStep();
+ }
+ function selectScenario(id){if(!stories[id])return;scenario=id;step=0;$$('[data-example]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.example===id)));showStep()}
+ function showStep(){
+  const s=stories[scenario],id=s.links[step],edge=edgeMap[id];if(!edge)return;
+  const from=nodeMap[edge.dataset.source],to=nodeMap[edge.dataset.target];if(!from||!to)return;
+  $('#atlas-scenario-summary').textContent=s.summary;
+  $('#atlas-step-counter').textContent=String(step+1).padStart(2,'0')+' / '+String(s.links.length).padStart(2,'0');
+  $('#atlas-step-from').textContent=from.dataset.title;$('#atlas-step-to').textContent=to.dataset.title;
+  $('#atlas-step-from-desc').textContent=from.dataset.kind;$('#atlas-step-to-desc').textContent=to.dataset.kind;
+  $('#atlas-step-protocol').textContent=edge.dataset.kind.toUpperCase();
+  $('#atlas-step-message').textContent=s.captions[step];
+  $('#atlas-why-title').textContent=explain[id]?'Why this connection matters':'Execution semantics';
+  $('#atlas-why-description').textContent=explain[id]||s.captions[step];
+  $('#atlas-mini-from').textContent=from.dataset.title;$('#atlas-mini-to').textContent=to.dataset.title;
+  $('#atlas-step-source').href=base+(refs[id]||from.dataset.file);
+  $('#atlas-step-progress').textContent=(step+1)+' of '+s.links.length;
+  $('#atlas-back').disabled=step===0;$('#atlas-forward').disabled=step===s.links.length-1;
+  const trail=$('#atlas-step-trail');trail.replaceChildren();
+  s.links.forEach((l,i)=>{
+    const b=document.createElement('button');b.type='button';b.textContent=String(i+1).padStart(2,'0');
+    b.setAttribute('aria-label','Go to step '+(i+1)+': '+s.captions[i]);b.setAttribute('aria-current',i===step?'step':'false');
+    b.addEventListener('click',()=>{step=i;showStep()});trail.append(b);
+  });
+  $('#atlas-step-trail [aria-current="step"]')?.scrollIntoView({block:'nearest',inline:'nearest'});
+  wire.forEach(el=>{el.classList.toggle('is-active',el.dataset.wire===id);el.classList.toggle('is-dimmed',el.dataset.wire!==id)});
+  node.forEach(n=>{n.classList.toggle('is-selected',[from,to].includes(n));n.classList.toggle('is-dimmed',![from,to].includes(n))});
+ }
+ function chooseCode(button){
+  if(!button)return;
+  $$('[data-symbol]').forEach(b=>b.setAttribute('aria-pressed',String(b===button)));
+  $('#atlas-code-label').textContent=button.dataset.label;$('#atlas-code-symbol').textContent=button.dataset.symbol;
+  $('#atlas-code-description').textContent=button.dataset.description;
+  $('#atlas-code-path').textContent='libs/agno/agno/'+button.dataset.path;$('#atlas-code-open').href=base+button.dataset.path;
+  const related=nodeMap[button.dataset.related];$('#atlas-code-linked').textContent=related?related.dataset.title+': '+related.dataset.detail:'See the matching architectural module.';
+ }
+ function setPresent(on){
+  presenting=on;root.classList.toggle('is-presenting',on);$('#atlas-present').setAttribute('aria-pressed',String(on));
+  $('#atlas-present').textContent=on?'Exit presentation ×':'Presentation view ↗';
+  if(on){savedOverflow=document.body.style.overflow;document.body.style.overflow='hidden';selectTab('walkthrough')}
+  else document.body.style.overflow=savedOverflow;
+ }
+ $$('[data-tab]').forEach(b=>{b.addEventListener('click',()=>selectTab(b.dataset.tab));b.addEventListener('keydown',e=>{if(!['ArrowLeft','ArrowRight'].includes(e.key))return;e.preventDefault();const names=['overview','walkthrough','code'];const idx=names.indexOf(b.dataset.tab);const next=names[(idx+(e.key==='ArrowRight'?1:2))%3];selectTab(next);$('[data-tab="'+next+'"]').focus()})});
+ node.forEach(n=>{const activate=()=>{selectTab('overview');wire.forEach(el=>el.classList.remove('is-dimmed'));node.forEach(el=>el.classList.remove('is-dimmed'));updateSource(n.dataset.node)};n.addEventListener('click',activate);n.addEventListener('keydown',e=>{if(['Enter',' '].includes(e.key)){e.preventDefault();activate()}})});
+ $$('[data-example]').forEach(b=>b.addEventListener('click',()=>selectScenario(b.dataset.example)));
+ $('#atlas-open-walk').addEventListener('click',()=>selectTab('walkthrough'));
+ $('#atlas-back').addEventListener('click',()=>{step=Math.max(0,step-1);showStep()});
+ $('#atlas-forward').addEventListener('click',()=>{step=Math.min(stories[scenario].links.length-1,step+1);showStep()});
+ $('#atlas-present').addEventListener('click',()=>setPresent(!presenting));
+ document.addEventListener('keydown',e=>{if(!presenting)return;if(['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName))return;
+ if(e.key==='Escape'){e.preventDefault();setPresent(false)}
+ else if(e.key==='ArrowRight'||e.key==='PageDown'){e.preventDefault();step=Math.min(stories[scenario].links.length-1,step+1);showStep()}
+ else if(e.key==='ArrowLeft'||e.key==='PageUp'){e.preventDefault();step=Math.max(0,step-1);showStep()}
+ });
+ $$('[data-symbol]').forEach(b=>b.addEventListener('click',()=>chooseCode(b)));
+ $('#atlas-open-code').addEventListener('click',()=>{selectTab('code');const e=edgeMap[stories[scenario].links[step]],target=e?.dataset.target;
+ const choice=$$('[data-symbol]').find(b=>b.dataset.related===target);chooseCode(choice||$$('[data-symbol]')[0])});
+ chooseCode($$('[data-symbol]')[0]);showStep();
+})();
+</script>
