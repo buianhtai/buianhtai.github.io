@@ -61,11 +61,12 @@ try{
   assert.match(await flow.locator('#ag-flow-inspect-title').innerText(),/Client \/ SDK/i,'Clicking after drag still inspects a node');
   await flow.locator('#ag-flow-expand').click();
   assert.equal(await flow.locator('#ag-flow-layout').evaluate(el=>el.classList.contains('is-expanded')),true,'Architecture fullscreen expands');
+  await flow.locator('#ag-flow-stage').screenshot({path:out+'/expanded-'+width+'-dark.png',animations:'disabled'});
   if(width===390){
     const zoomedClient=await flow.locator('[data-flow-node="client"]').boundingBox();
-    assert(zoomedClient&&zoomedClient.width>=150,'Mobile fullscreen shows readable nodes, not full-system thumbnail');
+    const worldTransform=await flow.locator('#ag-flow-world').evaluate(el=>el.style.transform);
+    assert(zoomedClient&&zoomedClient.width>=150,'Mobile fullscreen should show readable nodes: width='+zoomedClient?.width+', transform='+worldTransform);
   }
-  await flow.locator('#ag-flow-stage').screenshot({path:out+'/expanded-'+width+'-dark.png',animations:'disabled'});
   await flow.locator('#ag-flow-expand').click();
   await page.waitForFunction(()=>document.fullscreenElement===null);
   assert.equal(await flow.locator('#ag-flow-layout').evaluate(el=>el.classList.contains('is-expanded')),false,'Architecture fullscreen closes');
