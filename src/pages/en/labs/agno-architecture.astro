@@ -1,0 +1,36 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import AgnoArchitectureInfographic from '../../../components/mdx/AgnoArchitectureInfographic.astro';
+import AgnoSourceExecutionLab from '../../../components/mdx/AgnoSourceExecutionLab.astro';
+---
+<BaseLayout title="Agno AgentOS Architecture Lab — Interactive Execution and Relationships" description="Explore Agno AgentOS architecture by component, execution scenario, protocol, state ownership, and pinned code references.">
+  <main class="agno-lab">
+    <nav class="agno-lab-nav" aria-label="Lab navigation">
+      <a href="/en/blog/agno-agentos-distributed-systems-data-architecture/">← Deep dive article</a>
+      <a href="/en/labs/deerflow-source-atlas/">Compare DeerFlow Source Atlas ↗</a>
+    </nav>
+    <div class="agno-lab-intro">
+      <p>AGNO / AGENTOS · ENGINEERING EXPLORER</p>
+      <h1>See the architecture. Follow the execution.</h1>
+      <p>This dedicated lab combines the complete system map with guided HTTP/SSE, tool invocation, durable background, reconnect, and recovery paths. Select a scenario and press <b>Play walkthrough</b>, or click any component to inspect its relationships and source evidence.</p>
+    </div>
+    <AgnoArchitectureInfographic />
+    <section class="agno-lab-detail">
+      <p>CODE-LEVEL EXPLORATION</p>
+      <h2>From a component to its implementation</h2>
+      <p>The map above models logical dependencies. This linked source explorer follows verified Agno entry points for inline execution, durable workers, and recovery. The walkthroughs are explanatory, not live telemetry or a generated Python AST.</p>
+      <AgnoSourceExecutionLab />
+    </section>
+  </main>
+</BaseLayout>
+<style>
+.agno-lab{width:min(1240px,calc(100vw - 28px));margin:0 auto;padding:32px 0 80px}
+.agno-lab-nav{display:flex;justify-content:space-between;flex-wrap:wrap;gap:14px;font-size:.84rem;margin-bottom:34px}
+.agno-lab-nav a{color:var(--color-accent,#4bd1b6);text-decoration:underline;text-underline-offset:3px}
+.agno-lab-intro{max-width:850px;margin:0 auto 24px;text-align:center}
+.agno-lab-intro>p:first-child,.agno-lab-detail>p:first-child{font:.68rem ui-monospace,monospace;letter-spacing:.12em;color:var(--color-accent,#4bd1b6)}
+.agno-lab-intro h1{font-size:clamp(2rem,4vw,3.1rem);line-height:1.15;margin:8px 0 16px}
+.agno-lab-intro>p:last-child,.agno-lab-detail>p:last-of-type{font-size:.92rem;line-height:1.7;opacity:.78}
+.agno-lab-detail{margin-top:58px}.agno-lab-detail h2{font-size:clamp(1.6rem,3vw,2.2rem);margin:10px 0}
+.agno-lab-detail>p:last-of-type{max-width:780px}
+</style>
