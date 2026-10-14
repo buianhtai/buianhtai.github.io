@@ -1,0 +1,304 @@
+---
+const revision='1f2aac51eb28dc9c0970836d3b7ae046bae81bbb';
+const sourceBase='https://github.com/agno-agi/agno/blob/'+revision+'/libs/agno/agno/';
+const panels=[
+ {id:'system',label:'System boundaries',subtitle:'What is actually deployed?',summary:'AgentOS is a configurable FastAPI application. Providers and storage are dependencies, not built-in microservices.',
+  regions:[
+   {title:'YOUR APPLICATION',x:26,y:115,w:236,h:430,kind:'client'},
+   {title:'AGENTOS RUNTIME',x:279,y:115,w:478,h:430,kind:'runtime'},
+   {title:'CONFIGURED DEPENDENCIES',x:774,y:115,w:500,h:430,kind:'external'}
+  ],
+  nodes:[
+   {id:'client',title:'Application / SDK',subtitle:'Creates request',x:49,y:265,w:191,h:93,kind:'client',source:'os/routers/agents/router.py#L650',explain:'Your client sends requests and receives API responses or SSE events.'},
+   {id:'api',title:'AgentOS (FastAPI)',subtitle:'HTTP routes',x:302,y:170,w:206,h:96,kind:'runtime',source:'os/app.py#L1430',explain:'AgentOS.get_app() assembles the FastAPI application and routes.'},
+   {id:'agent',title:'Agent runtime',subtitle:'Model + tools',x:529,y:170,w:207,h:96,kind:'runtime',source:'agent/agent.py#L1564',explain:'Agent.arun() performs an agent run and can stream events.'},
+   {id:'worker',title:'QueueWorker',subtitle:'Optional durable path',x:302,y:374,w:207,h:96,kind:'runtime',source:'os/job_queue.py#L455',explain:'QueueWorker is activated for durable queued execution, with leases and retries.'},
+   {id:'sse',title:'SSE delivery',subtitle:'Run events',x:529,y:374,w:207,h:96,kind:'runtime',source:'os/routers/agents/router.py#L117',explain:'agent_response_streamer emits formatted SSE events for inline runs.'},
+   {id:'model',title:'Model / tools',subtitle:'External integrations',x:798,y:170,w:204,h:96,kind:'external',source:'agent/agent.py#L1564',explain:'The configured model provider and tools may make network calls or have side effects.'},
+   {id:'db',title:'Database',subtitle:'SQLite / Postgres etc.',x:1023,y:170,w:228,h:96,kind:'state',source:'os/app.py#L1430',explain:'AgentOS accepts configurable databases. PostgreSQL is typical for durable multi-replica setups, not a mandatory default.'},
+   {id:'redis',title:'Redis / Valkey',subtitle:'Optional streams',x:912,y:374,w:226,h:96,kind:'state',source:'os/event_streams/redis.py#L621',explain:'Redis coordinates retained events and cancellation across replicas when configured.'}
+  ],
+  edges:[['client','api','HTTP','http'],['api','agent','Invoke','call'],['agent','model','Model / tool','http'],['api','worker','Queue*','call'],['agent','sse','Events','event'],['worker','db','Jobs / lease','data'],['sse','redis','Replay*','event']]},
+ {id:'assembly',label:'How it is built',subtitle:'From Python config to a server',summary:'Build Agent and AgentOS objects, call get_app() to compose routes and startup lifespans, then serve the FastAPI app with Uvicorn.',
+  regions:[
+   {title:'YOUR PYTHON CODE',x:28,y:119,w:270,h:438,kind:'client'},
+   {title:'AGENTOS APPLICATION ASSEMBLY',x:317,y:119,w:655,h:438,kind:'runtime'},
+   {title:'HOSTED PROCESS',x:992,y:119,w:288,h:438,kind:'external'}
+  ],
+  nodes:[
+   {id:'defs',title:'Agent(...)',subtitle:'Model · tools · db',x:51,y:245,w:222,h:104,kind:'client',source:'agent/agent.py#L838',explain:'You create agents, teams, and workflows with the Agno SDK; model, tools and database are configured here.'},
+   {id:'os',title:'AgentOS(...)',subtitle:'Registers components',x:343,y:245,w:205,h:104,kind:'runtime',source:'os/app.py#L288',explain:'AgentOS receives the agent collection, database, queue configuration, authorization and optional features.'},
+   {id:'app',title:'get_app()',subtitle:'Builds FastAPI app',x:572,y:245,w:201,h:104,kind:'runtime',source:'os/app.py#L1430',explain:'get_app() builds/configures a FastAPI app and collects lifespans for databases, scheduler, queue worker and MCP if enabled.'},
+   {id:'routes',title:'Mount routers',subtitle:'Agent / team APIs',x:804,y:161,w:144,h:91,kind:'runtime',source:'os/app.py#L2240',explain:'FastAPI APIRouters are included; route conflicts can be managed by configuration.'},
+   {id:'life',title:'Startup lifespan',subtitle:'DB · queue · MCP*',x:804,y:375,w:144,h:91,kind:'runtime',source:'os/app.py#L1455',explain:'Lifespans coordinate database preparation and optional durable workers/scheduler/MCP; they are not necessarily separate processes.'},
+   {id:'uvicorn',title:'serve() / Uvicorn',subtitle:'Listen for HTTP',x:1014,y:245,w:245,h:104,kind:'external',source:'os/app.py#L2857',explain:'AgentOS.serve() runs the configured app with Uvicorn. A deployment can also host the app using its own ASGI server.'}
+  ],
+  edges:[['defs','os','Supply','call'],['os','app','Compose','call'],['app','routes','Routers','call'],['app','life','Lifespans','call'],['routes','uvicorn','ASGI','http'],['life','uvicorn','Start','call']]},
+ {id:'request',label:'Inline request',subtitle:'How a normal answer runs',summary:'The router resolves an agent, invokes agent.arun(stream=True), and formats run events as SSE. Inline cancellation follows the connection lifecycle.',
+  regions:[
+   {title:'REQUEST ENTRY',x:26,y:112,w:455,h:438,kind:'client'},
+   {title:'IN-PROCESS AGENT EXECUTION',x:498,y:112,w:463,h:438,kind:'runtime'},
+   {title:'EXTERNAL CALLS + OUTPUT',x:980,y:112,w:298,h:438,kind:'external'}
+  ],
+  nodes:[
+   {id:'request',title:'POST / run',subtitle:'Client input',x:53,y:239,w:184,h:95,kind:'client',source:'os/routers/agents/router.py#L650',explain:'The client invokes an AgentOS route with input and options.'},
+   {id:'router',title:'FastAPI router',subtitle:'Auth · resolve',x:264,y:239,w:195,h:95,kind:'client',source:'os/routers/agents/router.py#L650',explain:'The route handles permissions, input validation and component resolution for the configured app.'},
+   {id:'streamer',title:'response_streamer',subtitle:'SSE coroutine',x:522,y:177,w:200,h:97,kind:'runtime',source:'os/routers/agents/router.py#L117',explain:'agent_response_streamer starts an inline agent run; its implementation notes cancellation on client disconnect.'},
+   {id:'agent',title:'agent.arun()',subtitle:'Execution loop',x:743,y:177,w:197,h:97,kind:'runtime',source:'agent/agent.py#L1564',explain:'The configured agent executes the run, which may include model and tool calls.'},
+   {id:'model',title:'Model / tools',subtitle:'Configured providers',x:1007,y:177,w:244,h:97,kind:'external',source:'agent/agent.py#L1564',explain:'The agent calls its configured model and any required tools; implementations and side effects vary.'},
+   {id:'format',title:'format_sse_event',subtitle:'Serialize run chunk',x:628,y:399,w:221,h:96,kind:'runtime',source:'os/routers/agents/router.py#L148',explain:'Each yielded chunk is formatted into a server-sent event for the HTTP response.'},
+   {id:'client',title:'Browser / app',subtitle:'Consumes SSE',x:1007,y:399,w:244,h:96,kind:'external',source:'os/routers/agents/router.py#L117',explain:'Client receives events over the active connection. SSE delivery is not a durable job guarantee.'}
+  ],
+  edges:[['request','router','HTTP','http'],['router','streamer','Stream','call'],['streamer','agent','arun()','call'],['agent','model','Inference','http'],['agent','format','Yield chunk','event'],['format','client','SSE','event']]},
+ {id:'durable',label:'Durable run',subtitle:'Where state and recovery live',summary:'Durable queueing is opt-in. The database stores accepted jobs and run state; a worker claims under a lease. Redis provides optional cross-replica event transport.',
+  regions:[
+   {title:'REQUEST + QUEUE',x:26,y:115,w:477,h:442,kind:'client'},
+   {title:'WORKER / EXECUTION',x:522,y:115,w:458,h:442,kind:'runtime'},
+   {title:'PERSISTENCE + TRANSPORT',x:999,y:115,w:281,h:442,kind:'state'}
+  ],
+  nodes:[
+   {id:'api',title:'AgentOS API',subtitle:'Background request',x:51,y:239,w:199,h:95,kind:'client',source:'os/routers/agents/router.py#L650',explain:'An API request selects background/durable execution when enabled.'},
+   {id:'ticket',title:'Queue admission',subtitle:'Create queued job',x:270,y:239,w:207,h:95,kind:'client',source:'os/job_queue.py#L455',explain:'The queue admits a persisted ticket; accepted work should not rely on the client remaining connected.'},
+   {id:'worker',title:'QueueWorker',subtitle:'Claim · lease',x:547,y:239,w:190,h:95,kind:'runtime',source:'os/job_queue.py#L455',explain:'Workers claim jobs, renew leases, and retry or fail runs according to the configured policy.'},
+   {id:'agent',title:'Agent runtime',subtitle:'Execute run',x:764,y:239,w:188,h:95,kind:'runtime',source:'agent/agent.py#L1564',explain:'Worker executes the selected agent. External tool effects are not protected by the queue transaction.'},
+   {id:'postgres',title:'Persistent DB',subtitle:'Ticket + final run',x:1024,y:178,w:232,h:95,kind:'state',source:'db/schemas/jobs.py#L48',explain:'The configured durable queue store and run/session database hold recoverable state. PostgreSQL is a common choice.'},
+   {id:'redis',title:'Redis Streams*',subtitle:'Cross-replica events',x:1024,y:390,w:232,h:95,kind:'state',source:'os/event_streams/redis.py#L621',explain:'Optional cross-replica event replay uses retained Redis streams. Expiration does not delete the persisted final result.'},
+   {id:'reader',title:'SSE / resume',subtitle:'Read latest updates',x:646,y:399,w:203,h:95,kind:'runtime',source:'os/event_streams/redis.py#L621',explain:'A reconnecting reader may tail Redis events; persisted terminal run state remains authoritative.'}
+  ],
+  edges:[['api','ticket','Admit','call'],['ticket','postgres','Persist','data'],['postgres','worker','Claim','data'],['worker','agent','Execute','call'],['agent','postgres','Save run','data'],['agent','redis','Publish*','event'],['redis','reader','Replay*','event']]}
+];
+const lookup={};for(const p of panels){for(const n of p.nodes)lookup[p.id+':'+n.id]=n}
+function edgeCaption(scene,e){
+ const a=lookup[scene.id+':'+e[0]],b=lookup[scene.id+':'+e[1]];
+ const ax=a.x+a.w/2,ay=a.y+a.h/2,bx=b.x+b.w/2,by=b.y+b.h/2;
+ const horizontal=Math.abs(bx-ax)>Math.abs(by-ay)*1.25;
+ return {x:(ax+bx)/2,y:(ay+by)/2-(horizontal?8:10)}
+}
+function connection(scene,edge){
+ const [aId,bId]=edge;const a=lookup[scene.id+':'+aId],b=lookup[scene.id+':'+bId];if(!a||!b)return '';
+ const ax=a.x+a.w/2,ay=a.y+a.h/2,bx=b.x+b.w/2,by=b.y+b.h/2;
+ const horizontal=Math.abs(bx-ax)>Math.abs(by-ay)*1.25;
+ if(horizontal){let right=bx>ax,x1=right?a.x+a.w:a.x,x2=right?b.x:b.x+b.w,mid=(x1+x2)/2;
+   return 'M'+x1+' '+ay+' L'+mid+' '+ay+' L'+mid+' '+by+' L'+x2+' '+by}
+ const down=by>ay,y1=down?a.y+a.h:a.y,y2=down?b.y:b.y+b.h,mid=(y1+y2)/2;
+ return 'M'+ax+' '+y1+' L'+ax+' '+mid+' L'+bx+' '+mid+' L'+bx+' '+y2
+}
+---
+<div id="agno-diagram-explorer" class="de">
+ <header class="de-top">
+  <div class="de-identity"><a href="/en/labs/agno-architecture-v2/" aria-label="Back to architecture atlas">← Atlas</a><strong>AgentOS / Architecture diagrams</strong><span>SOURCE-VERIFIED</span></div>
+  <div class="de-actions">
+   <button type="button" id="de-only" aria-pressed="false"><span>▣</span> Diagram only</button>
+   <button type="button" id="de-full" aria-pressed="false"><span>⛶</span> Fullscreen</button>
+  </div>
+ </header>
+ <nav class="de-nav" aria-label="Choose architecture diagram" role="tablist">
+  {panels.map((p,i)=><button type="button" role="tab" aria-selected={i===0} aria-controls={'de-scene-'+p.id} id={'de-tab-'+p.id} tabindex={i===0?0:-1} data-diagram={p.id}><span>{String(i+1).padStart(2,'0')}</span><strong>{p.label}</strong><small>{p.subtitle}</small></button>)}
+ </nav>
+ <div class="de-heading"><div><span id="de-heading-label">01 / SYSTEM BOUNDARIES</span><h1 id="de-heading-title">What is actually deployed?</h1><p id="de-summary">AgentOS is a configurable FastAPI application. Providers and storage are dependencies, not built-in microservices.</p></div><a href={'https://github.com/agno-agi/agno/tree/'+revision} target="_blank" rel="noopener noreferrer">Pinned source {revision.slice(0,8)} ↗</a></div>
+ <div class="de-body">
+  <div class="de-stage" id="de-stage" tabindex="0" aria-label="Architecture diagram; drag to pan, scroll to zoom, and select components">
+   {panels.map((p,i)=><div class="de-scene" role="tabpanel" id={'de-scene-'+p.id} aria-labelledby={'de-tab-'+p.id} data-scene={p.id} hidden={i!==0}>
+     <svg class="de-svg" viewBox="0 0 1300 650" role="group" aria-label={p.label+' interactive source-linked diagram'} preserveAspectRatio="xMidYMid meet">
+      <defs>
+       <pattern id={'de-grid-'+p.id} width="24" height="24" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" class="de-grid-point"/></pattern>
+       {['http','call','event','data'].map(k=><marker id={'de-arrow-'+p.id+'-'+k} markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0 0 L9 4.5 L0 9 Z" class={'de-head-'+k}/></marker>)}
+      </defs>
+      <rect width="1300" height="650" class="de-bg"/>
+      <rect width="1300" height="650" fill={'url(#de-grid-'+p.id+')'}/>
+      {p.regions.map(g=><g class={'de-region de-region-'+g.kind}><rect x={g.x} y={g.y} width={g.w} height={g.h} rx="18"/><text x={g.x+15} y={g.y+28}>{g.title}</text></g>)}
+      {p.edges.map((e,i)=><g class={'de-edge de-edge-'+e[3]} data-edge={e[0]+'-'+e[1]} data-from={e[0]} data-to={e[1]} data-type={e[3]}><path d={connection(p,e)} marker-end={'url(#de-arrow-'+p.id+'-'+e[3]+')'}/><text x={edgeCaption(p,e).x} y={edgeCaption(p,e).y} class="de-edge-label">{e[2]}</text><title>{e[0]+' → '+e[1]+': '+e[2]}</title></g>)}
+      {p.nodes.map(n=><g class={'de-node de-node-'+n.kind} role="button" tabindex="0" data-node={n.id} data-title={n.title} data-detail={n.explain} data-source={n.source} data-kind={n.kind} aria-label={'Inspect '+n.title}>
+       <rect x={n.x} y={n.y} width={n.w} height={n.h} rx="11" class="de-node-rect"/>
+       <rect x={n.x+9} y={n.y+13} width="5" height={n.h-26} rx="3" class="de-node-stripe"/>
+       <text x={n.x+24} y={n.y+37} class="de-node-title">{n.title}</text>
+       <text x={n.x+24} y={n.y+59} class="de-node-sub">{n.subtitle}</text>
+      </g>)}
+      <text x="30" y="626" class="de-footnote">* Optional / configuration dependent. Arrows are logical relationships, not recorded network traffic.</text>
+     </svg>
+     <div class="de-mobile-flow" aria-label={p.label+' as a readable vertical relationship map'}>
+      {p.nodes.map((n,i)=><section class="de-mobile-card" data-mobile-card={n.id}>
+       <button type="button" data-mobile-node={n.id} aria-label={'Inspect '+n.title}>
+        <span>{String(i+1).padStart(2,'0')} · {n.kind.toUpperCase()}</span><strong>{n.title}</strong><small>{n.subtitle}</small>
+       </button>
+       <p>{n.explain}</p>
+       <div class="de-mobile-connections">
+        {p.edges.filter(e=>e[0]===n.id).map(e=><span>→ <b>{lookup[p.id+':'+e[1]]?.title}</b><small>{e[2]}</small></span>)}
+       </div>
+       <a href={sourceBase+n.source} target="_blank" rel="noopener noreferrer">Read implementation ↗</a>
+      </section>)}
+     </div>
+    </div>)}
+   <div class="de-mobile-switch"><span>Readable component map</span><button type="button" id="de-mobile-canvas" aria-pressed="false">View diagram canvas →</button></div>
+   <div class="de-canvas-controls" role="group" aria-label="Navigate diagram">
+    <button id="de-zoom-in" type="button" aria-label="Zoom in">+</button>
+    <button id="de-zoom-out" type="button" aria-label="Zoom out">−</button>
+    <button id="de-fit" type="button">Fit</button>
+   </div>
+   <div class="de-legend"><span><i class="de-http"></i>HTTP</span><span><i class="de-call"></i>Python / lifecycle</span><span><i class="de-data"></i>Storage</span><span><i class="de-event"></i>Events</span></div>
+  </div>
+  <aside class="de-inspector" id="de-inspector" aria-live="polite">
+   <span>SELECTED COMPONENT</span>
+   <h2 id="de-inspect-title">Select a node</h2>
+   <p id="de-inspect-detail">Choose a component in the diagram to see what it does, how it connects, and where its implementation lives.</p>
+   <div class="de-source"><strong>SOURCE FILE</strong><a id="de-inspect-source" target="_blank" rel="noopener noreferrer" href={'https://github.com/agno-agi/agno/tree/'+revision}>Browse pinned source ↗</a></div>
+   <div class="de-relations"><strong>CONNECTED RELATIONSHIPS</strong><div id="de-relationships"><p>Click a node to reveal connected components and direction.</p></div></div><p class="de-inspect-meta" id="de-inspect-meta">Diagram components are grouped by ownership and deployment boundary.</p>
+  </aside>
+ </div>
+ <footer class="de-lower">
+  <div class="de-explain"><strong>How to read these diagrams</strong><p>Start with <b>How it is built</b>: create an Agent, provide it to AgentOS, call <code>get_app()</code> to build routes and startup lifespans, and serve the resulting ASGI application. Then follow <b>Inline request</b> to see <code>agent.arun()</code> and SSE; <b>Durable run</b> shows the optional database-backed queue and worker.</p></div>
+  <div class="de-example"><span>MINIMAL ASSEMBLY · ILLUSTRATIVE</span><pre><code>agent = Agent(model=..., tools=[...])
+os = AgentOS(agents=[agent], db=db)
+app = os.get_app()
+os.serve(app="app:app")</code></pre><small>Queue, Redis, tracing and MCP are optional.</small></div>
+ </footer>
+ <p class="de-note">Architecture references pinned to Agno <a href={'https://github.com/agno-agi/agno/tree/'+revision} target="_blank" rel="noopener noreferrer">{revision.slice(0,8)}</a>. These are illustrative source-grounded diagrams, not inferred call stacks. <a href="/en/labs/agno-architecture-v2/">Return to Atlas V2 →</a></p>
+</div>
+<style>
+.de{--dk:#e7f0fa;--dm:#9caec2;--db:#162638;--dpanel:#1b2d43;--dline:#38506a;--dteal:#5edacb;--dblue:#64a5ec;--dpurple:#bb98ed;--dorange:#e6ae62;min-height:100vh;background:#101a28;color:var(--dk);font:inherit}
+.de *{box-sizing:border-box}.de :is(button,a,[role=button]):focus-visible{outline:2px solid var(--dteal);outline-offset:3px}.de button{cursor:pointer}
+.de-top{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 20px;border-bottom:1px solid var(--dline)}.de-identity{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.de-identity>a{color:var(--dteal);font-size:.79rem;text-decoration:none}.de-identity strong{font-weight:750;font-size:.87rem}.de-identity span,.de-heading>a{font:650 .63rem ui-monospace,monospace;color:var(--dm)}
+.de-actions{display:flex;gap:7px}.de-actions button,.de-canvas-controls button{border:1px solid var(--dline);background:var(--dpanel);color:var(--dk);border-radius:8px;padding:9px 12px;font-weight:700;font-size:.76rem}.de-actions button[aria-pressed=true]{background:var(--dteal);color:#102435}
+.de-nav{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));padding:9px 14px;gap:8px;border-bottom:1px solid var(--dline)}.de-nav button{text-align:left;display:flex;align-items:center;gap:10px;padding:11px 12px;border:1px solid var(--dline);background:var(--db);color:var(--dk);border-radius:9px}.de-nav button[aria-selected=true]{border-color:var(--dteal);background:#17413f}.de-nav strong{font-size:.81rem}.de-nav small{font-size:.64rem;color:var(--dm)}.de-nav button span{font:750 .68rem ui-monospace,monospace;color:var(--dteal)}
+.de-heading{display:flex;align-items:end;justify-content:space-between;padding:17px 21px 13px;gap:12px}.de-heading span{font:700 .64rem ui-monospace,monospace;color:var(--dteal);letter-spacing:.08em}.de-heading h1{font-size:clamp(1.15rem,2.5vw,1.8rem);margin:4px 0}.de-heading p{font-size:.79rem;color:var(--dm);line-height:1.5;margin:2px 0 0}.de-heading>a{white-space:nowrap;color:var(--dteal);text-decoration:none}
+.de-body{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,285px);padding:0 14px 14px;gap:10px}
+.de-stage{position:relative;overflow:hidden;height:min(69vh,715px);min-height:490px;background:#142235;border:1px solid var(--dline);border-radius:12px;touch-action:none;cursor:grab}
+.de-stage.is-panning{cursor:grabbing}.de-scene{position:absolute;inset:0}.de-scene[hidden]{display:none!important}.de-svg{width:100%;height:100%;display:block;user-select:none}
+.de-bg{fill:#142235}.de-grid-point{fill:#476078;opacity:.35}.de-region rect{fill:#1c2c40;stroke:#4c5e72;stroke-width:1.6}.de-region-runtime rect{fill:#19363e;stroke:#477b7c}.de-region-state rect{fill:#29273f;stroke:#8270a2}.de-region text{fill:#c3d4e5;font:700 11px ui-monospace,monospace;letter-spacing:.9px}
+.de-edge path{fill:none;stroke-width:2.7;stroke-linecap:round;stroke-linejoin:round;stroke:#64a5ec}.de-edge-call path{stroke:#5edacb}.de-edge-data path{stroke:#bb98ed}.de-edge-event path{stroke:#e6ae62}.de-head-http{fill:#64a5ec}.de-head-call{fill:#5edacb}.de-head-data{fill:#bb98ed}.de-head-event{fill:#e6ae62}
+.de-edge-label{font:700 11px ui-monospace,monospace;fill:#d4e5f4;stroke:#142235;stroke-width:5;paint-order:stroke;stroke-linejoin:round;text-anchor:middle}
+.de-edge{opacity:.57}.de-edge.is-focused{opacity:1;filter:drop-shadow(0 0 2px #aad9f3)}.de-edge.is-muted{opacity:.055}
+.de-node{cursor:pointer}.de-node-rect{fill:#23354a;stroke:#58718a;stroke-width:1.5}.de-node-stripe{fill:#64a5ec}.de-node-runtime .de-node-stripe{fill:#5edacb}.de-node-state .de-node-stripe{fill:#bb98ed}.de-node-external .de-node-stripe{fill:#e6ae62}.de-node-title{fill:#fff;font:760 15px system-ui}.de-node-sub{fill:#b8cbdc;font:12px system-ui}.de-node.is-selected .de-node-rect{stroke:#5edacb;stroke-width:3.6}.de-node.is-muted{opacity:.37}.de-footnote{fill:#8aa0b5;font:11px system-ui}
+.de-canvas-controls{position:absolute;bottom:13px;left:13px;display:flex;gap:6px;padding:5px;background:#102033e5;border:1px solid var(--dline);border-radius:9px}.de-canvas-controls button{min-width:38px}
+.de-legend{position:absolute;bottom:13px;right:13px;display:flex;gap:9px;flex-wrap:wrap;background:#102033e5;border:1px solid var(--dline);border-radius:8px;padding:10px}.de-legend span{display:flex;gap:5px;align-items:center;font-size:.65rem;color:var(--dm)}.de-legend i{width:17px;height:3px;display:inline-block}.de-http{background:#64a5ec}.de-call{background:#5edacb}.de-data{background:#bb98ed}.de-event{background:#e6ae62}
+.de-inspector{background:var(--db);border:1px solid var(--dline);border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:13px;min-width:0}.de-inspector>span,.de-source>strong,.de-example>span{font:700 .64rem ui-monospace,monospace;letter-spacing:.08em;color:var(--dteal)}.de-inspector h2{font-size:1.22rem;margin:0;line-height:1.3}.de-inspector>p{font-size:.82rem;line-height:1.65;color:var(--dm);margin:0}.de-source{display:grid;gap:8px;border-top:1px solid var(--dline);padding-top:15px;margin-top:auto}.de-source a{color:var(--dteal);overflow-wrap:anywhere;font-size:.73rem}.de-inspect-meta{font-size:.73rem!important}
+.de-relations{padding-top:12px;border-top:1px solid var(--dline);display:grid;gap:9px}.de-relations>strong{font:700 .64rem ui-monospace,monospace;letter-spacing:.06em;color:var(--dteal)}.de-relations>div{display:grid;gap:7px}.de-relations p{font-size:.71rem;line-height:1.5;color:var(--dm);margin:0}
+.de-relations :global(button){text-align:left;background:#23364b;border:1px solid #405671;border-radius:8px;padding:9px;color:var(--dk);font:650 .73rem system-ui}.de-relations :global(button) :global(small){display:block;font:.63rem ui-monospace,monospace;color:var(--dm);margin-top:5px}
+.de-lower{display:grid;grid-template-columns:1fr minmax(260px,450px);gap:18px;padding:14px 20px 24px}.de-explain{max-width:770px}.de-explain strong{font-size:1rem}.de-explain p{font-size:.85rem;color:var(--dm);line-height:1.7}.de-explain code{color:var(--dteal)}.de-example{background:var(--db);padding:14px;border:1px solid var(--dline);border-radius:9px}.de-example pre{overflow-x:auto;font:700 .76rem/1.6 ui-monospace,monospace;color:var(--dk);margin:8px 0}.de-example small{font-size:.68rem;color:var(--dm)}
+.de-note{font:.73rem/1.6 system-ui;color:var(--dm);padding:0 20px 20px;margin:0}.de-note a{color:var(--dteal)}
+.de.is-only .de-heading,.de.is-only .de-inspector,.de.is-only .de-lower,.de.is-only .de-note{display:none!important}
+.de.is-only .de-body{display:block;padding:8px 12px 12px}.de.is-only .de-stage{height:calc(100dvh - 121px);min-height:290px}.de.is-only .de-nav{padding:7px 14px}.de.is-only .de-nav button{padding:9px}
+.de:fullscreen,.de.is-fullscreen{position:fixed!important;inset:0!important;z-index:2147480000!important;width:100vw!important;height:100dvh!important;overflow:auto!important;background:#101a28}
+.de.is-fullscreen:not(.is-only) .de-stage,.de:fullscreen:not(.is-only) .de-stage{height:calc(100dvh - 160px)}
+@media(max-width:900px){.de-body{grid-template-columns:1fr}.de-stage{height:60vh;min-height:440px}.de-inspector{min-height:190px}.de-lower{grid-template-columns:1fr}.de-heading>a{display:none}.de-nav button{flex-wrap:wrap}}
+@media(max-width:580px){.de-top{padding:10px;flex-wrap:wrap}.de-identity strong{font-size:.78rem}.de-identity span{display:none}.de-actions button{font-size:.68rem;padding:8px}.de-nav{grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;padding:7px}.de-nav button{padding:8px 5px;display:grid;justify-items:start;gap:4px}.de-nav strong{font-size:.63rem;line-height:1.25}.de-nav small{display:none}.de-nav span{font-size:.57rem}.de-heading{padding:12px}.de-heading p{font-size:.72rem}.de-body{padding:0 7px 10px}.de-stage{height:61vh;min-height:400px}.de-inspector{padding:13px}.de-legend{bottom:53px;right:8px;padding:6px}.de-legend span{font-size:.58rem}.de-legend i{width:12px}.de-lower{padding:8px 13px}.de.is-only .de-stage{height:calc(100dvh - 150px)}}
+@media(prefers-reduced-motion:reduce){.de *{scroll-behavior:auto!important}}
+
+.de-mobile-flow,.de-mobile-switch{display:none}
+@media(max-width:580px){
+ .de-stage{touch-action:pan-y;cursor:default}
+ .de-scene .de-svg{display:none}
+ .de-mobile-switch{position:absolute;top:0;left:0;right:0;z-index:4;background:#16273a;display:flex;align-items:center;justify-content:space-between;gap:6px;padding:8px 9px;border-bottom:1px solid #38506a}
+ .de-mobile-switch span{font:700 .62rem ui-monospace,monospace;color:#b8cbdc}
+ .de-mobile-switch button{font:720 .67rem system-ui;color:#6addce;background:#243d51;padding:7px 9px;border:1px solid #456780;border-radius:7px;white-space:nowrap}
+ .de-mobile-flow{display:grid;gap:13px;padding:61px 11px 18px;height:100%;overflow-y:auto;overscroll-behavior:contain;align-content:start}
+ .de-mobile-card{background:#1d3045;border:1px solid #45617b;border-radius:11px;padding:13px;display:grid;gap:9px;min-width:0}
+ .de-mobile-card:focus-within,.de-mobile-card.is-selected{border-color:#5edacb}
+ .de-mobile-card>button{display:grid;text-align:left;gap:5px;background:none;border:none;padding:0;color:#e7f0fa}
+ .de-mobile-card>button span{font:700 .63rem ui-monospace,monospace;color:#5edacb}
+ .de-mobile-card>button strong{font-size:1rem}
+ .de-mobile-card>button small{font-size:.72rem;color:#b5c5d5}
+ .de-mobile-card p{font-size:.72rem;line-height:1.5;color:#bacadb;margin:0}
+ .de-mobile-connections{display:flex;flex-wrap:wrap;gap:7px}
+ .de-mobile-connections>span{display:flex;align-items:center;gap:5px;font-size:.67rem;background:#263e52;padding:6px 8px;border:1px solid #49627a;border-radius:6px;color:#6addce}
+ .de-mobile-connections b{font-weight:690;color:#e7f0fa}
+ .de-mobile-connections small{font-size:.61rem;color:#b9cadd;margin-left:3px}
+ .de-mobile-card>a{color:#6addce;font-size:.68rem;font-weight:700;text-decoration:none}
+ .de-canvas-controls,.de-legend{display:none}
+ .de.is-mobile-canvas .de-scene .de-svg{display:block}
+ .de.is-mobile-canvas .de-mobile-flow{display:none}
+ .de.is-mobile-canvas .de-canvas-controls{display:flex}
+ .de.is-mobile-canvas .de-legend{display:flex}
+ .de.is-mobile-canvas .de-stage{touch-action:none;cursor:grab}
+}
+</style>
+<script>
+(()=>{
+ const root=document.querySelector('#agno-diagram-explorer');if(!root||root.dataset.initialized==='yes')return;root.dataset.initialized='yes';
+ const $=s=>root.querySelector(s),$$=s=>[...root.querySelectorAll(s)];
+ const scenes=$$('[data-scene]'),tabs=$$('[data-diagram]'),stage=$('#de-stage');
+ const defaultSource='https://github.com/agno-agi/agno/tree/1f2aac51eb28dc9c0970836d3b7ae046bae81bbb';
+ let current='system',only=false,fullscreen=false,prevOverflow='',view={x:0,y:0,w:1300,h:650},drag=null,pointers=new Map(),pinch=null;
+ function svg(){return $('[data-scene="'+current+'"] .de-svg')}
+ function update(){svg()?.setAttribute('viewBox',[view.x,view.y,view.w,view.h].join(' '))}
+ function reset(){
+  const ratio=stage.clientWidth/stage.clientHeight;
+  if(stage.clientWidth<620){view={x:0,y:80,w:500,h:Math.round(500/ratio)}}
+  else view={x:0,y:0,w:1300,h:650};
+  update()
+ }
+ function choose(name){
+  const tab=tabs.find(t=>t.dataset.diagram===name);if(!tab)return;
+  current=name;tabs.forEach(b=>{const yes=b===tab;b.setAttribute('aria-selected',String(yes));b.tabIndex=yes?0:-1});
+  scenes.forEach(s=>s.hidden=s.dataset.scene!==name);
+  $$('.de-mobile-card').forEach(el=>el.classList.remove('is-selected'));
+  $('#de-heading-label').textContent=String(tabs.indexOf(tab)+1).padStart(2,'0')+' / '+tab.querySelector('strong').textContent.toUpperCase();
+  $('#de-heading-title').textContent=tab.querySelector('small').textContent;
+  $('#de-summary').textContent={system:'AgentOS is a configurable FastAPI app; databases, providers and tools are configured dependencies.',assembly:'Agent definitions → AgentOS(...) → get_app() → routes + lifespans → serve().',request:'Router → agent.arun() → model/tools → SSE events.',durable:'Optional queue admission → persisted ticket → worker lease → agent run → optional event replay.'}[name];
+  $('#de-inspect-title').textContent='Select a node';$('#de-inspect-detail').textContent='Choose a component to inspect the real implementation.';$('#de-inspect-source').href=defaultSource;$('#de-relationships').replaceChildren();
+  $$('.de-node').forEach(n=>n.classList.remove('is-selected','is-muted'));$$('.de-edge').forEach(n=>n.classList.remove('is-focused','is-muted'));
+  reset()
+ }
+ function inspect(n){
+  const scene=n.closest('[data-scene]');const id=n.dataset.node;
+  scene.querySelectorAll('.de-node').forEach(el=>{el.classList.toggle('is-selected',el===n);el.classList.toggle('is-muted',el!==n)});
+  scene.querySelectorAll('.de-edge').forEach(el=>{
+   const focus=el.dataset.from===id||el.dataset.to===id;el.classList.toggle('is-focused',focus);el.classList.toggle('is-muted',!focus)
+  });
+  $('#de-inspect-title').textContent=n.dataset.title;$('#de-inspect-detail').textContent=n.dataset.detail;
+  $('#de-inspect-meta').textContent='Boundaries: '+n.dataset.kind+'. Select another node to follow its relations.';
+  $('#de-inspect-source').href='https://github.com/agno-agi/agno/blob/1f2aac51eb28dc9c0970836d3b7ae046bae81bbb/libs/agno/agno/'+n.dataset.source;
+  const relationships=$('#de-relationships');relationships.replaceChildren();
+  scene.querySelectorAll('.de-edge').forEach(edge=>{
+   if(edge.dataset.from!==id&&edge.dataset.to!==id)return;
+   const incoming=edge.dataset.to===id,otherId=incoming?edge.dataset.from:edge.dataset.to;
+   const other=scene.querySelector('[data-node="'+otherId+'"]');
+   const btn=document.createElement('button');btn.type='button';
+   btn.textContent=(incoming?'← From ':'→ To ')+(other?.dataset.title||otherId);
+   const hint=document.createElement('small');hint.textContent=edge.dataset.type.toUpperCase()+' · '+edge.querySelector('title')?.textContent.split(': ').pop();
+   btn.append(hint);btn.addEventListener('click',()=>{if(other)inspect(other)});relationships.append(btn);
+  });
+  if(only){$('#de-only').title=n.dataset.title+' · source linked in inspector (exit diagram-only to read)'}
+ }
+ function zoom(f,cx=stage.clientWidth/2,cy=stage.clientHeight/2){
+  const next=Math.max(225,Math.min(1800,view.w*f)),r=next/view.w;
+  const bounds=stage.getBoundingClientRect(),localX=cx/bounds.width,localY=cy/bounds.height;
+  view.x+=(view.w-next)*localX;view.y+=(view.h-view.h*r)*localY;
+  view.w=next;view.h*=r;update()
+ }
+ tabs.forEach(t=>{t.addEventListener('click',()=>choose(t.dataset.diagram));t.addEventListener('keydown',e=>{if(e.key!=='ArrowRight'&&e.key!=='ArrowLeft')return;e.preventDefault();let i=tabs.indexOf(t);const next=tabs[(i+(e.key==='ArrowRight'?1:tabs.length-1))%tabs.length];next.click();next.focus()})});
+ $$('.de-node').forEach(n=>{n.addEventListener('click',()=>inspect(n));n.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();inspect(n)}})});
+ $$('[data-mobile-node]').forEach(b=>b.addEventListener('click',()=>{
+  const scene=b.closest('[data-scene]'),n=scene?.querySelector('.de-node[data-node="'+b.dataset.mobileNode+'"]');
+  if(n)inspect(n);
+  scene?.querySelectorAll('[data-mobile-card]').forEach(card=>card.classList.toggle('is-selected',card.dataset.mobileCard===b.dataset.mobileNode));
+ }));
+ $('#de-mobile-canvas').addEventListener('click',()=>{
+  const on=!root.classList.contains('is-mobile-canvas');root.classList.toggle('is-mobile-canvas',on);
+  $('#de-mobile-canvas').setAttribute('aria-pressed',String(on));
+  $('#de-mobile-canvas').textContent=on?'← Readable map':'View diagram canvas →';
+  if(on)reset()
+ });
+ $('#de-zoom-in').addEventListener('click',()=>zoom(.8));$('#de-zoom-out').addEventListener('click',()=>zoom(1.25));$('#de-fit').addEventListener('click',()=>{view={x:0,y:0,w:1300,h:650};update()});
+ $('#de-only').addEventListener('click',()=>{only=!only;root.classList.toggle('is-only',only);$('#de-only').setAttribute('aria-pressed',String(only));$('#de-only').textContent=only?'▣ Show details':'▣ Diagram only';reset()});
+ function exitFull(){if(!fullscreen)return;fullscreen=false;root.classList.remove('is-fullscreen');$('#de-full').setAttribute('aria-pressed','false');$('#de-full').textContent='⛶ Fullscreen';document.body.style.overflow=prevOverflow;if(document.fullscreenElement===root&&document.exitFullscreen)document.exitFullscreen().catch(()=>{});reset()}
+ $('#de-full').addEventListener('click',async()=>{if(fullscreen){exitFull();return}fullscreen=true;prevOverflow=document.body.style.overflow;document.body.style.overflow='hidden';root.classList.add('is-fullscreen');$('#de-full').setAttribute('aria-pressed','true');$('#de-full').textContent='✕ Exit fullscreen';reset();if(root.requestFullscreen){try{await root.requestFullscreen()}catch{}}reset()});
+ document.addEventListener('fullscreenchange',()=>{if(fullscreen&&!document.fullscreenElement)exitFull()});
+ document.addEventListener('keydown',e=>{if(!fullscreen||e.key!=='Escape')return;e.preventDefault();exitFull()});
+ stage.addEventListener('wheel',e=>{e.preventDefault();const r=stage.getBoundingClientRect();zoom(e.deltaY<0?.89:1.12,e.clientX-r.left,e.clientY-r.top)},{passive:false});
+ stage.addEventListener('pointerdown',e=>{if(e.target.closest('.de-mobile-flow,.de-mobile-switch,.de-canvas-controls,.de-legend,[role=button]'))return;if(e.pointerType==='mouse'&&e.button!==0)return;
+  pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  drag={pointer:e.pointerId,x:e.clientX,y:e.clientY,vx:view.x,vy:view.y};stage.setPointerCapture(e.pointerId)
+ });
+ stage.addEventListener('pointermove',e=>{if(!pointers.has(e.pointerId))return;pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(pointers.size===2){const p=[...pointers.values()],dist=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);if(pinch&&dist)zoom(pinch/dist);pinch=dist;return}
+  if(!drag||drag.pointer!==e.pointerId)return;
+  const r=stage.getBoundingClientRect();view.x=drag.vx-(e.clientX-drag.x)*view.w/r.width;view.y=drag.vy-(e.clientY-drag.y)*view.h/r.height;update();stage.classList.add('is-panning')
+ });
+ function end(e){pointers.delete(e.pointerId);if(pointers.size<2)pinch=null;if(drag?.pointer===e.pointerId)drag=null;stage.classList.remove('is-panning')}
+ stage.addEventListener('pointerup',end);stage.addEventListener('pointercancel',end);
+ stage.addEventListener('keydown',e=>{if(e.target!==stage)return;if(e.key==='+'||e.key==='='){e.preventDefault();zoom(.8)}else if(e.key==='-'){e.preventDefault();zoom(1.25)}else if(e.key==='0'){e.preventDefault();view={x:0,y:0,w:1300,h:650};update()}else if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){e.preventDefault();const s=35;view.x+=(e.key==='ArrowLeft'?-s:e.key==='ArrowRight'?s:0);view.y+=(e.key==='ArrowUp'?-s:e.key==='ArrowDown'?s:0);update()}});
+ window.addEventListener('resize',reset);
+ choose('system')
+})();
+</script>
