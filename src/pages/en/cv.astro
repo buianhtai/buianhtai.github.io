@@ -1,0 +1,138 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import cv from '../../data/cv.json';
+
+const pdf = '/downloads/Bui_Anh_Tai_CV_English.pdf';
+const primary = cv.jobs.slice(0, 3);
+const earlier = cv.jobs.slice(3);
+const displayDate = (date: string) => date.replace(' - ', ' – ');
+---
+
+<BaseLayout title="CV — Bui Anh Tai" description="Bui Anh Tai — Senior Backend and Platform Engineer. Experience in configurable PLM, deployed AI agents, multi-cloud insurance platforms, commerce, and payments." lang="en">
+  <div class="ed-container cv-page">
+    <header class="cv-hero">
+      <p class="ed-kicker">CURRICULUM VITAE</p>
+      <h1>{cv.name}</h1>
+      <p class="cv-role">{cv.headline}</p>
+      <p class="cv-specialties">Software Architecture · Enterprise Platforms · AI Systems</p>
+      <div class="cv-contact">
+        <span>{cv.location}</span>
+        <a href={cv.linkedin} target="_blank" rel="noopener noreferrer">LinkedIn <span aria-hidden="true">↗</span></a>
+        <a href="/en/blog/">Engineering writing <span aria-hidden="true">→</span></a>
+      </div>
+      <div class="cv-actions">
+        <a class="ed-btn ed-btn-primary" href={pdf} download="Bui_Anh_Tai_CV_English.pdf">Download CV <span class="cv-file-type">PDF · 2 pages</span></a>
+        <button type="button" class="ed-btn ed-btn-quiet" id="print-cv" hidden>Print / Save as PDF</button>
+      </div>
+    </header>
+
+    <section class="cv-profile" aria-label="Professional profile">
+      <p>{cv.summary}</p>
+    </section>
+
+    <div class="cv-layout">
+      <div class="cv-career">
+        <section aria-labelledby="experience">
+          <h2 id="experience">Professional experience</h2>
+          {primary.map((job) => <article class="cv-job">
+            <div class="cv-job-top"><h3>{job.company}</h3><p class="cv-date">{displayDate(job.dates)}</p></div>
+            <p class="cv-job-role">{job.role}</p>
+            <p class="cv-context">{job.context}</p>
+            <ul>{job.bullets.map(bullet => <li>{bullet}</li>)}</ul>
+            {job.company === 'Glide Systems Inc' && <p class="cv-stack">Java / Quarkus · Neo4j · Camunda</p>}
+          </article>)}
+        </section>
+        <section aria-labelledby="earlier-career">
+          <h2 id="earlier-career">Earlier career</h2>
+          {earlier.map((job) => <article class="cv-job cv-job-compact">
+            <div class="cv-job-top"><h3>{job.company}</h3><p class="cv-date">{displayDate(job.dates)}</p></div>
+            <p class="cv-job-role">{job.role}</p>
+            <ul>{job.bullets.map(bullet => <li>{bullet}</li>)}</ul>
+          </article>)}
+        </section>
+      </div>
+      <aside class="cv-sidebar" aria-label="Technical expertise and education">
+        <section aria-labelledby="expertise"><h2 id="expertise">Technical expertise</h2>
+          {cv.skills.map(([label, skills]) => <div class="cv-skill"><h3>{label}</h3><p>{skills}</p></div>)}
+        </section>
+        <section aria-labelledby="education"><h2 id="education">Education</h2>
+          <p class="cv-school">{cv.education[0]}</p><p>{cv.education[1]}</p>
+        </section>
+        <section aria-labelledby="languages"><h2 id="languages">Languages</h2><p>{cv.languages}</p></section>
+        <a class="cv-pdf-link" href={pdf} download>Download the two-page CV →</a>
+      </aside>
+    </div>
+  </div>
+</BaseLayout>
+
+<script>
+  const printButton = document.querySelector<HTMLButtonElement>('#print-cv');
+  if (printButton) {
+    printButton.hidden = false;
+    printButton.addEventListener('click', () => window.print());
+  }
+</script>
+
+<style>
+  .cv-page { padding-top: clamp(42px, 7vw, 88px); padding-bottom: 80px; }
+  .cv-hero { max-width: 900px; }
+  h1 { font-family: 'IBM Plex Serif', Georgia, serif; font-size: clamp(2.8rem, 7vw, 5.4rem); font-weight: 500; letter-spacing: -.055em; line-height: 1.1; margin: 16px 0 20px; }
+  .cv-role { font-size: clamp(1.15rem, 2.5vw, 1.6rem); font-weight: 600; margin: 0 0 8px; }
+  .cv-specialties, .cv-contact, .cv-context, .cv-date, .cv-stack { color: var(--color-text-dim); }
+  .cv-specialties { line-height: 1.7; margin: 0; }
+  .cv-contact { display: flex; gap: 12px 24px; flex-wrap: wrap; margin-top: 22px; font-size: .9rem; }
+  .cv-contact a, .cv-pdf-link { color: var(--color-accent); text-underline-offset: 4px; }
+  .cv-actions { display: flex; flex-wrap: wrap; gap: 12px; margin: 28px 0 0; }
+  .cv-actions [hidden] { display: none; }
+  .cv-file-type { font-size: .72rem; font-weight: 400; margin-left: 10px; }
+  .cv-profile { max-width: 860px; padding: 34px 0 40px; }
+  .cv-profile p { font-size: 1.08rem; line-height: 1.85; margin: 0; color: var(--color-text-dim); }
+  .cv-layout { display: grid; grid-template-columns: minmax(0, 1fr) 275px; gap: clamp(32px, 5vw, 72px); }
+  h2 { font-size: .78rem; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; border-top: 1px solid var(--color-border); padding-top: 20px; margin: 0 0 28px; }
+  .cv-job { margin-bottom: 38px; }
+  .cv-job-top { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 6px 18px; }
+  .cv-job h3 { margin: 0; font-size: 1.35rem; font-weight: 600; letter-spacing: -.025em; }
+  .cv-date { margin: 0; font-size: .8rem; white-space: nowrap; }
+  .cv-job-role { margin: 8px 0; font-weight: 600; font-size: .95rem; }
+  .cv-context { margin: 0 0 16px; font-size: .87rem; line-height: 1.6; }
+  .cv-job ul { list-style: disc; padding-left: 20px; margin: 14px 0 0; }
+  .cv-job li { padding-left: 4px; margin-bottom: 10px; line-height: 1.75; font-size: .94rem; }
+  .cv-job li::marker { color: var(--color-accent); }
+  .cv-stack { font-size: .8rem; margin-top: 18px; }
+  .cv-sidebar section { margin-bottom: 32px; }
+  .cv-skill { margin-bottom: 22px; }
+  .cv-skill h3 { font-size: .88rem; font-weight: 600; margin: 0 0 7px; }
+  .cv-sidebar p { margin: 0; color: var(--color-text-dim); font-size: .86rem; line-height: 1.8; }
+  .cv-sidebar .cv-school { color: var(--color-text); font-weight: 600; margin-bottom: 6px; }
+  .cv-pdf-link { font-size: .86rem; }
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 5px; }
+  @media (max-width: 800px) {
+    .cv-layout { grid-template-columns: 1fr; gap: 12px; }
+    .cv-sidebar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+    .cv-sidebar section:first-child { grid-column: 1 / -1; }
+    .cv-job-top { display: block; }
+    .cv-date { margin-top: 8px; }
+  }
+  @media (max-width: 480px) {
+    .cv-sidebar { display: block; }
+    .cv-actions { flex-direction: column; align-items: stretch; }
+    .cv-actions > * { justify-content: center; min-height: 48px; }
+  }
+  @media print {
+    @page { margin: 16mm; }
+    :global(html), :global(body) { background: white !important; color: black !important; }
+    :global(.ed-header), :global(.ed-footer), :global(.ed-skip-link), .cv-actions, .cv-pdf-link { display: none !important; }
+    .cv-page { max-width: none; padding: 0; }
+    .cv-layout { display: block; }
+    .cv-sidebar { display: block; }
+    h1 { font-size: 30pt; }
+    .cv-role { font-size: 14pt; }
+    .cv-profile { padding: 16px 0 24px; }
+    .cv-profile p, .cv-job li { font-size: 10pt; line-height: 1.45; }
+    .cv-page p, .cv-page a, .cv-page h2, .cv-job li::marker { color: black !important; }
+    .cv-job, .cv-skill, .cv-sidebar section { break-inside: avoid; }
+    h2, h3 { break-after: avoid; }
+    .cv-job { margin-bottom: 22px; }
+    h2 { border-color: #aaa; margin-bottom: 20px; }
+  }
+</style>

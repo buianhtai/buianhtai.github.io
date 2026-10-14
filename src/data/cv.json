@@ -1,0 +1,107 @@
+{
+  "name": "Bui Anh Tai",
+  "headline": "Senior Backend and Platform Engineer",
+  "target": "AI Platform Engineer",
+  "location": "Ho Chi Minh City, Vietnam",
+  "summary": "Backend and platform engineer with 13+ years of experience designing, building, and modernizing enterprise systems. Combines architectural ownership with hands-on development across configurable PLM platforms, deployed AI agent capabilities, and insurance systems spanning multiple countries and cloud environments. Experienced in balancing business flexibility, performance, cost, and regulatory requirements.",
+  "skills": [
+    [
+      "Backend and architecture",
+      "Java 17/21, Quarkus, Spring Boot, WebFlux, microservices, multi-tenancy, configurable models"
+    ],
+    [
+      "Data and workflows",
+      "Neo4j, PostgreSQL, Elasticsearch, MongoDB, Redis, Kafka, Camunda, business rules"
+    ],
+    [
+      "Cloud and delivery",
+      "AWS Lambda, DMS, SQS, Google Cloud, Docker, Kubernetes, Terraform, JUnit, Testcontainers"
+    ],
+    [
+      "Integration and AI",
+      "AgentOS, configurable agents, knowledge ingestion and retrieval, MCP, REST APIs, Keycloak"
+    ]
+  ],
+  "jobs": [
+    {
+      "company": "Glide Systems Inc",
+      "role": "Senior Engineer",
+      "dates": "May 2026 - Present",
+      "context": "Product lifecycle management and AI agent platforms",
+      "bullets": [
+        "Built and evolved core services for a configurable, multi-tenant product lifecycle management platform, spanning dynamic data models, business rules, workflows, tracking, and reporting.",
+        "Built and deployed AgentOS, a configurable AI agent platform supporting enterprise knowledge ingestion, retrieval, and agent execution.",
+        "Implemented support for multiple storage providers, allowing storage selection through configuration.",
+        "Refactored and optimized platform services and batch processing, addressing duplicate data, search inconsistencies, and complex permission behavior."
+      ]
+    },
+    {
+      "company": "DiscoverMarket Vietnam",
+      "role": "Lead Backend Engineer \u2192 Associate Technical Architect",
+      "dates": "December 2022 - April 2026",
+      "context": "Embedded insurance across countries and cloud environments",
+      "bullets": [
+        "Architected and refactored an embedded insurance platform to support multiple countries, cloud providers, and regions, balancing deployment flexibility and cost with GDPR and country-specific insurance requirements.",
+        "Took complex platform requirements from solution design through hands-on implementation, resolving difficult backend and integration problems."
+      ]
+    },
+    {
+      "company": "Global Fashion Group",
+      "role": "Senior Software Engineer",
+      "dates": "August 2021 \u2013 October 2022",
+      "context": "Services Team | Commerce platform modernization",
+      "bullets": [
+        "Contributed to the migration of a legacy monolithic commerce platform to microservices; designed database schemas and APIs for the new services.",
+        "Implemented notification, consignment, file management, data resolution, settings, reporting, and promotion modules.",
+        "Evaluated technologies, estimated implementation effort, reviewed code, and helped engineers resolve implementation challenges."
+      ]
+    },
+    {
+      "company": "ZAMO LLC",
+      "role": "Senior Software Engineer",
+      "dates": "May 2018 - August 2021",
+      "context": "Housing, healthcare, and enterprise document applications",
+      "bullets": [
+        "Housing and healthcare services. Developed backend services for the 1MG housing ecosystem and contributed to a dental booking platform.",
+        "Enterprise document workflows. Built FileNet and PeopleSoft integrations for bulk document processing and migrated a .NET document uploader to Java; reviewed code and trained engineers."
+      ]
+    },
+    {
+      "company": "MoMo",
+      "role": "Senior Software Engineer",
+      "dates": "April 2017 - April 2018",
+      "context": "Payment gateway and partner integrations",
+      "bullets": [
+        "Partner payment acceptance. Implemented gateway APIs connecting partners, including Uber and banks, to payments through the MoMo wallet.",
+        "Payment integrations. Developed backend services using Java, Vert.x, Kafka, RabbitMQ, Redis, Cassandra, and Oracle."
+      ]
+    },
+    {
+      "company": "CSC",
+      "role": "Software Engineer",
+      "dates": "October 2015 - April 2017",
+      "context": "ServiceNow development and integration",
+      "bullets": [
+        "Enterprise service workflows. Built ServiceNow integrations and configured business rules, scripts, UI policies, and access controls using REST, web services, FTP, and MID Server."
+      ]
+    },
+    {
+      "company": "GESO",
+      "role": "Software Engineer",
+      "dates": "October 2012 - October 2015",
+      "context": "Distribution management systems",
+      "bullets": [
+        "Distribution and ERP connectivity. Developed distribution management software integrating master data, orders, invoices, and promotions with SAP, Epicor, FAST, and Effect.",
+        "Team delivery. Led implementation groups of three to five developers, assigned priorities, and trained new employees."
+      ]
+    }
+  ],
+  "education": [
+    "Ho Chi Minh City University of Education",
+    "Bachelor degree in Information Teaching"
+  ],
+  "languages": "Vietnamese and English",
+  "linkedin": "https://www.linkedin.com/in/t%C3%A0i-b%C3%B9i-anh-240768117",
+  "blog": "https://buianhtai.github.io/en/blog/",
+  "tagline": "Software Architecture | Cloud Platforms | AI Systems"
+}
