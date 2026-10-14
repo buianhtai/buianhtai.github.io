@@ -32,7 +32,7 @@ try{
   assert.equal(await flow.locator('.ag-flow-group').count(),4,'Four logical/deployment boundaries');
   assert.equal(await flow.locator('.ag-flow-edge.is-visible').count(),6,'Core request edges highlighted by default');
   const firstPath=await flow.locator('[data-flow-edge="submit"]').getAttribute('d');
-  assert.match(firstPath,/^Md/,'Routed SVG connection is calculated');
+  assert.match(firstPath,/^M[0-9]/,'Routed SVG connection is calculated');
   const beforeZoom=await flow.locator('#ag-flow-world').getAttribute('style');
   await flow.locator('#ag-flow-plus').click();
   assert.notEqual(await flow.locator('#ag-flow-world').getAttribute('style'),beforeZoom,'Zoom changes the canvas viewport');
