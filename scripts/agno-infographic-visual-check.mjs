@@ -29,14 +29,38 @@ try{
     assert.equal(await lab.count(),1,'Infographic mounted');
     assert.equal(await lab.getAttribute('data-ready'),'1','Infographic behavior loaded');
     assert.equal(await lab.locator('[data-node]').count(),18,'Every main component shown');
+    assert.equal(await lab.locator('.ai-node-icon').count(),18,'Every architecture node has a meaningful icon');
+    assert.match(await lab.locator('[data-node="postgres"] .ai-node-icon').getAttribute('href'),/database/);
     assert.equal(await lab.locator('[data-link]').count(),24,'Every explicit relation shown');
     assert.equal(await lab.locator('.ai-boundary').count(),5,'Distinct system boundaries');
+    assert.equal(await lab.locator('#ai-region').count(),1,'Subsystem navigation available');
+    assert.equal(await lab.locator('#ai-find option').count(),19,'Searchable node picker includes every component');
+    assert.equal(await lab.locator('#ai-lines').getAttribute('aria-pressed'),'false','Essential lines are the initial view');
+    await lab.scrollIntoViewIfNeeded();
+    await page.screenshot({path:out+'/overview-'+width+'-dark.png',fullPage:false});
+
+    const firstEdge=lab.locator('[data-link="client-edge"]');
+    const opacityBefore=await firstEdge.evaluate(el=>el.style.opacity);
+    await lab.locator('#ai-lines').click();
+    assert.equal(await lab.locator('#ai-lines').getAttribute('aria-pressed'),'true');
+    const opacityAll=await firstEdge.evaluate(el=>el.style.opacity);
+    assert.notEqual(opacityAll,opacityBefore,'All connections mode changes visible link strength');
+    await lab.locator('#ai-lines').click();
+
+    await lab.locator('#ai-region').selectOption('runtime');
+    assert.match(await lab.locator('#ai-view-status').innerText(),/runtime and worker/i);
+    assert.notEqual(await lab.locator('#ai-svg').getAttribute('viewBox'),'0 0 1200 762','Subsystem navigates camera');
+    await lab.locator('#ai-find').selectOption('agent');
+    assert.match(await lab.locator('#ai-selected-title').innerText(),/Agent Runtime/i);
+    await lab.locator('#ai-fit').click();
+    assert.equal(await lab.locator('#ai-svg').getAttribute('viewBox'),'0 0 1200 762');
 
     await lab.locator('[data-node="agent"]').click();
     assert.match(await lab.locator('#ai-selected-title').innerText(),/Agent Runtime/i);
     assert.match(await lab.locator('#ai-selected-detail').innerText(),/model/i);
     assert((await lab.locator('.ai-edge.is-active').count())>=3,'Focused relations highlighted');
     assert((await lab.locator('.ai-rel-link').count())>=3,'Inspectable relation list');
+    assert.equal(await lab.locator('.ai-rel-link').first().evaluate(el=>getComputedStyle(el).display),'flex','Dynamic relation cards inherit scoped styles');
     assert.match(await lab.locator('#ai-source').getAttribute('href'),/1f2aac51eb28dc9c0970836d3b7ae046bae81bbb/);
 
     await lab.locator('.ai-filter [data-layer="data"]').click();
@@ -49,6 +73,8 @@ try{
     await lab.locator('#ai-next').click();
     assert((await lab.locator('.ai-edge.is-active').count())>=count,'Scenario path advances');
     assert.match(await lab.locator('#ai-step-count').innerText(),/02/);
+    assert.match(await lab.locator('#ai-step-label').textContent(),/2 ·/,'Selected relationship is annotated on map');
+    assert.equal(await lab.locator('#ai-step-annotation').getAttribute('visibility'),'visible');
 
     const initial=await lab.locator('#ai-svg').getAttribute('viewBox');
     await lab.locator('#ai-zoom-in').click();
@@ -58,6 +84,10 @@ try{
     await lab.locator('#ai-clear').click();
     assert.equal(await lab.locator('.ai-scenarios [data-scenario="overview"]').getAttribute('aria-pressed'),'true');
 
+    if(width===390){
+      await lab.locator('#ai-region').selectOption('api');
+      assert.match(await lab.locator('#ai-view-status').innerText(),/AgentOS API and registry/i);
+    }
     await lab.scrollIntoViewIfNeeded();
     await page.screenshot({path:out+'/architecture-'+width+'-dark.png',fullPage:false});
     await page.locator('#theme-toggle').click();
