@@ -268,7 +268,7 @@ os.serve(app="app:app")</code></pre><small>Queue, Redis, tracing and MCP are opt
  }
  tabs.forEach(t=>{t.addEventListener('click',()=>choose(t.dataset.diagram));t.addEventListener('keydown',e=>{if(e.key!=='ArrowRight'&&e.key!=='ArrowLeft')return;e.preventDefault();let i=tabs.indexOf(t);const next=tabs[(i+(e.key==='ArrowRight'?1:tabs.length-1))%tabs.length];next.click();next.focus()})});
  $('.de-node').forEach(n=>{n.addEventListener('click',()=>inspect(n));n.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();inspect(n)}})});
- $('#agno-diagram-explorer [data-mobile-node]').forEach(b=>b.addEventListener('click',()=>{
+ $('[data-mobile-node]').forEach(b=>b.addEventListener('click',()=>{
   const scene=b.closest('[data-scene]'),n=scene?.querySelector('.de-node[data-node="'+b.dataset.mobileNode+'"]');
   if(n)inspect(n);
   scene?.querySelectorAll('[data-mobile-card]').forEach(card=>card.classList.toggle('is-selected',card.dataset.mobileCard===b.dataset.mobileNode));
