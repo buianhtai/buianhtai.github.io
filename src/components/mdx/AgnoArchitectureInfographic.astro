@@ -146,6 +146,20 @@ function line(a,b){
       <div><small>IMPLEMENTATION EVIDENCE</small><a id="ai-runtime-source" target="_blank" rel="noopener noreferrer" href={'https://github.com/agno-agi/agno/tree/'+revision}>Pinned source ↗</a><span id="ai-runtime-proof">Select a scenario to inspect the relevant implementation.</span></div>
     </div>
   </div>
+  <div class="ai-journey" id="ai-journey" aria-label="Simplified execution journey" aria-live="polite">
+    <div class="ai-journey-heading">
+      <div><span class="ai-journey-kicker">READ THE FLOW — ONE CONNECTION AT A TIME</span><h4 id="ai-journey-heading">How does a request travel?</h4></div>
+      <span class="ai-journey-hint">The diagram below follows the selected relationship</span>
+    </div>
+    <div class="ai-journey-route">
+      <div class="ai-journey-endpoint"><small>01 / FROM</small><strong id="ai-from">Client application</strong><span id="ai-from-detail">The source of the request</span></div>
+      <div class="ai-journey-protocol"><span id="ai-journey-protocol">HTTPS · REQUEST</span><div class="ai-journey-arrow" aria-hidden="true"><span>➜</span></div><small id="ai-journey-meaning">Sends the request</small></div>
+      <div class="ai-journey-endpoint"><small>02 / TO</small><strong id="ai-to">AgentOS API</strong><span id="ai-to-detail">The next system receiving it</span></div>
+    </div>
+    <div class="ai-journey-steps" id="ai-journey-steps" role="group" aria-label="Select execution step">
+      <span>Select Direct answer, Tool execution, Durable background, Reconnect, or Worker recovery above.</span>
+    </div>
+  </div>
   <div class="ai-reader" aria-label="Architecture navigation">
     <div class="ai-reader-message"><strong>Explore the system by subsystem.</strong><span>Start with the whole platform, then magnify a boundary to read the component labels and connections.</span></div>
     <label for="ai-region">View architecture area
