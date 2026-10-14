@@ -82,7 +82,11 @@ function line(a,b){
       <h3 id="ai-heading">One platform. All the important connections.</h3>
       <p>Select any component to illuminate its dependencies. Switch execution paths to see <em>why</em> each relationship exists.</p>
     </div>
-    <span class="ai-rev">SOURCE SNAPSHOT <strong>{revision.slice(0, 8)}</strong></span>
+    <div class="ai-display-modes" role="group" aria-label="Architecture viewing modes">
+      <button type="button" id="ai-fullscreen" aria-pressed="false" title="Expand diagram to fill the screen (F)">⛶ Full screen</button>
+      <button type="button" id="ai-presentation" aria-pressed="false" title="Present architecture in guided slides (P)">▣ Present</button>
+      <span class="ai-rev">SOURCE SNAPSHOT <strong>{revision.slice(0, 8)}</strong></span>
+    </div>
   </header>
   <div class="ai-stats" aria-label="Architecture metadata">
     <span><b>{nodes.length}</b> components</span><span><b>{edges.length}</b> modeled relationships</span><span><b>{bounds.length}</b> bounded areas</span>
@@ -98,6 +102,18 @@ function line(a,b){
       <button id="ai-zoom-in" aria-label="Zoom in" type="button">+</button>
       <button id="ai-fit" aria-label="Fit entire diagram" type="button">Fit</button>
       <button id="ai-clear" aria-label="Clear component focus" type="button">Reset</button>
+    </div>
+  </div>
+  <div class="ai-presenter" aria-live="polite" aria-label="Presentation slide">
+    <div class="ai-presenter-copy">
+      <span id="ai-slide-number">01 / 06 · ARCHITECTURE STORY</span>
+      <h4 id="ai-slide-title">The complete AgentOS system</h4>
+      <p id="ai-slide-text">Start with the full system: clients, an AgentOS application, shared persistence, external systems and operations.</p>
+    </div>
+    <div class="ai-presenter-actions">
+      <button type="button" id="ai-slide-prev" aria-label="Previous presentation slide">← Previous</button>
+      <div id="ai-slide-dots" role="group" aria-label="Presentation slides"></div>
+      <button type="button" id="ai-slide-next" aria-label="Next presentation slide">Next →</button>
     </div>
   </div>
   <div class="ai-story" id="ai-guided">
@@ -128,6 +144,20 @@ function line(a,b){
       <div><small>CONNECTION / PROTOCOL</small><strong id="ai-runtime-protocol">Choose a flow to explore.</strong><code id="ai-runtime-payload">HTTP · SSE · in-process calls · database state</code></div>
       <div><small>STATE / EXECUTION CONSEQUENCE</small><p id="ai-runtime-state">Every step describes the active component, its relationship and what persists. This is a simulated walkthrough, not production telemetry.</p></div>
       <div><small>IMPLEMENTATION EVIDENCE</small><a id="ai-runtime-source" target="_blank" rel="noopener noreferrer" href={'https://github.com/agno-agi/agno/tree/'+revision}>Pinned source ↗</a><span id="ai-runtime-proof">Select a scenario to inspect the relevant implementation.</span></div>
+    </div>
+  </div>
+  <div class="ai-journey" id="ai-journey" aria-label="Simplified execution journey" aria-live="polite">
+    <div class="ai-journey-heading">
+      <div><span class="ai-journey-kicker">READ THE FLOW — ONE CONNECTION AT A TIME</span><h4 id="ai-journey-heading">How does a request travel?</h4></div>
+      <span class="ai-journey-hint">The diagram below follows the selected relationship</span>
+    </div>
+    <div class="ai-journey-route">
+      <div class="ai-journey-endpoint"><small>01 / FROM</small><strong id="ai-from">Client application</strong><span id="ai-from-detail">The source of the request</span></div>
+      <div class="ai-journey-protocol"><span id="ai-journey-protocol">HTTPS · REQUEST</span><div class="ai-journey-arrow" aria-hidden="true"><span>➜</span></div><small id="ai-journey-meaning">Sends the request</small></div>
+      <div class="ai-journey-endpoint"><small>02 / TO</small><strong id="ai-to">AgentOS API</strong><span id="ai-to-detail">The next system receiving it</span></div>
+    </div>
+    <div class="ai-journey-steps" id="ai-journey-steps" role="group" aria-label="Select execution step">
+      <span>Select Direct answer, Tool execution, Durable background, Reconnect, or Worker recovery above.</span>
     </div>
   </div>
   <div class="ai-reader" aria-label="Architecture navigation">
@@ -239,6 +269,131 @@ function line(a,b){
   </footer>
 </section>
 <style>
+/* During a guided run only one connection is emphasized; direction is explicit. */
+.ai .ai-edge.is-active{stroke-dasharray:9 8;animation:ai-flow-pulse 1.35s linear infinite;filter:drop-shadow(0 0 2px var(--a-accent))}
+@keyframes ai-flow-pulse{to{stroke-dashoffset:-34}}
+@media(prefers-reduced-motion:reduce){.ai .ai-edge.is-active{animation:none}}
+
+
+/* An infographic should explain one relationship before asking readers to decode a network. */
+.ai-journey{margin:0 15px 14px;padding:16px;background:var(--a-panel);border:1px solid var(--a-border);border-radius:13px;display:grid;gap:13px}
+.ai-journey-heading{display:flex;align-items:end;justify-content:space-between;gap:12px}
+.ai-journey-kicker{font:700 .64rem ui-monospace,monospace;letter-spacing:.09em;color:var(--a-accent)}
+.ai-journey-heading h4{font-size:clamp(.96rem,1.7vw,1.27rem);margin:6px 0 0;color:var(--a-text)}
+.ai-journey-hint{font-size:.69rem;color:var(--a-muted);text-align:right}
+.ai-journey-route{display:grid;grid-template-columns:minmax(0,1fr) minmax(130px,.75fr) minmax(0,1fr);align-items:stretch;gap:9px}
+.ai-journey-endpoint{background:var(--a-bg);border:1px solid var(--a-border);border-radius:12px;padding:13px 15px;display:grid;gap:6px}
+.ai-journey-endpoint:first-child{border-left:4px solid var(--a-link)}.ai-journey-endpoint:last-child{border-left:4px solid var(--a-call)}
+.ai-journey-endpoint small{font:700 .62rem ui-monospace,monospace;color:var(--a-accent)}
+.ai-journey-endpoint strong{font-size:clamp(.82rem,1.3vw,1.08rem);line-height:1.3;color:var(--a-text)}
+.ai-journey-endpoint span{font-size:.72rem;line-height:1.4;color:var(--a-muted)}
+.ai-journey-protocol{display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:5px;padding:6px}
+.ai-journey-protocol>span{font:700 .65rem ui-monospace,monospace;letter-spacing:.04em;color:var(--a-accent)}
+.ai-journey-protocol small{font-size:.69rem;line-height:1.3;color:var(--a-muted)}
+.ai-journey-arrow{width:100%;height:24px;position:relative;display:flex;align-items:center;justify-content:flex-end;color:var(--a-accent)}
+.ai-journey-arrow:before{content:'';position:absolute;left:0;right:10px;top:50%;height:3px;background:linear-gradient(90deg,var(--a-link),var(--a-accent));transform:translateY(-50%);border-radius:5px}
+.ai-journey-arrow>span{font-size:29px;line-height:1;position:relative;z-index:1}
+.ai .ai-journey-steps{display:flex;gap:7px;overflow-x:auto;overscroll-behavior-inline:contain;scrollbar-width:thin;padding:2px 0 6px}
+.ai .ai-journey-steps > :global(span){color:var(--a-muted);font:400 .75rem/1.5 system-ui;padding:8px 0}
+.ai :global(.ai-journey-step){position:relative;flex:0 0 auto;display:flex;align-items:center;gap:7px;max-width:220px;min-width:90px;padding:9px 11px!important;color:var(--a-muted)!important;background:var(--a-bg)!important;border:1px solid var(--a-border)!important;border-radius:9px!important;text-align:left;font:600 .7rem system-ui!important}
+.ai :global(.ai-journey-step) b{color:var(--a-accent);font:700 .67rem ui-monospace,monospace}
+.ai :global(.ai-journey-step)[aria-current=step]{color:var(--a-text)!important;border-color:var(--a-accent)!important;background:color-mix(in srgb,var(--a-accent) 9%,var(--a-bg))!important}
+.ai :global(.ai-journey-step).is-complete{opacity:.66}
+.ai.is-presenting .ai-journey{display:grid;order:2;flex-shrink:0;padding:10px 14px;margin:0 15px 8px;gap:7px}
+.ai.is-presenting .ai-journey-heading{display:none}
+.ai.is-presenting .ai-journey-endpoint{padding:8px 12px}
+.ai.is-presenting .ai-journey-endpoint span{display:none}
+.ai.is-presenting .ai-journey-steps{padding:0}
+.ai.is-presenting :global(.ai-journey-step){padding:6px 8px!important}
+.ai.is-presenting .ai-workspace{order:3}
+.ai.is-presenting .ai-story{order:4}
+.ai.is-presenting #ai-lines{display:none}
+@media(max-width:650px){
+ .ai-journey{margin:0 9px 10px;padding:10px}
+ .ai-journey-heading{display:block}
+ .ai-journey-hint{display:none}
+ .ai-journey-route{grid-template-columns:1fr;gap:3px}
+ .ai-journey-protocol{padding:3px}
+ .ai-journey-arrow{width:27px;margin:0 auto;transform:rotate(90deg)}
+ .ai-journey-protocol small{display:block}
+ .ai.is-presenting .ai-journey-route{grid-template-columns:minmax(0,1fr) 70px minmax(0,1fr);gap:4px}
+ .ai.is-presenting .ai-journey-arrow{transform:none;width:100%}
+ .ai.is-presenting .ai-journey-protocol small{display:none}
+ .ai-journey-endpoint{padding:9px 8px;min-width:0}
+ .ai-journey-endpoint strong{font-size:.74rem;overflow-wrap:anywhere}
+ .ai-journey-endpoint span{font-size:.62rem}
+ .ai-journey-protocol>span{font-size:.55rem;overflow-wrap:anywhere}
+ .ai-journey-protocol small{display:none}
+ .ai.is-presenting .ai-journey{margin:0 8px 6px;padding:8px}
+ .ai.is-presenting :global(.ai-journey-step){font-size:.62rem!important}
+}
+
+
+/* Standalone viewing modes — same architecture data and controls, expanded canvas. */
+.ai-display-modes{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.ai-display-modes button{padding:9px 13px;background:var(--a-panel);color:var(--a-text);border:1px solid var(--a-border);border-radius:9px;font:700 .75rem system-ui;white-space:nowrap}
+.ai-display-modes button:hover,.ai-display-modes button[aria-pressed=true]{border-color:var(--a-accent);color:var(--a-accent);background:color-mix(in srgb,var(--a-accent) 9%,var(--a-panel))}
+.ai-display-modes #ai-presentation{background:color-mix(in srgb,var(--a-accent) 12%,var(--a-panel));border-color:var(--a-accent)}
+.ai.is-immersive,.ai:fullscreen{position:fixed!important;inset:0!important;top:0!important;left:0!important;transform:none!important;width:100vw!important;height:100dvh!important;max-width:none!important;margin:0!important;z-index:2147483000!important;overflow:auto!important;border:0!important;border-radius:0!important;box-shadow:none!important}
+.ai.is-immersive .ai-workspace{grid-template-columns:minmax(0,1fr) minmax(260px,310px)}
+.ai.is-immersive .ai-canvas{min-height:430px;max-height:none;height:min(67dvh,900px)}
+.ai.is-immersive .ai-canvas svg{height:100%;max-height:none;min-width:0}
+.ai-presenter{display:none;align-items:center;justify-content:space-between;gap:22px;padding:15px 24px;margin:0 15px 10px;background:linear-gradient(95deg,color-mix(in srgb,var(--a-call) 13%,var(--a-panel)),var(--a-panel));border:1px solid var(--a-border);border-radius:13px}
+.ai-presenter-copy{flex:1;min-width:0}
+.ai-presenter-copy>span{font:700 .67rem ui-monospace,monospace;letter-spacing:.12em;color:var(--a-accent)}
+.ai-presenter-copy h4{font-size:clamp(1.1rem,2vw,1.65rem);margin:7px 0}
+.ai-presenter-copy p{color:var(--a-muted);font-size:.81rem;line-height:1.48;margin:0;max-width:720px}
+.ai-presenter-actions{display:flex;align-items:center;gap:8px}
+.ai-presenter-actions>button,.ai-presenter-actions #ai-slide-dots :global(button){background:var(--a-bg);border:1px solid var(--a-border);color:var(--a-text);border-radius:8px;padding:9px;font:700 .72rem system-ui}
+.ai-presenter-actions>button:disabled{opacity:.3;cursor:default}
+#ai-slide-dots{display:flex;align-items:center;gap:5px}
+.ai-presenter-actions #ai-slide-dots :global(button){width:12px;height:12px;border-radius:999px;padding:0;background:var(--a-muted);opacity:.45}
+.ai-presenter-actions #ai-slide-dots :global(button)[aria-current=step]{background:var(--a-accent);opacity:1;border-color:var(--a-accent);width:25px}
+.ai.is-presenting{display:flex!important;flex-direction:column}
+.ai.is-presenting .ai-header{order:0;padding:12px 22px}
+.ai.is-presenting .ai-header p:not(.ai-overline){display:none}
+.ai.is-presenting .ai-header h3{font-size:1.15rem;margin:4px 0}
+.ai.is-presenting .ai-rev{display:none}
+.ai.is-presenting .ai-stats,.ai.is-presenting .ai-toolbar,.ai.is-presenting .ai-reader,.ai.is-presenting .ai-legend,.ai.is-presenting .ai-foot{display:none!important}
+.ai.is-presenting .ai-presenter{display:flex;order:1;flex-shrink:0}
+.ai.is-presenting .ai-workspace{order:2;flex:1;min-height:295px;display:block;padding:0 15px 8px}
+.ai.is-presenting .ai-map{height:100%;width:100%}
+.ai.is-presenting .ai-canvas{height:calc(100% - 33px);min-height:260px;max-height:none}
+.ai.is-presenting .ai-canvas svg{height:100%;max-height:none;min-width:0}
+.ai.is-presenting .ai-map-caption{min-height:33px;padding:6px 11px}
+.ai.is-presenting .ai-canvas-foot,.ai.is-presenting .ai-aside{display:none!important}
+.ai.is-presenting .ai-story{order:3;flex-shrink:0;margin-bottom:10px;padding:11px 14px}
+.ai.is-presenting .ai-story-head,.ai.is-presenting .ai-scenarios{display:none}
+.ai.is-presenting .ai-flow-row{margin:0;padding:7px}
+.ai.is-presenting .ai-play-controls{margin:7px 0}
+.ai.is-presenting .ai-runtime-inspector{margin-top:8px}
+.ai.is-presenting .ai-runtime-inspector>div{padding:7px 10px}
+.ai.is-presenting .ai-runtime-inspector>div p,.ai.is-presenting .ai-runtime-inspector>div strong{font-size:.72rem}
+@media(max-width:900px){
+ .ai.is-immersive .ai-workspace{grid-template-columns:1fr}
+ .ai.is-immersive .ai-canvas{height:min(63dvh,700px)}
+ .ai-presenter{flex-wrap:wrap}
+ .ai-presenter-actions{width:100%;justify-content:space-between}
+}
+@media(max-width:650px){
+ .ai-display-modes{width:100%;justify-content:flex-start}
+ .ai-display-modes button{font-size:.73rem;padding:9px 12px}
+ .ai.is-presenting .ai-header{padding:10px 14px}
+ .ai.is-presenting .ai-header h3{font-size:.92rem}
+ .ai.is-presenting .ai-display-modes{width:auto}
+ .ai.is-presenting .ai-display-modes button{padding:7px;font-size:.68rem}
+ .ai.is-presenting .ai-presenter{padding:10px 12px;margin:0 8px 8px;gap:8px}
+ .ai-presenter-copy h4{font-size:1rem;margin:3px 0}
+ .ai-presenter-copy p{font-size:.7rem}
+ .ai.is-presenting .ai-workspace{padding:0 8px 5px;min-height:250px;flex:0 0 42dvh}
+ .ai.is-presenting .ai-canvas{min-height:200px}
+ .ai.is-presenting .ai-story{margin:0 8px 8px;padding:9px}
+ .ai.is-presenting .ai-runtime-inspector{grid-template-columns:1fr 1fr}
+ .ai.is-presenting .ai-runtime-inspector>div:last-child{display:none}
+ .ai-presenter-actions #ai-slide-dots :global(button){width:9px;height:9px}
+ .ai-presenter-actions #ai-slide-dots :global(button)[aria-current=step]{width:18px}
+}
+
 .ai{--a-bg:var(--color-surface,#0c1726);--a-panel:var(--color-surface-2,#142337);--a-text:var(--color-text,#eff6fc);--a-muted:var(--color-text-dim,#a4b7c8);--a-border:var(--color-border,#3c5066);--a-accent:var(--color-accent,#51d7ba);--a-link:#67a9ef;--a-call:#4cbca8;--a-db:#ad8ff3;--a-event:#dc9e58;--a-policy:#e38e95;position:relative;left:50%;transform:translateX(-50%);width:min(1190px,calc(100vw - 20px));max-width:none!important;margin:2.5rem 0;background:var(--a-bg);color:var(--a-text);border:1px solid var(--a-border);border-radius:20px;overflow:hidden;font-family:inherit;box-shadow:0 16px 52px #00000016}
 .ai *{box-sizing:border-box}
 .ai-reader{display:grid;grid-template-columns:minmax(200px,1fr) minmax(145px,198px) minmax(155px,214px);gap:12px;align-items:center;margin:0 15px 13px;padding:13px 15px;border:1px solid var(--a-border);border-radius:12px;background:linear-gradient(105deg,color-mix(in srgb,var(--a-link) 7%,var(--a-panel)),var(--a-panel))}
@@ -347,11 +502,12 @@ function paint(){
  const related=new Set([focused]);
  const incident=focused?new Set(connected(focused).map(e=>{related.add(e.dataset.from);related.add(e.dataset.to);return e.dataset.link})) : null;
  const path=scenarios[scenario].edges;
- const active=new Set(path.slice(0,step+1)),allPath=new Set(path);
+ const active=new Set(scenario==='overview'?[]:path.slice(step,step+1)),allPath=new Set(path);
+ const past=new Set(path.slice(0,step));
  edgeEls.forEach(e=>{const match=focused?incident.has(e.dataset.link):scenario==='overview'?false:active.has(e.dataset.link);
  e.classList.toggle('is-active',!!match);
- e.classList.toggle('is-past',!focused&&scenario!=='overview'&&allPath.has(e.dataset.link)&&!match);
- e.style.opacity=focused?(match?'1':'.035'):scenario!=='overview'?(active.has(e.dataset.link)?'1':allPath.has(e.dataset.link)?'.30':'.04'):(showAll?'.36':majorEdges.has(e.dataset.link)?'.63':'.045');
+ e.classList.toggle('is-past',!focused&&past.has(e.dataset.link)&&!match);
+ e.style.opacity=focused?(match?'1':'.035'):scenario!=='overview'?(active.has(e.dataset.link)?'1':past.has(e.dataset.link)?'.12':'.025'):(showAll?'.36':majorEdges.has(e.dataset.link)?'.10':'.012');
  });
  const flowNodes=new Set();if(scenario!=='overview'){path.slice(0,Math.max(1,step+1)).forEach(id=>{let e=edgeEls.find(x=>x.dataset.link===id);if(e){flowNodes.add(e.dataset.from);flowNodes.add(e.dataset.to)}})}
  get('ai-step-annotation').setAttribute('visibility',(!focused&&scenario!=='overview')?'visible':'hidden');
@@ -359,8 +515,44 @@ function paint(){
  el.classList.toggle('is-focused',focused===id);el.classList.toggle('is-adjacent',!!focused&&id!==focused&&related.has(id));el.classList.toggle('is-dimmed',(!eligible||!filter)&&id!==focused);
  });
 }
+
+function renderJourney(edge){
+ const a=get('ai-from'),b=get('ai-to'),steps=get('ai-journey-steps');
+ if(!edge){
+  get('ai-journey-heading').textContent='Choose an example request';
+  a.textContent='Client / Application';b.textContent='AgentOS / Runtime';
+  get('ai-from-detail').textContent='Who starts the request?';
+  get('ai-to-detail').textContent='Which component handles it?';
+  get('ai-journey-protocol').textContent='REQUEST FLOW';
+  get('ai-journey-meaning').textContent='One connection at a time';
+  steps.replaceChildren();
+  const hint=document.createElement('span');hint.textContent='Pick “Direct answer” or “Durable background” above to see numbered steps here.';steps.append(hint);
+  return;
+ }
+ const from=nodeMap[edge.dataset.from],to=nodeMap[edge.dataset.to];
+ get('ai-journey-heading').textContent='Step '+(step+1)+' — '+edge.dataset.label;
+ a.textContent=from.dataset.label;b.textContent=to.dataset.label;
+ get('ai-from-detail').textContent=from.dataset.detail;
+ get('ai-to-detail').textContent=to.dataset.detail;
+ get('ai-journey-protocol').textContent=edge.dataset.kind.toUpperCase()+' · '+edge.dataset.label;
+ const item=evidence[edge.dataset.link];get('ai-journey-meaning').textContent=item?item[1]:edge.dataset.label;
+ steps.replaceChildren();
+ scenarios[scenario].edges.forEach((link,i)=>{
+  const x=edgeEls.find(el=>el.dataset.link===link);if(!x)return;
+  const btn=document.createElement('button');btn.type='button';btn.className='ai-journey-step';
+  btn.setAttribute('aria-current',i===step?'step':'false');
+  btn.setAttribute('aria-label','Go to step '+(i+1)+': '+x.dataset.label);
+  if(i<step)btn.classList.add('is-complete');
+  const number=document.createElement('b');number.textContent=String(i+1).padStart(2,'0');
+  const label=document.createElement('span');label.textContent=x.dataset.label;
+  btn.append(number,label);btn.addEventListener('click',()=>{stopPlayback();step=i;focused=null;setFocus(null);scenarioText()});
+  steps.append(btn);
+ });
+ const current=steps.querySelector('[aria-current="step"]');if(current)current.scrollIntoView({block:'nearest',inline:'nearest',behavior:'instant'});
+}
+
 function scenarioText(){
- const s=scenarios[scenario],ids=s.edges; if(scenario==='overview'){get('ai-step-annotation').setAttribute('visibility','hidden');set(get('ai-story-title'),s.title);set(get('ai-story-description'),s.description);set(get('ai-step-count'),'—');get('ai-play').disabled=true;get('ai-scrub').disabled=true;get('ai-scrub').max=0;get('ai-scrub').value=0;updateEvidence(null);return}
+ const s=scenarios[scenario],ids=s.edges; if(scenario==='overview'){get('ai-step-annotation').setAttribute('visibility','hidden');set(get('ai-story-title'),s.title);set(get('ai-story-description'),s.description);set(get('ai-step-count'),'—');get('ai-play').disabled=true;get('ai-scrub').disabled=true;get('ai-scrub').max=0;get('ai-scrub').value=0;updateEvidence(null);renderJourney(null);return}
  const edge=edgeEls.find(e=>e.dataset.link===ids[step]);
  const from=edge?nodeMap[edge.dataset.from]?.dataset.label:'',to=edge?nodeMap[edge.dataset.to]?.dataset.label:'';
  if(edge){
@@ -376,7 +568,7 @@ function scenarioText(){
  set(get('ai-story-description'),edge?edge.dataset.label+' · '+s.description:s.description);
  set(get('ai-step-count'),String(step+1).padStart(2,'0')+' / '+String(ids.length).padStart(2,'0'));
  get('ai-play').disabled=false;get('ai-scrub').disabled=false;get('ai-scrub').max=ids.length-1;get('ai-scrub').value=step;
- updateEvidence(edge);followEdge(edge);
+ updateEvidence(edge);renderJourney(edge);followEdge(edge);
 }
 nodeEls.forEach(el=>{const activate=()=>{stopPlayback();setFocus(el.dataset.node)};el.addEventListener('click',activate);el.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();activate()}})});
 get('ai-lines').addEventListener('click',()=>{showAll=!showAll;get('ai-lines').setAttribute('aria-pressed',String(showAll));get('ai-lines').textContent=showAll?'Essential links':'Show all links';paint()});
@@ -454,6 +646,97 @@ svg.addEventListener('touchmove',e=>{
 svg.addEventListener('touchend',()=>{pinchDistance=null});
 svg.addEventListener('keydown',e=>{if(e.target!==svg)return;if(e.key==='+'){e.preventDefault();zoom(.85)}else if(e.key==='-'){e.preventDefault();zoom(1.15)}else if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)){e.preventDefault();view.x+=(e.key==='ArrowLeft'?-.08:e.key==='ArrowRight'?.08:0)*view.w;view.y+=(e.key==='ArrowUp'?-.08:e.key==='ArrowDown'?.08:0)*view.h;updateView()}});
 if(window.matchMedia('(max-width:700px)').matches)frameRegion('all');
+
+const slides=[
+ {scenario:'overview',title:'Understand the whole system',text:'Five logical boundaries: client and ingress; AgentOS runtime; state; integrations; operations. These are not five mandatory microservices.'},
+ {scenario:'answer',title:'How a direct answer works',text:'Trace a user request to FastAPI, the registered agent and its model, then follow the SSE response back.'},
+ {scenario:'tools',title:'When an agent invokes a tool',text:'Follow model selection, tool execution and an optional external API write. A timeout does not prove a business operation failed.'},
+ {scenario:'queue',title:'When execution becomes durable',text:'The committed queue ticket, worker lease and persisted run state have different owners and failure semantics.'},
+ {scenario:'resume',title:'When the client reconnects',text:'Watch events move through Redis Streams and return through an SSE listener on another replica.'},
+ {scenario:'failure',title:'When a worker crashes',text:'Lease expiry, retry policy and fencing protect persisted state; external side effects still require reconciliation.'}
+];
+let viewMode='normal',slideIndex=0,savedOverflow='',nativeFullscreen=false;
+function drawSlides(){
+ const slide=slides[slideIndex];
+ get('ai-slide-number').textContent=String(slideIndex+1).padStart(2,'0')+' / '+String(slides.length).padStart(2,'0')+' · ARCHITECTURE STORY';
+ get('ai-slide-title').textContent=slide.title;get('ai-slide-text').textContent=slide.text;
+ get('ai-slide-prev').disabled=slideIndex===0;get('ai-slide-next').disabled=slideIndex===slides.length-1;
+ const dots=get('ai-slide-dots');dots.replaceChildren();
+ slides.forEach((s,i)=>{
+  const btn=document.createElement('button');btn.type='button';
+  btn.setAttribute('aria-label','Presentation slide '+(i+1)+': '+s.title);
+  btn.setAttribute('aria-current',String(i===slideIndex?'step':'false'));
+  btn.addEventListener('click',()=>chooseSlide(i));dots.append(btn)
+ });
+}
+function chooseSlide(index){
+ slideIndex=Math.max(0,Math.min(slides.length-1,index));const s=slides[slideIndex];
+ const btn=root.querySelector('.ai-scenarios [data-scenario="'+s.scenario+'"]');
+ if(btn)btn.click();
+ if(s.scenario==='overview')frameRegion('all');
+ else{step=0;setFocus(null);scenarioText()}
+ drawSlides();
+}
+function syncViewMode(){
+ const immersive=viewMode!=='normal',presenting=viewMode==='presentation';
+ root.classList.toggle('is-immersive',immersive);root.classList.toggle('is-presenting',presenting);
+ get('ai-fullscreen').setAttribute('aria-pressed',String(viewMode==='fullscreen'));
+ get('ai-presentation').setAttribute('aria-pressed',String(presenting));
+ get('ai-fullscreen').textContent=viewMode==='fullscreen'?'✕ Exit full screen':'⛶ Full screen';
+ get('ai-presentation').textContent=presenting?'✕ End presentation':'▣ Present';
+ if(immersive){
+  if(viewMode==='normal')return;
+  if(!savedOverflow)savedOverflow=document.body.style.overflow||'';
+  document.body.style.overflow='hidden';root.scrollTop=0;
+ }else{
+  document.body.style.overflow=savedOverflow;savedOverflow='';
+ }
+}
+function leaveView(){
+ if(viewMode==='normal')return;
+ stopPlayback();viewMode='normal';syncViewMode();frameRegion('all');
+ if(document.fullscreenElement===root&&document.exitFullscreen)document.exitFullscreen().catch(()=>{});
+ nativeFullscreen=false;
+}
+async function enterView(next){
+ if(viewMode===next){leaveView();return}
+ stopPlayback();viewMode=next;syncViewMode();
+ if(next==='presentation')chooseSlide(0);
+ else frameRegion('all');
+ if(document.fullscreenElement!==root&&typeof root.requestFullscreen==='function'){
+  try{await root.requestFullscreen()}catch{ /* CSS fullscreen fallback still works (iOS/iframe). */ }
+ }
+ nativeFullscreen=document.fullscreenElement===root;
+}
+get('ai-fullscreen').addEventListener('click',()=>{if(viewMode==='presentation'){enterView('fullscreen')}else if(viewMode==='fullscreen'){leaveView()}else{enterView('fullscreen')}});
+get('ai-presentation').addEventListener('click',()=>{if(viewMode==='presentation')leaveView();else enterView('presentation')});
+get('ai-slide-prev').addEventListener('click',()=>chooseSlide(slideIndex-1));
+get('ai-slide-next').addEventListener('click',()=>chooseSlide(slideIndex+1));
+document.addEventListener('fullscreenchange',()=>{
+ if(viewMode!=='normal'&&nativeFullscreen&&document.fullscreenElement!==root)leaveView();
+});
+document.addEventListener('keydown',e=>{
+ const tag=e.target&&e.target.tagName;
+ if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT'||e.ctrlKey||e.metaKey||e.altKey)return;
+ if(viewMode==='normal'&&!root.contains(document.activeElement)&&!root.matches(':hover'))return;
+ const k=e.key.toLowerCase();
+ if(k==='f'&&!e.repeat){e.preventDefault();if(viewMode==='fullscreen')leaveView();else enterView('fullscreen');return}
+ if(k==='p'&&!e.repeat){e.preventDefault();if(viewMode==='presentation')leaveView();else enterView('presentation');return}
+ if(viewMode==='normal')return;
+ if(e.key==='Escape'){e.preventDefault();leaveView();return}
+ if(viewMode!=='presentation')return;
+ if(e.key==='ArrowRight'||e.key==='PageDown'||e.key===' '){
+  e.preventDefault();
+  if(scenario!=='overview'&&step<scenarios[scenario].edges.length-1){stopPlayback();go(1)}
+  else chooseSlide(slideIndex+1);
+ }else if(e.key==='ArrowLeft'||e.key==='PageUp'){
+  e.preventDefault();
+  if(scenario!=='overview'&&step>0){stopPlayback();go(-1)}
+  else chooseSlide(slideIndex-1);
+ }
+});
+drawSlides();
+
 setFocus(null);scenarioText();paint();
 })();
 </script>

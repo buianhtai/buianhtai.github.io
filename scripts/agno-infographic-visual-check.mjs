@@ -75,6 +75,15 @@ try{
     await lab.locator('#ai-next').click();
     assert((await lab.locator('.ai-edge.is-active').count())>=count,'Scenario path advances');
     assert.match(await lab.locator('#ai-step-count').innerText(),/02/);
+    assert.match(await lab.locator('#ai-journey-heading').innerText(),/Step 2/i,'Simple journey follows selected execution step');
+    assert.match(await lab.locator('#ai-from').innerText(),/AgentOS API/i);
+    assert.match(await lab.locator('#ai-to').innerText(),/Queue Configuration/i);
+    assert.match(await lab.locator('#ai-journey-protocol').innerText(),/INVOKE|Enqueue/i);
+    assert.equal(await lab.locator('.ai-journey-step[aria-current="step"]').count(),1,'One numbered journey step is active');
+    await lab.locator('.ai-journey-step').last().click();
+    assert.match(await lab.locator('#ai-step-count').innerText(),/09/,'Numbered journey strips navigate to a stage');
+    await lab.locator('#ai-scrub').evaluate(el=>{el.value='1';el.dispatchEvent(new Event('input',{bubbles:true}));});
+
     assert.equal(await lab.locator('#ai-play').isEnabled(),true,'Scenario enables playback');
     assert.match(await lab.locator('#ai-runtime-protocol').innerText(),/queue|http|durable/i);
     assert.match(await lab.locator('#ai-runtime-source').getAttribute('href'),/1f2aac51eb28dc9c0970836d3b7ae046bae81bbb/);
@@ -115,6 +124,26 @@ try{
     assert.equal(await standalone.locator('#agno-source-lab').count(),1,'Dedicated lab includes source explorer');
     await standalone.locator('#agno-infographic .ai-scenarios [data-scenario="answer"]').click();
     assert.equal(await standalone.locator('#agno-infographic #ai-play').isEnabled(),true);
+    const standaloneLab=standalone.locator('#agno-infographic');
+    await standaloneLab.locator('#ai-fullscreen').click();
+    assert.equal(await standaloneLab.evaluate(el=>el.classList.contains('is-immersive')),true,'Immersive fullscreen becomes active');
+    assert.equal(await standaloneLab.locator('#ai-fullscreen').getAttribute('aria-pressed'),'true');
+    await standalone.screenshot({path:out+'/fullscreen-'+width+'.png',fullPage:false});
+    await standaloneLab.locator('#ai-fullscreen').click();
+    assert.equal(await standaloneLab.evaluate(el=>el.classList.contains('is-immersive')),false,'Fullscreen exits');
+    await standalone.waitForFunction(()=>document.fullscreenElement===null,'',{timeout:4000});
+    await standaloneLab.locator('#ai-presentation').click();
+    assert.equal(await standaloneLab.evaluate(el=>el.classList.contains('is-presenting')),true,'Presentation enters');
+    assert.match(await standaloneLab.locator('#ai-slide-title').innerText(),/whole system/i);
+    await standaloneLab.locator('#ai-slide-next').click();
+    assert.match(await standaloneLab.locator('#ai-slide-title').innerText(),/direct answer/i);
+    assert.equal(await standaloneLab.locator('.ai-journey-step').count(),8,'Presentation shows numbered request path');
+    await standaloneLab.locator('#ai-slide-next').click();
+    assert.match(await standaloneLab.locator('#ai-slide-title').innerText(),/tool/i);
+    await standalone.screenshot({path:out+'/presentation-'+width+'.png',fullPage:false});
+    await standalone.keyboard.press('Escape');
+    assert.equal(await standaloneLab.evaluate(el=>el.classList.contains('is-presenting')),false,'Escape exits presentation');
+
     assert.deepEqual(labErrors,[]);
     await standalone.close();
     await ctx.close();
