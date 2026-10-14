@@ -128,6 +128,12 @@ try{
     await standaloneLab.locator('#ai-fullscreen').click();
     assert.equal(await standaloneLab.evaluate(el=>el.classList.contains('is-immersive')),true,'Immersive fullscreen becomes active');
     assert.equal(await standaloneLab.locator('#ai-fullscreen').getAttribute('aria-pressed'),'true');
+    if(width===390){
+      const mapBounds=await standaloneLab.locator('#ai-canvas').boundingBox();
+      assert(mapBounds,'Mobile fullscreen architecture canvas is visible');
+      assert(mapBounds.y<290,'Mobile fullscreen shows architecture map above the fold: '+mapBounds.y);
+      assert(mapBounds.height>=380,'Mobile fullscreen reserves meaningful height for map: '+mapBounds.height);
+    }
     await standalone.screenshot({path:out+'/fullscreen-'+width+'.png',fullPage:false});
     await standaloneLab.locator('#ai-fullscreen').click();
     assert.equal(await standaloneLab.evaluate(el=>el.classList.contains('is-immersive')),false,'Fullscreen exits');

@@ -423,6 +423,33 @@ function line(a,b){
 .ai-runtime-inspector a{font-size:.76rem;color:var(--a-accent);overflow-wrap:anywhere}
 .ai-runtime-inspector span{font-size:.68rem;color:var(--a-muted);line-height:1.5}
 .ai-story-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:11px}.ai-story-head span{font:700 .67rem ui-monospace,monospace;letter-spacing:.09em;color:var(--a-accent)}.ai-story-head small{font-size:.71rem;color:var(--a-muted)}.ai-flow-row{display:flex;align-items:center;gap:12px;border:1px solid var(--a-border);padding:11px 12px;border-radius:9px;background:var(--a-panel);margin-top:11px}.ai-flow-row>button{font-size:.9rem;min-width:39px;align-self:stretch}.ai-story-copy{flex:1;display:grid;gap:5px}.ai-story-copy strong{font-size:.83rem}.ai-story-copy span{font-size:.73rem;line-height:1.45;color:var(--a-muted)}.ai-stepcounter{font:.7rem ui-monospace,monospace;color:var(--a-muted);white-space:nowrap}.ai-legend{display:flex;gap:16px;flex-wrap:wrap;padding:12px 22px;border-top:1px solid var(--a-border);font-size:.72rem;color:var(--a-muted)}.ai-legend span{display:flex;align-items:center;gap:6px}.ai-key{height:3px;width:17px;display:inline-block;border-radius:4px}.ai-k-http{background:var(--a-link)}.ai-k-invoke{background:var(--a-call)}.ai-k-data{background:var(--a-db)}.ai-k-event{background:var(--a-event)}.ai-k-policy{background:var(--a-policy)}.ai-foot{font-size:.74rem;line-height:1.65;color:var(--a-muted);padding:14px 22px;border-top:1px solid var(--a-border)}.ai-foot a{color:var(--a-accent)}@media(max-width:900px){.ai-runtime-inspector{grid-template-columns:1fr 1fr}.ai-runtime-inspector>div:last-child{grid-column:1/-1}.ai-reader{grid-template-columns:repeat(2,minmax(0,1fr))}.ai-reader-message{grid-column:1/-1}.ai-workspace{grid-template-columns:1fr}.ai-aside{min-height:220px}.ai-header{flex-wrap:wrap}.ai-stats-note{margin-left:0}}@media(max-width:500px){.ai-story{margin:0 9px 12px;padding:12px}.ai-runtime-inspector{grid-template-columns:1fr}.ai-runtime-inspector>div:last-child{grid-column:auto}.ai-play-controls{gap:8px}.ai-follow-label{width:100%}.ai-reader{margin:0 9px 9px;gap:9px;padding:10px}.ai-reader select{font-size:.7rem}.ai-canvas.is-fit svg{min-width:0!important}.ai-header{padding:17px}.ai-header h3{font-size:1.35rem}.ai-toolbar{padding:10px}.ai-filter{overflow-x:auto;flex-wrap:nowrap;max-width:100%}.ai-filter button{white-space:nowrap}.ai-workspace{padding:0 9px 10px}.ai-story{padding:13px}.ai-story-copy strong{font-size:.75rem}.ai-canvas-foot>span{max-width:73%}}@media(prefers-reduced-motion:reduce){.ai-node,.ai-edge{transition:none}}
+
+/* Mobile immersive layout: show the map on the first screen, not a page of controls. */
+@media(max-width:650px){
+ .ai.is-immersive:not(.is-presenting){display:flex;flex-direction:column;overflow-y:auto}
+ .ai.is-immersive:not(.is-presenting) .ai-header{order:0;padding:9px 11px;align-items:center;gap:8px}
+ .ai.is-immersive:not(.is-presenting) .ai-header h3{font-size:.94rem;line-height:1.2;margin:0}
+ .ai.is-immersive:not(.is-presenting) .ai-header p,.ai.is-immersive:not(.is-presenting) .ai-rev{display:none!important}
+ .ai.is-immersive:not(.is-presenting) .ai-display-modes{width:auto;gap:5px}
+ .ai.is-immersive:not(.is-presenting) .ai-display-modes button{font-size:.67rem;padding:7px}
+ .ai.is-immersive:not(.is-presenting) .ai-stats,
+ .ai.is-immersive:not(.is-presenting) .ai-reader,
+ .ai.is-immersive:not(.is-presenting) .ai-legend,
+ .ai.is-immersive:not(.is-presenting) .ai-foot{display:none!important}
+ .ai.is-immersive:not(.is-presenting) .ai-toolbar{order:1;padding:5px 9px;gap:3px}
+ .ai.is-immersive:not(.is-presenting) .ai-filter{display:none}
+ .ai.is-immersive:not(.is-presenting) .ai-zoom{gap:4px}
+ .ai.is-immersive:not(.is-presenting) .ai-zoom button{padding:7px;font-size:.7rem}
+ .ai.is-immersive:not(.is-presenting) .ai-workspace{order:2;display:block;flex:none;padding:0 9px 8px}
+ .ai.is-immersive:not(.is-presenting) .ai-map{height:calc(100dvh - 145px);min-height:350px}
+ .ai.is-immersive:not(.is-presenting) .ai-canvas{height:calc(100% - 53px);min-height:280px;max-height:none}
+ .ai.is-immersive:not(.is-presenting) .ai-canvas svg{height:100%;width:100%;min-width:0;max-height:none}
+ .ai.is-immersive:not(.is-presenting) .ai-aside,
+ .ai.is-immersive:not(.is-presenting) .ai-canvas-foot{display:none!important}
+ .ai.is-immersive:not(.is-presenting) .ai-map-caption{min-height:53px;align-items:center}
+ .ai.is-immersive:not(.is-presenting) .ai-journey{order:3;flex-shrink:0}
+ .ai.is-immersive:not(.is-presenting) .ai-story{order:4;flex-shrink:0}
+}
 </style>
 <script>
 (()=>{
