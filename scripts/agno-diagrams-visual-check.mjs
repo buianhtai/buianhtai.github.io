@@ -22,7 +22,7 @@ try{
   page.on('pageerror',e=>errors.push(e.message));
   await page.goto(host+route,{waitUntil:'domcontentloaded'});
   const lab=page.locator('#agno-diagram-explorer');
-  assert.equal(await lab.getAttribute('data.initialized'),null); // data state read via DOM
+  await page.waitForFunction(()=>document.querySelector('#agno-diagram-explorer')?.dataset.initialized==='yes');
   assert.equal(await lab.getAttribute('data-initialized'),'yes');
   assert.equal(await lab.locator('[data-diagram]').count(),4,'Four architecture diagrams');
   assert.equal(await lab.locator('[data-scene="system"] .de-node').count(),8);
@@ -45,7 +45,7 @@ try{
   await page.screenshot({path:out+'/assembly-only-'+width+'.png',fullPage:false});
   await lab.locator('#de-only').click();
   assert.equal(await lab.locator('#de-inspector').isVisible(),true);
-  await lab.locator('[data-scene="assembly"] [data-node="app"]').evaluate(el=>el.click());
+  await lab.locator('[data-scene="assembly"] [data-node="app"]').evaluate(el=>el.dispatchEvent(new MouseEvent('click',{bubbles:true})));
   assert.match(await lab.locator('#de-inspect-title').innerText(),/get_app/);
   assert.match(await lab.locator('#de-inspect-source').getAttribute('href'),/os\/app.py#L1430$/);
   assert((await lab.locator('#de-relationships button').count())>=2,'Connected relationships are inspectable');
@@ -58,7 +58,7 @@ try{
   assert.match(await lab.locator('#de-heading-title').innerText(),/normal answer/i);
   await page.screenshot({path:out+'/request-'+width+'.png',fullPage:false});
   await lab.locator('[data-diagram="durable"]').click();
-  await lab.locator('[data-scene="durable"] [data-node="postgres"]').evaluate(el=>el.click());
+  await lab.locator('[data-scene="durable"] [data-node="postgres"]').evaluate(el=>el.dispatchEvent(new MouseEvent('click',{bubbles:true})));
   assert.match(await lab.locator('#de-inspect-source').getAttribute('href'),/db\/schemas\/jobs.py#L48$/);
   await page.screenshot({path:out+'/durable-'+width+'.png',fullPage:false});
   await lab.locator('#de-full').click();
