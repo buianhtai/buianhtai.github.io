@@ -270,6 +270,54 @@ function line(a,b){
 </section>
 <style>
 
+/* An infographic should explain one relationship before asking readers to decode a network. */
+.ai-journey{margin:0 15px 14px;padding:16px;background:var(--a-panel);border:1px solid var(--a-border);border-radius:13px;display:grid;gap:13px}
+.ai-journey-heading{display:flex;align-items:end;justify-content:space-between;gap:12px}
+.ai-journey-kicker{font:700 .64rem ui-monospace,monospace;letter-spacing:.09em;color:var(--a-accent)}
+.ai-journey-heading h4{font-size:clamp(.96rem,1.7vw,1.27rem);margin:6px 0 0;color:var(--a-text)}
+.ai-journey-hint{font-size:.69rem;color:var(--a-muted);text-align:right}
+.ai-journey-route{display:grid;grid-template-columns:minmax(0,1fr) minmax(130px,.75fr) minmax(0,1fr);align-items:stretch;gap:9px}
+.ai-journey-endpoint{background:var(--a-bg);border:1px solid var(--a-border);border-radius:12px;padding:13px 15px;display:grid;gap:6px}
+.ai-journey-endpoint:first-child{border-left:4px solid var(--a-link)}.ai-journey-endpoint:last-child{border-left:4px solid var(--a-call)}
+.ai-journey-endpoint small{font:700 .62rem ui-monospace,monospace;color:var(--a-accent)}
+.ai-journey-endpoint strong{font-size:clamp(.82rem,1.3vw,1.08rem);line-height:1.3;color:var(--a-text)}
+.ai-journey-endpoint span{font-size:.72rem;line-height:1.4;color:var(--a-muted)}
+.ai-journey-protocol{display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:5px;padding:6px}
+.ai-journey-protocol>span{font:700 .65rem ui-monospace,monospace;letter-spacing:.04em;color:var(--a-accent)}
+.ai-journey-protocol small{font-size:.69rem;line-height:1.3;color:var(--a-muted)}
+.ai-journey-arrow{width:100%;height:24px;position:relative;display:flex;align-items:center;justify-content:flex-end;color:var(--a-accent)}
+.ai-journey-arrow:before{content:'';position:absolute;left:0;right:10px;top:50%;height:3px;background:linear-gradient(90deg,var(--a-link),var(--a-accent));transform:translateY(-50%);border-radius:5px}
+.ai-journey-arrow>span{font-size:29px;line-height:1;position:relative;z-index:1}
+.ai-journey-steps{display:flex;gap:7px;overflow-x:auto;overscroll-behavior-inline:contain;scrollbar-width:thin;padding:2px 0 6px}
+.ai-journey-steps>span{color:var(--a-muted);font-size:.74rem;padding:9px 0}
+.ai-journey-step{position:relative;flex:0 0 auto;display:flex;align-items:center;gap:7px;max-width:220px;min-width:90px;padding:9px 11px!important;color:var(--a-muted)!important;background:var(--a-bg)!important;border:1px solid var(--a-border)!important;border-radius:9px!important;text-align:left;font:600 .7rem system-ui!important}
+.ai-journey-step b{color:var(--a-accent);font:700 .67rem ui-monospace,monospace}
+.ai-journey-step[aria-current=step]{color:var(--a-text)!important;border-color:var(--a-accent)!important;background:color-mix(in srgb,var(--a-accent) 9%,var(--a-bg))!important}
+.ai-journey-step.is-complete{opacity:.66}
+.ai.is-presenting .ai-journey{display:grid;order:2;flex-shrink:0;padding:10px 14px;margin:0 15px 8px;gap:7px}
+.ai.is-presenting .ai-journey-heading{display:none}
+.ai.is-presenting .ai-journey-endpoint{padding:8px 12px}
+.ai.is-presenting .ai-journey-endpoint span{display:none}
+.ai.is-presenting .ai-journey-steps{padding:0}
+.ai.is-presenting .ai-journey-step{padding:6px 8px!important}
+.ai.is-presenting .ai-workspace{order:3}
+.ai.is-presenting .ai-story{order:4}
+.ai.is-presenting #ai-lines{display:none}
+@media(max-width:650px){
+ .ai-journey{margin:0 9px 10px;padding:10px}
+ .ai-journey-heading{display:block}
+ .ai-journey-hint{display:none}
+ .ai-journey-route{grid-template-columns:minmax(0,1fr) 68px minmax(0,1fr);gap:5px}
+ .ai-journey-endpoint{padding:9px 8px;min-width:0}
+ .ai-journey-endpoint strong{font-size:.74rem;overflow-wrap:anywhere}
+ .ai-journey-endpoint span{font-size:.62rem}
+ .ai-journey-protocol>span{font-size:.55rem;overflow-wrap:anywhere}
+ .ai-journey-protocol small{display:none}
+ .ai.is-presenting .ai-journey{margin:0 8px 6px;padding:8px}
+ .ai.is-presenting .ai-journey-step{font-size:.62rem!important}
+}
+
+
 /* Standalone viewing modes — same architecture data and controls, expanded canvas. */
 .ai-display-modes{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
 .ai-display-modes button{padding:9px 13px;background:var(--a-panel);color:var(--a-text);border:1px solid var(--a-border);border-radius:9px;font:700 .75rem system-ui;white-space:nowrap}
