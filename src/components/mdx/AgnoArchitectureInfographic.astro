@@ -269,6 +269,11 @@ function line(a,b){
   </footer>
 </section>
 <style>
+/* During a guided run only one connection is emphasized; direction is explicit. */
+.ai .ai-edge.is-active{stroke-dasharray:9 8;animation:ai-flow-pulse 1.35s linear infinite;filter:drop-shadow(0 0 2px var(--a-accent))}
+@keyframes ai-flow-pulse{to{stroke-dashoffset:-34}}
+@media(prefers-reduced-motion:reduce){.ai .ai-edge.is-active{animation:none}}
+
 
 /* An infographic should explain one relationship before asking readers to decode a network. */
 .ai-journey{margin:0 15px 14px;padding:16px;background:var(--a-panel);border:1px solid var(--a-border);border-radius:13px;display:grid;gap:13px}
@@ -288,18 +293,18 @@ function line(a,b){
 .ai-journey-arrow{width:100%;height:24px;position:relative;display:flex;align-items:center;justify-content:flex-end;color:var(--a-accent)}
 .ai-journey-arrow:before{content:'';position:absolute;left:0;right:10px;top:50%;height:3px;background:linear-gradient(90deg,var(--a-link),var(--a-accent));transform:translateY(-50%);border-radius:5px}
 .ai-journey-arrow>span{font-size:29px;line-height:1;position:relative;z-index:1}
-.ai-journey-steps{display:flex;gap:7px;overflow-x:auto;overscroll-behavior-inline:contain;scrollbar-width:thin;padding:2px 0 6px}
-.ai-journey-steps>span{color:var(--a-muted);font-size:.74rem;padding:9px 0}
-.ai-journey-step{position:relative;flex:0 0 auto;display:flex;align-items:center;gap:7px;max-width:220px;min-width:90px;padding:9px 11px!important;color:var(--a-muted)!important;background:var(--a-bg)!important;border:1px solid var(--a-border)!important;border-radius:9px!important;text-align:left;font:600 .7rem system-ui!important}
-.ai-journey-step b{color:var(--a-accent);font:700 .67rem ui-monospace,monospace}
-.ai-journey-step[aria-current=step]{color:var(--a-text)!important;border-color:var(--a-accent)!important;background:color-mix(in srgb,var(--a-accent) 9%,var(--a-bg))!important}
-.ai-journey-step.is-complete{opacity:.66}
+.ai :global(.ai-journey-step)s{display:flex;gap:7px;overflow-x:auto;overscroll-behavior-inline:contain;scrollbar-width:thin;padding:2px 0 6px}
+.ai :global(.ai-journey-step)s>span{color:var(--a-muted);font-size:.74rem;padding:9px 0}
+.ai :global(.ai-journey-step){position:relative;flex:0 0 auto;display:flex;align-items:center;gap:7px;max-width:220px;min-width:90px;padding:9px 11px!important;color:var(--a-muted)!important;background:var(--a-bg)!important;border:1px solid var(--a-border)!important;border-radius:9px!important;text-align:left;font:600 .7rem system-ui!important}
+.ai :global(.ai-journey-step) b{color:var(--a-accent);font:700 .67rem ui-monospace,monospace}
+.ai :global(.ai-journey-step)[aria-current=step]{color:var(--a-text)!important;border-color:var(--a-accent)!important;background:color-mix(in srgb,var(--a-accent) 9%,var(--a-bg))!important}
+.ai :global(.ai-journey-step).is-complete{opacity:.66}
 .ai.is-presenting .ai-journey{display:grid;order:2;flex-shrink:0;padding:10px 14px;margin:0 15px 8px;gap:7px}
 .ai.is-presenting .ai-journey-heading{display:none}
 .ai.is-presenting .ai-journey-endpoint{padding:8px 12px}
 .ai.is-presenting .ai-journey-endpoint span{display:none}
-.ai.is-presenting .ai-journey-steps{padding:0}
-.ai.is-presenting .ai-journey-step{padding:6px 8px!important}
+.ai.is-presenting .ai :global(.ai-journey-step)s{padding:0}
+.ai.is-presenting .ai :global(.ai-journey-step){padding:6px 8px!important}
 .ai.is-presenting .ai-workspace{order:3}
 .ai.is-presenting .ai-story{order:4}
 .ai.is-presenting #ai-lines{display:none}
@@ -314,7 +319,7 @@ function line(a,b){
  .ai-journey-protocol>span{font-size:.55rem;overflow-wrap:anywhere}
  .ai-journey-protocol small{display:none}
  .ai.is-presenting .ai-journey{margin:0 8px 6px;padding:8px}
- .ai.is-presenting .ai-journey-step{font-size:.62rem!important}
+ .ai.is-presenting .ai :global(.ai-journey-step){font-size:.62rem!important}
 }
 
 
@@ -496,7 +501,7 @@ function paint(){
  edgeEls.forEach(e=>{const match=focused?incident.has(e.dataset.link):scenario==='overview'?false:active.has(e.dataset.link);
  e.classList.toggle('is-active',!!match);
  e.classList.toggle('is-past',!focused&&past.has(e.dataset.link)&&!match);
- e.style.opacity=focused?(match?'1':'.035'):scenario!=='overview'?(active.has(e.dataset.link)?'1':past.has(e.dataset.link)?'.12':'.025'):(showAll?'.36':majorEdges.has(e.dataset.link)?'.42':'.02');
+ e.style.opacity=focused?(match?'1':'.035'):scenario!=='overview'?(active.has(e.dataset.link)?'1':past.has(e.dataset.link)?'.12':'.025'):(showAll?'.36':majorEdges.has(e.dataset.link)?'.10':'.012');
  });
  const flowNodes=new Set();if(scenario!=='overview'){path.slice(0,Math.max(1,step+1)).forEach(id=>{let e=edgeEls.find(x=>x.dataset.link===id);if(e){flowNodes.add(e.dataset.from);flowNodes.add(e.dataset.to)}})}
  get('ai-step-annotation').setAttribute('visibility',(!focused&&scenario!=='overview')?'visible':'hidden');
