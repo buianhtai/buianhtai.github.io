@@ -255,6 +255,72 @@ function line(a,b){
   </footer>
 </section>
 <style>
+
+/* Standalone viewing modes — same architecture data and controls, expanded canvas. */
+.ai-display-modes{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.ai-display-modes button{padding:9px 13px;background:var(--a-panel);color:var(--a-text);border:1px solid var(--a-border);border-radius:9px;font:700 .75rem system-ui;white-space:nowrap}
+.ai-display-modes button:hover,.ai-display-modes button[aria-pressed=true]{border-color:var(--a-accent);color:var(--a-accent);background:color-mix(in srgb,var(--a-accent) 9%,var(--a-panel))}
+.ai-display-modes #ai-presentation{background:color-mix(in srgb,var(--a-accent) 12%,var(--a-panel));border-color:var(--a-accent)}
+.ai.is-immersive,.ai:fullscreen{position:fixed!important;inset:0!important;top:0!important;left:0!important;transform:none!important;width:100vw!important;height:100dvh!important;max-width:none!important;margin:0!important;z-index:2147483000!important;overflow:auto!important;border:0!important;border-radius:0!important;box-shadow:none!important}
+.ai.is-immersive .ai-workspace{grid-template-columns:minmax(0,1fr) minmax(260px,310px)}
+.ai.is-immersive .ai-canvas{min-height:430px;max-height:none;height:min(67dvh,900px)}
+.ai.is-immersive .ai-canvas svg{height:100%;max-height:none;min-width:0}
+.ai-presenter{display:none;align-items:center;justify-content:space-between;gap:22px;padding:15px 24px;margin:0 15px 10px;background:linear-gradient(95deg,color-mix(in srgb,var(--a-call) 13%,var(--a-panel)),var(--a-panel));border:1px solid var(--a-border);border-radius:13px}
+.ai-presenter-copy{flex:1;min-width:0}
+.ai-presenter-copy>span{font:700 .67rem ui-monospace,monospace;letter-spacing:.12em;color:var(--a-accent)}
+.ai-presenter-copy h4{font-size:clamp(1.1rem,2vw,1.65rem);margin:7px 0}
+.ai-presenter-copy p{color:var(--a-muted);font-size:.81rem;line-height:1.48;margin:0;max-width:720px}
+.ai-presenter-actions{display:flex;align-items:center;gap:8px}
+.ai-presenter-actions>button,.ai-presenter-actions #ai-slide-dots button{background:var(--a-bg);border:1px solid var(--a-border);color:var(--a-text);border-radius:8px;padding:9px;font:700 .72rem system-ui}
+.ai-presenter-actions>button:disabled{opacity:.3;cursor:default}
+#ai-slide-dots{display:flex;align-items:center;gap:5px}
+.ai-presenter-actions #ai-slide-dots button{width:12px;height:12px;border-radius:999px;padding:0;background:var(--a-muted);opacity:.45}
+.ai-presenter-actions #ai-slide-dots button[aria-current=step]{background:var(--a-accent);opacity:1;border-color:var(--a-accent);width:25px}
+.ai.is-presenting{display:flex!important;flex-direction:column}
+.ai.is-presenting .ai-header{order:0;padding:12px 22px}
+.ai.is-presenting .ai-header p:not(.ai-overline){display:none}
+.ai.is-presenting .ai-header h3{font-size:1.15rem;margin:4px 0}
+.ai.is-presenting .ai-rev{display:none}
+.ai.is-presenting .ai-stats,.ai.is-presenting .ai-toolbar,.ai.is-presenting .ai-reader,.ai.is-presenting .ai-legend,.ai.is-presenting .ai-foot{display:none!important}
+.ai.is-presenting .ai-presenter{display:flex;order:1;flex-shrink:0}
+.ai.is-presenting .ai-workspace{order:2;flex:1;min-height:295px;display:block;padding:0 15px 8px}
+.ai.is-presenting .ai-map{height:100%;width:100%}
+.ai.is-presenting .ai-canvas{height:calc(100% - 33px);min-height:260px;max-height:none}
+.ai.is-presenting .ai-canvas svg{height:100%;max-height:none;min-width:0}
+.ai.is-presenting .ai-map-caption{min-height:33px;padding:6px 11px}
+.ai.is-presenting .ai-canvas-foot,.ai.is-presenting .ai-aside{display:none!important}
+.ai.is-presenting .ai-story{order:3;flex-shrink:0;margin-bottom:10px;padding:11px 14px}
+.ai.is-presenting .ai-story-head,.ai.is-presenting .ai-scenarios{display:none}
+.ai.is-presenting .ai-flow-row{margin:0;padding:7px}
+.ai.is-presenting .ai-play-controls{margin:7px 0}
+.ai.is-presenting .ai-runtime-inspector{margin-top:8px}
+.ai.is-presenting .ai-runtime-inspector>div{padding:7px 10px}
+.ai.is-presenting .ai-runtime-inspector>div p,.ai.is-presenting .ai-runtime-inspector>div strong{font-size:.72rem}
+@media(max-width:900px){
+ .ai.is-immersive .ai-workspace{grid-template-columns:1fr}
+ .ai.is-immersive .ai-canvas{height:min(63dvh,700px)}
+ .ai-presenter{flex-wrap:wrap}
+ .ai-presenter-actions{width:100%;justify-content:space-between}
+}
+@media(max-width:650px){
+ .ai-display-modes{width:100%;justify-content:flex-start}
+ .ai-display-modes button{font-size:.73rem;padding:9px 12px}
+ .ai.is-presenting .ai-header{padding:10px 14px}
+ .ai.is-presenting .ai-header h3{font-size:.92rem}
+ .ai.is-presenting .ai-display-modes{width:auto}
+ .ai.is-presenting .ai-display-modes button{padding:7px;font-size:.68rem}
+ .ai.is-presenting .ai-presenter{padding:10px 12px;margin:0 8px 8px;gap:8px}
+ .ai-presenter-copy h4{font-size:1rem;margin:3px 0}
+ .ai-presenter-copy p{font-size:.7rem}
+ .ai.is-presenting .ai-workspace{padding:0 8px 5px;min-height:250px;flex:0 0 42dvh}
+ .ai.is-presenting .ai-canvas{min-height:200px}
+ .ai.is-presenting .ai-story{margin:0 8px 8px;padding:9px}
+ .ai.is-presenting .ai-runtime-inspector{grid-template-columns:1fr 1fr}
+ .ai.is-presenting .ai-runtime-inspector>div:last-child{display:none}
+ .ai-presenter-actions #ai-slide-dots button{width:9px;height:9px}
+ .ai-presenter-actions #ai-slide-dots button[aria-current=step]{width:18px}
+}
+
 .ai{--a-bg:var(--color-surface,#0c1726);--a-panel:var(--color-surface-2,#142337);--a-text:var(--color-text,#eff6fc);--a-muted:var(--color-text-dim,#a4b7c8);--a-border:var(--color-border,#3c5066);--a-accent:var(--color-accent,#51d7ba);--a-link:#67a9ef;--a-call:#4cbca8;--a-db:#ad8ff3;--a-event:#dc9e58;--a-policy:#e38e95;position:relative;left:50%;transform:translateX(-50%);width:min(1190px,calc(100vw - 20px));max-width:none!important;margin:2.5rem 0;background:var(--a-bg);color:var(--a-text);border:1px solid var(--a-border);border-radius:20px;overflow:hidden;font-family:inherit;box-shadow:0 16px 52px #00000016}
 .ai *{box-sizing:border-box}
 .ai-reader{display:grid;grid-template-columns:minmax(200px,1fr) minmax(145px,198px) minmax(155px,214px);gap:12px;align-items:center;margin:0 15px 13px;padding:13px 15px;border:1px solid var(--a-border);border-radius:12px;background:linear-gradient(105deg,color-mix(in srgb,var(--a-link) 7%,var(--a-panel)),var(--a-panel))}
