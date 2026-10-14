@@ -710,9 +710,12 @@ document.addEventListener('fullscreenchange',()=>{
  if(viewMode!=='normal'&&nativeFullscreen&&document.fullscreenElement!==root)leaveView();
 });
 document.addEventListener('keydown',e=>{
- if(viewMode==='normal')return;
  const tag=e.target&&e.target.tagName;
- if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT')return;
+ if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT'||e.ctrlKey||e.metaKey||e.altKey)return;
+ const k=e.key.toLowerCase();
+ if(k==='f'&&!e.repeat){e.preventDefault();if(viewMode==='fullscreen')leaveView();else enterView('fullscreen');return}
+ if(k==='p'&&!e.repeat){e.preventDefault();if(viewMode==='presentation')leaveView();else enterView('presentation');return}
+ if(viewMode==='normal')return;
  if(e.key==='Escape'){e.preventDefault();leaveView();return}
  if(viewMode!=='presentation')return;
  if(e.key==='ArrowRight'||e.key==='PageDown'||e.key===' '){
