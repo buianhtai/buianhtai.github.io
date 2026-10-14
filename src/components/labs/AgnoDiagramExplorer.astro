@@ -231,12 +231,12 @@ os.serve(app="app:app")</code></pre><small>Queue, Redis, tracing and MCP are opt
   const tab=tabs.find(t=>t.dataset.diagram===name);if(!tab)return;
   current=name;tabs.forEach(b=>{const yes=b===tab;b.setAttribute('aria-selected',String(yes));b.tabIndex=yes?0:-1});
   scenes.forEach(s=>s.hidden=s.dataset.scene!==name);
-  $('.de-mobile-card').forEach(el=>el.classList.remove('is-selected'));
+  $$('.de-mobile-card').forEach(el=>el.classList.remove('is-selected'));
   $('#de-heading-label').textContent=String(tabs.indexOf(tab)+1).padStart(2,'0')+' / '+tab.querySelector('strong').textContent.toUpperCase();
   $('#de-heading-title').textContent=tab.querySelector('small').textContent;
   $('#de-summary').textContent={system:'AgentOS is a configurable FastAPI app; databases, providers and tools are configured dependencies.',assembly:'Agent definitions → AgentOS(...) → get_app() → routes + lifespans → serve().',request:'Router → agent.arun() → model/tools → SSE events.',durable:'Optional queue admission → persisted ticket → worker lease → agent run → optional event replay.'}[name];
   $('#de-inspect-title').textContent='Select a node';$('#de-inspect-detail').textContent='Choose a component to inspect the real implementation.';$('#de-inspect-source').href=defaultSource;$('#de-relationships').replaceChildren();
-  $$('.de-node').forEach(n=>n.classList.remove('is-selected','is-muted'));$$('.de-edge').forEach(n=>n.classList.remove('is-focused','is-muted'));
+  $$$('.de-node').forEach(n=>n.classList.remove('is-selected','is-muted'));$$('.de-edge').forEach(n=>n.classList.remove('is-focused','is-muted'));
   reset()
  }
  function inspect(n){
