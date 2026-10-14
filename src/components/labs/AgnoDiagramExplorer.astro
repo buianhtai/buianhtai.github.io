@@ -116,7 +116,20 @@ function connection(scene,edge){
       </g>)}
       <text x="30" y="626" class="de-footnote">* Optional / configuration dependent. Arrows are logical relationships, not recorded network traffic.</text>
      </svg>
+     <div class="de-mobile-flow" aria-label={p.label+' as a readable vertical relationship map'}>
+      {p.nodes.map((n,i)=><section class="de-mobile-card" data-mobile-card={n.id}>
+       <button type="button" data-mobile-node={n.id} aria-label={'Inspect '+n.title}>
+        <span>{String(i+1).padStart(2,'0')} · {n.kind.toUpperCase()}</span><strong>{n.title}</strong><small>{n.subtitle}</small>
+       </button>
+       <p>{n.explain}</p>
+       <div class="de-mobile-connections">
+        {p.edges.filter(e=>e[0]===n.id).map(e=><span>→ <b>{lookup[p.id+':'+e[1]]?.title}</b><small>{e[2]}</small></span>)}
+       </div>
+       <a href={sourceBase+n.source} target="_blank" rel="noopener noreferrer">Read implementation ↗</a>
+      </section>)}
+     </div>
     </div>)}
+   <div class="de-mobile-switch"><span>Readable component map</span><button type="button" id="de-mobile-canvas" aria-pressed="false">View diagram canvas →</button></div>
    <div class="de-canvas-controls" role="group" aria-label="Navigate diagram">
     <button id="de-zoom-in" type="button" aria-label="Zoom in">+</button>
     <button id="de-zoom-out" type="button" aria-label="Zoom out">−</button>
@@ -170,6 +183,34 @@ os.serve(app="app:app")</code></pre><small>Queue, Redis, tracing and MCP are opt
 @media(max-width:900px){.de-body{grid-template-columns:1fr}.de-stage{height:60vh;min-height:440px}.de-inspector{min-height:190px}.de-lower{grid-template-columns:1fr}.de-heading>a{display:none}.de-nav button{flex-wrap:wrap}}
 @media(max-width:580px){.de-top{padding:10px;flex-wrap:wrap}.de-identity strong{font-size:.78rem}.de-identity span{display:none}.de-actions button{font-size:.68rem;padding:8px}.de-nav{grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;padding:7px}.de-nav button{padding:8px 5px;display:grid;justify-items:start;gap:4px}.de-nav strong{font-size:.63rem;line-height:1.25}.de-nav small{display:none}.de-nav span{font-size:.57rem}.de-heading{padding:12px}.de-heading p{font-size:.72rem}.de-body{padding:0 7px 10px}.de-stage{height:61vh;min-height:400px}.de-inspector{padding:13px}.de-legend{bottom:53px;right:8px;padding:6px}.de-legend span{font-size:.58rem}.de-legend i{width:12px}.de-lower{padding:8px 13px}.de.is-only .de-stage{height:calc(100dvh - 150px)}}
 @media(prefers-reduced-motion:reduce){.de *{scroll-behavior:auto!important}}
+
+.de-mobile-flow,.de-mobile-switch{display:none}
+@media(max-width:580px){
+ .de-stage{touch-action:pan-y;cursor:default}
+ .de-scene .de-svg{display:none}
+ .de-mobile-switch{position:absolute;top:0;left:0;right:0;z-index:4;background:#16273a;display:flex;align-items:center;justify-content:space-between;gap:6px;padding:8px 9px;border-bottom:1px solid #38506a}
+ .de-mobile-switch span{font:700 .62rem ui-monospace,monospace;color:#b8cbdc}
+ .de-mobile-switch button{font:720 .67rem system-ui;color:#6addce;background:#243d51;padding:7px 9px;border:1px solid #456780;border-radius:7px;white-space:nowrap}
+ .de-mobile-flow{display:grid;gap:13px;padding:61px 11px 18px;height:100%;overflow-y:auto;overscroll-behavior:contain;align-content:start}
+ .de-mobile-card{background:#1d3045;border:1px solid #45617b;border-radius:11px;padding:13px;display:grid;gap:9px;min-width:0}
+ .de-mobile-card:focus-within,.de-mobile-card.is-selected{border-color:#5edacb}
+ .de-mobile-card>button{display:grid;text-align:left;gap:5px;background:none;border:none;padding:0;color:#e7f0fa}
+ .de-mobile-card>button span{font:700 .63rem ui-monospace,monospace;color:#5edacb}
+ .de-mobile-card>button strong{font-size:1rem}
+ .de-mobile-card>button small{font-size:.72rem;color:#b5c5d5}
+ .de-mobile-card p{font-size:.72rem;line-height:1.5;color:#bacadb;margin:0}
+ .de-mobile-connections{display:flex;flex-wrap:wrap;gap:7px}
+ .de-mobile-connections>span{display:flex;align-items:center;gap:5px;font-size:.67rem;background:#263e52;padding:6px 8px;border:1px solid #49627a;border-radius:6px;color:#6addce}
+ .de-mobile-connections b{font-weight:690;color:#e7f0fa}
+ .de-mobile-connections small{font-size:.61rem;color:#b9cadd;margin-left:3px}
+ .de-mobile-card>a{color:#6addce;font-size:.68rem;font-weight:700;text-decoration:none}
+ .de-canvas-controls,.de-legend{display:none}
+ .de.is-mobile-canvas .de-scene .de-svg{display:block}
+ .de.is-mobile-canvas .de-mobile-flow{display:none}
+ .de.is-mobile-canvas .de-canvas-controls{display:flex}
+ .de.is-mobile-canvas .de-legend{display:flex}
+ .de.is-mobile-canvas .de-stage{touch-action:none;cursor:grab}
+}
 </style>
 <script>
 (()=>{
@@ -190,6 +231,7 @@ os.serve(app="app:app")</code></pre><small>Queue, Redis, tracing and MCP are opt
   const tab=tabs.find(t=>t.dataset.diagram===name);if(!tab)return;
   current=name;tabs.forEach(b=>{const yes=b===tab;b.setAttribute('aria-selected',String(yes));b.tabIndex=yes?0:-1});
   scenes.forEach(s=>s.hidden=s.dataset.scene!==name);
+  $('.de-mobile-card').forEach(el=>el.classList.remove('is-selected'));
   $('#de-heading-label').textContent=String(tabs.indexOf(tab)+1).padStart(2,'0')+' / '+tab.querySelector('strong').textContent.toUpperCase();
   $('#de-heading-title').textContent=tab.querySelector('small').textContent;
   $('#de-summary').textContent={system:'AgentOS is a configurable FastAPI app; databases, providers and tools are configured dependencies.',assembly:'Agent definitions → AgentOS(...) → get_app() → routes + lifespans → serve().',request:'Router → agent.arun() → model/tools → SSE events.',durable:'Optional queue admission → persisted ticket → worker lease → agent run → optional event replay.'}[name];
@@ -225,7 +267,18 @@ os.serve(app="app:app")</code></pre><small>Queue, Redis, tracing and MCP are opt
   view.w=next;view.h*=r;update()
  }
  tabs.forEach(t=>{t.addEventListener('click',()=>choose(t.dataset.diagram));t.addEventListener('keydown',e=>{if(e.key!=='ArrowRight'&&e.key!=='ArrowLeft')return;e.preventDefault();let i=tabs.indexOf(t);const next=tabs[(i+(e.key==='ArrowRight'?1:tabs.length-1))%tabs.length];next.click();next.focus()})});
- $$('.de-node').forEach(n=>{n.addEventListener('click',()=>inspect(n));n.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();inspect(n)}})});
+ $('.de-node').forEach(n=>{n.addEventListener('click',()=>inspect(n));n.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();inspect(n)}})});
+ $('#agno-diagram-explorer [data-mobile-node]').forEach(b=>b.addEventListener('click',()=>{
+  const scene=b.closest('[data-scene]'),n=scene?.querySelector('.de-node[data-node="'+b.dataset.mobileNode+'"]');
+  if(n)inspect(n);
+  scene?.querySelectorAll('[data-mobile-card]').forEach(card=>card.classList.toggle('is-selected',card.dataset.mobileCard===b.dataset.mobileNode));
+ }));
+ $('#de-mobile-canvas').addEventListener('click',()=>{
+  const on=!root.classList.contains('is-mobile-canvas');root.classList.toggle('is-mobile-canvas',on);
+  $('#de-mobile-canvas').setAttribute('aria-pressed',String(on));
+  $('#de-mobile-canvas').textContent=on?'← Readable map':'View diagram canvas →';
+  if(on)reset()
+ });
  $('#de-zoom-in').addEventListener('click',()=>zoom(.8));$('#de-zoom-out').addEventListener('click',()=>zoom(1.25));$('#de-fit').addEventListener('click',()=>{view={x:0,y:0,w:1300,h:650};update()});
  $('#de-only').addEventListener('click',()=>{only=!only;root.classList.toggle('is-only',only);$('#de-only').setAttribute('aria-pressed',String(only));$('#de-only').textContent=only?'▣ Show details':'▣ Diagram only';reset()});
  function exitFull(){if(!fullscreen)return;fullscreen=false;root.classList.remove('is-fullscreen');$('#de-full').setAttribute('aria-pressed','false');$('#de-full').textContent='⛶ Fullscreen';document.body.style.overflow=prevOverflow;if(document.fullscreenElement===root&&document.exitFullscreen)document.exitFullscreen().catch(()=>{});reset()}
@@ -233,7 +286,7 @@ os.serve(app="app:app")</code></pre><small>Queue, Redis, tracing and MCP are opt
  document.addEventListener('fullscreenchange',()=>{if(fullscreen&&!document.fullscreenElement)exitFull()});
  document.addEventListener('keydown',e=>{if(!fullscreen||e.key!=='Escape')return;e.preventDefault();exitFull()});
  stage.addEventListener('wheel',e=>{e.preventDefault();const r=stage.getBoundingClientRect();zoom(e.deltaY<0?.89:1.12,e.clientX-r.left,e.clientY-r.top)},{passive:false});
- stage.addEventListener('pointerdown',e=>{if(e.target.closest('.de-canvas-controls,.de-legend,[role=button]'))return;if(e.pointerType==='mouse'&&e.button!==0)return;
+ stage.addEventListener('pointerdown',e=>{if(e.target.closest('.de-mobile-flow,.de-mobile-switch,.de-canvas-controls,.de-legend,[role=button]'))return;if(e.pointerType==='mouse'&&e.button!==0)return;
   pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
   drag={pointer:e.pointerId,x:e.clientX,y:e.clientY,vx:view.x,vy:view.y};stage.setPointerCapture(e.pointerId)
  });
