@@ -504,8 +504,44 @@ function paint(){
  el.classList.toggle('is-focused',focused===id);el.classList.toggle('is-adjacent',!!focused&&id!==focused&&related.has(id));el.classList.toggle('is-dimmed',(!eligible||!filter)&&id!==focused);
  });
 }
+
+function renderJourney(edge){
+ const a=get('ai-from'),b=get('ai-to'),steps=get('ai-journey-steps');
+ if(!edge){
+  get('ai-journey-heading').textContent='Choose an example request';
+  a.textContent='Client / Application';b.textContent='AgentOS / Runtime';
+  get('ai-from-detail').textContent='Who starts the request?';
+  get('ai-to-detail').textContent='Which component handles it?';
+  get('ai-journey-protocol').textContent='REQUEST FLOW';
+  get('ai-journey-meaning').textContent='One connection at a time';
+  steps.replaceChildren();
+  const hint=document.createElement('span');hint.textContent='Pick “Direct answer” or “Durable background” above to see numbered steps here.';steps.append(hint);
+  return;
+ }
+ const from=nodeMap[edge.dataset.from],to=nodeMap[edge.dataset.to];
+ get('ai-journey-heading').textContent='Step '+(step+1)+' — '+edge.dataset.label;
+ a.textContent=from.dataset.label;b.textContent=to.dataset.label;
+ get('ai-from-detail').textContent=from.dataset.detail;
+ get('ai-to-detail').textContent=to.dataset.detail;
+ get('ai-journey-protocol').textContent=edge.dataset.kind.toUpperCase()+' · '+edge.dataset.label;
+ const item=evidence[edge.dataset.link];get('ai-journey-meaning').textContent=item?item[1]:edge.dataset.label;
+ steps.replaceChildren();
+ scenarios[scenario].edges.forEach((link,i)=>{
+  const x=edgeEls.find(el=>el.dataset.link===link);if(!x)return;
+  const btn=document.createElement('button');btn.type='button';btn.className='ai-journey-step';
+  btn.setAttribute('aria-current',i===step?'step':'false');
+  btn.setAttribute('aria-label','Go to step '+(i+1)+': '+x.dataset.label);
+  if(i<step)btn.classList.add('is-complete');
+  const number=document.createElement('b');number.textContent=String(i+1).padStart(2,'0');
+  const label=document.createElement('span');label.textContent=x.dataset.label;
+  btn.append(number,label);btn.addEventListener('click',()=>{stopPlayback();step=i;focused=null;setFocus(null);scenarioText()});
+  steps.append(btn);
+ });
+ const current=steps.querySelector('[aria-current="step"]');if(current)current.scrollIntoView({block:'nearest',inline:'nearest',behavior:'instant'});
+}
+
 function scenarioText(){
- const s=scenarios[scenario],ids=s.edges; if(scenario==='overview'){get('ai-step-annotation').setAttribute('visibility','hidden');set(get('ai-story-title'),s.title);set(get('ai-story-description'),s.description);set(get('ai-step-count'),'—');get('ai-play').disabled=true;get('ai-scrub').disabled=true;get('ai-scrub').max=0;get('ai-scrub').value=0;updateEvidence(null);return}
+ const s=scenarios[scenario],ids=s.edges; if(scenario==='overview'){get('ai-step-annotation').setAttribute('visibility','hidden');set(get('ai-story-title'),s.title);set(get('ai-story-description'),s.description);set(get('ai-step-count'),'—');get('ai-play').disabled=true;get('ai-scrub').disabled=true;get('ai-scrub').max=0;get('ai-scrub').value=0;updateEvidence(null);renderJourney(null);return}
  const edge=edgeEls.find(e=>e.dataset.link===ids[step]);
  const from=edge?nodeMap[edge.dataset.from]?.dataset.label:'',to=edge?nodeMap[edge.dataset.to]?.dataset.label:'';
  if(edge){
@@ -521,7 +557,7 @@ function scenarioText(){
  set(get('ai-story-description'),edge?edge.dataset.label+' · '+s.description:s.description);
  set(get('ai-step-count'),String(step+1).padStart(2,'0')+' / '+String(ids.length).padStart(2,'0'));
  get('ai-play').disabled=false;get('ai-scrub').disabled=false;get('ai-scrub').max=ids.length-1;get('ai-scrub').value=step;
- updateEvidence(edge);followEdge(edge);
+ updateEvidence(edge);renderJourney(edge);followEdge(edge);
 }
 nodeEls.forEach(el=>{const activate=()=>{stopPlayback();setFocus(el.dataset.node)};el.addEventListener('click',activate);el.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();activate()}})});
 get('ai-lines').addEventListener('click',()=>{showAll=!showAll;get('ai-lines').setAttribute('aria-pressed',String(showAll));get('ai-lines').textContent=showAll?'Essential links':'Show all links';paint()});
