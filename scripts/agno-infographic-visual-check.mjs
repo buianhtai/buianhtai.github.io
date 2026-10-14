@@ -36,6 +36,8 @@ try{
     assert.equal(await lab.locator('#ai-region').count(),1,'Subsystem navigation available');
     assert.equal(await lab.locator('#ai-find option').count(),19,'Searchable node picker includes every component');
     assert.equal(await lab.locator('#ai-lines').getAttribute('aria-pressed'),'false','Essential lines are the initial view');
+    assert.equal(await lab.locator('#ai-play').isDisabled(),true,'Overview cannot autoplay');
+    assert.equal(await lab.locator('.ai-runtime-inspector').count(),1,'Visible guided protocol inspector');
     await lab.scrollIntoViewIfNeeded();
     await page.screenshot({path:out+'/overview-'+width+'-dark.png',fullPage:false});
 
@@ -73,6 +75,17 @@ try{
     await lab.locator('#ai-next').click();
     assert((await lab.locator('.ai-edge.is-active').count())>=count,'Scenario path advances');
     assert.match(await lab.locator('#ai-step-count').innerText(),/02/);
+    assert.equal(await lab.locator('#ai-play').isEnabled(),true,'Scenario enables playback');
+    assert.match(await lab.locator('#ai-runtime-protocol').innerText(),/queue|http|durable/i);
+    assert.match(await lab.locator('#ai-runtime-source').getAttribute('href'),/1f2aac51eb28dc9c0970836d3b7ae046bae81bbb/);
+    const prevView=await lab.locator('#ai-svg').getAttribute('viewBox');
+    await lab.locator('#ai-scrub').evaluate(el=>{el.value='3';el.dispatchEvent(new Event('input',{bubbles:true}));});
+    assert.match(await lab.locator('#ai-step-count').innerText(),/04/,'Scrubbing updates stage');
+    assert.notEqual(await lab.locator('#ai-svg').getAttribute('viewBox'),prevView,'Following flow moves architecture camera');
+    await lab.locator('#ai-play').click();
+    assert.equal(await lab.locator('#ai-play').getAttribute('aria-pressed'),'true','Playback starts');
+    await lab.locator('#ai-play').click();
+    assert.equal(await lab.locator('#ai-play').getAttribute('aria-pressed'),'false','Playback pauses');
     assert.match(await lab.locator('#ai-step-label').textContent(),/2 ·/,'Selected relationship is annotated on map');
     assert.equal(await lab.locator('#ai-step-annotation').getAttribute('visibility'),'visible');
 
@@ -95,6 +108,15 @@ try{
     await lab.scrollIntoViewIfNeeded();
     await page.screenshot({path:out+'/architecture-'+width+'-light.png',fullPage:false});
     assert.deepEqual(errors,[],'No JavaScript exceptions');
+    const standalone=await ctx.newPage();
+    const labErrors=[];standalone.on('pageerror',e=>labErrors.push(e.message));
+    await standalone.goto(host+'/en/labs/agno-architecture/',{waitUntil:'domcontentloaded'});
+    assert.equal(await standalone.locator('#agno-infographic').count(),1,'Dedicated Agno lab includes architecture');
+    assert.equal(await standalone.locator('#agno-source-lab').count(),1,'Dedicated lab includes source explorer');
+    await standalone.locator('#agno-infographic .ai-scenarios [data-scenario="answer"]').click();
+    assert.equal(await standalone.locator('#agno-infographic #ai-play').isEnabled(),true);
+    assert.deepEqual(labErrors,[]);
+    await standalone.close();
     await ctx.close();
     console.log('PASS Agno infographic '+width+'px: component map, focus, layers, flows, zoom, theme');
   }
