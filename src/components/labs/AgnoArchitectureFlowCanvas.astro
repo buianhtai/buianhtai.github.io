@@ -299,7 +299,7 @@ const edges=[
   }
  });
  mini.addEventListener('click',e=>{const bounds=mini.getBoundingClientRect();const mx=(e.clientX-bounds.left)/bounds.width*W,my=(e.clientY-bounds.top)/bounds.height*H;panX=stage.clientWidth/2-mx*scale;panY=stage.clientHeight/2-my*scale;place()});
- const ro=new ResizeObserver(()=>{if(stage.clientWidth>0){if(!stage.dataset.fitted){stage.dataset.fitted='1';fit();if(stage.clientWidth<600){scale=Math.min(1,Math.max(scale,.62));panX=28-60*scale;panY=110-206*scale;place()}}else place()}});
+ const ro=new ResizeObserver(()=>{if(stage.clientWidth>0){if(!stage.dataset.fitted){stage.dataset.fitted='1';fit();scale=Math.max(scale,stage.clientWidth<600?.80:.76);panX=26-60*scale;panY=(stage.clientWidth<600?142:170)-206*scale;place()}else place()}});
  ro.observe(stage);draw();
 })();
 </script>
