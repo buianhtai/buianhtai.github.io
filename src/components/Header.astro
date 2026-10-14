@@ -8,6 +8,7 @@ const isBlog = path.startsWith(`/${lang}/blog`);
 const isFoundations = path.startsWith(`/${lang}/foundations`);
 const isTags = path.startsWith(`/${lang}/tags`);
 const isAbout = path.startsWith('/'+lang+'/about');
+const isCV = path.startsWith('/en/cv');
 // Only top-level pages have guaranteed localized equivalents.
 const switchedPath = isHome ? `/${otherLang}/` :
   isFoundations ? `/${otherLang}/foundations` :
@@ -24,6 +25,7 @@ const vi = lang === 'vi';
       <a href={`/${lang}/foundations`} aria-current={isFoundations ? 'page' : undefined}>{vi ? 'Kiến thức nền' : 'Foundations'}</a>
       <a href="/architecture/" class="ed-nav-architecture">{vi ? 'Kiến trúc' : 'Architecture'}</a>
       <a class="ed-nav-projects" href={'/'+lang+'/about/'} aria-current={isAbout ? 'page' : undefined}>{vi ? 'Giới thiệu' : 'About'}</a>
+      <a href="/en/cv/" aria-current={isCV ? 'page' : undefined}>{vi ? 'CV (EN)' : 'CV'}</a>
     </nav>
     <div class="ed-header-controls">
       <a href={`/${lang}/blog`} class="ed-icon-button" title={vi ? 'Tìm bài viết' : 'Find articles'} aria-label={vi ? 'Tìm bài viết' : 'Find articles'}>
