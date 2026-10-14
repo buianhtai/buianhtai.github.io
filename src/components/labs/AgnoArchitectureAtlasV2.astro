@@ -1,4 +1,5 @@
 ---
+import AgnoArchitectureFlowCanvas from './AgnoArchitectureFlowCanvas.astro';
 /**
  * An opt-in design prototype: a single readable system map, guided execution
  * and separately navigable code evidence. No dependency on the old atlas.
@@ -70,7 +71,9 @@ const code=[
     <button type="button" role="tab" id="atlas-tab-code" aria-controls="atlas-code" aria-selected="false" tabindex="-1" data-tab="code"><span>03</span><strong>Code explorer</strong><small>Find implementation</small></button>
   </div>
   <section class="atlas-panel" role="tabpanel" id="atlas-overview" aria-labelledby="atlas-tab-overview" data-panel="overview">
-    <div class="atlas-section-title"><div><p>01 / ARCHITECTURE</p><h2>The entire system, without the spaghetti</h2><span>Distinct boundaries first. Open a component to see its purpose and source.</span></div><div class="atlas-actions"><button type="button" id="atlas-open-walk" class="atlas-primary">Follow a request <span aria-hidden="true">→</span></button></div></div>
+    <div class="atlas-section-title"><div><p>01 / ARCHITECTURE</p><h2>Explore the architecture as a flow</h2><span>Pan, zoom, drag, follow directional connectors, and inspect components—without treating Python modules as separate services.</span></div><div class="atlas-actions"><button type="button" id="atlas-open-walk" class="atlas-primary">Follow a request <span aria-hidden="true">→</span></button></div></div>
+    <AgnoArchitectureFlowCanvas />
+    <div class="atlas-legacy-model" hidden aria-hidden="true">
     <div class="atlas-diagram-shell">
       <div class="atlas-diagram-scroll">
         <svg id="atlas-diagram" viewBox="0 0 1200 752" role="group" aria-label="Interactive system boundary diagram: client and ingress connect to AgentOS application, state and external providers">
@@ -101,6 +104,7 @@ const code=[
       <div><span class="atlas-inspector-tag" id="atlas-component-kind">START HERE</span><h3 id="atlas-component-title">A system boundary is not a microservice</h3><p id="atlas-component-description">AgentOS composes HTTP routes, agent execution and optional queue workers in the application. PostgreSQL, Redis and model providers are configured dependencies, not necessarily bundled services.</p></div>
       <div class="atlas-inspector-actions"><a id="atlas-component-source" href={'https://github.com/agno-agi/agno/tree/'+revision} target="_blank" rel="noopener noreferrer">Explore source <span aria-hidden="true">↗</span></a></div>
     </aside>
+    </div>
     <div class="atlas-editorial-notes"><div><span>DEPLOYMENT</span><h3>One application can contain many modules.</h3><p>Agent, team, workflow and router boundaries are primarily programming concepts. Independent scaling needs an explicit deployment decision.</p></div><div><span>STATE</span><h3>Connections are not always durable.</h3><p>An SSE stream, a persisted run and a queue ticket solve different problems. The failure walkthrough explains where recovery lives.</p></div></div>
   </section>
   <section class="atlas-panel" role="tabpanel" id="atlas-walkthrough" aria-labelledby="atlas-tab-walkthrough" data-panel="walkthrough" hidden>
@@ -151,7 +155,7 @@ const code=[
 </section>
 <style>
 .atlas{--ink:var(--color-text,#152538);--muted:var(--color-text-dim,#52667e);--quiet:var(--color-text-muted,#7f93aa);--surface:var(--color-surface,#fff);--subtle:var(--color-surface-2,#f0f4f8);--border:var(--color-border,#dfe6ef);--teal:var(--color-accent,#087e79);--blue:#4e86da;--violet:#9581dd;--amber:#d7a451;color:var(--ink);width:100%;margin:0 auto;font-family:inherit;min-width:0}
-.atlas *{box-sizing:border-box}.atlas button{cursor:pointer}.atlas button:focus-visible,.atlas a:focus-visible,.atlas [role=button]:focus-visible{outline:2px solid var(--teal);outline-offset:3px}.atlas [hidden]{display:none!important}
+.atlas *{box-sizing:border-box}.atlas button{cursor:pointer}.atlas button:focus-visible,.atlas a:focus-visible,.atlas [role=button]:focus-visible{outline:2px solid var(--teal);outline-offset:3px}.atlas [hidden]{display:none!important}.atlas-legacy-model{display:none!important}
 .atlas-hero{display:grid;grid-template-columns:minmax(0,1fr) 160px;gap:26px;align-items:center;padding:44px 42px 38px;border:1px solid var(--border);border-radius:18px 18px 0 0;background:radial-gradient(circle at 92% 12%,color-mix(in srgb,var(--teal) 9%,var(--surface)),var(--surface) 45%)}
 .atlas-kicker,.atlas-section-title>div>p,.atlas-pane-eyebrow{color:var(--teal);font:750 .68rem/1.4 ui-monospace,monospace;letter-spacing:.11em!important;margin:0!important}
 .atlas-hero h1{font-size:clamp(2rem,4vw,3.35rem);line-height:1.13;letter-spacing:-.055em;margin:12px 0 18px!important;font-weight:770}
