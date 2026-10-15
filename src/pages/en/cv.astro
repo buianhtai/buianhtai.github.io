@@ -48,9 +48,13 @@ const displayDate = (date: string) => date.replace(' - ', ' – ');
       <p>{cv.summary}</p>
     </section>
 
-    <CareerTree />
+    <div class="cv-view-controls" role="group" aria-label="Choose CV view" hidden>
+      <button type="button" data-cv-view="explore" aria-pressed="true" aria-controls="cv-explore">Explore timeline</button>
+      <button type="button" data-cv-view="read" aria-pressed="false" aria-controls="cv-reading">Read CV</button>
+    </div>
+    <div id="cv-explore"><CareerTree /></div>
     <div class="cv-layout">
-      <div class="cv-career">
+      <div class="cv-career" id="cv-reading">
         <section aria-labelledby="experience">
           <div class="cv-section-heading"><span class="cv-label">02 / CAREER</span><h2 id="experience">Professional experience</h2></div>
           {primary.map((job, index) => <article id={`role-${index}`} class="cv-job">
@@ -88,6 +92,31 @@ const displayDate = (date: string) => date.replace(' - ', ' – ');
 </BaseLayout>
 
 <script>
+  const controls=document.querySelector<HTMLElement>('.cv-view-controls');
+  const explore=document.querySelector<HTMLElement>('#cv-explore');
+  const reading=document.querySelector<HTMLElement>('#cv-reading');
+  const layout=document.querySelector<HTMLElement>('.cv-layout');
+  const buttons=Array.from(document.querySelectorAll<HTMLButtonElement>('[data-cv-view]'));
+  const setView=(view:string)=>{
+    if(!explore||!reading)return;
+    explore.hidden=view!=='explore';reading.hidden=view!=='read';
+    layout?.classList.toggle('expertise-only',view==='explore');
+    buttons.forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.cvView===view)));
+  };
+  const syncHash=()=>{
+    if(location.hash.startsWith('#career-'))setView('explore');
+    else if(location.hash==='#experience'||location.hash.startsWith('#role-')||location.hash==='#earlier-career')setView('read');
+  };
+  if(controls){controls.hidden=false;setView('explore');syncHash();}
+  buttons.forEach(button=>button.addEventListener('click',()=>{
+    setView(button.dataset.cvView!);
+    history.replaceState(null,'',button.dataset.cvView==='read'?'#experience':'#career-tree-title');
+  }));
+  window.addEventListener('hashchange',syncHash);
+  document.querySelectorAll<HTMLAnchorElement>('.cv-section-nav a').forEach(link=>link.addEventListener('click',()=>{
+    if(link.hash==='#experience')setView('read');
+    if(link.hash==='#career-tree-title')setView('explore');
+  }));
   const printButton = document.querySelector<HTMLButtonElement>('#print-cv');
   if (printButton) {
     printButton.hidden = false;
@@ -96,6 +125,14 @@ const displayDate = (date: string) => date.replace(' - ', ' – ');
 </script>
 
 <style>
+  .cv-view-controls{display:flex;gap:6px;flex-wrap:wrap;border:1px solid var(--color-border);padding:5px;border-radius:8px;width:fit-content;margin-bottom:30px;background:var(--color-surface)}
+  .cv-view-controls[hidden],#cv-explore[hidden],#cv-reading[hidden]{display:none}
+  .cv-view-controls button{min-height:44px;padding:10px 20px;border:0;border-radius:5px;background:transparent;color:var(--color-text);font:inherit;font-size:.85rem;cursor:pointer}
+  .cv-view-controls button[aria-pressed="true"]{background:var(--color-accent);color:var(--color-bg);font-weight:600}
+  .cv-layout.expertise-only{display:block}.expertise-only .cv-sidebar{border-left:0;padding-left:0;display:grid;grid-template-columns:2fr 1fr 1fr;gap:30px}.expertise-only .cv-sidebar section+section{border:0;padding-top:0}
+  @media(max-width:760px){.expertise-only .cv-sidebar{display:block}}
+  @media print{.cv-view-controls,#cv-explore{display:none!important}#cv-reading[hidden]{display:block!important}.cv-layout.expertise-only,.expertise-only .cv-sidebar{display:block}}
+
   .cv-company {display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:12px;}
 
   .cv-page { --cv-muted: color-mix(in srgb, var(--color-text) 72%, var(--color-bg)); padding-top: clamp(38px,6vw,76px); padding-bottom: 64px; }

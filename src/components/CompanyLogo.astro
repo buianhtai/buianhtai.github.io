@@ -1,18 +1,20 @@
 ---
 interface Props { company: string; }
 const { company } = Astro.props;
-// Asset URLs observed on the companies' official websites, 2026-10-15.
+// Sources checked 2026-10-15: official GFG/ZAMO sites, MoMo Brandfetch,
+// and the historical Computer Sciences Corporation mark on Wikimedia Commons.
 // Keep unidentified marks as neutral initials, not invented brand artwork.
+// Glide's decorative gradient and DiscoverMarket's Discohub product mark were removed.
 const marks: Record<string, {src:string; dark?:boolean}> = {
-  'Glide Systems Inc': {src:'https://www.glidesystemsinc.com/img/gradient-logo.svg'},
-  'DiscoverMarket Vietnam': {src:'https://connect.discovermarket.com/img/discohub.png'},
   'Global Fashion Group': {src:'https://global-fashion-group.com/wp-content/themes/global-fashion-group/assets/img/logos/GFG_Logo_white.svg',dark:true},
+  'MoMo': {src:'https://cdn.brandfetch.io/idn4xaCzTm/w/1666/h/1666/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1734358527203'},
+  'CSC': {src:'https://upload.wikimedia.org/wikipedia/commons/thumb/3/32/CSC_Logo.svg/3840px-CSC_Logo.svg.png'},
   'ZAMO LLC': {src:'https://zamo.io/logo-primary.svg'},
 };
 const mark=marks[company];
-const initials:Record<string,string>={'Glide Systems Inc':'GL','DiscoverMarket Vietnam':'DM','Global Fashion Group':'GFG','ZAMO LLC':'ZAMO','MoMo':'MoMo','CSC':'CSC','GESO':'GESO'};
+const initials:Record<string,string>={'Glide Systems Inc':'Glide','DiscoverMarket Vietnam':'discovermarket','Global Fashion Group':'GFG','ZAMO LLC':'ZAMO','MoMo':'MoMo','CSC':'CSC','GESO':'GESO'};
 ---
-<span class:list={['company-logo',{'dark-mark':mark?.dark}]} data-company-logo aria-hidden="true">
+<span class:list={['company-logo',{'dark-mark':mark?.dark}]} data-company-logo title={mark ? company : `${company} — text label; logo not verified`} aria-hidden="true">
   <span class="logo-initials">{initials[company]??company.slice(0,2)}</span>
   {mark && <img src={mark.src} alt="" width="88" height="44" loading="lazy" decoding="async" referrerpolicy="no-referrer" />}
 </span>
@@ -26,8 +28,8 @@ const initials:Record<string,string>={'Glide Systems Inc':'GL','DiscoverMarket V
   });
 </script>
 <style>
-  .company-logo{position:relative;display:inline-flex;width:88px;height:44px;flex:0 0 88px;align-items:center;justify-content:center;border:1px solid var(--color-border);border-radius:6px;background:var(--color-surface-2);overflow:hidden;vertical-align:middle}
-  .logo-initials{font-size:.75rem;font-weight:650;letter-spacing:.04em;color:var(--color-text)}
+  .company-logo{position:relative;display:inline-flex;width:76px;height:40px;flex:0 0 76px;align-items:center;justify-content:center;border:1px solid var(--color-border);border-radius:6px;background:var(--color-surface-2);overflow:hidden;vertical-align:middle}
+  .logo-initials{font-size:.6rem;font-weight:650;letter-spacing:.04em;color:var(--color-text)}
   img{position:absolute;inset:0;box-sizing:border-box;width:100%;height:100%;object-fit:contain;padding:7px;opacity:0}
   .logo-loaded{background:#fff;border-color:#dfe3e8}.logo-loaded.dark-mark{background:#141820;border-color:#39404d}.logo-loaded img{opacity:1}.logo-loaded .logo-initials{visibility:hidden}
   @media print{.company-logo{display:none}}
