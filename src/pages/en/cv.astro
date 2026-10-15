@@ -2,6 +2,7 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import cv from '../../data/cv.json';
 import CareerTree from '../../components/CareerTree.astro';
+import CompanyLogo from '../../components/CompanyLogo.astro';
 
 const pdf = '/downloads/Bui_Anh_Tai_CV_English.pdf';
 const primary = cv.jobs.slice(0, 3);
@@ -54,7 +55,7 @@ const displayDate = (date: string) => date.replace(' - ', ' – ');
           <div class="cv-section-heading"><span class="cv-label">02 / CAREER</span><h2 id="experience">Professional experience</h2></div>
           {primary.map((job, index) => <article id={`role-${index}`} class="cv-job">
             <span class="cv-job-index" aria-hidden="true">0{index + 1}</span>
-            <div class="cv-job-top"><h3>{job.company}</h3><p class="cv-date">{displayDate(job.dates)}</p></div>
+            <div class="cv-job-top"><div class="cv-company"><CompanyLogo company={job.company} /><h3>{job.company}</h3></div><p class="cv-date">{displayDate(job.dates)}</p></div>
             <p class="cv-job-role">{job.role}</p>
             {job.company === 'DiscoverMarket Vietnam' && <span class="cv-promotion">Promoted to Associate Technical Architect</span>}
             <p class="cv-context">{job.context}</p>
@@ -65,7 +66,7 @@ const displayDate = (date: string) => date.replace(' - ', ' – ');
         <section class="cv-earlier" aria-labelledby="earlier-career">
           <h2 id="earlier-career">Earlier career</h2>
           {earlier.map((job) => <article class="cv-job cv-job-compact">
-            <div class="cv-job-top"><h3>{job.company}</h3><p class="cv-date">{displayDate(job.dates)}</p></div>
+            <div class="cv-job-top"><div class="cv-company"><CompanyLogo company={job.company} /><h3>{job.company}</h3></div><p class="cv-date">{displayDate(job.dates)}</p></div>
             <p class="cv-job-role">{job.role}</p>
             <ul>{job.bullets.map(bullet => <li>{bullet}</li>)}</ul>
           </article>)}
@@ -95,6 +96,8 @@ const displayDate = (date: string) => date.replace(' - ', ' – ');
 </script>
 
 <style>
+  .cv-company {display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:12px;}
+
   .cv-page { --cv-muted: color-mix(in srgb, var(--color-text) 72%, var(--color-bg)); padding-top: clamp(38px,6vw,76px); padding-bottom: 64px; }
   .cv-hero { display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:64px; align-items:center; padding-bottom:48px; }
   .cv-label,.ed-kicker { font-size:.68rem; font-weight:600; letter-spacing:.14em; line-height:1.6; color:var(--cv-muted); }
