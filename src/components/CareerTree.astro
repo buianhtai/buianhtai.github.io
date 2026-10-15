@@ -1,5 +1,6 @@
 ---
 import cv from '../data/cv.json';
+import CompanyLogo from './CompanyLogo.astro';
 const themes = [
   { focus: 'Configurable platforms & AI', hub: 'Enterprise platforms', branches: ['AgentOS · deployed AI agents', 'PLM · dynamic models & rules', 'Workflows · tracking & reporting', 'Storage · configurable providers'], stack: ['Java / Quarkus', 'Neo4j', 'Camunda', 'AgentOS'] },
   { focus: 'Architecture across markets', hub: 'Embedded insurance', branches: ['Deployment · clouds & regions', 'Markets · country requirements', 'Constraints · GDPR & insurance', 'Engineering · refactoring & cost'], stack: ['Multi-cloud', 'Multi-region', 'Solution architecture', 'Hands-on refactoring'] },
@@ -20,7 +21,7 @@ const themes = [
         {cv.jobs.map((job,index) => <li class:list={['tree-branch', { 'is-selected':index===0 }]}>
           <a class="role-node" href={`#career-panel-${index}`} data-career-role={index} aria-current={index===0?'true':undefined}>
             <span class="node-year">{job.dates.match(/\d{4}/)?.[0]}{index===0 && <span class="current-badge">CURRENT</span>}</span>
-            <strong>{job.company}</strong><span class="node-role">{job.role}</span>
+            <span class="node-company"><CompanyLogo company={job.company} /><strong>{job.company}</strong></span><span class="node-role">{job.role}</span>
             <span class="node-focus">{themes[index].focus}<span aria-hidden="true"> ↗</span></span>
           </a>
         </li>)}
@@ -31,7 +32,7 @@ const themes = [
       <p class="sr-only" data-career-announcement aria-live="polite" aria-atomic="true"></p>
       {cv.jobs.map((job,index) => <article class="career-panel" id={`career-panel-${index}`} data-career-panel={index} aria-labelledby={`career-company-${index}`} tabindex="-1">
         <div class="panel-topline"><span class="eyebrow">ROLE {String(cv.jobs.length-index).padStart(2,'0')} / {String(cv.jobs.length).padStart(2,'0')}</span><span>{job.dates.replace(' - ',' – ')}</span></div>
-        <h3 id={`career-company-${index}`}>{job.company}</h3><p class="panel-role">{job.role}</p>
+        <div class="panel-company"><CompanyLogo company={job.company} /><h3 id={`career-company-${index}`}>{job.company}</h3></div><p class="panel-role">{job.role}</p>
         {index===1 && <p class="promotion-note">Career progression: promoted from Lead Backend Engineer to Associate Technical Architect.</p>}
         <p class="panel-context">{job.context}</p>
         <section class="work-map" aria-label={`Work overview at ${job.company}`}>
@@ -73,6 +74,8 @@ const themes = [
 </script>
 
 <style>
+  .node-company{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.panel-company{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:16px}.panel-company h3{margin:0}
+
   .career-explorer{padding-bottom:64px;color:var(--color-text)}
   .explorer-heading{display:flex;justify-content:space-between;align-items:end;gap:30px;margin-bottom:30px}
   .eyebrow{font-size:.65rem;letter-spacing:.13em;font-weight:600;color:var(--cv-muted);margin:0 0 12px}
@@ -91,8 +94,8 @@ const themes = [
   .role-node:hover{border-color:var(--color-accent)}.role-node[aria-current]{border-color:var(--color-accent);background:color-mix(in srgb,var(--color-accent) 7%,var(--color-surface));box-shadow:inset 3px 0 var(--color-accent)}
   .node-year{display:flex;align-items:center;gap:10px;color:var(--color-accent);font-size:.73rem;margin-bottom:8px;font-weight:600;font-variant-numeric:tabular-nums}
   .current-badge{font-size:.52rem;letter-spacing:.1em;border:1px solid var(--color-border);padding:3px 5px;border-radius:3px;color:var(--cv-muted)}
-  .role-node strong{font-size:.92rem;line-height:1.5;display:block}.node-role{font-size:.72rem;line-height:1.6;display:block;color:var(--cv-muted);margin-top:4px}
-  .node-focus{font-size:.66rem;display:block;margin-top:12px;color:var(--cv-muted);line-height:1.6}.node-focus span{color:var(--color-accent)}
+  .role-node strong{font-size:.92rem;line-height:1.5;display:block}.node-role{font-size:.8rem;line-height:1.6;display:block;color:var(--cv-muted);margin-top:4px}
+  .node-focus{font-size:.75rem;display:block;margin-top:12px;color:var(--cv-muted);line-height:1.6}.node-focus span{color:var(--color-accent)}
   .tree-root{padding-top:12px}.tree-root span{margin-left:3px;color:var(--color-accent)}
   .career-panels{position:sticky;top:100px;min-width:0}
   .career-panel{border:1px solid var(--color-border);border-radius:12px;background:var(--color-surface);padding:clamp(22px,3vw,36px);scroll-margin-top:100px;margin-bottom:20px}
@@ -106,7 +109,7 @@ const themes = [
   .map-leaves{list-style:none;padding:0 0 0 22px;margin:16px 0 0 10px;border-left:1px solid var(--color-accent);display:grid;gap:12px}
   .map-leaves li{position:relative;display:flex;gap:8px;flex-wrap:wrap;align-items:baseline;line-height:1.6}.map-leaves li::before{content:'';position:absolute;left:-22px;top:11px;width:14px;border-top:1px solid var(--color-accent)}
   .map-leaves span{font-size:.65rem;color:var(--cv-muted);min-width:75px}.map-leaves strong{font-size:.73rem;font-weight:500}
-  h4{font-size:.72rem;letter-spacing:.02em;margin:24px 0 12px}.contribution-list{padding-left:17px;margin:0;list-style:disc}.contribution-list li{font-size:.8rem;line-height:1.85;padding-left:3px;margin-bottom:10px}.contribution-list li::marker{color:var(--color-accent)}
+  h4{font-size:.72rem;letter-spacing:.02em;margin:24px 0 12px}.contribution-list{padding-left:17px;margin:0;list-style:disc}.contribution-list li{font-size:.9rem;line-height:1.85;padding-left:3px;margin-bottom:10px}.contribution-list li::marker{color:var(--color-accent)}
   .technology-tags{list-style:none;padding:0;margin:0;display:flex;flex-wrap:wrap;gap:7px}.technology-tags li{font-size:.65rem;line-height:1.6;border:1px solid var(--color-border);padding:5px 9px;border-radius:4px}
   .back-to-tree{display:inline-block;font-size:.73rem;color:var(--color-accent);margin-top:24px;text-underline-offset:5px;padding:8px 0}
   a:focus-visible,.career-panel:focus-visible{outline:2px solid var(--color-accent);outline-offset:4px}
