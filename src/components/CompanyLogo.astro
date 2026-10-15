@@ -1,11 +1,13 @@
 ---
 interface Props { company: string; }
 const { company } = Astro.props;
-// Sources checked 2026-10-15: official GFG/ZAMO sites, MoMo Brandfetch,
+// Sources checked 2026-10-15: official Glide/DiscoverMarket/GESO/GFG/ZAMO sites, MoMo Brandfetch,
 // and the historical Computer Sciences Corporation mark on Wikimedia Commons.
 // Keep unidentified marks as neutral initials, not invented brand artwork.
-// Glide's decorative gradient and DiscoverMarket's Discohub product mark were removed.
+// Glide uses its header wordmark; DiscoverMarket uses its header's colored company symbol.
 const marks: Record<string, {src:string; dark?:boolean}> = {
+  'Glide Systems Inc': {src:'https://www.glidesystemsinc.com/_next/static/media/main-logo.3873772b.svg'},
+  'DiscoverMarket Vietnam': {src:'https://www.discovermarket.com/wp-content/themes/discovermarketasia/images/dm-symbol-color.png'},
   'Global Fashion Group': {src:'https://global-fashion-group.com/wp-content/themes/global-fashion-group/assets/img/logos/GFG_Logo_white.svg',dark:true},
   'GESO': {src:'https://geso.vn/wp-content/uploads/2026/09/Logo-png-1024x252.png'},
   'MoMo': {src:'https://cdn.brandfetch.io/idn4xaCzTm/w/1666/h/1666/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1734358527203'},
