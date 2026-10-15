@@ -20,7 +20,7 @@ const themes = [
       <ol>
         {cv.jobs.map((job,index) => <li class:list={['tree-branch', { 'is-selected':index===0 }]}>
           <a class="role-node" href={`#career-panel-${index}`} data-career-role={index} aria-current={index===0?'true':undefined}>
-            <span class="node-year">{job.dates.match(/\d{4}/)?.[0]}{index===0 && <span class="current-badge">CURRENT</span>}</span>
+            <span class="node-year">{job.dates.replace(' - ',' – ')}{index===0 && <span class="current-badge">CURRENT</span>}</span>
             <span class="node-company"><CompanyLogo company={job.company} /><strong>{job.company}</strong></span><span class="node-role">{job.role}</span>
             <span class="node-focus">{themes[index].focus}<span aria-hidden="true"> ↗</span></span>
           </a>
@@ -31,16 +31,17 @@ const themes = [
     <div class="career-panels">
       <p class="sr-only" data-career-announcement aria-live="polite" aria-atomic="true"></p>
       {cv.jobs.map((job,index) => <article class="career-panel" id={`career-panel-${index}`} data-career-panel={index} aria-labelledby={`career-company-${index}`} tabindex="-1">
-        <div class="panel-topline"><span class="eyebrow">ROLE {String(cv.jobs.length-index).padStart(2,'0')} / {String(cv.jobs.length).padStart(2,'0')}</span><span>{job.dates.replace(' - ',' – ')}</span></div>
+        <div class="panel-topline"><span class="eyebrow">{index===0 ? 'CURRENT ROLE' : 'PREVIOUS EXPERIENCE'}</span><span>{job.dates.replace(' - ',' – ')}</span></div>
         <div class="panel-company"><CompanyLogo company={job.company} /><h3 id={`career-company-${index}`}>{job.company}</h3></div><p class="panel-role">{job.role}</p>
         {index===1 && <p class="promotion-note">Career progression: promoted from Lead Backend Engineer to Associate Technical Architect.</p>}
         <p class="panel-context">{job.context}</p>
+        <p class="role-highlight">{job.bullets[index===0?1:0]}</p>
         <section class="work-map" aria-label={`Work overview at ${job.company}`}>
           <p class="map-caption">WHAT I WORKED ON</p>
           <div class="map-hub"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="8" y="2" width="8" height="6" rx="1"/><path d="M12 8v5M5 16v-3h14v3"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="16" y="16" width="6" height="6" rx="1"/></svg>{themes[index].hub}</div>
           <ul class="map-leaves">{themes[index].branches.map(branch=><li><span>{branch.split(' · ')[0]}</span><strong>{branch.split(' · ')[1]}</strong></li>)}</ul>
         </section>
-        <h4>Contributions</h4><ul class="contribution-list">{job.bullets.map(bullet=><li>{bullet}</li>)}</ul>
+        <h4>Contributions</h4><ul class="contribution-list">{job.bullets.filter((_,bulletIndex)=>bulletIndex!==(index===0?1:0)).map(bullet=><li>{bullet}</li>)}</ul>
         <h4>Technology & practice</h4><ul class="technology-tags">{themes[index].stack.map(tag=><li>{tag}</li>)}</ul>
         <a class="back-to-tree" href="#career-tree">↑ Choose another role</a>
       </article>)}
@@ -54,6 +55,15 @@ const themes = [
     const roles=Array.from(explorer.querySelectorAll<HTMLAnchorElement>('[data-career-role]'));
     const panels=Array.from(explorer.querySelectorAll<HTMLElement>('[data-career-panel]'));
     const announcement=explorer.querySelector<HTMLElement>('[data-career-announcement]');
+    const panelHome=explorer.querySelector<HTMLElement>('.career-panels')!;
+    const mobile=window.matchMedia('(max-width:640px)');
+    const arrangePanels=()=>{
+      panels.forEach((panel,index)=>{
+        const host=mobile.matches?roles[index].closest('li'):panelHome;
+        host?.appendChild(panel);
+      });
+    };
+    arrangePanels();mobile.addEventListener('change',arrangePanels);
     const select=(index:number, moveFocus=false)=>{
       roles.forEach((role,i)=>{
         if(i===index) role.setAttribute('aria-current','true'); else role.removeAttribute('aria-current');
@@ -63,7 +73,7 @@ const themes = [
       if(announcement) announcement.textContent=`Showing ${roles[index].querySelector('strong')?.textContent} experience`;
       if(moveFocus){
         panels[index].focus({preventScroll:true});
-        panels[index].scrollIntoView({behavior:'instant',block:'nearest'});
+        if(!mobile.matches)panels[index].scrollIntoView({behavior:'instant',block:'nearest'});
       }
     };
     roles.forEach((role,index)=>role.addEventListener('click',event=>{event.preventDefault();select(index,true);history.replaceState(null,'',role.getAttribute('href')!);}));
@@ -74,6 +84,10 @@ const themes = [
 </script>
 
 <style>
+  .role-highlight{font-size:.95rem;line-height:1.8;margin:20px 0;border-left:3px solid var(--color-accent);padding-left:16px}
+  .node-year{flex-wrap:wrap;line-height:1.7}
+  @media(max-width:640px){.tree-branch>.career-panel{margin-top:12px;margin-bottom:12px;padding:20px 16px}.tree-branch .panel-company{gap:12px}.tree-branch .work-map{padding:14px}}
+
   .node-company{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.panel-company{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:16px}.panel-company h3{margin:0}
 
   .career-explorer{padding-bottom:64px;color:var(--color-text)}
