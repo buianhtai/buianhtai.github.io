@@ -11,10 +11,11 @@ const displayDate = (date: string) => date.replace(' - ', ' – ');
 <BaseLayout title="CV — Bui Anh Tai" description="Bui Anh Tai — Senior Backend and Platform Engineer. Experience in configurable PLM, deployed AI agents, multi-cloud insurance platforms, commerce, and payments." lang="en">
   <div class="ed-container cv-page">
     <header class="cv-hero">
-      <p class="ed-kicker">CURRICULUM VITAE</p>
+      <div class="cv-intro">
+      <p class="ed-kicker">ENGINEERING / ARCHITECTURE</p>
       <h1>{cv.name}</h1>
       <p class="cv-role">{cv.headline}</p>
-      <p class="cv-specialties">Software Architecture · Enterprise Platforms · AI Systems</p>
+      <p class="cv-specialties">From complex requirements to working platforms.</p>
       <div class="cv-contact">
         <span>{cv.location}</span>
         <a href={cv.linkedin} target="_blank" rel="noopener noreferrer">LinkedIn <span aria-hidden="true">↗</span></a>
@@ -24,25 +25,50 @@ const displayDate = (date: string) => date.replace(' - ', ' – ');
         <a class="ed-btn ed-btn-primary" href={pdf} download="Bui_Anh_Tai_CV_English.pdf">Download CV <span class="cv-file-type">PDF · 2 pages</span></a>
         <button type="button" class="ed-btn ed-btn-quiet" id="print-cv" hidden>Print / Save as PDF</button>
       </div>
+      </div>
+      <aside class="cv-at-a-glance" aria-label="Career at a glance">
+        <span class="cv-label">AT A GLANCE</span>
+        <p class="cv-years">13<span>+</span></p>
+        <p class="cv-years-label">years building enterprise software</p>
+        <dl>
+          <div><dt>Current</dt><dd>Senior Engineer <span>Glide Systems</span></dd></div>
+          <div><dt>Previously</dt><dd>Associate Technical Architect <span>DiscoverMarket</span></dd></div>
+          <div><dt>Approach</dt><dd>Architecture + hands-on delivery</dd></div>
+        </dl>
+      </aside>
     </header>
 
-    <section class="cv-profile" aria-label="Professional profile">
+    <nav class="cv-section-nav" aria-label="CV sections">
+      <a href="#profile">Profile</a><a href="#selected-work">Selected work</a><a href="#experience">Experience</a><a href="#expertise">Expertise</a>
+    </nav>
+    <section id="profile" class="cv-profile" aria-label="Professional profile">
+      <p class="cv-label">THE PROFILE</p>
       <p>{cv.summary}</p>
     </section>
 
+    <section class="cv-selected" aria-labelledby="selected-work">
+      <div class="cv-section-heading"><span class="cv-label">01 / SELECTED WORK</span><h2 id="selected-work">Complex platforms. Practical delivery.</h2></div>
+      <div class="cv-work-grid">
+        <a class="cv-work" href="#role-0"><span class="cv-work-domain">AI SYSTEMS / GLIDE</span><h3>AgentOS</h3><p>Built and deployed a configurable AI agent platform for enterprise knowledge ingestion, retrieval, and execution.</p><span class="cv-work-link">Explore experience <span aria-hidden="true">↗</span></span></a>
+        <a class="cv-work" href="#role-1"><span class="cv-work-domain">INSURANCE / DISCOVERMARKET</span><h3>Across clouds & countries</h3><p>Architecture and hands-on refactoring for multi-region deployment, balancing cost, GDPR, and insurance requirements.</p><span class="cv-work-link">Explore experience <span aria-hidden="true">↗</span></span></a>
+        <a class="cv-work" href="#role-0"><span class="cv-work-domain">ENTERPRISE PLM / GLIDE</span><h3>Flexibility by design</h3><p>Configurable, multi-tenant services combining dynamic models, business rules, workflows, and storage providers.</p><span class="cv-work-link">Explore experience <span aria-hidden="true">↗</span></span></a>
+      </div>
+    </section>
     <div class="cv-layout">
       <div class="cv-career">
         <section aria-labelledby="experience">
-          <h2 id="experience">Professional experience</h2>
-          {primary.map((job) => <article class="cv-job">
+          <div class="cv-section-heading"><span class="cv-label">02 / CAREER</span><h2 id="experience">Professional experience</h2></div>
+          {primary.map((job, index) => <article id={`role-${index}`} class="cv-job">
+            <span class="cv-job-index" aria-hidden="true">0{index + 1}</span>
             <div class="cv-job-top"><h3>{job.company}</h3><p class="cv-date">{displayDate(job.dates)}</p></div>
             <p class="cv-job-role">{job.role}</p>
+            {job.company === 'DiscoverMarket Vietnam' && <span class="cv-promotion">Promoted to Associate Technical Architect</span>}
             <p class="cv-context">{job.context}</p>
             <ul>{job.bullets.map(bullet => <li>{bullet}</li>)}</ul>
             {job.company === 'Glide Systems Inc' && <p class="cv-stack">Java / Quarkus · Neo4j · Camunda</p>}
           </article>)}
         </section>
-        <section aria-labelledby="earlier-career">
+        <section class="cv-earlier" aria-labelledby="earlier-career">
           <h2 id="earlier-career">Earlier career</h2>
           {earlier.map((job) => <article class="cv-job cv-job-compact">
             <div class="cv-job-top"><h3>{job.company}</h3><p class="cv-date">{displayDate(job.dates)}</p></div>
@@ -52,7 +78,7 @@ const displayDate = (date: string) => date.replace(' - ', ' – ');
         </section>
       </div>
       <aside class="cv-sidebar" aria-label="Technical expertise and education">
-        <section aria-labelledby="expertise"><h2 id="expertise">Technical expertise</h2>
+        <section aria-labelledby="expertise"><span class="cv-label">03 / CAPABILITIES</span><h2 id="expertise">Technical expertise</h2>
           {cv.skills.map(([label, skills]) => <div class="cv-skill"><h3>{label}</h3><p>{skills}</p></div>)}
         </section>
         <section aria-labelledby="education"><h2 id="education">Education</h2>
@@ -62,6 +88,7 @@ const displayDate = (date: string) => date.replace(' - ', ' – ');
         <a class="cv-pdf-link" href={pdf} download>Download the two-page CV →</a>
       </aside>
     </div>
+    <footer class="cv-closing"><div><span class="cv-label">CONTINUE THE CONVERSATION</span><h2>Let’s connect.</h2><p>Explore my engineering writing or connect on LinkedIn.</p></div><div class="cv-closing-links"><a href={cv.linkedin} target="_blank" rel="noopener noreferrer">Connect on LinkedIn ↗</a><a href="/en/blog/">Read my engineering blog →</a></div></footer>
   </div>
 </BaseLayout>
 
@@ -74,65 +101,72 @@ const displayDate = (date: string) => date.replace(' - ', ' – ');
 </script>
 
 <style>
-  .cv-page { padding-top: clamp(42px, 7vw, 88px); padding-bottom: 80px; }
-  .cv-hero { max-width: 900px; }
-  h1 { font-family: 'IBM Plex Serif', Georgia, serif; font-size: clamp(2.8rem, 7vw, 5.4rem); font-weight: 500; letter-spacing: -.055em; line-height: 1.1; margin: 16px 0 20px; }
-  .cv-role { font-size: clamp(1.15rem, 2.5vw, 1.6rem); font-weight: 600; margin: 0 0 8px; }
-  .cv-specialties, .cv-contact, .cv-context, .cv-date, .cv-stack { color: var(--color-text-dim); }
-  .cv-specialties { line-height: 1.7; margin: 0; }
-  .cv-contact { display: flex; gap: 12px 24px; flex-wrap: wrap; margin-top: 22px; font-size: .9rem; }
-  .cv-contact a, .cv-pdf-link { color: var(--color-accent); text-underline-offset: 4px; }
-  .cv-actions { display: flex; flex-wrap: wrap; gap: 12px; margin: 28px 0 0; }
-  .cv-actions [hidden] { display: none; }
-  .cv-file-type { font-size: .72rem; font-weight: 400; margin-left: 10px; }
-  .cv-profile { max-width: 860px; padding: 34px 0 40px; }
-  .cv-profile p { font-size: 1.08rem; line-height: 1.85; margin: 0; color: var(--color-text-dim); }
-  .cv-layout { display: grid; grid-template-columns: minmax(0, 1fr) 275px; gap: clamp(32px, 5vw, 72px); }
-  h2 { font-size: .78rem; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; border-top: 1px solid var(--color-border); padding-top: 20px; margin: 0 0 28px; }
-  .cv-job { margin-bottom: 38px; }
-  .cv-job-top { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 6px 18px; }
-  .cv-job h3 { margin: 0; font-size: 1.35rem; font-weight: 600; letter-spacing: -.025em; }
-  .cv-date { margin: 0; font-size: .8rem; white-space: nowrap; }
-  .cv-job-role { margin: 8px 0; font-weight: 600; font-size: .95rem; }
-  .cv-context { margin: 0 0 16px; font-size: .87rem; line-height: 1.6; }
-  .cv-job ul { list-style: disc; padding-left: 20px; margin: 14px 0 0; }
-  .cv-job li { padding-left: 4px; margin-bottom: 10px; line-height: 1.75; font-size: .94rem; }
-  .cv-job li::marker { color: var(--color-accent); }
-  .cv-stack { font-size: .8rem; margin-top: 18px; }
-  .cv-sidebar section { margin-bottom: 32px; }
-  .cv-skill { margin-bottom: 22px; }
-  .cv-skill h3 { font-size: .88rem; font-weight: 600; margin: 0 0 7px; }
-  .cv-sidebar p { margin: 0; color: var(--color-text-dim); font-size: .86rem; line-height: 1.8; }
-  .cv-sidebar .cv-school { color: var(--color-text); font-weight: 600; margin-bottom: 6px; }
-  .cv-pdf-link { font-size: .86rem; }
-  a:focus-visible, button:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 5px; }
-  @media (max-width: 800px) {
-    .cv-layout { grid-template-columns: 1fr; gap: 12px; }
-    .cv-sidebar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
-    .cv-sidebar section:first-child { grid-column: 1 / -1; }
-    .cv-job-top { display: block; }
-    .cv-date { margin-top: 8px; }
-  }
-  @media (max-width: 480px) {
-    .cv-sidebar { display: block; }
-    .cv-actions { flex-direction: column; align-items: stretch; }
-    .cv-actions > * { justify-content: center; min-height: 48px; }
-  }
-  @media print {
-    @page { margin: 16mm; }
-    :global(html), :global(body) { background: white !important; color: black !important; }
-    :global(.ed-header), :global(.ed-footer), :global(.ed-skip-link), .cv-actions, .cv-pdf-link { display: none !important; }
-    .cv-page { max-width: none; padding: 0; }
-    .cv-layout { display: block; }
-    .cv-sidebar { display: block; }
-    h1 { font-size: 30pt; }
-    .cv-role { font-size: 14pt; }
-    .cv-profile { padding: 16px 0 24px; }
-    .cv-profile p, .cv-job li { font-size: 10pt; line-height: 1.45; }
-    .cv-page p, .cv-page a, .cv-page h2, .cv-job li::marker { color: black !important; }
-    .cv-job, .cv-skill, .cv-sidebar section { break-inside: avoid; }
-    h2, h3 { break-after: avoid; }
-    .cv-job { margin-bottom: 22px; }
-    h2 { border-color: #aaa; margin-bottom: 20px; }
-  }
+  .cv-page { --cv-muted: color-mix(in srgb, var(--color-text) 72%, var(--color-bg)); padding-top: clamp(38px,6vw,76px); padding-bottom: 64px; }
+  .cv-hero { display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:64px; align-items:center; padding-bottom:48px; }
+  .cv-label,.ed-kicker { font-size:.68rem; font-weight:600; letter-spacing:.14em; line-height:1.6; color:var(--cv-muted); }
+  h1 { font-family:'IBM Plex Serif',Georgia,serif; font-size:clamp(3rem,6.5vw,5.5rem); letter-spacing:-.055em; line-height:1.05; font-weight:500; margin:22px 0; }
+  .cv-role { font-size:clamp(1.15rem,2vw,1.45rem); font-weight:600; line-height:1.45; margin:0 0 12px; }
+  .cv-specialties { color:var(--cv-muted); font-size:1rem; line-height:1.7; margin:0; }
+  .cv-contact { display:flex; flex-wrap:wrap; gap:10px 20px; margin-top:24px; color:var(--cv-muted); font-size:.8rem; line-height:1.7; }
+  .cv-contact a { color:var(--color-text); text-underline-offset:5px; }
+  .cv-actions { display:flex; flex-wrap:wrap; gap:12px; margin-top:28px; }
+  .cv-actions [hidden] { display:none; }
+  .cv-actions > * { min-height:46px; }
+  .cv-file-type { font-size:.68rem; margin-left:12px; font-weight:400; }
+  .cv-at-a-glance { border:1px solid var(--color-border); border-top:3px solid var(--color-accent); padding:28px; background:var(--color-surface); }
+  .cv-years { font-family:'IBM Plex Serif',Georgia,serif; font-size:5rem; line-height:1; letter-spacing:-.06em; margin:22px 0 8px; }
+  .cv-years span { font-size:2.4rem; color:var(--color-accent); vertical-align:top; }
+  .cv-years-label { font-size:.8rem; color:var(--cv-muted); margin:0 0 24px; line-height:1.6; }
+  dl { margin:0; } dl div { border-top:1px solid var(--color-border); padding:14px 0; } dl div:last-child { padding-bottom:0; }
+  dt { color:var(--cv-muted); font-size:.67rem; margin-bottom:5px; } dd { margin:0; font-size:.82rem; line-height:1.6; font-weight:500; } dd span { display:block; color:var(--cv-muted); font-weight:400; }
+  .cv-section-nav { display:flex; gap:30px; flex-wrap:wrap; padding:18px 0; border-block:1px solid var(--color-border); }
+  .cv-section-nav a { font-size:.78rem; color:var(--cv-muted); text-decoration:none; padding:6px 0; }
+  .cv-section-nav a:hover { color:var(--color-accent); }
+  .cv-profile { display:grid; grid-template-columns:200px minmax(0,1fr); gap:40px; padding:44px 0 52px; }
+  .cv-profile p { margin:0; } .cv-profile p:last-child { max-width:780px; font-size:1.06rem; line-height:1.9; color:var(--cv-muted); }
+  .cv-selected { padding-bottom:64px; }
+  .cv-section-heading { margin-bottom:28px; }
+  h2 { font-family:'IBM Plex Serif',Georgia,serif; font-size:clamp(1.55rem,2.5vw,2rem); font-weight:500; letter-spacing:-.035em; line-height:1.3; margin:10px 0 0; }
+  .cv-work-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); border:1px solid var(--color-border); }
+  .cv-work { display:flex; flex-direction:column; padding:28px; color:var(--color-text); text-decoration:none; background:var(--color-surface); border-top:2px solid transparent; transition:background .18s,border-color .18s; }
+  .cv-work + .cv-work { border-left:1px solid var(--color-border); }
+  .cv-work:hover { background:var(--color-surface-2); border-top-color:var(--color-accent); }
+  .cv-work-domain { font-size:.6rem; letter-spacing:.09em; color:var(--cv-muted); line-height:1.6; }
+  .cv-work h3 { font-size:1.17rem; letter-spacing:-.025em; line-height:1.4; margin:22px 0 12px; }
+  .cv-work p { color:var(--cv-muted); font-size:.85rem; line-height:1.8; margin:0 0 28px; }
+  .cv-work-link { display:flex; justify-content:space-between; gap:12px; margin-top:auto; font-size:.74rem; color:var(--color-accent); }
+  .cv-layout { display:grid; grid-template-columns:minmax(0,1fr) 270px; gap:64px; border-top:1px solid var(--color-border); padding-top:36px; }
+  .cv-job { position:relative; padding:0 0 32px 34px; margin-left:10px; border-left:1px solid var(--color-border); scroll-margin-top:100px; }
+  .cv-job::before { content:''; position:absolute; left:-5px; top:9px; width:9px; height:9px; border-radius:50%; background:var(--color-accent); box-shadow:0 0 0 5px var(--color-bg); }
+  .cv-job-index { position:absolute; right:0; top:0; color:var(--cv-muted); font-size:.65rem; letter-spacing:.1em; }
+  .cv-job-top { padding-right:28px; }
+  .cv-job h3 { margin:0; font-size:1.2rem; font-weight:600; letter-spacing:-.025em; line-height:1.5; }
+  .cv-date { font-size:.73rem; color:var(--cv-muted); margin:6px 0 12px; }
+  .cv-job-role { font-size:.92rem; font-weight:600; line-height:1.6; margin:0 0 8px; }
+  .cv-promotion { display:inline-block; color:var(--color-text); font-size:.66rem; padding:5px 9px; margin:0 0 12px; background:var(--color-surface-2); border-left:2px solid var(--color-accent); }
+  .cv-context { font-size:.78rem; color:var(--cv-muted); margin:0 0 16px; line-height:1.7; }
+  .cv-job ul { padding-left:17px; margin:16px 0 0; list-style:disc; }
+  .cv-job li { font-size:.88rem; line-height:1.85; padding-left:3px; margin-bottom:10px; }
+  .cv-job li::marker { color:var(--cv-muted); }
+  .cv-stack { font-size:.71rem; color:var(--cv-muted); margin-top:20px; }
+  .cv-earlier { margin-top:22px; } .cv-earlier > h2 { margin-bottom:28px; }
+  .cv-job-compact::before { background:var(--color-bg); border:1px solid var(--cv-muted); }
+  .cv-sidebar { border-left:1px solid var(--color-border); padding-left:28px; }
+  .cv-sidebar section { margin-bottom:32px; }
+  .cv-sidebar h2 { font-family:inherit; font-size:1rem; font-weight:600; margin:10px 0 24px; letter-spacing:-.02em; }
+  .cv-sidebar section + section { padding-top:24px; border-top:1px solid var(--color-border); }
+  .cv-skill { margin-bottom:24px; } .cv-skill h3 { font-size:.77rem; margin:0 0 8px; font-weight:600; }
+  .cv-sidebar p { color:var(--cv-muted); font-size:.8rem; line-height:1.9; margin:0; }
+  .cv-sidebar .cv-school { color:var(--color-text); font-weight:500; margin-bottom:8px; }
+  .cv-pdf-link { display:inline-block; font-size:.78rem; line-height:1.7; color:var(--color-accent); text-underline-offset:5px; }
+  .cv-closing { border-top:1px solid var(--color-border); margin-top:32px; padding:40px 0 0; display:flex; justify-content:space-between; gap:32px; align-items:center; }
+  .cv-closing p { font-size:.85rem; color:var(--cv-muted); margin:14px 0 0; line-height:1.7; }
+  .cv-closing-links { display:flex; flex-direction:column; gap:16px; } .cv-closing-links a { font-size:.85rem; color:var(--color-text); text-underline-offset:6px; }
+  :is(h2,section)[id] { scroll-margin-top:100px; }
+  a:focus-visible,button:focus-visible { outline:2px solid var(--color-accent); outline-offset:5px; }
+  @media(max-width:1000px) { .cv-hero { gap:32px; grid-template-columns:minmax(0,1fr) 260px; } .cv-layout { gap:32px; grid-template-columns:minmax(0,1fr) 230px; } .cv-work { padding:22px; } }
+  @media(max-width:760px) { .cv-hero { grid-template-columns:1fr; gap:32px; } .cv-at-a-glance { padding:24px; } .cv-years { font-size:3.5rem; margin-top:16px; } .cv-at-a-glance dl { display:grid; grid-template-columns:1fr 1fr; gap:0 20px; } .cv-at-a-glance dl div:last-child { grid-column:1/-1; } .cv-profile { grid-template-columns:1fr; gap:14px; padding:32px 0 40px; } .cv-work-grid { grid-template-columns:1fr; } .cv-work + .cv-work { border-left:0; border-top:1px solid var(--color-border); } .cv-work h3 { margin-top:12px; } .cv-work p { margin-bottom:18px; } .cv-selected { padding-bottom:40px; } .cv-layout { grid-template-columns:1fr; } .cv-sidebar { border-left:0; border-top:1px solid var(--color-border); padding:28px 0 0; } .cv-sidebar section:first-child { display:grid; grid-template-columns:1fr 1fr; gap:0 24px; } .cv-sidebar section:first-child > :is(h2,.cv-label) { grid-column:1/-1; } .cv-closing { align-items:flex-start; flex-direction:column; } }
+  @media(max-width:420px) { .cv-actions { flex-direction:column; } .cv-actions > * { justify-content:center; } .cv-section-nav { gap:18px; } .cv-section-nav a { font-size:.7rem; } .cv-job { padding-left:24px; margin-left:5px; } .cv-sidebar section:first-child { display:block; } }
+  @media(prefers-reduced-motion:reduce) { .cv-work { transition:none; } }
+  @media print { @page { margin:16mm; } :global(html),:global(body) { background:white!important; color:black!important; } :global(.ed-header),:global(.ed-footer),:global(.ed-skip-link),.cv-actions,.cv-pdf-link,.cv-section-nav,.cv-at-a-glance,.cv-selected,.cv-closing { display:none!important; } .cv-page { padding:0; max-width:none; } .cv-hero,.cv-layout,.cv-profile,.cv-sidebar { display:block; } .cv-hero { padding-bottom:10px; } h1 { font-size:30pt; margin:10px 0; } .cv-role { font-size:14pt; } .cv-profile { padding:18px 0; } .cv-profile p:last-child,.cv-job li { font-size:10pt; line-height:1.5; } .cv-page p,.cv-page a,.cv-page span,.cv-page dt,.cv-page dd { color:black!important; } .cv-layout,.cv-sidebar { border:0; padding:0; } .cv-job,.cv-skill,.cv-sidebar section { break-inside:avoid; } h2,h3 { break-after:avoid; } .cv-job { border:0; padding:0 0 18px; margin:0; } .cv-job::before,.cv-job-index { display:none; } .cv-promotion { background:none; border-color:#555; } }
 </style>
