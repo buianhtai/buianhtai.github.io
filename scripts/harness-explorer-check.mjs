@@ -28,6 +28,13 @@ try{
   assert.equal(await app.locator('button[data-mode="overview"]').getAttribute('aria-pressed'),'true');
   assert.equal(await app.locator('.ae-minimap-button').count(),1,'Minimap is present');
   assert((await app.locator('.ae-mini-nodes rect').count())>=6,'Minimap contains architecture nodes');
+  if(width===390){
+    assert.equal(await app.locator('.ae-minimap-button').isVisible(),false,'Mobile minimap starts minimized');
+    await app.locator('[data-action="toggle-minimap"]').click();
+    assert.equal(await app.locator('.ae-minimap-button').isVisible(),true,'Reader can reveal minimap on demand');
+    await app.locator('[data-action="toggle-minimap"]').click();
+    assert.equal(await app.locator('.ae-minimap-button').isVisible(),false);
+  }
   await app.locator('[data-action="inspector"]').click();
   assert.equal(await app.locator('.ae-inspector').isVisible(),false,'Inspector collapses to free canvas width');
   await app.locator('[data-action="inspector"]').click();
@@ -93,6 +100,8 @@ try{
   if(width===390){
     const viewportHeight=await app.locator('.ae-viewport').evaluate(el=>el.getBoundingClientRect().height);
     assert(viewportHeight<=701,'Fitted mobile canvas must not reserve excess blank height');
+    await app.locator('[data-action="focus-node"]').click();
+    assert(parseInt(await app.locator('output').innerText(),10)>=65,'Focus makes mobile selected component readable');
   }
   await app.scrollIntoViewIfNeeded();await page.screenshot({path:`artifacts/harness-explorer/map-${theme}-${width}.png`,fullPage:true});
   await app.locator('[data-action="only"]').click();
