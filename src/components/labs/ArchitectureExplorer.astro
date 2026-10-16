@@ -292,7 +292,7 @@ const { model } = Astro.props;
       q('.ae-tree').replaceChildren(...model.views.filter(v=>v.id!=='loop').map(v=>button(v.label,()=>navigate(v.id))));
       q<HTMLInputElement>('input').addEventListener('input',event=>{const term=(event.target as HTMLInputElement).value.trim().toLowerCase();const results=q('.ae-results');results.replaceChildren();if(!term)return;const matches=model.nodes.filter(n=>(n.label+' '+n.summary).toLowerCase().includes(term)).slice(0,12);if(!matches.length)results.textContent='No matching components.';for(const n of matches)results.append(button(`${n.label} · ${model.views.find(v=>v.id===n.view)!.label}`,()=>{navigate(n.view,n.id);results.replaceChildren();q<HTMLInputElement>('input').value='';}));});
       shell.addEventListener('click',event=>{
-        const chosen=(event.target as HTMLElement).closest<HTMLButtonElement>('[data-mode]')?.dataset.mode as Mode | undefined;
+        const chosen=(event.target as HTMLElement).closest<HTMLButtonElement>('button[data-mode]')?.dataset.mode as Mode | undefined;
         if(chosen){setMode(chosen);return;}
         const action=(event.target as HTMLElement).closest<HTMLElement>('[data-action]')?.dataset.action;if(!action)return;
         if(action==='in'||action==='out'){zoom=Math.min(2,Math.max(.35,zoom+(action==='in'?.15:-.15)));updateZoom();}
