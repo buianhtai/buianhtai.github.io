@@ -1,0 +1,9 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import ArchitectureExplorer from '../../../components/labs/ArchitectureExplorer.astro';
+import model from '../../../data/architecture/deepseek-harness.json';
+---
+<BaseLayout title="DeepSeek Harness — architecture explorer" description="Explore DeepSeek Harness through a revision-pinned component map, package dependencies, agent-loop source files and a guided turn walkthrough." noindex>
+  <div class="harness-page"><a class="return-link" href="/en/blog/">← Engineering notes / Architecture lab</a><ArchitectureExplorer model={model} /></div>
+</BaseLayout>
+<style>.harness-page{width:min(1700px,calc(100% - 2rem));margin:1.5rem auto 3rem;}.return-link{display:inline-block;margin-bottom:1rem;font-size:.8rem;color:var(--color-text-muted);}@media(max-width:640px){.harness-page{width:calc(100% - 1rem);}}</style>

@@ -1,0 +1,154 @@
+---
+interface Props { model: any }
+const { model } = Astro.props;
+---
+<architecture-explorer>
+  <script type="application/json" data-model set:html={JSON.stringify(model).replace(/</g, '\\u003c')} />
+  <section class="ae-shell" aria-label={`${model.title} architecture explorer`}>
+    <header class="ae-header">
+      <div><span class="ae-eyebrow">CODE → ARCHITECTURE</span><h1>{model.title}</h1><p>Explore the system. Open a component. Follow the code.</p></div>
+      <div class="ae-header-actions"><a href={`${model.repository}/tree/${model.revision}`} target="_blank" rel="noopener">Source · {model.revision.slice(0,7)} ↗</a><button data-action="expand">Expand view ↗</button></div>
+    </header>
+    <div class="ae-toolbar">
+      <nav class="ae-crumbs" aria-label="Architecture breadcrumb"></nav>
+      <div class="ae-controls"><button data-action="back" disabled>← Back</button><button data-action="out" aria-label="Zoom out">−</button><output aria-label="Zoom level">100%</output><button data-action="in" aria-label="Zoom in">+</button><button data-action="fit">Fit</button><button data-action="reset">100%</button><button data-action="only" aria-pressed="false">Diagram only</button></div>
+    </div>
+    <div class="ae-workbench">
+      <aside class="ae-nav" aria-label="Component navigation"><label>Find a component<input type="search" placeholder="Try agent, stream, tools…" /></label><div class="ae-results" aria-live="polite"></div><h2>Subsystems</h2><div class="ae-tree"></div><button class="ae-tour-start" data-action="tour">▶ Follow one agent turn</button><p class="ae-small">Select to inspect.<br/>Open a component to drill down.<br/>Drag empty canvas to pan.</p></aside>
+      <main class="ae-map">
+        <div class="ae-map-heading"><h2 data-view-title></h2><p data-view-description></p></div>
+        <div class="ae-viewport" tabindex="0" role="region" aria-label="Architecture map; scroll or drag background to pan"><div class="ae-stage"><svg class="ae-edges" aria-hidden="true"></svg><div class="ae-nodes"></div></div></div>
+        <div class="ae-journey" hidden><div><span data-step-count></span><h3 data-step-title></h3><p data-step-description></p><a data-step-source target="_blank" rel="noopener">View this implementation ↗</a></div><div class="ae-tour-controls"><button data-action="previous">←</button><button data-action="next">Next →</button><button data-action="stop">Exit walkthrough</button></div></div>
+        <div class="ae-map-footer"><span data-map-count></span><span>Arrow = dependency / import · select a node to isolate its connections</span></div>
+      </main>
+      <aside class="ae-inspector" aria-label="Selected component"><span class="ae-eyebrow">INSPECT</span><h2 data-detail-title></h2><p data-detail-summary></p><button data-action="drill" hidden>Explore inside →</button><h3>Source evidence</h3><div class="ae-sources"></div><h3>Connections</h3><div class="ae-connections"></div></aside>
+    </div>
+    <footer class="ae-scope">{model.scope} <a href={`${model.repository}/blob/${model.revision}/docs/architecture.md`} target="_blank" rel="noopener">Upstream architecture notes ↗</a></footer>
+  </section>
+  <dialog aria-label={`${model.title} expanded architecture view`}></dialog>
+  <noscript><p>The interactive map needs JavaScript. <a href={`${model.repository}/blob/${model.revision}/docs/architecture.md`}>Read the upstream architecture guide.</a></p></noscript>
+</architecture-explorer>
+<script>
+  type Source = { path: string; line: number; url: string };
+  type Node = { id: string; view: string; label: string; summary: string; kind: string; child?: string; sources: Source[] };
+  type Edge = { view: string; from: string; to: string; label: string; evidence: string; sources: Source[] };
+  type View = { id: string; label: string; parent?: string; description: string };
+  type Model = { nodes: Node[]; edges: Edge[]; views: View[]; journey: { node: string; title: string; description: string; source: Source }[] };
+  class ArchitectureExplorer extends HTMLElement {
+    connectedCallback() {
+      if (this.dataset.ready) return;
+      const model: Model = JSON.parse(this.querySelector('[data-model]')!.textContent!);
+      const q = <T extends HTMLElement = HTMLElement>(s: string) => this.querySelector<T>(s)!;
+      const shell = q('.ae-shell'), dialog = q<HTMLDialogElement>('dialog');
+      const viewport = q('.ae-viewport'), stage = q('.ae-stage');
+      const button = (label: string, fn: () => void, className = '') => { const el = document.createElement('button'); el.textContent = label; el.className = className; el.type = 'button'; el.onclick = fn; return el; };
+      const link = (src: Source) => { const a = document.createElement('a'); a.textContent = `${src.path} : ${src.line} ↗`; a.href = src.url; a.target = '_blank'; a.rel = 'noopener'; return a; };
+      const getNode = (id: string) => model.nodes.find(n => n.id === id)!;
+      let view = 'system', selected = 'core', zoom = 1, step = -1;
+      const history: {view: string; selected: string; zoom: number; x: number; y: number}[] = [];
+      let positions = new Map<string, {x:number;y:number}>();
+      let restoring = false;
+      const setHash = () => { if (!restoring) window.history.replaceState(null, '', `#view=${encodeURIComponent(view)}&node=${encodeURIComponent(selected)}`); };
+      const updateZoom = () => { stage.style.zoom = String(zoom); q<HTMLOutputElement>('output').value = `${Math.round(zoom*100)}%`; };
+      const sources = (refs: Source[]) => { q('.ae-sources').replaceChildren(...refs.map(link)); };
+      const inspect = (id: string) => {
+        selected = id; const node = getNode(id);
+        q('[data-detail-title]').textContent = node.label; q('[data-detail-summary]').textContent = node.summary;
+        q<HTMLButtonElement>('[data-action="drill"]').hidden = !node.child;
+        sources(node.sources);
+        const edges = model.edges.filter(e => e.view === view && (e.from === id || e.to === id));
+        const connected = new Set([id,...edges.flatMap(e=>[e.from,e.to])]);
+        this.querySelectorAll<HTMLElement>('[data-node]').forEach(el => {el.classList.toggle('is-selected',el.dataset.node===id);el.classList.toggle('is-muted',!connected.has(el.dataset.node!));el.setAttribute('aria-pressed', String(el.dataset.node===id));});
+        this.querySelectorAll<SVGElement>('[data-edge]').forEach(el=>{const e=model.edges[Number(el.dataset.edge)];el.classList.toggle('is-active', e.from===id||e.to===id);});
+        const list = q('.ae-connections'); list.replaceChildren();
+        if(!edges.length) list.textContent = 'No dependencies shown in this focused view. This does not imply the component has none.';
+        for(const e of edges){ const other=getNode(e.from===id?e.to:e.from); const row=document.createElement('div');row.className='ae-connection';row.append(button(`${e.from===id?'→ Uses':'← Used by'} ${other.label}`,()=>inspect(other.id)));const p=document.createElement('p');p.textContent=e.evidence;row.append(p,...e.sources.slice(0,2).map(link));list.append(row); }
+        setHash();
+      };
+      const navigate = (next: string, node?: string, remember=true) => {
+        if(remember) history.push({view,selected,zoom,x:viewport.scrollLeft,y:viewport.scrollTop});
+        view=next; selected=node || model.nodes.find(n=>n.view===view)!.id; zoom=1; step=-1; q('.ae-journey').hidden=true;
+        render(); viewport.scrollTo(0,0);
+      };
+      const render = () => {
+        const current=model.views.find(v=>v.id===view)!;
+        q('[data-view-title]').textContent=current.label;q('[data-view-description]').textContent=current.description;
+        const crumbs:View[]=[];let cursor:View|undefined=current;while(cursor){crumbs.unshift(cursor);cursor=model.views.find(v=>v.id===cursor!.parent);}
+        q('.ae-crumbs').replaceChildren(...crumbs.map(v=>button(v.label,()=>navigate(v.id))));
+        q<HTMLButtonElement>('[data-action="back"]').disabled=history.length===0;
+        const nodes=model.nodes.filter(n=>n.view===view);const edges=model.edges.filter(e=>e.view===view);
+        const width=900,height=Math.max(430,Math.ceil(nodes.length/3)*190+70);
+        stage.style.width=width+'px';stage.style.height=height+'px'; positions=new Map();
+        const layer=q('.ae-nodes');layer.replaceChildren();
+        nodes.forEach((n,i)=>{const x=40+(i%3)*290,y=45+Math.floor(i/3)*190;positions.set(n.id,{x,y}); const card=button('',()=>inspect(n.id),'ae-node'); card.dataset.node=n.id; card.style.left=x+'px';card.style.top=y+'px'; const type=document.createElement('span');type.className='ae-node-kind';type.textContent=n.kind;const title=document.createElement('strong');title.textContent=n.label;const summary=document.createElement('span');summary.className='ae-node-summary';summary.textContent=n.summary;card.append(type,title,summary);if(n.child){const hint=document.createElement('span');hint.className='ae-node-hint';hint.textContent='Contains components ↗';card.append(hint);card.ondblclick=()=>navigate(n.child!); }layer.append(card);});
+        const svg=this.querySelector<SVGSVGElement>('.ae-edges')!;svg.setAttribute('viewBox',`0 0 ${width} ${height}`);svg.setAttribute('width',String(width));svg.setAttribute('height',String(height));
+        svg.replaceChildren();const ns='http://www.w3.org/2000/svg';
+        const markerId=`arrow-${this.dataset.instance}`;const defs=document.createElementNS(ns,'defs');const marker=document.createElementNS(ns,'marker');marker.id=markerId;for(const [k,v]of Object.entries({viewBox:'0 0 10 10',refX:'9',refY:'5',markerWidth:'7',markerHeight:'7',orient:'auto-start-reverse'}))marker.setAttribute(k,v);const tip=document.createElementNS(ns,'path');tip.setAttribute('d','M 0 0 L 10 5 L 0 10 z');tip.setAttribute('fill','var(--color-accent)');marker.append(tip);defs.append(marker);svg.append(defs);
+        edges.forEach(e=>{const a=positions.get(e.from)!,b=positions.get(e.to)!;const same=a.y===b.y;const forward=b.x>a.x;const x1=same?(a.x+(forward?230:0)):a.x+115,y1=same?a.y+65:a.y+(b.y>a.y?130:0);const x2=same?(b.x+(forward?0:230)):b.x+115,y2=same?b.y+65:b.y+(b.y>a.y?0:130);const path=document.createElementNS(ns,'path');path.setAttribute('d',same?`M${x1},${y1} C${(x1+x2)/2},${y1-28} ${(x1+x2)/2},${y2-28} ${x2},${y2}`:`M${x1},${y1} C${x1},${(y1+y2)/2} ${x2},${(y1+y2)/2} ${x2},${y2}`);path.dataset.edge=String(model.edges.indexOf(e));path.setAttribute('marker-end',`url(#${markerId})`);svg.append(path);});
+        q('[data-map-count]').textContent=`${nodes.length} components · ${edges.length} relationships`;updateZoom();inspect(selected);
+      };
+      const showStep = () => {const item=model.journey[step];q('.ae-journey').hidden=false;q('[data-step-count]').textContent=`CURATED TURN WALKTHROUGH · ${step+1} / ${model.journey.length}`;q('[data-step-title]').textContent=item.title;q('[data-step-description]').textContent=item.description;q<HTMLAnchorElement>('[data-step-source]').href=item.source.url;q<HTMLButtonElement>('[data-action="previous"]').disabled=step===0;q<HTMLButtonElement>('[data-action="next"]').disabled=step===model.journey.length-1;inspect(item.node);const p=positions.get(item.node)!;viewport.scrollTo({left:Math.max(0,p.x*zoom-40),top:Math.max(0,p.y*zoom-40),behavior:'smooth'});};
+      q('.ae-tree').replaceChildren(...model.views.filter(v=>v.id!=='loop').map(v=>button(v.label,()=>navigate(v.id))));
+      q<HTMLInputElement>('input').addEventListener('input',event=>{const term=(event.target as HTMLInputElement).value.trim().toLowerCase();const results=q('.ae-results');results.replaceChildren();if(!term)return;const matches=model.nodes.filter(n=>(n.label+' '+n.summary).toLowerCase().includes(term)).slice(0,12);if(!matches.length)results.textContent='No matching components.';for(const n of matches)results.append(button(`${n.label} · ${model.views.find(v=>v.id===n.view)!.label}`,()=>{navigate(n.view,n.id);results.replaceChildren();q<HTMLInputElement>('input').value='';}));});
+      shell.addEventListener('click',event=>{const action=(event.target as HTMLElement).closest<HTMLElement>('[data-action]')?.dataset.action;if(!action)return;
+        if(action==='in'||action==='out'){zoom=Math.min(2,Math.max(.35,zoom+(action==='in'?.15:-.15)));updateZoom();}
+        if(action==='fit'){zoom=Math.min(1,(viewport.clientWidth-20)/900);updateZoom();viewport.scrollTo(0,0);}
+        if(action==='reset'){zoom=1;updateZoom();viewport.scrollTo(0,0);}
+        if(action==='drill'){const child=getNode(selected).child;if(child)navigate(child);}
+        if(action==='back'){const prior=history.pop();if(prior){navigate(prior.view,prior.selected,false);zoom=prior.zoom;updateZoom();viewport.scrollTo(prior.x,prior.y);}}
+        if(action==='only'){const on=shell.classList.toggle('ae-only');q('[data-action="only"]').setAttribute('aria-pressed',String(on));}
+        if(action==='expand'){if(dialog.open)dialog.close();else{dialog.append(shell);q('[data-action="expand"]').textContent='Close view ×';dialog.showModal();q('[data-action="expand"]').focus();}}
+        if(action==='tour'){navigate('loop','file-inbox.ts');step=0;showStep();}
+        if(action==='next'&&step<model.journey.length-1){step++;showStep();}
+        if(action==='previous'&&step>0){step--;showStep();}
+        if(action==='stop'){step=-1;q('.ae-journey').hidden=true;}
+      });
+      dialog.addEventListener('close',()=>{this.insertBefore(shell,dialog);q('[data-action="expand"]').textContent='Expand view ↗';q('[data-action="expand"]').focus();});
+      let drag: {x:number;y:number;left:number;top:number}|null=null;
+      viewport.addEventListener('pointerdown',event=>{if(event.pointerType!=='mouse'||event.button!==0||(event.target as HTMLElement).closest('button'))return;drag={x:event.clientX,y:event.clientY,left:viewport.scrollLeft,top:viewport.scrollTop};viewport.setPointerCapture(event.pointerId);});
+      viewport.addEventListener('pointermove',event=>{if(drag){viewport.scrollLeft=drag.left+drag.x-event.clientX;viewport.scrollTop=drag.top+drag.y-event.clientY;}});
+      for(const event of ['pointerup','pointercancel','lostpointercapture'])viewport.addEventListener(event,()=>drag=null);
+      this.dataset.instance=crypto.randomUUID();
+      const hash=new URLSearchParams(location.hash.slice(1));const initialView=hash.get('view'),initialNode=hash.get('node');
+      if(model.views.some(v=>v.id===initialView)){view=initialView!;selected=model.nodes.find(n=>n.view===view&&n.id===initialNode)?.id||model.nodes.find(n=>n.view===view)!.id;}
+      restoring=true;render();restoring=false;this.dataset.ready='true';
+    }
+  }
+  if(!customElements.get('architecture-explorer'))customElements.define('architecture-explorer',ArchitectureExplorer);
+</script>
+<style is:global>
+  architecture-explorer {display:block;color:var(--color-text);--ae-line:var(--color-border);}
+  architecture-explorer * {box-sizing:border-box;}
+  .ae-shell {background:var(--color-bg);border:1px solid var(--ae-line);border-radius:18px;overflow:hidden;}
+  .ae-header {display:flex;justify-content:space-between;gap:1rem;padding:1.5rem 1.5rem 1rem;background:var(--color-surface);}
+  .ae-eyebrow {font:600 .68rem var(--font-mono,monospace);letter-spacing:.12em;color:var(--color-accent);}
+  .ae-header h1 {font-size:1.75rem;margin:.3rem 0;letter-spacing:-.04em;}.ae-header p{margin:0;color:var(--color-text-muted);font-size:.85rem;}
+  .ae-header-actions{display:flex;align-items:center;gap:1rem;flex-wrap:wrap;}
+  architecture-explorer button, architecture-explorer input {font:inherit;color:var(--color-text);}
+  architecture-explorer button {min-height:42px;padding:.55rem .7rem;border:1px solid var(--ae-line);border-radius:7px;background:var(--color-surface);font-size:.75rem;cursor:pointer;text-align:left;}
+  architecture-explorer button:hover {border-color:var(--color-accent);}
+  architecture-explorer button:disabled {opacity:.4;cursor:default;}
+  architecture-explorer :is(button,input,a):focus-visible {outline:2px solid var(--color-accent);outline-offset:3px;}
+  architecture-explorer a {color:var(--color-accent);font-size:.75rem;text-decoration:none;overflow-wrap:anywhere;}
+  .ae-toolbar{display:flex;justify-content:space-between;gap:.7rem;flex-wrap:wrap;padding:.7rem 1rem;border-block:1px solid var(--ae-line);}
+  .ae-controls,.ae-crumbs{display:flex;align-items:center;gap:.3rem;flex-wrap:wrap;}.ae-crumbs button{border:0;background:transparent;}.ae-crumbs button+button:before{content:' / ';color:var(--color-text-muted);}.ae-controls output{font-size:.7rem;min-width:3rem;text-align:center;}
+  .ae-workbench{display:grid;grid-template-columns:200px minmax(0,1fr) 270px;min-height:650px;}
+  .ae-nav,.ae-inspector{padding:1rem;background:var(--color-surface);min-width:0;}.ae-nav{border-right:1px solid var(--ae-line);}.ae-inspector{border-left:1px solid var(--ae-line);max-height:850px;overflow:auto;}
+  .ae-nav label{font-size:.75rem;display:block;}.ae-nav input{display:block;width:100%;margin:.5rem 0 1rem;padding:.7rem;border:1px solid var(--ae-line);border-radius:6px;background:var(--color-bg);font-size:.75rem;}
+  .ae-nav h2,.ae-inspector h3{font-size:.7rem;text-transform:uppercase;letter-spacing:.07em;color:var(--color-text-muted);margin:1.25rem 0 .6rem;}
+  .ae-tree,.ae-results{display:grid;gap:.4rem;}.ae-tree button{border-color:transparent;background:transparent;}.ae-tour-start{width:100%;margin-top:1.2rem!important;border-color:var(--color-accent)!important;color:var(--color-accent)!important;}
+  .ae-small{font-size:.72rem;line-height:1.7;color:var(--color-text-muted);}
+  .ae-map{min-width:0;display:flex;flex-direction:column;}.ae-map-heading{padding:1rem 1.25rem;}.ae-map-heading h2{font-size:1rem;margin:0 0 .4rem;}.ae-map-heading p{font-size:.75rem;line-height:1.5;color:var(--color-text-muted);margin:0;max-width:75ch;}
+  .ae-viewport{height:530px;overflow:auto;cursor:grab;background-image:radial-gradient(var(--color-border) 1px,transparent 1px);background-size:20px 20px;overscroll-behavior:contain;}.ae-viewport:active{cursor:grabbing;}.ae-stage{position:relative;}.ae-edges{position:absolute;inset:0;overflow:visible;}.ae-edges>path{fill:none;stroke:var(--color-text-muted);stroke-width:1.4;opacity:.12;}.ae-edges>path.is-active{stroke:var(--color-accent);stroke-width:2;opacity:.85;}
+  architecture-explorer .ae-node{position:absolute;width:230px;height:130px;padding:14px 16px;display:flex;flex-direction:column;gap:5px;border-radius:12px;border:1px solid var(--ae-line);box-shadow:0 4px 14px #00000010;background:var(--color-surface);white-space:normal;}
+  .ae-node-kind{font:.6rem var(--font-mono,monospace);text-transform:uppercase;letter-spacing:.08em;color:var(--color-text-muted);}.ae-node strong{font-size:.9rem;line-height:1.2;}.ae-node-summary{font-size:.68rem;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;color:var(--color-text-muted);}.ae-node-hint{font-size:.65rem;color:var(--color-accent);margin-top:auto;}.ae-node.is-selected{border:2px solid var(--color-accent);box-shadow:0 0 0 4px color-mix(in srgb,var(--color-accent) 12%,transparent);}.ae-node.is-muted{opacity:.45;}
+  .ae-inspector h2{font-size:1.1rem;margin:.6rem 0;}.ae-inspector p{font-size:.8rem;line-height:1.65;color:var(--color-text-muted);}.ae-sources{display:grid;gap:.65rem;}.ae-connection{padding:.65rem 0;border-bottom:1px solid var(--ae-line);}.ae-connection button{border:0;padding:0;background:none;font-weight:600;}.ae-connection p{font-size:.68rem;margin:.25rem 0;}.ae-connection a{display:block;font-size:.65rem;margin:.25rem 0;}
+  .ae-map-footer{padding:.75rem 1rem;font-size:.65rem;color:var(--color-text-muted);display:flex;justify-content:space-between;gap:1rem;border-top:1px solid var(--ae-line);margin-top:auto;}.ae-scope{padding:.8rem 1.2rem;border-top:1px solid var(--ae-line);font-size:.7rem;line-height:1.6;color:var(--color-text-muted);}
+  .ae-journey{padding:1rem 1.25rem;border-block:1px solid var(--color-accent);background:var(--color-surface);}.ae-journey[hidden]{display:none;}.ae-journey span{font:.65rem var(--font-mono,monospace);color:var(--color-accent);}.ae-journey h3{font-size:1rem;margin:.4rem 0;}.ae-journey p{font-size:.8rem;line-height:1.6;}.ae-tour-controls{display:flex;gap:.5rem;margin-top:.7rem;}
+  .ae-only .ae-nav,.ae-only .ae-inspector{display:none;}.ae-only .ae-workbench{grid-template-columns:1fr;}.ae-only .ae-viewport{height:70vh;}
+  architecture-explorer dialog{padding:0;border:0;width:calc(100vw - 1rem);max-width:none;max-height:calc(100dvh - 1rem);background:var(--color-bg);color:var(--color-text);border-radius:18px;}architecture-explorer dialog::backdrop{background:#000b;}
+  @media(min-width:1600px){.ae-workbench{grid-template-columns:220px minmax(0,1fr) 310px;}}
+  @media(max-width:1050px){.ae-workbench{grid-template-columns:160px minmax(0,1fr);}.ae-inspector{grid-column:1/-1;border-left:0;border-top:1px solid var(--ae-line);max-height:400px;}.ae-header{flex-direction:column;}}
+  @media(max-width:640px){.ae-workbench{display:flex;flex-direction:column;}.ae-nav{border-right:0;border-bottom:1px solid var(--ae-line);}.ae-nav h2,.ae-tree,.ae-small{display:none;}.ae-nav input{margin-bottom:.2rem;}.ae-tour-start{margin-top:.5rem!important;}.ae-header{padding:1rem;}.ae-header h1{font-size:1.4rem;}.ae-viewport{height:420px;}.ae-controls{gap:.2rem;}.ae-controls button{padding:.5rem;}.ae-map-footer{flex-direction:column;gap:.3rem;}.ae-inspector{max-height:none;}.ae-toolbar{padding:.6rem;}}
+  @media(prefers-reduced-motion:reduce){.ae-viewport{scroll-behavior:auto;}}
+</style>

@@ -1,0 +1,59 @@
+name: Harness architecture explorer
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/components/labs/ArchitectureExplorer.astro'
+      - 'src/data/architecture/**'
+      - 'src/pages/en/labs/deepseek-harness.astro'
+      - 'scripts/harness-explorer-check.mjs'
+      - '.github/workflows/harness-explorer.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  explorer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Install D2 (pinned release)
+        shell: bash
+        run: |
+          set -euo pipefail
+          D2_VERSION="v0.9.0"
+          ARCHIVE="d2-${D2_VERSION}-linux-amd64.tar.gz"
+          curl --fail --location --retry 5 --retry-all-errors \
+            "https://github.com/d2lang/d2/releases/download/${D2_VERSION}/${ARCHIVE}" \
+            --output "$RUNNER_TEMP/$ARCHIVE"
+          tar -xzf "$RUNNER_TEMP/$ARCHIVE" -C "$RUNNER_TEMP"
+          make -sC "$RUNNER_TEMP/d2-${D2_VERSION}" install PREFIX="$HOME/.local"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/d2" version
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Build Astro site
+        run: npm run build
+
+      - name: Assert full-text search index exists
+        run: test -s dist/pagefind/pagefind.js
+
+      - name: Install browser test tools
+        run: |
+          npm install --no-save --no-package-lock playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Verify explorer reader journeys
+        run: node scripts/harness-explorer-check.mjs
+      - name: Upload review screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: harness-explorer-review
+          path: artifacts/harness-explorer/
+          if-no-files-found: warn

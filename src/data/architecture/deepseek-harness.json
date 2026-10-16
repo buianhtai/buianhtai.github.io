@@ -1,0 +1,1605 @@
+{
+  "title": "DeepSeek Harness",
+  "repository": "https://github.com/deepseek-ai/deepseek-harness",
+  "revision": "1517a4dbca0a2789ff1d41ba439600f8547d23fa",
+  "scope": "26 selected packages; 7 agent-loop files. Curated subsystem boundaries, manifest-derived dependencies and lexical file imports. This is not a complete call graph or a live trace.",
+  "views": [
+    {
+      "id": "system",
+      "label": "System overview",
+      "parent": null,
+      "description": "A focused package dependency map. Arrows point from the dependent to its dependency; they do not indicate request order."
+    },
+    {
+      "id": "boot",
+      "label": "Composition",
+      "parent": "system",
+      "description": "Profiles and patches assemble the plugin tree. Edges show declared package dependencies within this view."
+    },
+    {
+      "id": "api",
+      "label": "Remote API",
+      "parent": "system",
+      "description": "Session activation and the typed remote gateway. Edges show declared package dependencies within this view."
+    },
+    {
+      "id": "core",
+      "label": "Agent runtime",
+      "parent": "system",
+      "description": "Agent contracts, the default driver, tools and session log. Edges show declared package dependencies within this view."
+    },
+    {
+      "id": "llm",
+      "label": "Model providers",
+      "parent": "system",
+      "description": "A model service seam with replaceable adapters and retry policy. Edges show declared package dependencies within this view."
+    },
+    {
+      "id": "session",
+      "label": "Durable state",
+      "parent": "system",
+      "description": "Persistence and projections around the session event log. Edges show declared package dependencies within this view."
+    },
+    {
+      "id": "capabilities",
+      "label": "Capability plugins",
+      "parent": "system",
+      "description": "External tools, execution policy, filesystem and shell capabilities. Edges show declared package dependencies within this view."
+    },
+    {
+      "id": "loop",
+      "label": "Agent-loop implementation",
+      "parent": "core",
+      "description": "Source-file imports inside the default driver. Use the turn walkthrough for a separately curated execution sequence."
+    }
+  ],
+  "nodes": [
+    {
+      "id": "boot",
+      "view": "system",
+      "label": "Composition",
+      "summary": "Profiles and patches assemble the plugin tree.",
+      "kind": "Subsystem",
+      "child": "boot",
+      "sources": [
+        {
+          "path": "docs/architecture.md",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/docs/architecture.md#L1"
+        }
+      ]
+    },
+    {
+      "id": "boot-app-boot",
+      "view": "boot",
+      "label": "app-boot",
+      "summary": "Shared boot glue for the app bins: .env loading, fail-loud Loader guards, snapshot-aware config resolution, and the Loader boot sequence",
+      "kind": "Package",
+      "child": null,
+      "sources": [
+        {
+          "path": "packages/boot/app-boot/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/boot/app-boot/package.json#L1"
+        },
+        {
+          "path": "packages/boot/app-boot/src/index.ts",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/boot/app-boot/src/index.ts#L1"
+        }
+      ]
+    },
+    {
+      "id": "boot-cmdline",
+      "view": "boot",
+      "label": "cmdline",
+      "summary": "Immutable command-line handoff from a dsh launcher to any app plugin that injects cmdlineArgs",
+      "kind": "Package",
+      "child": null,
+      "sources": [
+        {
+          "path": "packages/boot/cmdline/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/boot/cmdline/package.json#L1"
+        },
+        {
+          "path": "packages/boot/cmdline/src/index.ts",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/boot/cmdline/src/index.ts#L1"
+        }
+      ]
+    },
+    {
+      "id": "boot-plugin-manager",
+      "view": "boot",
+      "label": "plugin-manager",
+      "summary": "Current-profile plugin and bundle management shared by dsh CLI, Web and agent tools",
+      "kind": "Package",
+      "child": null,
+      "sources": [
+        {
+          "path": "packages/boot/plugin-manager/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/boot/plugin-manager/package.json#L1"
+        },
+        {
+          "path": "packages/boot/plugin-manager/src/index.ts",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/boot/plugin-manager/src/index.ts#L1"
+        }
+      ]
+    },
+    {
+      "id": "boot-hmr",
+      "view": "boot",
+      "label": "hmr",
+      "summary": "Coordinated module and profile configuration hot reload",
+      "kind": "Package",
+      "child": null,
+      "sources": [
+        {
+          "path": "packages/boot/hmr/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/boot/hmr/package.json#L1"
+        },
+        {
+          "path": "packages/boot/hmr/src/index.ts",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/boot/hmr/src/index.ts#L1"
+        }
+      ]
+    },
+    {
+      "id": "api",
+      "view": "system",
+      "label": "Remote API",
+      "summary": "Session activation and the typed remote gateway.",
+      "kind": "Subsystem",
+      "child": "api",
+      "sources": [
+        {
+          "path": "docs/architecture.md",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/docs/architecture.md#L1"
+        }
+      ]
+    },
+    {
+      "id": "api-gateway",
+      "view": "api",
+      "label": "gateway",
+      "summary": "Typert Remote Host dispatcher and Client API endpoint",
+      "kind": "Package",
+      "child": null,
+      "sources": [
+        {
+          "path": "packages/api/gateway/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/api/gateway/package.json#L1"
+        },
+        {
+          "path": "packages/api/gateway/src/index.ts",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/api/gateway/src/index.ts#L1"
+        }
+      ]
+    },
+    {
+      "id": "api-session-controller",
+      "view": "api",
+      "label": "session-controller",
+      "summary": "Session Remote commands, cold reads, and live control transport",
+      "kind": "Package",
+      "child": null,
+      "sources": [
+        {
+          "path": "packages/api/session-controller/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/api/session-controller/package.json#L1"
+        },
+        {
+          "path": "packages/api/session-controller/src/index.ts",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/api/session-controller/src/index.ts#L1"
+        }
+      ]
+    },
+    {
+      "id": "api-remotes",
+      "view": "api",
+      "label": "remotes",
+      "summary": "Remote BFF assembly for application-selected Host capabilities",
+      "kind": "Package",
+      "child": null,
+      "sources": [
+        {
+          "path": "packages/api/remotes/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/api/remotes/package.json#L1"
+        },
+        {
+          "path": "packages/api/remotes/src/index.ts",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/api/remotes/src/index.ts#L1"
+        }
+      ]
+    },
+    {
+      "id": "core",
+      "view": "system",
+      "label": "Agent runtime",
+      "summary": "Agent contracts, the default driver, tools and session log.",
+      "kind": "Subsystem",
+      "child": "core",
+      "sources": [
+        {
+          "path": "docs/architecture.md",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/docs/architecture.md#L1"
+        }
+      ]
+    },
+    {
+      "id": "core-agent",
+      "view": "core",
+      "label": "agent",
+      "summary": "Agent interface, registry, initiator scope, and event vocabulary for the DeepSeek Harness",
+      "kind": "Package",
+      "child": null,
+      "sources": [
+        {
+          "path": "packages/core/agent/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent/package.json#L1"
+        },
+        {
+          "path": "packages/core/agent/src/index.ts",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent/src/index.ts#L1"
+        }
+      ]
+    },
+    {
+      "id": "core-agent-loop",
+      "view": "core",
+      "label": "agent-loop",
+      "summary": "The concrete agent loop plugin for the DeepSeek Harness",
+      "kind": "Package",
+      "child": "loop",
+      "sources": [
+        {
+          "path": "packages/core/agent-loop/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/package.json#L1"
+        },
+        {
+          "path": "packages/core/agent-loop/src/index.ts",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/src/index.ts#L1"
+        }
+      ]
+    },
+    {
+      "id": "core-session",
+      "view": "core",
+      "label": "session",
+      "summary": "Event-sourced session store for the DeepSeek Harness",
+      "kind": "Package",
+      "child": null,
+      "sources": [
+        {
+          "path": "packages/core/session/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/session/package.json#L1"
+        },
+        {
+          "path": "packages/core/session/src/index.ts",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/session/src/index.ts#L1"
+        }
+      ]
+    },
+    {
+      "id": "core-system-prompt",
+      "view": "core",
+      "label": "system-prompt",
+      "summary": "System prompt assembly registry for the DeepSeek Harness",
+      "kind": "Package",
+      "child": null,
+      "sources": [
+        {
+          "path": "packages/core/system-prompt/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/system-prompt/package.json#L1"
+        },
+        {
+          "path": "packages/core/system-prompt/src/index.ts",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/system-prompt/src/index.ts#L1"
+        }
+      ]
+    },
+    {
+      "id": "core-tools",
+      "view": "core",
+      "label": "tools",
+      "summary": "Tool registry and execution pipeline for the DeepSeek Harness",
+      "kind": "Package",
+      "child": null,
+      "sources": [
+        {
+          "path": "packages/core/tools/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/tools/package.json#L1"
+        },
+        {
+          "path": "packages/core/tools/src/index.ts",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/tools/src/index.ts#L1"
+        }
+      ]
+    },
+    {
+      "id": "core-scope",
+      "view": "core",
+      "label": "scope",
+      "summary": "Scoped-context registration primitive (scope tags, scope-filtered event dispatch) for the DeepSeek Harness",
+      "kind": "Package",
+      "child": null,
+      "sources": [
+        {
+          "path": "packages/core/scope/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/scope/package.json#L1"
+        },
+        {
+          "path": "packages/core/scope/src/index.ts",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/scope/src/index.ts#L1"
+        }
+      ]
+    },
+    {
+      "id": "llm",
+      "view": "system",
+      "label": "Model providers",
+      "summary": "A model service seam with replaceable adapters and retry policy.",
+      "kind": "Subsystem",
+      "child": "llm",
+      "sources": [
+        {
+          "path": "docs/architecture.md",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/docs/architecture.md#L1"
+        }
+      ]
+    },
+    {
+      "id": "llm-llm",
+      "view": "llm",
+      "label": "llm",
+      "summary": "Provider-neutral LLM service interface for the DeepSeek Harness",
+      "kind": "Package",
+      "child": null,
+      "sources": [
+        {
+          "path": "packages/llm/llm/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/llm/llm/package.json#L1"
+        },
+        {
+          "path": "packages/llm/llm/src/index.ts",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/llm/llm/src/index.ts#L1"
+        }
+      ]
+    },
+    {
+      "id": "llm-llm-deepseek-api-key",
+      "view": "llm",
+      "label": "llm-deepseek-api-key",
+      "summary": "DeepSeek api-key provider authentication and discovery",
+      "kind": "Package",
+      "child": null,
+      "sources": [
+        {
+          "path": "packages/llm/llm-deepseek-api-key/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/llm/llm-deepseek-api-key/package.json#L1"
+        },
+        {
+          "path": "packages/llm/llm-deepseek-api-key/src/index.ts",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/llm/llm-deepseek-api-key/src/index.ts#L1"
+        }
+      ]
+    },
+    {
+      "id": "llm-llm-pi-ai",
+      "view": "llm",
+      "label": "llm-pi-ai",
+      "summary": "pi-ai-backed DeepSeek adapter for the DeepSeek Harness LLM seam (design-verification twin of dsh-llm-deepseek)",
+      "kind": "Package",
+      "child": null,
+      "sources": [
+        {
+          "path": "packages/llm/llm-pi-ai/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/llm/llm-pi-ai/package.json#L1"
+        },
+        {
+          "path": "packages/llm/llm-pi-ai/src/index.ts",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/llm/llm-pi-ai/src/index.ts#L1"
+        }
+      ]
+    },
+    {
+      "id": "llm-llm-retry",
+      "view": "llm",
+      "label": "llm-retry",
+      "summary": "Provider-routed LLM request retry policy for the DeepSeek Harness",
+      "kind": "Package",
+      "child": null,
+      "sources": [
+        {
+          "path": "packages/llm/llm-retry/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/llm/llm-retry/package.json#L1"
+        },
+        {
+          "path": "packages/llm/llm-retry/src/index.ts",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/llm/llm-retry/src/index.ts#L1"
+        }
+      ]
+    },
+    {
+      "id": "session",
+      "view": "system",
+      "label": "Durable state",
+      "summary": "Persistence and projections around the session event log.",
+      "kind": "Subsystem",
+      "child": "session",
+      "sources": [
+        {
+          "path": "docs/architecture.md",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/docs/architecture.md#L1"
+        }
+      ]
+    },
+    {
+      "id": "session-session-persistence",
+      "view": "session",
+      "label": "session-persistence",
+      "summary": "Abstract durable session persistence seam (ctx.sessionPersistence) for the DeepSeek Harness",
+      "kind": "Package",
+      "child": null,
+      "sources": [
+        {
+          "path": "packages/session/session-persistence/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/session/session-persistence/package.json#L1"
+        },
+        {
+          "path": "packages/session/session-persistence/src/index.ts",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/session/session-persistence/src/index.ts#L1"
+        }
+      ]
+    },
+    {
+      "id": "session-session-persistence-jsonl",
+      "view": "session",
+      "label": "session-persistence-jsonl",
+      "summary": "JSONL durable session persistence backend for the DeepSeek Harness",
+      "kind": "Package",
+      "child": null,
+      "sources": [
+        {
+          "path": "packages/session/session-persistence-jsonl/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/session/session-persistence-jsonl/package.json#L1"
+        },
+        {
+          "path": "packages/session/session-persistence-jsonl/src/index.ts",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/session/session-persistence-jsonl/src/index.ts#L1"
+        }
+      ]
+    },
+    {
+      "id": "session-session-projection",
+      "view": "session",
+      "label": "session-projection",
+      "summary": "Session-projection seam: the merge-extensible projection type table, the provider contract, and the ctx.sessionProjections registry serving whole current values of log-derived per-session state",
+      "kind": "Package",
+      "child": null,
+      "sources": [
+        {
+          "path": "packages/session/session-projection/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/session/session-projection/package.json#L1"
+        },
+        {
+          "path": "packages/session/session-projection/src/index.ts",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/session/session-projection/src/index.ts#L1"
+        }
+      ]
+    },
+    {
+      "id": "session-session-checkpoint-policy",
+      "view": "session",
+      "label": "session-checkpoint-policy",
+      "summary": "Semantic session durability checkpoints before model requests and tool side effects",
+      "kind": "Package",
+      "child": null,
+      "sources": [
+        {
+          "path": "packages/session/session-checkpoint-policy/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/session/session-checkpoint-policy/package.json#L1"
+        },
+        {
+          "path": "packages/session/session-checkpoint-policy/src/index.ts",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/session/session-checkpoint-policy/src/index.ts#L1"
+        }
+      ]
+    },
+    {
+      "id": "capabilities",
+      "view": "system",
+      "label": "Capability plugins",
+      "summary": "External tools, execution policy, filesystem and shell capabilities.",
+      "kind": "Subsystem",
+      "child": "capabilities",
+      "sources": [
+        {
+          "path": "docs/architecture.md",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/docs/architecture.md#L1"
+        }
+      ]
+    },
+    {
+      "id": "mcp-mcp-client",
+      "view": "capabilities",
+      "label": "mcp-client",
+      "summary": "MCP client bridge: connects to MCP servers and registers their tools on ctx.tools",
+      "kind": "Package",
+      "child": null,
+      "sources": [
+        {
+          "path": "packages/mcp/mcp-client/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/mcp/mcp-client/package.json#L1"
+        },
+        {
+          "path": "packages/mcp/mcp-client/src/index.ts",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/mcp/mcp-client/src/index.ts#L1"
+        }
+      ]
+    },
+    {
+      "id": "guard-timeout-policy",
+      "view": "capabilities",
+      "label": "timeout-policy",
+      "summary": "Tool-call timeout policy: a tools/execute wrapper that arms a per-tool deadline on exec.signal and returns TOOL_TIMEOUT when it wins",
+      "kind": "Package",
+      "child": null,
+      "sources": [
+        {
+          "path": "packages/guard/timeout-policy/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/guard/timeout-policy/package.json#L1"
+        },
+        {
+          "path": "packages/guard/timeout-policy/src/index.ts",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/guard/timeout-policy/src/index.ts#L1"
+        }
+      ]
+    },
+    {
+      "id": "fs-fs",
+      "view": "capabilities",
+      "label": "fs",
+      "summary": "Abstract filesystem capability seam (ctx.fs) for the DeepSeek Harness \u2014 vocabulary types, the FileSystem service (text IO + optional version-guarded atomic mutations), and the fs/* policy event vocabulary",
+      "kind": "Package",
+      "child": null,
+      "sources": [
+        {
+          "path": "packages/fs/fs/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/fs/fs/package.json#L1"
+        },
+        {
+          "path": "packages/fs/fs/src/index.ts",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/fs/fs/src/index.ts#L1"
+        }
+      ]
+    },
+    {
+      "id": "shell-bash-local",
+      "view": "capabilities",
+      "label": "bash-local",
+      "summary": "Local-subprocess implementation of the DeepSeek Harness bash executor seam",
+      "kind": "Package",
+      "child": null,
+      "sources": [
+        {
+          "path": "packages/shell/bash-local/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/shell/bash-local/package.json#L1"
+        },
+        {
+          "path": "packages/shell/bash-local/src/index.ts",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/shell/bash-local/src/index.ts#L1"
+        }
+      ]
+    },
+    {
+      "id": "sandbox-sandbox",
+      "view": "capabilities",
+      "label": "sandbox",
+      "summary": "Abstract process-sandbox seam (ctx.sandbox) for the DeepSeek Harness: same-world confinement vocabulary and the SandboxProvider contract",
+      "kind": "Package",
+      "child": null,
+      "sources": [
+        {
+          "path": "packages/sandbox/sandbox/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/sandbox/sandbox/package.json#L1"
+        },
+        {
+          "path": "packages/sandbox/sandbox/src/index.ts",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/sandbox/sandbox/src/index.ts#L1"
+        }
+      ]
+    },
+    {
+      "id": "file-index.ts",
+      "view": "loop",
+      "label": "AgentLoop service",
+      "summary": "Creates and resumes agents, registers projections and manages ordered teardown.",
+      "kind": "Source file",
+      "sources": [
+        {
+          "path": "packages/core/agent-loop/src/index.ts",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/src/index.ts#L1"
+        }
+      ]
+    },
+    {
+      "id": "file-agent.ts",
+      "view": "loop",
+      "label": "ReactLoopAgent",
+      "summary": "Drives turns and steps, derives requests from the log and settles model attempts.",
+      "kind": "Source file",
+      "sources": [
+        {
+          "path": "packages/core/agent-loop/src/agent.ts",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/src/agent.ts#L1"
+        }
+      ]
+    },
+    {
+      "id": "file-inbox.ts",
+      "view": "loop",
+      "label": "Input inbox",
+      "summary": "Reconstructs pending input from durable inbox events and exposes claim operations.",
+      "kind": "Source file",
+      "sources": [
+        {
+          "path": "packages/core/agent-loop/src/inbox.ts",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/src/inbox.ts#L1"
+        }
+      ]
+    },
+    {
+      "id": "file-assistant-stream.ts",
+      "view": "loop",
+      "label": "Assistant stream",
+      "summary": "Accumulates an attempt while emitting transient frames; settlement records the compact stream.",
+      "kind": "Source file",
+      "sources": [
+        {
+          "path": "packages/core/agent-loop/src/assistant-stream.ts",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/src/assistant-stream.ts#L1"
+        }
+      ]
+    },
+    {
+      "id": "file-tool-calls.ts",
+      "view": "loop",
+      "label": "Tool scheduler",
+      "summary": "Runs exclusive barriers and a bounded parallel pool; finalizes results in model order.",
+      "kind": "Source file",
+      "sources": [
+        {
+          "path": "packages/core/agent-loop/src/tool-calls.ts",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/src/tool-calls.ts#L1"
+        }
+      ]
+    },
+    {
+      "id": "file-runtime-context.ts",
+      "view": "loop",
+      "label": "Runtime context",
+      "summary": "Projects the system prompt and runtime context onto the durable session surface.",
+      "kind": "Source file",
+      "sources": [
+        {
+          "path": "packages/core/agent-loop/src/runtime-context.ts",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/src/runtime-context.ts#L1"
+        }
+      ]
+    },
+    {
+      "id": "file-constants.ts",
+      "view": "loop",
+      "label": "Concurrency defaults",
+      "summary": "Defines the default maximum parallel tool-call count.",
+      "kind": "Source file",
+      "sources": [
+        {
+          "path": "packages/core/agent-loop/src/constants.ts",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/src/constants.ts#L1"
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "view": "boot",
+      "from": "boot-plugin-manager",
+      "to": "boot-app-boot",
+      "label": "depends on",
+      "evidence": "Package manifest (runtime or peer dependency)",
+      "sources": [
+        {
+          "path": "packages/boot/plugin-manager/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/boot/plugin-manager/package.json#L1"
+        }
+      ]
+    },
+    {
+      "view": "boot",
+      "from": "boot-plugin-manager",
+      "to": "boot-hmr",
+      "label": "depends on",
+      "evidence": "Package manifest (runtime or peer dependency)",
+      "sources": [
+        {
+          "path": "packages/boot/plugin-manager/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/boot/plugin-manager/package.json#L1"
+        }
+      ]
+    },
+    {
+      "view": "boot",
+      "from": "boot-hmr",
+      "to": "boot-app-boot",
+      "label": "depends on",
+      "evidence": "Package manifest (runtime or peer dependency)",
+      "sources": [
+        {
+          "path": "packages/boot/hmr/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/boot/hmr/package.json#L1"
+        }
+      ]
+    },
+    {
+      "view": "boot",
+      "from": "boot-hmr",
+      "to": "boot-cmdline",
+      "label": "depends on",
+      "evidence": "Package manifest (runtime or peer dependency)",
+      "sources": [
+        {
+          "path": "packages/boot/hmr/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/boot/hmr/package.json#L1"
+        }
+      ]
+    },
+    {
+      "view": "api",
+      "from": "api-session-controller",
+      "to": "api-gateway",
+      "label": "depends on",
+      "evidence": "Package manifest (runtime or peer dependency)",
+      "sources": [
+        {
+          "path": "packages/api/session-controller/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/api/session-controller/package.json#L1"
+        }
+      ]
+    },
+    {
+      "view": "core",
+      "from": "core-agent",
+      "to": "core-scope",
+      "label": "depends on",
+      "evidence": "Package manifest (runtime or peer dependency)",
+      "sources": [
+        {
+          "path": "packages/core/agent/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent/package.json#L1"
+        }
+      ]
+    },
+    {
+      "view": "core",
+      "from": "core-agent",
+      "to": "core-session",
+      "label": "depends on",
+      "evidence": "Package manifest (runtime or peer dependency)",
+      "sources": [
+        {
+          "path": "packages/core/agent/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent/package.json#L1"
+        }
+      ]
+    },
+    {
+      "view": "core",
+      "from": "core-agent",
+      "to": "core-system-prompt",
+      "label": "depends on",
+      "evidence": "Package manifest (runtime or peer dependency)",
+      "sources": [
+        {
+          "path": "packages/core/agent/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent/package.json#L1"
+        }
+      ]
+    },
+    {
+      "view": "core",
+      "from": "core-agent-loop",
+      "to": "core-agent",
+      "label": "depends on",
+      "evidence": "Package manifest (runtime or peer dependency)",
+      "sources": [
+        {
+          "path": "packages/core/agent-loop/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/package.json#L1"
+        }
+      ]
+    },
+    {
+      "view": "core",
+      "from": "core-agent-loop",
+      "to": "core-scope",
+      "label": "depends on",
+      "evidence": "Package manifest (runtime or peer dependency)",
+      "sources": [
+        {
+          "path": "packages/core/agent-loop/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/package.json#L1"
+        }
+      ]
+    },
+    {
+      "view": "core",
+      "from": "core-agent-loop",
+      "to": "core-session",
+      "label": "depends on",
+      "evidence": "Package manifest (runtime or peer dependency)",
+      "sources": [
+        {
+          "path": "packages/core/agent-loop/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/package.json#L1"
+        }
+      ]
+    },
+    {
+      "view": "core",
+      "from": "core-agent-loop",
+      "to": "core-system-prompt",
+      "label": "depends on",
+      "evidence": "Package manifest (runtime or peer dependency)",
+      "sources": [
+        {
+          "path": "packages/core/agent-loop/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/package.json#L1"
+        }
+      ]
+    },
+    {
+      "view": "core",
+      "from": "core-agent-loop",
+      "to": "core-tools",
+      "label": "depends on",
+      "evidence": "Package manifest (runtime or peer dependency)",
+      "sources": [
+        {
+          "path": "packages/core/agent-loop/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/package.json#L1"
+        }
+      ]
+    },
+    {
+      "view": "core",
+      "from": "core-session",
+      "to": "core-scope",
+      "label": "depends on",
+      "evidence": "Package manifest (runtime or peer dependency)",
+      "sources": [
+        {
+          "path": "packages/core/session/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/session/package.json#L1"
+        }
+      ]
+    },
+    {
+      "view": "core",
+      "from": "core-system-prompt",
+      "to": "core-scope",
+      "label": "depends on",
+      "evidence": "Package manifest (runtime or peer dependency)",
+      "sources": [
+        {
+          "path": "packages/core/system-prompt/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/system-prompt/package.json#L1"
+        }
+      ]
+    },
+    {
+      "view": "core",
+      "from": "core-tools",
+      "to": "core-agent",
+      "label": "depends on",
+      "evidence": "Package manifest (runtime or peer dependency)",
+      "sources": [
+        {
+          "path": "packages/core/tools/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/tools/package.json#L1"
+        }
+      ]
+    },
+    {
+      "view": "core",
+      "from": "core-tools",
+      "to": "core-scope",
+      "label": "depends on",
+      "evidence": "Package manifest (runtime or peer dependency)",
+      "sources": [
+        {
+          "path": "packages/core/tools/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/tools/package.json#L1"
+        }
+      ]
+    },
+    {
+      "view": "core",
+      "from": "core-tools",
+      "to": "core-session",
+      "label": "depends on",
+      "evidence": "Package manifest (runtime or peer dependency)",
+      "sources": [
+        {
+          "path": "packages/core/tools/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/tools/package.json#L1"
+        }
+      ]
+    },
+    {
+      "view": "core",
+      "from": "core-tools",
+      "to": "core-system-prompt",
+      "label": "depends on",
+      "evidence": "Package manifest (runtime or peer dependency)",
+      "sources": [
+        {
+          "path": "packages/core/tools/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/tools/package.json#L1"
+        }
+      ]
+    },
+    {
+      "view": "llm",
+      "from": "llm-llm-deepseek-api-key",
+      "to": "llm-llm",
+      "label": "depends on",
+      "evidence": "Package manifest (runtime or peer dependency)",
+      "sources": [
+        {
+          "path": "packages/llm/llm-deepseek-api-key/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/llm/llm-deepseek-api-key/package.json#L1"
+        }
+      ]
+    },
+    {
+      "view": "llm",
+      "from": "llm-llm-pi-ai",
+      "to": "llm-llm",
+      "label": "depends on",
+      "evidence": "Package manifest (runtime or peer dependency)",
+      "sources": [
+        {
+          "path": "packages/llm/llm-pi-ai/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/llm/llm-pi-ai/package.json#L1"
+        }
+      ]
+    },
+    {
+      "view": "llm",
+      "from": "llm-llm-retry",
+      "to": "llm-llm",
+      "label": "depends on",
+      "evidence": "Package manifest (runtime or peer dependency)",
+      "sources": [
+        {
+          "path": "packages/llm/llm-retry/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/llm/llm-retry/package.json#L1"
+        }
+      ]
+    },
+    {
+      "view": "session",
+      "from": "session-session-persistence-jsonl",
+      "to": "session-session-persistence",
+      "label": "depends on",
+      "evidence": "Package manifest (runtime or peer dependency)",
+      "sources": [
+        {
+          "path": "packages/session/session-persistence-jsonl/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/session/session-persistence-jsonl/package.json#L1"
+        }
+      ]
+    },
+    {
+      "view": "session",
+      "from": "session-session-checkpoint-policy",
+      "to": "session-session-persistence",
+      "label": "depends on",
+      "evidence": "Package manifest (runtime or peer dependency)",
+      "sources": [
+        {
+          "path": "packages/session/session-checkpoint-policy/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/session/session-checkpoint-policy/package.json#L1"
+        }
+      ]
+    },
+    {
+      "view": "capabilities",
+      "from": "fs-fs",
+      "to": "sandbox-sandbox",
+      "label": "depends on",
+      "evidence": "Package manifest (runtime or peer dependency)",
+      "sources": [
+        {
+          "path": "packages/fs/fs/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/fs/fs/package.json#L1"
+        }
+      ]
+    },
+    {
+      "view": "system",
+      "from": "boot",
+      "to": "capabilities",
+      "label": "depends on",
+      "evidence": "Aggregated declared dependencies between selected packages",
+      "sources": [
+        {
+          "path": "packages/boot/plugin-manager/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/boot/plugin-manager/package.json#L1"
+        }
+      ]
+    },
+    {
+      "view": "system",
+      "from": "boot",
+      "to": "core",
+      "label": "depends on",
+      "evidence": "Aggregated declared dependencies between selected packages",
+      "sources": [
+        {
+          "path": "packages/boot/plugin-manager/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/boot/plugin-manager/package.json#L1"
+        }
+      ]
+    },
+    {
+      "view": "system",
+      "from": "api",
+      "to": "core",
+      "label": "depends on",
+      "evidence": "Aggregated declared dependencies between selected packages",
+      "sources": [
+        {
+          "path": "packages/api/session-controller/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/api/session-controller/package.json#L1"
+        },
+        {
+          "path": "packages/api/remotes/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/api/remotes/package.json#L1"
+        }
+      ]
+    },
+    {
+      "view": "system",
+      "from": "api",
+      "to": "capabilities",
+      "label": "depends on",
+      "evidence": "Aggregated declared dependencies between selected packages",
+      "sources": [
+        {
+          "path": "packages/api/session-controller/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/api/session-controller/package.json#L1"
+        }
+      ]
+    },
+    {
+      "view": "system",
+      "from": "api",
+      "to": "llm",
+      "label": "depends on",
+      "evidence": "Aggregated declared dependencies between selected packages",
+      "sources": [
+        {
+          "path": "packages/api/session-controller/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/api/session-controller/package.json#L1"
+        }
+      ]
+    },
+    {
+      "view": "system",
+      "from": "api",
+      "to": "session",
+      "label": "depends on",
+      "evidence": "Aggregated declared dependencies between selected packages",
+      "sources": [
+        {
+          "path": "packages/api/session-controller/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/api/session-controller/package.json#L1"
+        }
+      ]
+    },
+    {
+      "view": "system",
+      "from": "core",
+      "to": "llm",
+      "label": "depends on",
+      "evidence": "Aggregated declared dependencies between selected packages",
+      "sources": [
+        {
+          "path": "packages/core/agent/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent/package.json#L1"
+        },
+        {
+          "path": "packages/core/agent-loop/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/package.json#L1"
+        },
+        {
+          "path": "packages/core/session/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/session/package.json#L1"
+        },
+        {
+          "path": "packages/core/system-prompt/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/system-prompt/package.json#L1"
+        },
+        {
+          "path": "packages/core/tools/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/tools/package.json#L1"
+        }
+      ]
+    },
+    {
+      "view": "system",
+      "from": "core",
+      "to": "session",
+      "label": "depends on",
+      "evidence": "Aggregated declared dependencies between selected packages",
+      "sources": [
+        {
+          "path": "packages/core/agent/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent/package.json#L1"
+        },
+        {
+          "path": "packages/core/agent-loop/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/package.json#L1"
+        }
+      ]
+    },
+    {
+      "view": "system",
+      "from": "core",
+      "to": "capabilities",
+      "label": "depends on",
+      "evidence": "Aggregated declared dependencies between selected packages",
+      "sources": [
+        {
+          "path": "packages/core/tools/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/tools/package.json#L1"
+        }
+      ]
+    },
+    {
+      "view": "system",
+      "from": "llm",
+      "to": "capabilities",
+      "label": "depends on",
+      "evidence": "Aggregated declared dependencies between selected packages",
+      "sources": [
+        {
+          "path": "packages/llm/llm-pi-ai/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/llm/llm-pi-ai/package.json#L1"
+        }
+      ]
+    },
+    {
+      "view": "system",
+      "from": "llm",
+      "to": "core",
+      "label": "depends on",
+      "evidence": "Aggregated declared dependencies between selected packages",
+      "sources": [
+        {
+          "path": "packages/llm/llm-retry/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/llm/llm-retry/package.json#L1"
+        }
+      ]
+    },
+    {
+      "view": "system",
+      "from": "llm",
+      "to": "session",
+      "label": "depends on",
+      "evidence": "Aggregated declared dependencies between selected packages",
+      "sources": [
+        {
+          "path": "packages/llm/llm-retry/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/llm/llm-retry/package.json#L1"
+        }
+      ]
+    },
+    {
+      "view": "system",
+      "from": "session",
+      "to": "core",
+      "label": "depends on",
+      "evidence": "Aggregated declared dependencies between selected packages",
+      "sources": [
+        {
+          "path": "packages/session/session-persistence/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/session/session-persistence/package.json#L1"
+        },
+        {
+          "path": "packages/session/session-persistence-jsonl/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/session/session-persistence-jsonl/package.json#L1"
+        },
+        {
+          "path": "packages/session/session-projection/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/session/session-projection/package.json#L1"
+        },
+        {
+          "path": "packages/session/session-checkpoint-policy/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/session/session-checkpoint-policy/package.json#L1"
+        }
+      ]
+    },
+    {
+      "view": "system",
+      "from": "session",
+      "to": "llm",
+      "label": "depends on",
+      "evidence": "Aggregated declared dependencies between selected packages",
+      "sources": [
+        {
+          "path": "packages/session/session-persistence-jsonl/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/session/session-persistence-jsonl/package.json#L1"
+        },
+        {
+          "path": "packages/session/session-checkpoint-policy/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/session/session-checkpoint-policy/package.json#L1"
+        }
+      ]
+    },
+    {
+      "view": "system",
+      "from": "capabilities",
+      "to": "llm",
+      "label": "depends on",
+      "evidence": "Aggregated declared dependencies between selected packages",
+      "sources": [
+        {
+          "path": "packages/mcp/mcp-client/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/mcp/mcp-client/package.json#L1"
+        },
+        {
+          "path": "packages/guard/timeout-policy/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/guard/timeout-policy/package.json#L1"
+        },
+        {
+          "path": "packages/fs/fs/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/fs/fs/package.json#L1"
+        },
+        {
+          "path": "packages/sandbox/sandbox/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/sandbox/sandbox/package.json#L1"
+        }
+      ]
+    },
+    {
+      "view": "system",
+      "from": "capabilities",
+      "to": "core",
+      "label": "depends on",
+      "evidence": "Aggregated declared dependencies between selected packages",
+      "sources": [
+        {
+          "path": "packages/mcp/mcp-client/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/mcp/mcp-client/package.json#L1"
+        },
+        {
+          "path": "packages/guard/timeout-policy/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/guard/timeout-policy/package.json#L1"
+        },
+        {
+          "path": "packages/sandbox/sandbox/package.json",
+          "line": 1,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/sandbox/sandbox/package.json#L1"
+        }
+      ]
+    },
+    {
+      "view": "loop",
+      "from": "file-index.ts",
+      "to": "file-agent.ts",
+      "label": "imports",
+      "evidence": "Lexical import, including type-only imports; not a proven runtime call",
+      "sources": [
+        {
+          "path": "packages/core/agent-loop/src/index.ts",
+          "line": 34,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/src/index.ts#L34"
+        }
+      ]
+    },
+    {
+      "view": "loop",
+      "from": "file-index.ts",
+      "to": "file-inbox.ts",
+      "label": "imports",
+      "evidence": "Lexical import, including type-only imports; not a proven runtime call",
+      "sources": [
+        {
+          "path": "packages/core/agent-loop/src/index.ts",
+          "line": 35,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/src/index.ts#L35"
+        }
+      ]
+    },
+    {
+      "view": "loop",
+      "from": "file-index.ts",
+      "to": "file-constants.ts",
+      "label": "imports",
+      "evidence": "Lexical import, including type-only imports; not a proven runtime call",
+      "sources": [
+        {
+          "path": "packages/core/agent-loop/src/index.ts",
+          "line": 36,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/src/index.ts#L36"
+        }
+      ]
+    },
+    {
+      "view": "loop",
+      "from": "file-index.ts",
+      "to": "file-runtime-context.ts",
+      "label": "imports",
+      "evidence": "Lexical import, including type-only imports; not a proven runtime call",
+      "sources": [
+        {
+          "path": "packages/core/agent-loop/src/index.ts",
+          "line": 37,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/src/index.ts#L37"
+        }
+      ]
+    },
+    {
+      "view": "loop",
+      "from": "file-agent.ts",
+      "to": "file-inbox.ts",
+      "label": "imports",
+      "evidence": "Lexical import, including type-only imports; not a proven runtime call",
+      "sources": [
+        {
+          "path": "packages/core/agent-loop/src/agent.ts",
+          "line": 36,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/src/agent.ts#L36"
+        }
+      ]
+    },
+    {
+      "view": "loop",
+      "from": "file-agent.ts",
+      "to": "file-runtime-context.ts",
+      "label": "imports",
+      "evidence": "Lexical import, including type-only imports; not a proven runtime call",
+      "sources": [
+        {
+          "path": "packages/core/agent-loop/src/agent.ts",
+          "line": 37,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/src/agent.ts#L37"
+        }
+      ]
+    },
+    {
+      "view": "loop",
+      "from": "file-agent.ts",
+      "to": "file-assistant-stream.ts",
+      "label": "imports",
+      "evidence": "Lexical import, including type-only imports; not a proven runtime call",
+      "sources": [
+        {
+          "path": "packages/core/agent-loop/src/agent.ts",
+          "line": 38,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/src/agent.ts#L38"
+        }
+      ]
+    },
+    {
+      "view": "loop",
+      "from": "file-agent.ts",
+      "to": "file-runtime-context.ts",
+      "label": "imports",
+      "evidence": "Lexical import, including type-only imports; not a proven runtime call",
+      "sources": [
+        {
+          "path": "packages/core/agent-loop/src/agent.ts",
+          "line": 39,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/src/agent.ts#L39"
+        }
+      ]
+    },
+    {
+      "view": "loop",
+      "from": "file-agent.ts",
+      "to": "file-tool-calls.ts",
+      "label": "imports",
+      "evidence": "Lexical import, including type-only imports; not a proven runtime call",
+      "sources": [
+        {
+          "path": "packages/core/agent-loop/src/agent.ts",
+          "line": 40,
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/src/agent.ts#L40"
+        }
+      ]
+    }
+  ],
+  "journey": [
+    {
+      "node": "file-inbox.ts",
+      "title": "Claim input",
+      "description": "The driver claims pending next-step input and a queued prompt. A turn can finish without spending a model step.",
+      "source": {
+        "path": "docs/agent-lifecycle.md",
+        "line": 12,
+        "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/docs/agent-lifecycle.md#L12"
+      }
+    },
+    {
+      "node": "file-agent.ts",
+      "title": "Assemble and admit",
+      "description": "preStep assembles context and invokes agent/pre-step. Its decision may rewrite or reject the claimed messages.",
+      "source": {
+        "path": "packages/core/agent-loop/src/agent.ts",
+        "line": 266,
+        "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/src/agent.ts#L266"
+      }
+    },
+    {
+      "node": "file-runtime-context.ts",
+      "title": "Prepare the request",
+      "description": "The driver prepares the model call, reconciles prompt/context and derives the request from the session log.",
+      "source": {
+        "path": "packages/core/agent-loop/src/agent.ts",
+        "line": 411,
+        "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/src/agent.ts#L411"
+      }
+    },
+    {
+      "node": "file-assistant-stream.ts",
+      "title": "Stream and settle",
+      "description": "Transient assistant frames serve live listeners. Successful or failed attempts are settled into durable session events.",
+      "source": {
+        "path": "packages/core/agent-loop/src/agent.ts",
+        "line": 443,
+        "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/src/agent.ts#L443"
+      }
+    },
+    {
+      "node": "file-tool-calls.ts",
+      "title": "Schedule tools",
+      "description": "Exclusive calls form barriers; parallel calls use a bounded pool. Results remain in model order.",
+      "source": {
+        "path": "packages/core/agent-loop/src/tool-calls.ts",
+        "line": 60,
+        "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/src/tool-calls.ts#L60"
+      }
+    },
+    {
+      "node": "file-agent.ts",
+      "title": "Continue or stop",
+      "description": "Record step/end. Pending tool work or input can lead to another step; otherwise finish the turn.",
+      "source": {
+        "path": "packages/core/agent-loop/src/agent.ts",
+        "line": 358,
+        "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/src/agent.ts#L358"
+      }
+    }
+  ]
+}
