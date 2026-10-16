@@ -1,0 +1,62 @@
+{
+  "revision": "1517a4dbca0a2789ff1d41ba439600f8547d23fa",
+  "provenance": "Static excerpts copied from the pinned upstream MIT-licensed repository. Non-executable; only a small reading sample per file.",
+  "excerpts": {
+    "file-index.ts": {
+      "path": "packages/core/agent-loop/src/index.ts",
+      "startLine": 33,
+      "endLine": 43,
+      "note": "Lifecycle wiring and module imports",
+      "code": "import type { SessionHandle, SessionPersistence } from '@deepseek-ai/dsh-session-persistence'\nimport { ReactLoopAgent } from './agent.ts'\nimport { inboxProjectionDefinition } from './inbox.ts'\nimport { DEFAULT_MAX_PARALLEL_TOOL_CALLS } from './constants.ts'\nimport type {} from './runtime-context.ts'\n\n/** Fiber states that cannot own or serve a new lifecycle. */\nconst INACTIVE_STATES: ReadonlySet<FiberState> = new Set([\n  FiberState.UNLOADING,\n  FiberState.DISPOSED,\n  FiberState.FAILED,",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/src/index.ts#L33-L43"
+    },
+    "file-agent.ts": {
+      "path": "packages/core/agent-loop/src/agent.ts",
+      "startLine": 266,
+      "endLine": 280,
+      "note": "preStep: inbox claim, context assembly, admission hook",
+      "code": "\n  private async preStep(target: InboxTarget, position: { turn: number; step: number }): Promise<PreparedStep> {\n    /* v8 ignore next -- private callers establish the running phase before proposing a step */\n    if (this.phase.kind !== 'running') throw new Error(`agent \"${this.id}\": pre-step outside running phase`)\n    const signal = this.phase.abort.signal\n    const claimed = this.inbox.claim(target, position.turn)\n    const assembly = await this.loopCtx.systemPrompt.assemble(assembleContextFor(this, signal))\n    signal.throwIfAborted()\n    const decision = await this.dispatch.waterfall(\n      'agent/pre-step', { messages: claimed, ...position, signal },\n      (): Promise<PreStepDecision> => {\n        const sections = renderContextSections(assembly)\n        const context = this.runtimeContext.project(joinContextSections(sections), sections)\n        return Promise.resolve<PreStepDecision>({\n          kind: 'enter',",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/src/agent.ts#L266-L280"
+    },
+    "file-inbox.ts": {
+      "path": "packages/core/agent-loop/src/inbox.ts",
+      "startLine": 20,
+      "endLine": 33,
+      "note": "Durable inbox projection and validation",
+      "code": "/** Wire validation for pending agent input reconstructed from durable inbox splices. */\nexport const inboxProjectionSchema = z.object({\n  'next-turn': z.array(z.custom<UserMessage>()).readonly(),\n  'next-step': z.array(z.custom<UserMessage>()).readonly(),\n}).readonly()\n\n/** Standard fold that reconstructs pending input and rejects invalid durable splice history. */\nexport const inboxProjectionDefinition = {\n  key: 'inbox',\n  stateSchema: inboxProjectionSchema,\n  init: (): InboxState => ({ 'next-turn': [], 'next-step': [] }),\n  apply(state: InboxState, event) {\n    if (event.type !== 'agent/inbox/spliced') return state\n    const splice = event.data",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/src/inbox.ts#L20-L33"
+    },
+    "file-assistant-stream.ts": {
+      "path": "packages/core/agent-loop/src/assistant-stream.ts",
+      "startLine": 43,
+      "endLine": 57,
+      "note": "Opening frames for assistant attempts",
+      "code": "    private readonly emit: (frame: AssistantStreamFrame) => void,\n  ) {\n    this.attemptId = LlmAttemptId(`${sessionId}:${attempt}`)\n  }\n\n  /** Publish the opening marker before the first delivered chunk. */\n  start(): void {\n    this.emit({\n      type: 'start',\n      attemptId: this.attemptId,\n      revision: this.nextRevision(),\n      turn: this.turn,\n      step: this.step,\n    })\n  }",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/src/assistant-stream.ts#L43-L57"
+    },
+    "file-tool-calls.ts": {
+      "path": "packages/core/agent-loop/src/tool-calls.ts",
+      "startLine": 60,
+      "endLine": 75,
+      "note": "Tool scheduling API and ordered execution context",
+      "code": "export async function executeToolCalls(\n  ctx: Context,\n  turn: number,\n  step: number,\n  toolCalls: ToolCallBlock[],\n  signal: AbortSignal,\n  acceptContext: (context: UserMessage) => void,\n): Promise<{ concluded: boolean }> {\n  const agent = ctx.agents.requireInitiator()\n  const { session } = agent\n\n  // Inputs are distinct because tools/execute wrappers may replace `exec.signal`.\n  const planned: PlannedCall[] = toolCalls.map(block => ({\n    block,\n    exec: {\n      callId: block.id,",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/src/tool-calls.ts#L60-L75"
+    },
+    "file-runtime-context.ts": {
+      "path": "packages/core/agent-loop/src/runtime-context.ts",
+      "startLine": 30,
+      "endLine": 43,
+      "note": "Prompt projection contracts",
+      "code": "\n/** One uncommitted system-prompt surface operation for request admission or reconciliation. */\nexport interface SystemPromptCommit {\n  /** Rendered prompt or empty content: an empty head records no prompt; empty tails are dormant. */\n  message: SystemMessage\n  /** `append` for a new system node, otherwise a replacement of one surviving system node. */\n  intent: SurfaceIntent<'system/message'>\n}\n\n/** The request-series facts one prompt decision is made under. */\nexport interface SystemPromptDecisionInput {\n  /** Whether the prepared route for this attempt reads a later `system` message as the effective prompt. */\n  inHistory: boolean\n  /**",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/src/runtime-context.ts#L30-L43"
+    },
+    "file-constants.ts": {
+      "path": "packages/core/agent-loop/src/constants.ts",
+      "startLine": 1,
+      "endLine": 6,
+      "note": "Concurrency policy default",
+      "code": "/** Shared agent-loop scheduler defaults.\n * @module dsh-agent-loop/constants\n */\n\n/** Default maximum in-flight parallel-safe calls per agent step. */\nexport const DEFAULT_MAX_PARALLEL_TOOL_CALLS = 10",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/src/constants.ts#L1-L6"
+    }
+  }
+}

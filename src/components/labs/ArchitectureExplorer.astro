@@ -9,19 +9,33 @@ const { model } = Astro.props;
       <div><span class="ae-eyebrow">CODE → ARCHITECTURE</span><h1>{model.title}</h1><p>Explore the system. Open a component. Follow the code.</p></div>
       <div class="ae-header-actions"><a href={`${model.repository}/tree/${model.revision}`} target="_blank" rel="noopener">Source · {model.revision.slice(0,7)} ↗</a><button data-action="expand">Expand view ↗</button></div>
     </header>
+    <div class="ae-modebar">
+      <div class="ae-mode-label"><strong>Explore the implementation</strong><span>Choose how to read this architecture</span></div>
+      <nav class="ae-modes" aria-label="Architecture exploration mode">
+        <button type="button" data-mode="overview" aria-pressed="true">Overview</button>
+        <button type="button" data-mode="dependencies" aria-pressed="false">Dependencies</button>
+        <button type="button" data-mode="execution" aria-pressed="false">Execution</button>
+        <button type="button" data-mode="source" aria-pressed="false">Source</button>
+      </nav>
+    </div>
     <div class="ae-toolbar">
       <nav class="ae-crumbs" aria-label="Architecture breadcrumb"></nav>
-      <div class="ae-controls"><button data-action="back" disabled>← Back</button><button data-action="out" aria-label="Zoom out">−</button><output aria-label="Zoom level">100%</output><button data-action="in" aria-label="Zoom in">+</button><button data-action="fit">Fit</button><button data-action="reset">100%</button><button data-action="only" aria-pressed="false">Diagram only</button></div>
+      <div class="ae-controls"><button data-action="back" disabled>← Back</button><button data-action="out" aria-label="Zoom out">−</button><output aria-label="Zoom level">100%</output><button data-action="in" aria-label="Zoom in">+</button><button data-action="fit" title="Fit entire graph">Fit all</button><button data-action="focus-node" title="Make selected component readable">Focus</button><button data-action="reset">100%</button><button data-action="toggle-minimap" aria-pressed="false" class="ae-mini-toggle">Map</button><button data-action="navigation" aria-pressed="true">Hide navigation</button><button data-action="inspector" aria-pressed="true">Hide inspector</button><button data-action="only" aria-pressed="false">Diagram only</button></div>
     </div>
     <div class="ae-workbench">
       <aside class="ae-nav" aria-label="Component navigation"><label>Find a component<input type="search" placeholder="Try agent, stream, tools…" /></label><div class="ae-results" aria-live="polite"></div><h2>Subsystems</h2><div class="ae-tree"></div><button class="ae-tour-start" data-action="tour">▶ Follow one agent turn</button><p class="ae-small">Select to inspect.<br/>Open a component to drill down.<br/>Drag empty canvas to pan.</p></aside>
       <section class="ae-map" aria-label="Architecture canvas">
-        <div class="ae-map-heading"><div><h2 data-view-title></h2><p data-view-description></p></div><div class="ae-edge-legend" aria-label="Dependency direction"><span><i class="ae-legend-line"></i> Uses</span><span><i class="ae-legend-line is-inbound"></i> Used by</span></div></div><div class="ae-zone-jumps" role="group" aria-label="Jump to architecture area" hidden></div>
-        <div class="ae-viewport" tabindex="0" role="region" aria-label="Architecture map; scroll or drag background to pan"><div class="ae-stage"><div class="ae-zones" aria-hidden="true"></div><svg class="ae-edges" aria-hidden="true"></svg><div class="ae-nodes"></div></div></div>
+        <div class="ae-map-heading"><div><h2 data-view-title></h2><p data-view-description></p></div><div class="ae-edge-legend" aria-label="Dependency direction"><span><i class="ae-legend-line"></i> Uses</span><span><i class="ae-legend-line is-inbound"></i> Used by</span></div></div><div class="ae-zone-jumps" role="group" aria-label="Jump to architecture area" hidden></div><p class="ae-mode-explainer" data-mode-explainer>Conceptual subsystem boundaries. Select a component to inspect its declared dependencies.</p>
+        <div class="ae-canvas-wrap">
+          <div class="ae-viewport" tabindex="0" role="region" aria-label="Architecture map; scroll or drag background to pan"><div class="ae-stage"><div class="ae-zones" aria-hidden="true"></div><svg class="ae-edges" aria-hidden="true"></svg><div class="ae-nodes"></div></div></div>
+          <button type="button" class="ae-minimap-button" data-action="minimap" aria-label="Architecture minimap; click to move the viewport" title="Click to navigate the diagram"><svg class="ae-minimap" viewBox="0 0 320 180" preserveAspectRatio="none" aria-hidden="true"><g class="ae-mini-zones"></g><g class="ae-mini-nodes"></g><rect class="ae-mini-window" x="0" y="0" width="20" height="20" rx="7"></rect></svg><span>Overview map</span></button>
+        </div>
+        <section class="ae-source-preview" hidden aria-label="Pinned implementation excerpt"><div class="ae-preview-title"><span>CODE READER</span><a class="ae-preview-link" target="_blank" rel="noopener">Open pinned file ↗</a></div><h3 class="ae-preview-note"></h3><p class="ae-preview-path"></p><pre class="ae-preview-code"><code></code></pre><p class="ae-preview-disclaimer">Read-only source excerpt from the pinned upstream commit, not a live execution trace.</p></section>
         <div class="ae-journey" hidden><div class="ae-journey-overview"><span data-step-count></span><button data-action="stop">Exit walkthrough ×</button></div><div class="ae-journey-rail" role="group" aria-label="Six-step agent turn"></div><div class="ae-journey-detail"><div><h3 data-step-title></h3><p data-step-description></p><a data-step-source target="_blank" rel="noopener">View this implementation ↗</a></div><div class="ae-tour-controls"><button data-action="previous">← Previous</button><button data-action="next">Next →</button></div></div></div>
         <div class="ae-map-footer"><span data-map-count></span><span>Zones organize concepts, not execution order. Arrows show declared dependencies/imports. Select a node to isolate them.</span></div>
       </section>
-      <aside class="ae-inspector" aria-label="Selected component"><span class="ae-eyebrow">INSPECT · SOURCE GROUNDED</span><h2 data-detail-title></h2><p data-detail-summary></p><p class="ae-detail-stats" data-detail-stats></p><button data-action="drill" hidden>Explore inside →</button><h3>Source evidence</h3><div class="ae-sources"></div><h3>Connections</h3><div class="ae-connections"></div></aside>
+      <aside class="ae-inspector" aria-label="Selected component"><span class="ae-eyebrow">INSPECT · SOURCE GROUNDED</span><h2 data-detail-title></h2><p data-detail-summary></p><p class="ae-detail-stats" data-detail-stats></p><button data-action="drill" hidden>Explore inside →</button><h3>Source evidence</h3><div class="ae-sources"></div><h3>Connections</h3><div class="ae-connections"></div>
+      </aside>
     </div>
     <footer class="ae-scope">{model.scope} <a href={`${model.repository}/blob/${model.revision}/docs/architecture.md`} target="_blank" rel="noopener">Upstream architecture notes ↗</a></footer>
   </section>
@@ -34,22 +48,51 @@ const { model } = Astro.props;
   type Edge = { view: string; from: string; to: string; label: string; evidence: string; sources: Source[] };
   type View = { id: string; label: string; parent?: string; description: string };
   type Zone = { label: string; note: string; nodes: string[] };
-  type Model = { nodes: Node[]; edges: Edge[]; views: View[]; journey: { node: string; title: string; description: string; source: Source }[]; visualZones?: Record<string, Zone[]> };
+  type Preview = { path: string; startLine: number; endLine: number; note: string; code: string; url: string };
+  type Mode = 'overview' | 'dependencies' | 'execution' | 'source';
+  type Model = { nodes: Node[]; edges: Edge[]; views: View[]; journey: { node: string; title: string; description: string; source: Source }[]; visualZones?: Record<string, Zone[]>; sourceExcerpts?: Record<string, Preview> };
   class ArchitectureExplorer extends HTMLElement {
     connectedCallback() {
       if (this.dataset.ready) return;
       const model: Model = JSON.parse(this.querySelector('[data-model]')!.textContent!);
-      const q = <T extends HTMLElement = HTMLElement>(s: string) => this.querySelector<T>(s)!;
+      const q = <T extends Element = HTMLElement>(s: string) => this.querySelector<T>(s)!;
       const shell = q('.ae-shell'), dialog = q<HTMLDialogElement>('dialog');
       const viewport = q('.ae-viewport'), stage = q('.ae-stage');
       const button = (label: string, fn: () => void, className = '') => { const el = document.createElement('button'); el.textContent = label; el.className = className; el.type = 'button'; el.onclick = fn; return el; };
       const link = (src: Source) => { const a = document.createElement('a'); a.textContent = `${src.path} : ${src.line} ↗`; a.href = src.url; a.target = '_blank'; a.rel = 'noopener'; return a; };
       const getNode = (id: string) => model.nodes.find(n => n.id === id)!;
-      let view = 'system', selected = 'core', zoom = 1, step = -1;
+      let view = 'system', selected = 'core', zoom = 1, step = -1, mode: Mode = 'overview';
       const history: {view: string; selected: string; zoom: number; x: number; y: number}[] = [];
       let positions = new Map<string, {x:number;y:number}>();
       let restoring = false;
-      const setHash = () => { if (!restoring) window.history.replaceState(null, '', `#view=${encodeURIComponent(view)}&node=${encodeURIComponent(selected)}`); };
+      const setHash = () => { if (!restoring) window.history.replaceState(null, '', `#view=${encodeURIComponent(view)}&node=${encodeURIComponent(selected)}&mode=${mode}`); };
+      const updateMinimap = () => {
+        const mini=q<SVGSVGElement>('.ae-minimap');
+        const w=parseFloat(stage.style.width)||900,h=parseFloat(stage.style.height)||530;
+        mini.setAttribute('viewBox',`0 0 ${w} ${h}`);
+        const windowRect=q<SVGRectElement>('.ae-mini-window');
+        const left=Math.max(0,viewport.scrollLeft/zoom),top=Math.max(0,viewport.scrollTop/zoom);
+        windowRect.setAttribute('x',String(left));windowRect.setAttribute('y',String(top));
+        windowRect.setAttribute('width',String(Math.min(w,viewport.clientWidth/zoom)));
+        windowRect.setAttribute('height',String(Math.min(h,viewport.clientHeight/zoom)));
+      };
+      const buildMinimap = () => {
+        const ns='http://www.w3.org/2000/svg', zoneLayer=q('.ae-mini-zones'),nodeLayer=q('.ae-mini-nodes');
+        zoneLayer.replaceChildren();nodeLayer.replaceChildren();
+        this.querySelectorAll<HTMLElement>('.ae-zone').forEach(el=>{
+          const rect=document.createElementNS(ns,'rect');rect.setAttribute('x',el.style.left);
+          rect.setAttribute('y','14');rect.setAttribute('width',el.style.width);
+          rect.setAttribute('height',el.style.height);rect.setAttribute('rx','20');zoneLayer.append(rect);
+        });
+        for(const [id,p] of positions){
+          const rect=document.createElementNS(ns,'rect');
+          rect.setAttribute('x',String(p.x));rect.setAttribute('y',String(p.y));
+          rect.setAttribute('width',String(stage.classList.contains('has-zones')?330:230));
+          rect.setAttribute('height',String(stage.classList.contains('has-zones')?132:130));
+          rect.setAttribute('rx','10');rect.dataset.miniNode=id;nodeLayer.append(rect);
+        }
+        updateMinimap();
+      };
       const updateZoom = () => {
         stage.style.zoom=String(zoom);
         q<HTMLOutputElement>('output').value=`${Math.round(zoom*100)}%`;
@@ -58,13 +101,32 @@ const { model } = Astro.props;
           const drawingHeight=parseFloat(stage.style.height)||530;
           viewport.style.height=`${Math.max(270,Math.min(window.innerHeight*.7,drawingHeight*zoom+28))}px`;
         }else viewport.style.removeProperty('height');
+        updateMinimap();
       };
       const sources = (refs: Source[]) => { q('.ae-sources').replaceChildren(...refs.map(link)); };
+      const renderExcerpt = (id: string) => {
+        const container=q<HTMLElement>('.ae-source-preview');
+        const preview=model.sourceExcerpts?.[id];
+        container.hidden=mode!=='source'||!preview;
+        if(!preview) return;
+        q('.ae-preview-note').textContent=preview.note;
+        q('.ae-preview-path').textContent=`${preview.path} · lines ${preview.startLine}–${preview.endLine}`;
+        q<HTMLAnchorElement>('.ae-preview-link').href=preview.url;
+        const code=q('.ae-preview-code code');code.replaceChildren();
+        preview.code.replace(/\n$/,'').split('\n').forEach((sourceLine,index)=>{
+          const line=document.createElement('span');line.className='ae-code-line';
+          const number=document.createElement('span');number.className='ae-code-no';number.textContent=String(preview.startLine+index);
+          const content=document.createElement('span');content.textContent=sourceLine||' ';
+          line.append(number,content);code.append(line);
+        });
+      };
       const inspect = (id: string) => {
         selected = id; const node = getNode(id);
         q('[data-detail-title]').textContent = node.label; q('[data-detail-summary]').textContent = node.summary;
         q<HTMLButtonElement>('[data-action="drill"]').hidden = !node.child;
         sources(node.sources);
+        renderExcerpt(id);
+        this.querySelectorAll<HTMLElement>('[data-mini-node]').forEach(el=>el.classList.toggle('is-selected',el.dataset.miniNode===id));
         const edges = model.edges.filter(e => e.view === view && (e.from === id || e.to === id));
         const inbound = edges.filter(e => e.to === id).length;
         const outbound = edges.filter(e => e.from === id).length;
@@ -169,13 +231,17 @@ const { model } = Astro.props;
           let x1:number,y1:number,x2:number,y2:number;
           if(horizontal){x1=a.x+cardW/2+sign*cardW/2;y1=a.y+cardH/2+spread;x2=b.x+cardW/2-sign*cardW/2;y2=b.y+cardH/2+spread;}
           else{x1=a.x+cardW/2+spread;y1=a.y+cardH/2+sign*cardH/2;x2=b.x+cardW/2+spread;y2=b.y+cardH/2-sign*cardH/2;}
-          const d=horizontal?`M${x1},${y1} C${(x1+x2)/2},${y1} ${(x1+x2)/2},${y2} ${x2},${y2}`:`M${x1},${y1} C${x1},${(y1+y2)/2} ${x2},${(y1+y2)/2} ${x2},${y2}`;
+          // Manhattan connectors are easier to trace than long Bezier arcs.
+          // These are inferred visual routes for evidence edges, NOT runtime message paths.
+          const d=horizontal
+            ? `M${x1},${y1} L${(x1+x2)/2},${y1} L${(x1+x2)/2},${y2} L${x2},${y2}`
+            : `M${x1},${y1} L${x1},${(y1+y2)/2} L${x2},${(y1+y2)/2} L${x2},${y2}`;
           const path=document.createElementNS(ns,'path');path.setAttribute('d',d);
           path.dataset.edge=String(model.edges.indexOf(e));
           path.setAttribute('marker-end',`url(#${markerId}-out)`);svg.append(path);
         });
         q('[data-map-count]').textContent=`${nodes.length} components · ${edges.length} declared relationships`;
-        updateZoom();inspect(selected);
+        updateZoom();buildMinimap();inspect(selected);
         if(zoned && viewport.clientWidth<650)viewport.scrollLeft=Math.max(0,(positions.get(selected)?.x||0)-32);
       };
       const showStep = () => {
@@ -197,30 +263,109 @@ const { model } = Astro.props;
         const p=positions.get(item.node)!;
         viewport.scrollTo({left:Math.max(0,p.x*zoom-40),top:Math.max(0,p.y*zoom-40),behavior:'smooth'});
       };
+      const setMode = (next: Mode) => {
+        mode=next;shell.dataset.mode=next;
+        this.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.mode===next)));
+        const explainer:Record<Mode,string>={
+          overview:'Editorial subsystem boundaries: what belongs together. These zones are not proof of deployment topology.',
+          dependencies:'Manifest dependencies and lexical file imports. Solid highlights mean uses; dashed means used by. Not an execution trace.',
+          execution:'Curated six-stage reading of one agent turn. Numbered steps are source-linked, not captured runtime spans.',
+          source:'Implementation file explorer. Select a source file to inspect real, commit-pinned TypeScript excerpts and import evidence.'
+        };
+        q('.ae-mode-explainer').textContent=explainer[next];
+        if(next==='overview' && view!=='system')navigate('system','core');
+        if(next==='execution'){
+          if(view!=='loop')navigate('loop','file-inbox.ts');
+          step=0;showStep();
+        }else{
+          step=-1;q('.ae-journey').hidden=true;
+          if(next==='source'){
+            if(view!=='loop')navigate('loop','file-agent.ts');
+            shell.classList.remove('ae-inspector-collapsed');
+            q<HTMLButtonElement>('[data-action="inspector"]').setAttribute('aria-pressed','true');
+            q<HTMLButtonElement>('[data-action="inspector"]').textContent='Hide inspector';
+          }
+          inspect(selected);
+        }
+        updateMinimap();setHash();
+      };
       q('.ae-tree').replaceChildren(...model.views.filter(v=>v.id!=='loop').map(v=>button(v.label,()=>navigate(v.id))));
       q<HTMLInputElement>('input').addEventListener('input',event=>{const term=(event.target as HTMLInputElement).value.trim().toLowerCase();const results=q('.ae-results');results.replaceChildren();if(!term)return;const matches=model.nodes.filter(n=>(n.label+' '+n.summary).toLowerCase().includes(term)).slice(0,12);if(!matches.length)results.textContent='No matching components.';for(const n of matches)results.append(button(`${n.label} · ${model.views.find(v=>v.id===n.view)!.label}`,()=>{navigate(n.view,n.id);results.replaceChildren();q<HTMLInputElement>('input').value='';}));});
-      shell.addEventListener('click',event=>{const action=(event.target as HTMLElement).closest<HTMLElement>('[data-action]')?.dataset.action;if(!action)return;
+      shell.addEventListener('click',event=>{
+        const chosen=(event.target as HTMLElement).closest<HTMLButtonElement>('button[data-mode]')?.dataset.mode as Mode | undefined;
+        if(chosen){setMode(chosen);return;}
+        const action=(event.target as HTMLElement).closest<HTMLElement>('[data-action]')?.dataset.action;if(!action)return;
         if(action==='in'||action==='out'){zoom=Math.min(2,Math.max(.35,zoom+(action==='in'?.15:-.15)));updateZoom();}
-        if(action==='fit'){zoom=Math.min(1,(viewport.clientWidth-20)/900);updateZoom();viewport.scrollTo(0,0);}
+        if(action==='fit'){
+          const stageW=parseFloat(stage.style.width)||900,stageH=parseFloat(stage.style.height)||530;
+          zoom=Math.max(.25,Math.min(1.5,(viewport.clientWidth-24)/stageW,(viewport.clientHeight-24)/stageH));
+          updateZoom();viewport.scrollTo(0,0);
+        }
         if(action==='reset'){zoom=1;updateZoom();viewport.scrollTo(0,0);}
+        if(action==='focus-node'){
+          const p=positions.get(selected);
+          if(p){
+            const cardW=stage.classList.contains('has-zones')?330:230;
+            const cardH=stage.classList.contains('has-zones')?132:130;
+            zoom=Math.max(.65,Math.min(1.25,(viewport.clientWidth-24)/(cardW+24)));
+            updateZoom();
+            viewport.scrollTo({left:Math.max(0,(p.x+cardW/2)*zoom-viewport.clientWidth/2),
+              top:Math.max(0,(p.y+cardH/2)*zoom-viewport.clientHeight/2)});
+          }
+        }
+        if(action==='toggle-minimap'){
+          const open=shell.classList.toggle('ae-show-minimap');
+          q<HTMLButtonElement>('[data-action="toggle-minimap"]').setAttribute('aria-pressed',String(open));
+          updateMinimap();
+        }
         if(action==='drill'){const child=getNode(selected).child;if(child)navigate(child);}
         if(action==='back'){const prior=history.pop();if(prior){navigate(prior.view,prior.selected,false);zoom=prior.zoom;updateZoom();viewport.scrollTo(prior.x,prior.y);}}
         if(action==='only'){const on=shell.classList.toggle('ae-only');q('[data-action="only"]').setAttribute('aria-pressed',String(on));updateZoom();}
+        if(action==='navigation'){
+          const visible=!shell.classList.toggle('ae-nav-collapsed');
+          const control=q<HTMLButtonElement>('[data-action="navigation"]');
+          control.setAttribute('aria-pressed',String(visible));control.textContent=visible?'Hide navigation':'Show navigation';
+          updateMinimap();
+        }
+        if(action==='inspector'){
+          const visible=!shell.classList.toggle('ae-inspector-collapsed');
+          const control=q<HTMLButtonElement>('[data-action="inspector"]');
+          control.setAttribute('aria-pressed',String(visible));control.textContent=visible?'Hide inspector':'Show inspector';
+          updateMinimap();
+        }
+        if(action==='minimap'){
+          const box=q<SVGSVGElement>('.ae-minimap').getBoundingClientRect();
+          const w=parseFloat(stage.style.width)||900,h=parseFloat(stage.style.height)||530;
+          const rx=Math.max(0,Math.min(1,(event.clientX-box.left)/box.width));
+          const ry=Math.max(0,Math.min(1,(event.clientY-box.top)/box.height));
+          viewport.scrollTo({left:Math.max(0,rx*w*zoom-viewport.clientWidth/2),top:Math.max(0,ry*h*zoom-viewport.clientHeight/2)});
+          updateMinimap();
+        }
         if(action==='expand'){if(dialog.open)dialog.close();else{dialog.append(shell);q('[data-action="expand"]').textContent='Close view ×';dialog.showModal();q('[data-action="expand"]').focus();}}
-        if(action==='tour'){navigate('loop','file-inbox.ts');step=0;showStep();}
+        if(action==='tour'){setMode('execution');}
         if(action==='next'&&step<model.journey.length-1){step++;showStep();}
         if(action==='previous'&&step>0){step--;showStep();}
-        if(action==='stop'){step=-1;q('.ae-journey').hidden=true;}
+        if(action==='stop'){setMode('dependencies');}
       });
       dialog.addEventListener('close',()=>{this.insertBefore(shell,dialog);q('[data-action="expand"]').textContent='Expand view ↗';q('[data-action="expand"]').focus();});
       let drag: {x:number;y:number;left:number;top:number}|null=null;
       viewport.addEventListener('pointerdown',event=>{if(event.pointerType!=='mouse'||event.button!==0||(event.target as HTMLElement).closest('button'))return;drag={x:event.clientX,y:event.clientY,left:viewport.scrollLeft,top:viewport.scrollTop};viewport.setPointerCapture(event.pointerId);});
       viewport.addEventListener('pointermove',event=>{if(drag){viewport.scrollLeft=drag.left+drag.x-event.clientX;viewport.scrollTop=drag.top+drag.y-event.clientY;}});
       for(const event of ['pointerup','pointercancel','lostpointercapture'])viewport.addEventListener(event,()=>drag=null);
+      viewport.addEventListener('scroll',updateMinimap,{passive:true});
+      const resizeObserver=new ResizeObserver(()=>updateMinimap());
+      resizeObserver.observe(viewport);
       this.dataset.instance=crypto.randomUUID();
       const hash=new URLSearchParams(location.hash.slice(1));const initialView=hash.get('view'),initialNode=hash.get('node');
+      const initialMode=hash.get('mode') as Mode;
       if(model.views.some(v=>v.id===initialView)){view=initialView!;selected=model.nodes.find(n=>n.view===view&&n.id===initialNode)?.id||model.nodes.find(n=>n.view===view)!.id;}
-      restoring=true;render();restoring=false;this.dataset.ready='true';
+      if(['overview','dependencies','execution','source'].includes(initialMode))mode=initialMode;
+      if((mode==='execution'||mode==='source')&&view!=='loop'){view='loop';selected=mode==='execution'?'file-inbox.ts':'file-agent.ts';}
+      shell.dataset.mode=mode;
+      this.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.mode===mode)));
+      restoring=true;render();restoring=false;
+      if(mode!=='overview')setMode(mode);
+      this.dataset.ready='true';
     }
   }
   if(!customElements.get('architecture-explorer'))customElements.define('architecture-explorer',ArchitectureExplorer);
@@ -299,5 +444,54 @@ const { model } = Astro.props;
   architecture-explorer dialog[open] .ae-viewport{height:min(70dvh,800px);}
   @media(max-width:800px){.ae-map-heading,.ae-journey-detail{flex-direction:column;align-items:flex-start;}.ae-edge-legend{flex-wrap:wrap;}.ae-journey-rail .ae-step{flex:0 0 150px;}}
   @media(max-width:640px){.ae-map-heading{gap:.6rem;}.ae-zone-jumps{padding:.1rem .75rem .6rem;}.ae-journey{padding:.75rem;}.ae-journey-rail .ae-step{min-width:145px;}.ae-journey-detail{gap:.35rem;}.ae-tour-controls{width:100%;}.ae-tour-controls button{flex:1;}}
+  .ae-mini-toggle{display:none;}
+  @media(max-width:640px){
+    .ae-mini-toggle{display:inline-flex;}
+    .ae-minimap-button{display:none;}
+    .ae-shell.ae-show-minimap .ae-minimap-button{display:block;}
+  }
+
+  /* Explorer mode, progressive disclosure and source-reader additions. */
+  .ae-modebar{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:.85rem 1.25rem;border-top:1px solid var(--ae-line);background:var(--color-surface);}
+  .ae-mode-label{display:flex;flex-direction:column;gap:.18rem;min-width:0;}
+  .ae-mode-label strong{font-size:.83rem;letter-spacing:-.01em;}.ae-mode-label span{font-size:.69rem;color:var(--color-text-muted);}
+  .ae-modes{display:flex;gap:.2rem;flex-wrap:wrap;padding:.2rem;border:1px solid var(--ae-line);border-radius:10px;background:var(--color-bg);}
+  .ae-modes button{min-height:36px;border:0;border-radius:7px;padding:.4rem .72rem;white-space:nowrap;}
+  .ae-modes button[aria-pressed="true"]{background:color-mix(in srgb,var(--color-accent) 14%,var(--color-surface));color:var(--color-text);box-shadow:inset 0 0 0 1px var(--color-accent);font-weight:700;}
+  .ae-mode-explainer{font-size:.72rem;line-height:1.55;color:var(--color-text-muted);margin:.1rem 1.25rem .65rem;}
+  .ae-canvas-wrap{position:relative;min-width:0;}
+  .ae-minimap-button{position:absolute;right:14px;bottom:14px;width:176px;min-height:112px!important;padding:5px!important;border:1px solid color-mix(in srgb,var(--color-accent) 25%,var(--color-border))!important;border-radius:11px!important;z-index:2;background:var(--color-surface)!important;box-shadow:0 12px 30px #0002;overflow:hidden;}
+  .ae-minimap-button>span{display:block;text-align:center;font-size:.62rem;line-height:1.2;color:var(--color-text-muted);margin-top:3px;}
+  .ae-minimap{width:100%;height:86px;display:block;background:var(--color-bg);border-radius:7px;}
+  .ae-mini-zones rect{fill:color-mix(in srgb,var(--color-accent) 7%,var(--color-surface));stroke:var(--color-border);stroke-width:2;}
+  .ae-mini-nodes rect{fill:color-mix(in srgb,var(--color-accent) 58%,var(--color-surface));stroke:var(--color-surface);stroke-width:1;}
+  .ae-mini-nodes rect.is-selected{fill:var(--color-accent);}
+  .ae-mini-window{fill:color-mix(in srgb,var(--color-accent) 15%,transparent);stroke:var(--color-accent);stroke-width:5;}
+  .ae-shell.ae-inspector-collapsed .ae-inspector{display:none;}
+  .ae-shell.ae-inspector-collapsed .ae-workbench{grid-template-columns:200px minmax(0,1fr);}
+  .ae-shell.ae-nav-collapsed .ae-nav{display:none;}
+  .ae-shell.ae-nav-collapsed .ae-workbench{grid-template-columns:minmax(0,1fr) 270px;}
+  .ae-shell.ae-nav-collapsed.ae-inspector-collapsed .ae-workbench{grid-template-columns:minmax(0,1fr);}
+  .ae-shell.ae-only .ae-minimap-button{right:18px;bottom:18px;}
+  .ae-shell[data-mode="dependencies"] .ae-edges>path{opacity:.16;}
+  .ae-shell[data-mode="execution"] .ae-edges>path{opacity:0!important;marker-end:none!important;}
+  .ae-shell[data-mode="execution"] .ae-node.is-selected{box-shadow:0 0 0 6px color-mix(in srgb,var(--color-accent) 20%,transparent),0 6px 20px #0002;}
+  .ae-shell[data-mode="execution"] .ae-journey{background:color-mix(in srgb,var(--color-accent) 8%,var(--color-surface));}
+  .ae-source-preview{margin:0;padding:1rem 1.2rem;border-bottom:1px solid var(--ae-line);background:var(--color-surface);}
+  .ae-shell[data-mode="source"] .ae-source-preview{order:-1;}
+  .ae-shell[data-mode="source"] .ae-preview-code{max-height:340px;}
+  .ae-shell[data-mode="source"] .ae-preview-code code{font-size:.74rem;line-height:1.8;}
+  .ae-source-preview[hidden]{display:none;}
+  .ae-preview-title{display:flex;align-items:center;justify-content:space-between;gap:.5rem;flex-wrap:wrap;}
+  .ae-preview-title span{font:700 .66rem var(--font-mono,monospace);letter-spacing:.08em;color:var(--color-accent);}
+  .ae-source-preview .ae-preview-note{font-size:.85rem;line-height:1.5;text-transform:none;letter-spacing:0;color:var(--color-text);margin:.65rem 0 .35rem;}
+  .ae-preview-path{font:.66rem/1.5 var(--font-mono,monospace)!important;overflow-wrap:anywhere;}
+  .ae-preview-code{margin:.7rem 0 0;background:var(--color-bg);border:1px solid var(--ae-line);border-radius:9px;overflow:auto;max-height:330px;padding:.55rem .3rem;}
+  .ae-preview-code code{display:block;font:400 .7rem/1.7 var(--font-mono,monospace);white-space:pre;tab-size:2;}
+  .ae-code-line{display:block;padding:0 .5rem;white-space:pre;}
+  .ae-code-no{display:inline-block;min-width:2.5rem;padding-right:.65rem;text-align:right;color:var(--color-text-muted);user-select:none;border-right:1px solid var(--ae-line);margin-right:.8rem;}
+  .ae-preview-disclaimer{font-size:.68rem!important;line-height:1.5!important;color:var(--color-text-muted)!important;}
+  @media (max-width:1050px){.ae-shell.ae-inspector-collapsed .ae-workbench{grid-template-columns:160px minmax(0,1fr);}.ae-shell.ae-nav-collapsed:not(.ae-inspector-collapsed) .ae-workbench{grid-template-columns:minmax(0,1fr);}.ae-shell.ae-nav-collapsed.ae-inspector-collapsed .ae-workbench{grid-template-columns:1fr;}}
+  @media (max-width:640px){.ae-modebar{flex-direction:column;align-items:stretch;padding:.7rem;}.ae-modes{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));}.ae-modes button{padding:.35rem .1rem;font-size:.68rem;}.ae-shell.ae-nav-collapsed .ae-workbench,.ae-shell.ae-inspector-collapsed .ae-workbench,.ae-shell.ae-nav-collapsed.ae-inspector-collapsed .ae-workbench{display:flex;flex-direction:column;}.ae-minimap-button{width:116px;min-height:78px!important;right:7px;bottom:7px;}.ae-minimap{height:53px;}.ae-minimap-button>span{font-size:.54rem;}.ae-mode-explainer{margin:.1rem .75rem .65rem;}.ae-shell.ae-inspector-collapsed .ae-inspector{display:none;}}
   @media(prefers-reduced-motion:reduce){.ae-viewport{scroll-behavior:auto;}.ae-zone,.ae-edges>path{transition:none;}}
 </style>
