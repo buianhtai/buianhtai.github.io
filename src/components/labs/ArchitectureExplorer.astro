@@ -20,7 +20,7 @@ const { model } = Astro.props;
     </div>
     <div class="ae-toolbar">
       <nav class="ae-crumbs" aria-label="Architecture breadcrumb"></nav>
-      <div class="ae-controls"><button data-action="back" disabled>← Back</button><button data-action="out" aria-label="Zoom out">−</button><output aria-label="Zoom level">100%</output><button data-action="in" aria-label="Zoom in">+</button><button data-action="fit">Fit</button><button data-action="reset">100%</button><button data-action="navigation" aria-pressed="true">Hide navigation</button><button data-action="inspector" aria-pressed="true">Hide inspector</button><button data-action="only" aria-pressed="false">Diagram only</button></div>
+      <div class="ae-controls"><button data-action="back" disabled>← Back</button><button data-action="out" aria-label="Zoom out">−</button><output aria-label="Zoom level">100%</output><button data-action="in" aria-label="Zoom in">+</button><button data-action="fit" title="Fit entire graph">Fit all</button><button data-action="focus-node" title="Make selected component readable">Focus</button><button data-action="reset">100%</button><button data-action="toggle-minimap" aria-pressed="false" class="ae-mini-toggle">Map</button><button data-action="navigation" aria-pressed="true">Hide navigation</button><button data-action="inspector" aria-pressed="true">Hide inspector</button><button data-action="only" aria-pressed="false">Diagram only</button></div>
     </div>
     <div class="ae-workbench">
       <aside class="ae-nav" aria-label="Component navigation"><label>Find a component<input type="search" placeholder="Try agent, stream, tools…" /></label><div class="ae-results" aria-live="polite"></div><h2>Subsystems</h2><div class="ae-tree"></div><button class="ae-tour-start" data-action="tour">▶ Follow one agent turn</button><p class="ae-small">Select to inspect.<br/>Open a component to drill down.<br/>Drag empty canvas to pan.</p></aside>
@@ -302,6 +302,22 @@ const { model } = Astro.props;
           updateZoom();viewport.scrollTo(0,0);
         }
         if(action==='reset'){zoom=1;updateZoom();viewport.scrollTo(0,0);}
+        if(action==='focus-node'){
+          const p=positions.get(selected);
+          if(p){
+            const cardW=stage.classList.contains('has-zones')?330:230;
+            const cardH=stage.classList.contains('has-zones')?132:130;
+            zoom=Math.max(.65,Math.min(1.25,(viewport.clientWidth-24)/(cardW+24)));
+            updateZoom();
+            viewport.scrollTo({left:Math.max(0,(p.x+cardW/2)*zoom-viewport.clientWidth/2),
+              top:Math.max(0,(p.y+cardH/2)*zoom-viewport.clientHeight/2)});
+          }
+        }
+        if(action==='toggle-minimap'){
+          const open=shell.classList.toggle('ae-show-minimap');
+          q<HTMLButtonElement>('[data-action="toggle-minimap"]').setAttribute('aria-pressed',String(open));
+          updateMinimap();
+        }
         if(action==='drill'){const child=getNode(selected).child;if(child)navigate(child);}
         if(action==='back'){const prior=history.pop();if(prior){navigate(prior.view,prior.selected,false);zoom=prior.zoom;updateZoom();viewport.scrollTo(prior.x,prior.y);}}
         if(action==='only'){const on=shell.classList.toggle('ae-only');q('[data-action="only"]').setAttribute('aria-pressed',String(on));updateZoom();}
@@ -428,6 +444,12 @@ const { model } = Astro.props;
   architecture-explorer dialog[open] .ae-viewport{height:min(70dvh,800px);}
   @media(max-width:800px){.ae-map-heading,.ae-journey-detail{flex-direction:column;align-items:flex-start;}.ae-edge-legend{flex-wrap:wrap;}.ae-journey-rail .ae-step{flex:0 0 150px;}}
   @media(max-width:640px){.ae-map-heading{gap:.6rem;}.ae-zone-jumps{padding:.1rem .75rem .6rem;}.ae-journey{padding:.75rem;}.ae-journey-rail .ae-step{min-width:145px;}.ae-journey-detail{gap:.35rem;}.ae-tour-controls{width:100%;}.ae-tour-controls button{flex:1;}}
+  .ae-mini-toggle{display:none;}
+  @media(max-width:640px){
+    .ae-mini-toggle{display:inline-flex;}
+    .ae-minimap-button{display:none;}
+    .ae-shell.ae-show-minimap .ae-minimap-button{display:block;}
+  }
 
   /* Explorer mode, progressive disclosure and source-reader additions. */
   .ae-modebar{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:.85rem 1.25rem;border-top:1px solid var(--ae-line);background:var(--color-surface);}
