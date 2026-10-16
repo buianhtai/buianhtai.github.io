@@ -232,6 +232,16 @@ jobs:
       - name: Verify Agno Atlas V2 reader tasks and responsive design
         timeout-minutes: 3
         run: node scripts/agno-atlas-v2-visual-check.mjs
+      - name: Verify shared diagram controls, themes and mobile layout
+        timeout-minutes: 3
+        run: node scripts/diagram-system-check.mjs
+      - name: Upload shared diagram gallery screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagram-system-review
+          path: artifacts/diagram-system/
+          if-no-files-found: warn
       - name: Verify source-linked diagram-only viewer (desktop and mobile)
         timeout-minutes: 3
         run: node scripts/agno-diagrams-visual-check.mjs

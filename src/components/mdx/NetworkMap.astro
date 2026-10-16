@@ -1,4 +1,5 @@
 ---
+import DiagramFrame from './DiagramFrame.astro';
 /**
  * NetworkMap — free-layout node/edge graph for infrastructure topology.
  *
@@ -155,8 +156,8 @@ function diamondPath(cx: number, cy: number, rx: number, ry: number): string {
 const id = `nm-${Math.random().toString(36).slice(2, 7)}`;
 ---
 
+<DiagramFrame {title} {caption} kind="Network">
 <div class="nm-wrap">
-  {title && <div class="nm-titlebar"><span class="nm-prompt">$</span> {title}</div>}
   <div class="nm-body">
     <svg
       width={W} height={H}
@@ -336,8 +337,8 @@ const id = `nm-${Math.random().toString(36).slice(2, 7)}`;
       })}
     </svg>
   </div>
-  {caption && <div class="nm-caption"><span class="nm-prompt">▶</span> {caption}</div>}
 </div>
+</DiagramFrame>
 
 <style>
   .nm-wrap {
