@@ -30,11 +30,11 @@ const { model } = Astro.props;
           <div class="ae-viewport" tabindex="0" role="region" aria-label="Architecture map; scroll or drag background to pan"><div class="ae-stage"><div class="ae-zones" aria-hidden="true"></div><svg class="ae-edges" aria-hidden="true"></svg><div class="ae-nodes"></div></div></div>
           <button type="button" class="ae-minimap-button" data-action="minimap" aria-label="Architecture minimap; click to move the viewport" title="Click to navigate the diagram"><svg class="ae-minimap" viewBox="0 0 320 180" preserveAspectRatio="none" aria-hidden="true"><g class="ae-mini-zones"></g><g class="ae-mini-nodes"></g><rect class="ae-mini-window" x="0" y="0" width="20" height="20" rx="7"></rect></svg><span>Overview map</span></button>
         </div>
+        <section class="ae-source-preview" hidden aria-label="Pinned implementation excerpt"><div class="ae-preview-title"><span>CODE READER</span><a class="ae-preview-link" target="_blank" rel="noopener">Open pinned file ↗</a></div><h3 class="ae-preview-note"></h3><p class="ae-preview-path"></p><pre class="ae-preview-code"><code></code></pre><p class="ae-preview-disclaimer">Read-only source excerpt from the pinned upstream commit, not a live execution trace.</p></section>
         <div class="ae-journey" hidden><div class="ae-journey-overview"><span data-step-count></span><button data-action="stop">Exit walkthrough ×</button></div><div class="ae-journey-rail" role="group" aria-label="Six-step agent turn"></div><div class="ae-journey-detail"><div><h3 data-step-title></h3><p data-step-description></p><a data-step-source target="_blank" rel="noopener">View this implementation ↗</a></div><div class="ae-tour-controls"><button data-action="previous">← Previous</button><button data-action="next">Next →</button></div></div></div>
         <div class="ae-map-footer"><span data-map-count></span><span>Zones organize concepts, not execution order. Arrows show declared dependencies/imports. Select a node to isolate them.</span></div>
       </section>
       <aside class="ae-inspector" aria-label="Selected component"><span class="ae-eyebrow">INSPECT · SOURCE GROUNDED</span><h2 data-detail-title></h2><p data-detail-summary></p><p class="ae-detail-stats" data-detail-stats></p><button data-action="drill" hidden>Explore inside →</button><h3>Source evidence</h3><div class="ae-sources"></div><h3>Connections</h3><div class="ae-connections"></div>
-        <section class="ae-source-preview" hidden aria-label="Pinned implementation excerpt"><div class="ae-preview-title"><span>CODE READER</span><a class="ae-preview-link" target="_blank" rel="noopener">Open pinned file ↗</a></div><h3 class="ae-preview-note"></h3><p class="ae-preview-path"></p><pre class="ae-preview-code"><code></code></pre><p class="ae-preview-disclaimer">Read-only source excerpt from the pinned upstream commit, not a live execution trace.</p></section>
       </aside>
     </div>
     <footer class="ae-scope">{model.scope} <a href={`${model.repository}/blob/${model.revision}/docs/architecture.md`} target="_blank" rel="noopener">Upstream architecture notes ↗</a></footer>
@@ -455,7 +455,10 @@ const { model } = Astro.props;
   .ae-shell[data-mode="execution"] .ae-edges>path{opacity:0!important;marker-end:none!important;}
   .ae-shell[data-mode="execution"] .ae-node.is-selected{box-shadow:0 0 0 6px color-mix(in srgb,var(--color-accent) 20%,transparent),0 6px 20px #0002;}
   .ae-shell[data-mode="execution"] .ae-journey{background:color-mix(in srgb,var(--color-accent) 8%,var(--color-surface));}
-  .ae-source-preview{margin-top:1.4rem;padding-top:.9rem;border-top:1px solid var(--ae-line);}
+  .ae-source-preview{margin:0;padding:1rem 1.2rem;border-bottom:1px solid var(--ae-line);background:var(--color-surface);}
+  .ae-shell[data-mode="source"] .ae-source-preview{order:-1;}
+  .ae-shell[data-mode="source"] .ae-preview-code{max-height:340px;}
+  .ae-shell[data-mode="source"] .ae-preview-code code{font-size:.74rem;line-height:1.8;}
   .ae-source-preview[hidden]{display:none;}
   .ae-preview-title{display:flex;align-items:center;justify-content:space-between;gap:.5rem;flex-wrap:wrap;}
   .ae-preview-title span{font:700 .66rem var(--font-mono,monospace);letter-spacing:.08em;color:var(--color-accent);}
