@@ -21,13 +21,20 @@ try{
   await page.goto(host+route);const app=page.locator('architecture-explorer');
   await page.waitForSelector('architecture-explorer[data-ready="true"]');
   assert.equal(await app.locator('[data-node]').count(),6);
+  assert.equal(await app.locator('.ae-zone').count(),3,'Overview presents three conceptual zones');
   await app.locator('[data-node="core"]').click();
+  assert.equal(await app.locator('.ae-zone.is-zone-active').count(),1,'Active module highlights its boundary');
+  assert(await app.locator('.ae-edges > path.is-outgoing').count()>0,'Outgoing dependencies are visually distinguished');
+  assert(await app.locator('.ae-edges > path.is-incoming').count()>0,'Incoming dependencies are visually distinguished');
+  assert.match(await app.locator('[data-detail-stats]').innerText(),/outgoing.*incoming/);
   assert.match(await app.locator('[data-detail-title]').innerText(),/Agent runtime/);
   await app.locator('[data-action="drill"]').click();
   assert.equal(await app.locator('[data-node]').count(),6);
+  assert.equal(await app.locator('.ae-zone').count(),3,'Runtime groups are visible');
   await app.locator('[data-node="core-agent-loop"]').click();
   await app.locator('[data-action="drill"]').click();
   assert.equal(await app.locator('[data-node]').count(),7);
+  assert.equal(await app.locator('.ae-zone').count(),3,'Source modules have visible responsibility boundaries');
   assert.match(await app.locator('[data-view-title]').innerText(),/Agent-loop/);
   await app.locator('[data-action="in"]').click();assert.equal(await app.locator('output').innerText(),'115%');
   await app.locator('[data-action="back"]').click();assert.match(await app.locator('[data-detail-title]').innerText(),/agent-loop/);
@@ -36,11 +43,14 @@ try{
   assert.match(await app.locator('[data-detail-title]').innerText(),/Assistant stream/);
   const source=await app.locator('.ae-sources a').first().getAttribute('href');assert(source.includes(model.revision));
   await app.locator('[data-action="tour"]').click();
+  assert.equal(await app.locator('.ae-journey-rail button').count(),6,'All six stages remain directly selectable');
   for(let i=0;i<model.journey.length;i++){
    assert.match(await app.locator('[data-step-count]').innerText(),new RegExp(`${i+1} / 6`));
    assert.equal(await app.locator(`[data-node="${model.journey[i].node}"]`).getAttribute('aria-pressed'),'true');
    if(i<model.journey.length-1)await app.locator('[data-action="next"]').click();
   }
+  await app.locator('.ae-journey-rail button').first().click();
+  assert.match(await app.locator('[data-step-count]').innerText(),/1 \/ 6/,'Reader can jump directly to a stage');
   await app.locator('[data-action="stop"]').click();
   await app.locator('[data-action="expand"]').click();assert.equal(await app.locator('dialog').evaluate(e=>e.open),true);
   await page.keyboard.press('Escape');assert.equal(await app.locator('dialog').evaluate(e=>e.open),false);
