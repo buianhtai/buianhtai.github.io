@@ -32,6 +32,27 @@ provides a directly selectable horizontal stage rail. This is a curated
 explanation of the code, not a captured execution trace. On mobile, use native
 canvas scrolling to explore the bounded map.
 
+## V3 architecture workspace
+
+The original PR #64/#65 source-pinned model remains the authoritative graph.
+The viewer now has four *reading modes* over this same data:
+
+- **Overview:** conceptual/editorial subsystem zones. These are not runtime containers.
+- **Dependencies:** source-declared imports and package relationships, with outgoing versus incoming focus. Not calls or service requests.
+- **Execution:** six curated, source-linked steps in agent-loop. The source order is editorial and not a recorded trace.
+- **Source:** seven short, read-only excerpts pinned to the same Git commit, with line numbers and GitHub anchors. Excerpts are stored in `src/data/architecture/deepseek-harness-excerpts.json`; no external browser fetches or executable source are involved.
+
+To avoid squeezing the graph behind sidebars, readers can collapse either navigation
+or inspector independently, use Diagram only mode, Fit based on the actual canvas
+dimensions, pan the SVG minimap or jump directly to an architecture zone.
+The dependency edges use orthogonal visual routing, without claiming those
+lines represent runtime message sequence.
+
+The reusable `ArchitectureExplorer` accepts optional `visualZones` and
+`sourceExcerpts`. To reuse this interface for another codebase, supply
+independently verified relationship evidence and pinned source snippets; do not
+invent function-call order from imports.
+
 ## Evidence and limits
 
 Subsystem boundaries are editorial. Package relationships are extracted from
