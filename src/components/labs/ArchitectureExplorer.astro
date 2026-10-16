@@ -16,12 +16,12 @@ const { model } = Astro.props;
     <div class="ae-workbench">
       <aside class="ae-nav" aria-label="Component navigation"><label>Find a component<input type="search" placeholder="Try agent, stream, tools…" /></label><div class="ae-results" aria-live="polite"></div><h2>Subsystems</h2><div class="ae-tree"></div><button class="ae-tour-start" data-action="tour">▶ Follow one agent turn</button><p class="ae-small">Select to inspect.<br/>Open a component to drill down.<br/>Drag empty canvas to pan.</p></aside>
       <section class="ae-map" aria-label="Architecture canvas">
-        <div class="ae-map-heading"><h2 data-view-title></h2><p data-view-description></p></div>
-        <div class="ae-viewport" tabindex="0" role="region" aria-label="Architecture map; scroll or drag background to pan"><div class="ae-stage"><svg class="ae-edges" aria-hidden="true"></svg><div class="ae-nodes"></div></div></div>
-        <div class="ae-journey" hidden><div><span data-step-count></span><h3 data-step-title></h3><p data-step-description></p><a data-step-source target="_blank" rel="noopener">View this implementation ↗</a></div><div class="ae-tour-controls"><button data-action="previous">←</button><button data-action="next">Next →</button><button data-action="stop">Exit walkthrough</button></div></div>
-        <div class="ae-map-footer"><span data-map-count></span><span>Arrow = dependency / import · select a node to isolate its connections</span></div>
+        <div class="ae-map-heading"><div><h2 data-view-title></h2><p data-view-description></p></div><div class="ae-edge-legend" aria-label="Dependency direction"><span><i class="ae-legend-line"></i> Uses</span><span><i class="ae-legend-line is-inbound"></i> Used by</span></div></div><div class="ae-zone-jumps" role="group" aria-label="Jump to architecture area" hidden></div>
+        <div class="ae-viewport" tabindex="0" role="region" aria-label="Architecture map; scroll or drag background to pan"><div class="ae-stage"><div class="ae-zones" aria-hidden="true"></div><svg class="ae-edges" aria-hidden="true"></svg><div class="ae-nodes"></div></div></div>
+        <div class="ae-journey" hidden><div class="ae-journey-overview"><span data-step-count></span><button data-action="stop">Exit walkthrough ×</button></div><div class="ae-journey-rail" role="group" aria-label="Six-step agent turn"></div><div class="ae-journey-detail"><div><h3 data-step-title></h3><p data-step-description></p><a data-step-source target="_blank" rel="noopener">View this implementation ↗</a></div><div class="ae-tour-controls"><button data-action="previous">← Previous</button><button data-action="next">Next →</button></div></div></div>
+        <div class="ae-map-footer"><span data-map-count></span><span>Zones organize concepts, not execution order. Arrows show declared dependencies/imports. Select a node to isolate them.</span></div>
       </section>
-      <aside class="ae-inspector" aria-label="Selected component"><span class="ae-eyebrow">INSPECT</span><h2 data-detail-title></h2><p data-detail-summary></p><button data-action="drill" hidden>Explore inside →</button><h3>Source evidence</h3><div class="ae-sources"></div><h3>Connections</h3><div class="ae-connections"></div></aside>
+      <aside class="ae-inspector" aria-label="Selected component"><span class="ae-eyebrow">INSPECT · SOURCE GROUNDED</span><h2 data-detail-title></h2><p data-detail-summary></p><p class="ae-detail-stats" data-detail-stats></p><button data-action="drill" hidden>Explore inside →</button><h3>Source evidence</h3><div class="ae-sources"></div><h3>Connections</h3><div class="ae-connections"></div></aside>
     </div>
     <footer class="ae-scope">{model.scope} <a href={`${model.repository}/blob/${model.revision}/docs/architecture.md`} target="_blank" rel="noopener">Upstream architecture notes ↗</a></footer>
   </section>
@@ -33,7 +33,8 @@ const { model } = Astro.props;
   type Node = { id: string; view: string; label: string; summary: string; kind: string; child?: string; sources: Source[] };
   type Edge = { view: string; from: string; to: string; label: string; evidence: string; sources: Source[] };
   type View = { id: string; label: string; parent?: string; description: string };
-  type Model = { nodes: Node[]; edges: Edge[]; views: View[]; journey: { node: string; title: string; description: string; source: Source }[] };
+  type Zone = { label: string; note: string; nodes: string[] };
+  type Model = { nodes: Node[]; edges: Edge[]; views: View[]; journey: { node: string; title: string; description: string; source: Source }[]; visualZones?: Record<string, Zone[]> };
   class ArchitectureExplorer extends HTMLElement {
     connectedCallback() {
       if (this.dataset.ready) return;
@@ -49,7 +50,15 @@ const { model } = Astro.props;
       let positions = new Map<string, {x:number;y:number}>();
       let restoring = false;
       const setHash = () => { if (!restoring) window.history.replaceState(null, '', `#view=${encodeURIComponent(view)}&node=${encodeURIComponent(selected)}`); };
-      const updateZoom = () => { stage.style.zoom = String(zoom); q<HTMLOutputElement>('output').value = `${Math.round(zoom*100)}%`; };
+      const updateZoom = () => {
+        stage.style.zoom=String(zoom);
+        q<HTMLOutputElement>('output').value=`${Math.round(zoom*100)}%`;
+        // At small widths, a fitted, diagram-only canvas should not leave a huge blank viewport.
+        if(shell.classList.contains('ae-only')&&window.innerWidth<=640){
+          const drawingHeight=parseFloat(stage.style.height)||530;
+          viewport.style.height=`${Math.max(270,Math.min(window.innerHeight*.7,drawingHeight*zoom+28))}px`;
+        }else viewport.style.removeProperty('height');
+      };
       const sources = (refs: Source[]) => { q('.ae-sources').replaceChildren(...refs.map(link)); };
       const inspect = (id: string) => {
         selected = id; const node = getNode(id);
@@ -57,9 +66,20 @@ const { model } = Astro.props;
         q<HTMLButtonElement>('[data-action="drill"]').hidden = !node.child;
         sources(node.sources);
         const edges = model.edges.filter(e => e.view === view && (e.from === id || e.to === id));
+        const inbound = edges.filter(e => e.to === id).length;
+        const outbound = edges.filter(e => e.from === id).length;
+        q('[data-detail-stats]').textContent = `${outbound} outgoing · ${inbound} incoming · ${node.sources.length} source references`;
         const connected = new Set([id,...edges.flatMap(e=>[e.from,e.to])]);
         this.querySelectorAll<HTMLElement>('[data-node]').forEach(el => {el.classList.toggle('is-selected',el.dataset.node===id);el.classList.toggle('is-muted',!connected.has(el.dataset.node!));el.setAttribute('aria-pressed', String(el.dataset.node===id));});
-        this.querySelectorAll<SVGElement>('[data-edge]').forEach(el=>{const e=model.edges[Number(el.dataset.edge)];el.classList.toggle('is-active', e.from===id||e.to===id);});
+        this.querySelectorAll<SVGElement>('[data-edge]').forEach(el=>{
+          const e=model.edges[Number(el.dataset.edge)];
+          const outgoing=e.from===id,incoming=e.to===id;
+          el.classList.toggle('is-outgoing',outgoing);
+          el.classList.toggle('is-incoming',incoming);
+          el.setAttribute('marker-end',outgoing||incoming?`url(#arrow-${this.dataset.instance}-${incoming?'in':'out'})`:'none');
+        });
+        this.querySelectorAll<HTMLElement>('.ae-zone').forEach(el=>el.classList.toggle('is-zone-active',el.dataset.zoneNodes?.split(',').includes(id)??false));
+        this.querySelectorAll<HTMLElement>('.ae-zone-jump').forEach(el=>el.classList.toggle('is-current',el.dataset.zoneNodes?.split(',').includes(id)??false));
         const list = q('.ae-connections'); list.replaceChildren();
         if(!edges.length) list.textContent = 'No dependencies shown in this focused view. This does not imply the component has none.';
         for(const e of edges){ const other=getNode(e.from===id?e.to:e.from); const row=document.createElement('div');row.className='ae-connection';row.append(button(`${e.from===id?'→ Uses':'← Used by'} ${other.label}`,()=>inspect(other.id)));const p=document.createElement('p');p.textContent=e.evidence;row.append(p,...e.sources.slice(0,2).map(link));list.append(row); }
@@ -76,18 +96,107 @@ const { model } = Astro.props;
         const crumbs:View[]=[];let cursor:View|undefined=current;while(cursor){crumbs.unshift(cursor);cursor=model.views.find(v=>v.id===cursor!.parent);}
         q('.ae-crumbs').replaceChildren(...crumbs.map(v=>button(v.label,()=>navigate(v.id))));
         q<HTMLButtonElement>('[data-action="back"]').disabled=history.length===0;
-        const nodes=model.nodes.filter(n=>n.view===view);const edges=model.edges.filter(e=>e.view===view);
-        const width=900,height=Math.max(430,Math.ceil(nodes.length/3)*190+70);
-        stage.style.width=width+'px';stage.style.height=height+'px'; positions=new Map();
+        const nodes=model.nodes.filter(n=>n.view===view);
+        const edges=model.edges.filter(e=>e.view===view);
+        const configured=model.visualZones?.[view] || [];
+        const groups=configured.map(z=>({...z,nodes:z.nodes.filter(id=>nodes.some(n=>n.id===id))})).filter(z=>z.nodes.length);
+        const assigned=new Set(groups.flatMap(z=>z.nodes));
+        const remaining=nodes.filter(n=>!assigned.has(n.id)).map(n=>n.id);
+        if(groups.length&&remaining.length)groups.push({label:'Additional modules',note:'Not assigned to an editorial zone',nodes:remaining});
+        const zoned=groups.length>0;
+        const width=zoned?groups.length*410+20:900;
+        const height=zoned?Math.max(460,130+Math.max(...groups.map(z=>z.nodes.length))*160):Math.max(430,Math.ceil(nodes.length/3)*190+70);
+        const cardW=zoned?330:230,cardH=zoned?132:130;
+        stage.style.width=width+'px';stage.style.height=height+'px';
+        stage.classList.toggle('has-zones',zoned);positions=new Map();
+        const zoneLayer=q('.ae-zones');zoneLayer.replaceChildren();
+        const zoneJumps=q('.ae-zone-jumps');zoneJumps.replaceChildren();zoneJumps.hidden=!zoned;
+        if(zoned){
+          groups.forEach((zone,index)=>{
+            const x=24+index*410;
+            const panel=document.createElement('section');panel.className='ae-zone';
+            panel.dataset.zoneNodes=zone.nodes.join(',');panel.style.left=x+'px';panel.style.width='386px';panel.style.height=(height-28)+'px';
+            const heading=document.createElement('div');heading.className='ae-zone-heading';
+            const number=document.createElement('span');number.className='ae-zone-mark';number.textContent='◈';
+            const copy=document.createElement('div');const title=document.createElement('h3');title.textContent=zone.label;
+            const note=document.createElement('p');note.textContent=zone.note;copy.append(title,note);heading.append(number,copy);panel.append(heading);zoneLayer.append(panel);
+            zone.nodes.forEach((id,row)=>positions.set(id,{x:x+27,y:130+row*160}));
+            const jump=button(zone.label,()=>{
+              const focusId=zone.nodes[0];inspect(focusId);
+              const pos=positions.get(focusId)!;
+              viewport.scrollTo({left:Math.max(0,pos.x-30),top:0,behavior:'smooth'});
+            },'ae-zone-jump');
+            jump.dataset.zoneNodes=zone.nodes.join(',');
+            jump.setAttribute('aria-label',`Show ${zone.label} on the architecture map`);
+            zoneJumps.append(jump);
+          });
+        }else nodes.forEach((n,i)=>positions.set(n.id,{x:40+(i%3)*290,y:45+Math.floor(i/3)*190}));
         const layer=q('.ae-nodes');layer.replaceChildren();
-        nodes.forEach((n,i)=>{const x=40+(i%3)*290,y=45+Math.floor(i/3)*190;positions.set(n.id,{x,y}); const card=button('',()=>inspect(n.id),'ae-node'); card.dataset.node=n.id; card.style.left=x+'px';card.style.top=y+'px'; const type=document.createElement('span');type.className='ae-node-kind';type.textContent=n.kind;const title=document.createElement('strong');title.textContent=n.label;const summary=document.createElement('span');summary.className='ae-node-summary';summary.textContent=n.summary;card.append(type,title,summary);if(n.child){const hint=document.createElement('span');hint.className='ae-node-hint';hint.textContent='Contains components ↗';card.append(hint);card.ondblclick=()=>navigate(n.child!); }layer.append(card);});
-        const svg=this.querySelector<SVGSVGElement>('.ae-edges')!;svg.setAttribute('viewBox',`0 0 ${width} ${height}`);svg.setAttribute('width',String(width));svg.setAttribute('height',String(height));
+        nodes.forEach((n)=>{
+          const place=positions.get(n.id)!;
+          const card=button('',()=>inspect(n.id),'ae-node');card.dataset.node=n.id;
+          card.style.left=place.x+'px';card.style.top=place.y+'px';
+          const top=document.createElement('span');top.className='ae-node-top';
+          const glyph=document.createElement('span');glyph.className='ae-node-glyph';
+          glyph.textContent=n.kind==='Source file'?'{ }':n.kind==='Subsystem'?'◇':'▦';
+          const type=document.createElement('span');type.className='ae-node-kind';type.textContent=n.kind;
+          top.append(glyph,type);
+          const title=document.createElement('strong');title.textContent=n.label;
+          const summary=document.createElement('span');summary.className='ae-node-summary';summary.textContent=n.summary;
+          card.append(top,title,summary);
+          if(n.child){const hint=document.createElement('span');hint.className='ae-node-hint';hint.textContent='Explore inside ↗';card.append(hint);card.ondblclick=()=>navigate(n.child!);}
+          layer.append(card);
+        });
+        const svg=this.querySelector<SVGSVGElement>('.ae-edges')!;
+        svg.setAttribute('viewBox',`0 0 ${width} ${height}`);
+        svg.setAttribute('width',String(width));svg.setAttribute('height',String(height));
         svg.replaceChildren();const ns='http://www.w3.org/2000/svg';
-        const markerId=`arrow-${this.dataset.instance}`;const defs=document.createElementNS(ns,'defs');const marker=document.createElementNS(ns,'marker');marker.id=markerId;for(const [k,v]of Object.entries({viewBox:'0 0 10 10',refX:'9',refY:'5',markerWidth:'7',markerHeight:'7',orient:'auto-start-reverse'}))marker.setAttribute(k,v);const tip=document.createElementNS(ns,'path');tip.setAttribute('d','M 0 0 L 10 5 L 0 10 z');tip.setAttribute('fill','var(--color-accent)');marker.append(tip);defs.append(marker);svg.append(defs);
-        edges.forEach(e=>{const a=positions.get(e.from)!,b=positions.get(e.to)!;const same=a.y===b.y;const forward=b.x>a.x;const x1=same?(a.x+(forward?230:0)):a.x+115,y1=same?a.y+65:a.y+(b.y>a.y?130:0);const x2=same?(b.x+(forward?0:230)):b.x+115,y2=same?b.y+65:b.y+(b.y>a.y?0:130);const path=document.createElementNS(ns,'path');path.setAttribute('d',same?`M${x1},${y1} C${(x1+x2)/2},${y1-28} ${(x1+x2)/2},${y2-28} ${x2},${y2}`:`M${x1},${y1} C${x1},${(y1+y2)/2} ${x2},${(y1+y2)/2} ${x2},${y2}`);path.dataset.edge=String(model.edges.indexOf(e));path.setAttribute('marker-end',`url(#${markerId})`);svg.append(path);});
-        q('[data-map-count]').textContent=`${nodes.length} components · ${edges.length} relationships`;updateZoom();inspect(selected);
+        const markerId=`arrow-${this.dataset.instance}`;
+        const defs=document.createElementNS(ns,'defs');
+        for(const [suffix,paint] of [['out','var(--color-accent)'],['in','var(--ae-incoming)']] as const){
+          const marker=document.createElementNS(ns,'marker');marker.id=`${markerId}-${suffix}`;
+          for(const [k,v]of Object.entries({viewBox:'0 0 10 10',refX:'9',refY:'5',markerWidth:'7',markerHeight:'7',orient:'auto-start-reverse'}))marker.setAttribute(k,v);
+          const tip=document.createElementNS(ns,'path');tip.setAttribute('d','M 0 0 L 10 5 L 0 10 z');tip.setAttribute('fill',paint);marker.append(tip);defs.append(marker);
+        }
+        svg.append(defs);
+        edges.forEach(e=>{
+          const a=positions.get(e.from)!,b=positions.get(e.to)!;
+          const dx=b.x-a.x,dy=b.y-a.y;
+          const horizontal=Math.abs(dx)>Math.abs(dy)*.6;
+          const sign=horizontal?(dx>=0?1:-1):(dy>=0?1:-1);
+          const reciprocal=edges.some(other=>other.from===e.to&&other.to===e.from);
+          const spread=reciprocal?(e.from<e.to?-9:9):0;
+          let x1:number,y1:number,x2:number,y2:number;
+          if(horizontal){x1=a.x+cardW/2+sign*cardW/2;y1=a.y+cardH/2+spread;x2=b.x+cardW/2-sign*cardW/2;y2=b.y+cardH/2+spread;}
+          else{x1=a.x+cardW/2+spread;y1=a.y+cardH/2+sign*cardH/2;x2=b.x+cardW/2+spread;y2=b.y+cardH/2-sign*cardH/2;}
+          const d=horizontal?`M${x1},${y1} C${(x1+x2)/2},${y1} ${(x1+x2)/2},${y2} ${x2},${y2}`:`M${x1},${y1} C${x1},${(y1+y2)/2} ${x2},${(y1+y2)/2} ${x2},${y2}`;
+          const path=document.createElementNS(ns,'path');path.setAttribute('d',d);
+          path.dataset.edge=String(model.edges.indexOf(e));
+          path.setAttribute('marker-end',`url(#${markerId}-out)`);svg.append(path);
+        });
+        q('[data-map-count]').textContent=`${nodes.length} components · ${edges.length} declared relationships`;
+        updateZoom();inspect(selected);
+        if(zoned && viewport.clientWidth<650)viewport.scrollLeft=Math.max(0,(positions.get(selected)?.x||0)-32);
       };
-      const showStep = () => {const item=model.journey[step];q('.ae-journey').hidden=false;q('[data-step-count]').textContent=`CURATED TURN WALKTHROUGH · ${step+1} / ${model.journey.length}`;q('[data-step-title]').textContent=item.title;q('[data-step-description]').textContent=item.description;q<HTMLAnchorElement>('[data-step-source]').href=item.source.url;q<HTMLButtonElement>('[data-action="previous"]').disabled=step===0;q<HTMLButtonElement>('[data-action="next"]').disabled=step===model.journey.length-1;inspect(item.node);const p=positions.get(item.node)!;viewport.scrollTo({left:Math.max(0,p.x*zoom-40),top:Math.max(0,p.y*zoom-40),behavior:'smooth'});};
+      const showStep = () => {
+        const item=model.journey[step];q('.ae-journey').hidden=false;
+        q('[data-step-count]').textContent=`CURATED SOURCE WALKTHROUGH · ${step+1} / ${model.journey.length}`;
+        q('[data-step-title]').textContent=item.title;
+        q('[data-step-description]').textContent=item.description;
+        q<HTMLAnchorElement>('[data-step-source]').href=item.source.url;
+        q<HTMLButtonElement>('[data-action="previous"]').disabled=step===0;
+        q<HTMLButtonElement>('[data-action="next"]').disabled=step===model.journey.length-1;
+        q('.ae-journey-rail').replaceChildren(...model.journey.map((j,i)=>{
+          const chip=button(`${String(i+1).padStart(2,'0')}  ${j.title}`,()=>{step=i;showStep();},'ae-step');
+          chip.classList.toggle('is-current',i===step);
+          chip.classList.toggle('is-done',i<step);
+          chip.setAttribute('aria-current',i===step?'step':'false');
+          return chip;
+        }));
+        inspect(item.node);
+        const p=positions.get(item.node)!;
+        viewport.scrollTo({left:Math.max(0,p.x*zoom-40),top:Math.max(0,p.y*zoom-40),behavior:'smooth'});
+      };
       q('.ae-tree').replaceChildren(...model.views.filter(v=>v.id!=='loop').map(v=>button(v.label,()=>navigate(v.id))));
       q<HTMLInputElement>('input').addEventListener('input',event=>{const term=(event.target as HTMLInputElement).value.trim().toLowerCase();const results=q('.ae-results');results.replaceChildren();if(!term)return;const matches=model.nodes.filter(n=>(n.label+' '+n.summary).toLowerCase().includes(term)).slice(0,12);if(!matches.length)results.textContent='No matching components.';for(const n of matches)results.append(button(`${n.label} · ${model.views.find(v=>v.id===n.view)!.label}`,()=>{navigate(n.view,n.id);results.replaceChildren();q<HTMLInputElement>('input').value='';}));});
       shell.addEventListener('click',event=>{const action=(event.target as HTMLElement).closest<HTMLElement>('[data-action]')?.dataset.action;if(!action)return;
@@ -96,7 +205,7 @@ const { model } = Astro.props;
         if(action==='reset'){zoom=1;updateZoom();viewport.scrollTo(0,0);}
         if(action==='drill'){const child=getNode(selected).child;if(child)navigate(child);}
         if(action==='back'){const prior=history.pop();if(prior){navigate(prior.view,prior.selected,false);zoom=prior.zoom;updateZoom();viewport.scrollTo(prior.x,prior.y);}}
-        if(action==='only'){const on=shell.classList.toggle('ae-only');q('[data-action="only"]').setAttribute('aria-pressed',String(on));}
+        if(action==='only'){const on=shell.classList.toggle('ae-only');q('[data-action="only"]').setAttribute('aria-pressed',String(on));updateZoom();}
         if(action==='expand'){if(dialog.open)dialog.close();else{dialog.append(shell);q('[data-action="expand"]').textContent='Close view ×';dialog.showModal();q('[data-action="expand"]').focus();}}
         if(action==='tour'){navigate('loop','file-inbox.ts');step=0;showStep();}
         if(action==='next'&&step<model.journey.length-1){step++;showStep();}
@@ -150,5 +259,45 @@ const { model } = Astro.props;
   @media(min-width:1600px){.ae-workbench{grid-template-columns:220px minmax(0,1fr) 310px;}}
   @media(max-width:1050px){.ae-workbench{grid-template-columns:160px minmax(0,1fr);}.ae-inspector{grid-column:1/-1;border-left:0;border-top:1px solid var(--ae-line);max-height:400px;}.ae-header{flex-direction:column;}}
   @media(max-width:640px){.ae-workbench{display:flex;flex-direction:column;}.ae-nav{border-right:0;border-bottom:1px solid var(--ae-line);}.ae-nav h2,.ae-tree,.ae-small{display:none;}.ae-nav input{margin-bottom:.2rem;}.ae-tour-start{margin-top:.5rem!important;}.ae-header{padding:1rem;}.ae-header h1{font-size:1.4rem;}.ae-viewport{height:420px;}.ae-controls{gap:.2rem;}.ae-controls button{padding:.5rem;}.ae-map-footer{flex-direction:column;gap:.3rem;}.ae-inspector{max-height:none;}.ae-toolbar{padding:.6rem;}}
-  @media(prefers-reduced-motion:reduce){.ae-viewport{scroll-behavior:auto;}}
+  /* Visual reading layer. Boundaries are editorial, never a claim about runtime order. */
+  architecture-explorer {--ae-incoming:color-mix(in srgb,var(--color-accent) 55%,var(--color-text));}
+  .ae-map-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;}
+  .ae-edge-legend{display:flex;flex-shrink:0;gap:.8rem;margin-top:.2rem;font-size:.68rem;color:var(--color-text-muted);}
+  .ae-edge-legend span{display:flex;align-items:center;gap:.35rem;white-space:nowrap;}
+  .ae-legend-line{display:inline-block;width:20px;border-top:2px solid var(--color-accent);}
+  .ae-legend-line.is-inbound{border-color:var(--ae-incoming);border-top-style:dashed;}
+  .ae-zone-jumps{display:flex;gap:.4rem;overflow-x:auto;padding:.1rem 1.25rem .65rem;scrollbar-width:thin;}
+  .ae-zone-jumps[hidden]{display:none;}
+  .ae-zone-jump{white-space:nowrap;border-radius:999px!important;min-height:34px!important;padding:.3rem .8rem!important;}
+  .ae-zone-jump.is-current{background:color-mix(in srgb,var(--color-accent) 12%,var(--color-surface));border-color:var(--color-accent);font-weight:700;}
+  .ae-zones{position:absolute;inset:0;pointer-events:none;}
+  .ae-zone{position:absolute;top:14px;border:1px solid color-mix(in srgb,var(--color-accent) 23%,var(--color-border));background:color-mix(in srgb,var(--color-accent) 4%,var(--color-surface));border-radius:20px;transition:border-color .18s,background .18s;}
+  .ae-zone.is-zone-active{border-color:color-mix(in srgb,var(--color-accent) 68%,var(--color-border));background:color-mix(in srgb,var(--color-accent) 9%,var(--color-surface));}
+  .ae-zone-heading{display:flex;align-items:flex-start;gap:.8rem;padding:1rem 1.15rem;border-bottom:1px solid var(--ae-line);}
+  .ae-zone-mark{font:700 .8rem var(--font-mono,monospace);color:var(--color-accent);border:1px solid var(--ae-line);border-radius:9px;padding:.4rem;background:var(--color-surface);}
+  .ae-zone-heading h3{margin:0;font-size:.93rem;font-weight:700;line-height:1.4;letter-spacing:-.015em;color:var(--color-text);}
+  .ae-zone-heading p{margin:.22rem 0 0;font-size:.7rem;line-height:1.5;color:var(--color-text-muted);}
+  .ae-stage.has-zones .ae-node{width:330px;height:132px;}
+  .ae-node-top{display:flex;align-items:center;gap:.45rem;}
+  .ae-node-glyph{display:grid;place-items:center;min-width:25px;height:25px;border:1px solid var(--ae-line);border-radius:7px;background:color-mix(in srgb,var(--color-accent) 9%,var(--color-surface));color:var(--color-accent);font-weight:700;font-size:.8rem;}
+  .ae-edges>path{opacity:.025;transition:opacity .15s,stroke .15s;}
+  .ae-edges>path.is-outgoing{stroke:var(--color-accent);stroke-width:2.4;opacity:.98;}
+  .ae-edges>path.is-incoming{stroke:var(--ae-incoming);stroke-width:2.2;stroke-dasharray:7 5;opacity:.8;}
+  .ae-detail-stats{font:600 .69rem var(--font-mono,monospace)!important;color:var(--color-accent)!important;border-block:1px solid var(--ae-line);padding:.6rem 0;}
+  .ae-journey{order:-1;border-block:0;border-bottom:1px solid var(--ae-line);background:color-mix(in srgb,var(--color-accent) 4%,var(--color-surface));}
+  .ae-journey-overview,.ae-journey-detail{display:flex;justify-content:space-between;gap:1.25rem;align-items:center;}
+  .ae-journey-overview{margin-bottom:.65rem;}
+  .ae-journey-overview button{min-height:32px;}
+  .ae-journey-rail{display:flex;gap:.5rem;overflow-x:auto;max-width:100%;padding:.2rem .1rem .7rem;scrollbar-width:thin;}
+  .ae-journey-rail .ae-step{min-width:144px;flex:1;min-height:54px;white-space:normal;line-height:1.45;background:var(--color-surface);border:1px solid var(--ae-line);font-weight:600;}
+  .ae-journey-rail .ae-step.is-current{border-color:var(--color-accent);background:color-mix(in srgb,var(--color-accent) 11%,var(--color-surface));box-shadow:inset 0 0 0 1px var(--color-accent);color:var(--color-text);}
+  .ae-journey-rail .ae-step.is-done{border-color:color-mix(in srgb,var(--color-accent) 45%,var(--color-border));}
+  .ae-journey-detail{align-items:flex-end;padding-top:.3rem;}
+  .ae-journey-detail h3{margin:.3rem 0;font-size:1rem;}
+  .ae-journey-detail p{max-width:72ch;margin:.2rem 0 .4rem;}
+  .ae-tour-controls{flex-shrink:0;}
+  architecture-explorer dialog[open] .ae-viewport{height:min(70dvh,800px);}
+  @media(max-width:800px){.ae-map-heading,.ae-journey-detail{flex-direction:column;align-items:flex-start;}.ae-edge-legend{flex-wrap:wrap;}.ae-journey-rail .ae-step{flex:0 0 150px;}}
+  @media(max-width:640px){.ae-map-heading{gap:.6rem;}.ae-zone-jumps{padding:.1rem .75rem .6rem;}.ae-journey{padding:.75rem;}.ae-journey-rail .ae-step{min-width:145px;}.ae-journey-detail{gap:.35rem;}.ae-tour-controls{width:100%;}.ae-tour-controls button{flex:1;}}
+  @media(prefers-reduced-motion:reduce){.ae-viewport{scroll-behavior:auto;}.ae-zone,.ae-edges>path{transition:none;}}
 </style>

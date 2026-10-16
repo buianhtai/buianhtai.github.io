@@ -16,6 +16,22 @@ DeepSeek Harness at commit `1517a4dbca0a2789ff1d41ba439600f8547d23fa`.
 - Expand into a modal view or hide side panels with Diagram only. Escape closes the modal.
 - Share the current URL to restore its view and selection.
 
+## Diagram-first visual language
+
+The page supplies editorial zones for the system, Agent runtime and agent-loop
+views. These bounded panels are **conceptual groupings, not deployment boundaries
+or execution sequence**. Evidence stays in the generated JSON graph.
+
+Selecting a component highlights its conceptual zone and distinguishes declared
+outgoing dependencies from incoming references (solid versus dashed). Unrelated
+relations are faint, reducing the visual noise of mutually dependent packages.
+The inspector shows direction counts and commit-pinned source references.
+
+The six-step, source-linked turn walkthrough now appears before the diagram and
+provides a directly selectable horizontal stage rail. This is a curated
+explanation of the code, not a captured execution trace. On mobile, use native
+canvas scrolling to explore the bounded map.
+
 ## Evidence and limits
 
 Subsystem boundaries are editorial. Package relationships are extracted from
