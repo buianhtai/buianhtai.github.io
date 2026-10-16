@@ -15,12 +15,12 @@ const { model } = Astro.props;
     </div>
     <div class="ae-workbench">
       <aside class="ae-nav" aria-label="Component navigation"><label>Find a component<input type="search" placeholder="Try agent, stream, tools…" /></label><div class="ae-results" aria-live="polite"></div><h2>Subsystems</h2><div class="ae-tree"></div><button class="ae-tour-start" data-action="tour">▶ Follow one agent turn</button><p class="ae-small">Select to inspect.<br/>Open a component to drill down.<br/>Drag empty canvas to pan.</p></aside>
-      <main class="ae-map">
+      <section class="ae-map" aria-label="Architecture canvas">
         <div class="ae-map-heading"><h2 data-view-title></h2><p data-view-description></p></div>
         <div class="ae-viewport" tabindex="0" role="region" aria-label="Architecture map; scroll or drag background to pan"><div class="ae-stage"><svg class="ae-edges" aria-hidden="true"></svg><div class="ae-nodes"></div></div></div>
         <div class="ae-journey" hidden><div><span data-step-count></span><h3 data-step-title></h3><p data-step-description></p><a data-step-source target="_blank" rel="noopener">View this implementation ↗</a></div><div class="ae-tour-controls"><button data-action="previous">←</button><button data-action="next">Next →</button><button data-action="stop">Exit walkthrough</button></div></div>
         <div class="ae-map-footer"><span data-map-count></span><span>Arrow = dependency / import · select a node to isolate its connections</span></div>
-      </main>
+      </section>
       <aside class="ae-inspector" aria-label="Selected component"><span class="ae-eyebrow">INSPECT</span><h2 data-detail-title></h2><p data-detail-summary></p><button data-action="drill" hidden>Explore inside →</button><h3>Source evidence</h3><div class="ae-sources"></div><h3>Connections</h3><div class="ae-connections"></div></aside>
     </div>
     <footer class="ae-scope">{model.scope} <a href={`${model.repository}/blob/${model.revision}/docs/architecture.md`} target="_blank" rel="noopener">Upstream architecture notes ↗</a></footer>
@@ -68,7 +68,7 @@ const { model } = Astro.props;
       const navigate = (next: string, node?: string, remember=true) => {
         if(remember) history.push({view,selected,zoom,x:viewport.scrollLeft,y:viewport.scrollTop});
         view=next; selected=node || model.nodes.find(n=>n.view===view)!.id; zoom=1; step=-1; q('.ae-journey').hidden=true;
-        render(); viewport.scrollTo(0,0);
+        render(); viewport.scrollTo(0,0); q('[data-view-title]').scrollIntoView({block:'start'});
       };
       const render = () => {
         const current=model.views.find(v=>v.id===view)!;
