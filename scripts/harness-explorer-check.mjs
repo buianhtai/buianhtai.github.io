@@ -3,6 +3,10 @@ import {spawn} from 'node:child_process';
 import {mkdir, readFile} from 'node:fs/promises';
 import {chromium} from 'playwright';
 const model=JSON.parse(await readFile('src/data/architecture/deepseek-harness.json','utf8'));
+const previews=JSON.parse(await readFile('src/data/architecture/deepseek-harness-excerpts.json','utf8'));
+assert.equal(previews.revision,model.revision,'Source previews match pinned architecture commit');
+assert.equal(Object.keys(previews.excerpts).length,7,'All seven loop files have pinned excerpts');
+for(const preview of Object.values(previews.excerpts)){assert(preview.url.includes('/'+model.revision+'/'));assert(preview.code.length>0);}
 const ids=new Set(model.nodes.map(n=>n.id));
 assert.equal(ids.size,model.nodes.length);
 for(const e of model.edges){assert(ids.has(e.from)&&ids.has(e.to));assert(e.sources.length>0);}
@@ -21,6 +25,19 @@ try{
   await page.goto(host+route);const app=page.locator('architecture-explorer');
   await page.waitForSelector('architecture-explorer[data-ready="true"]');
   assert.equal(await app.locator('[data-node]').count(),6);
+  assert.equal(await app.locator('[data-mode="overview"]').getAttribute('aria-pressed'),'true');
+  assert.equal(await app.locator('.ae-minimap-button').count(),1,'Minimap is present');
+  assert((await app.locator('.ae-mini-nodes rect').count())>=6,'Minimap contains architecture nodes');
+  await app.locator('[data-action="inspector"]').click();
+  assert.equal(await app.locator('.ae-inspector').isVisible(),false,'Inspector collapses to free canvas width');
+  await app.locator('[data-action="inspector"]').click();
+  assert.equal(await app.locator('.ae-inspector').isVisible(),true,'Inspector can be restored');
+  await app.locator('[data-action="navigation"]').click();
+  assert.equal(await app.locator('.ae-nav').isVisible(),false);
+  await app.locator('[data-action="navigation"]').click();
+  assert.equal(await app.locator('.ae-nav').isVisible(),true);
+  await app.locator('[data-mode="dependencies"]').click();
+  assert.equal(await app.locator('[data-mode="dependencies"]').getAttribute('aria-pressed'),'true');
   assert.equal(await app.locator('.ae-zone').count(),3,'Overview presents three conceptual zones');
   await app.locator('[data-node="core"]').click();
   assert.equal(await app.locator('.ae-zone.is-zone-active').count(),1,'Active module highlights its boundary');
@@ -41,6 +58,17 @@ try{
   assert.equal(await app.locator('[data-node]').count(),7);
   assert.equal(await app.locator('.ae-zone').count(),3,'Source modules have visible responsibility boundaries');
   assert.match(await app.locator('[data-view-title]').innerText(),/Agent-loop/);
+  await app.locator('[data-mode="source"]').click();
+  assert.equal(await app.locator('[data-mode="source"]').getAttribute('aria-pressed'),'true');
+  await app.locator('[data-node="file-agent.ts"]').click();
+  assert.equal(await app.locator('.ae-source-preview').isVisible(),true,'Source mode displays pinned code');
+  assert.match(await app.locator('.ae-preview-note').innerText(),/preStep/);
+  assert((await app.locator('.ae-code-line').count())>=10);
+  assert((await app.locator('.ae-preview-link').getAttribute('href')).includes(model.revision));
+  await app.locator('[data-mode="execution"]').click();
+  assert.equal(await app.locator('.ae-journey-rail button').count(),6,'Execution mode opens curated stage rail');
+  assert.match(await app.locator('[data-step-count]').innerText(),/1 \/ 6/);
+  await app.locator('[data-mode="dependencies"]').click();
   await app.locator('[data-action="in"]').click();assert.equal(await app.locator('output').innerText(),'115%');
   await app.locator('[data-action="back"]').click();assert.match(await app.locator('[data-detail-title]').innerText(),/agent-loop/);
   await app.locator('input').fill('Assistant stream');
@@ -73,5 +101,5 @@ try{
   const url=page.url();await page.goto(url);await page.waitForSelector('architecture-explorer[data-ready="true"]');assert.match(await app.locator('[data-view-title]').innerText(),/Agent-loop/);
   assert.deepEqual(errors,[]);await ctx.close();
  }
- console.log('Harness explorer passed: data integrity, drilldown, back, source evidence, search, walkthrough, zoom, modal, diagram-only, deep links, 3 widths and 2 themes.');
+ console.log('Harness explorer passed: version-pinned code previews, four modes, minimap, collapsible panels, drilldown, back, source, execution rail, zoom, modal, diagram-only, deep links, 3 widths and 2 themes.');
 }finally{await browser?.close();server.kill();}
