@@ -2,12 +2,14 @@
 import BaseLayout from '../../../layouts/BaseLayout.astro';
 import ArchitectureExplorer from '../../../components/labs/ArchitectureExplorer.astro';
 import model from '../../../data/architecture/deepseek-harness.json';
+import snippets from '../../../data/architecture/deepseek-harness-excerpts.json';
 /**
  * Editorial boundaries organize the reading experience, not runtime call order.
  * Keep these separate from the generated manifest/import evidence model.
  */
 const visualModel = {
   ...model,
+  sourceExcerpts: snippets.excerpts,
   visualZones: {
     system: [
       { label: 'Entry & assembly', note: 'Remote sessions and plugin composition', nodes: ['boot', 'api'] },
