@@ -72,9 +72,12 @@ try{
   assert.match(await app.locator('.ae-preview-note').innerText(),/preStep/);
   assert((await app.locator('.ae-code-line').count())>=10);
   assert((await app.locator('.ae-preview-link').getAttribute('href')).includes(model.revision));
+  await page.screenshot({path:`artifacts/harness-explorer/source-${theme}-${width}.png`,fullPage:true});
   await app.locator('button[data-mode="execution"]').click();
   assert.equal(await app.locator('.ae-journey-rail button').count(),6,'Execution mode opens curated stage rail');
   assert.match(await app.locator('[data-step-count]').innerText(),/1 \/ 6/);
+  await app.locator('.ae-journey-rail button').nth(3).click();
+  await page.screenshot({path:`artifacts/harness-explorer/execution-${theme}-${width}.png`,fullPage:true});
   await app.locator('button[data-mode="dependencies"]').click();
   await app.locator('[data-action="in"]').click();assert.equal(await app.locator('output').innerText(),'115%');
   await app.locator('[data-action="back"]').click();assert.match(await app.locator('[data-detail-title]').innerText(),/agent-loop/);
