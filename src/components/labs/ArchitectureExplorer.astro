@@ -48,7 +48,9 @@ const { model } = Astro.props;
   type Edge = { view: string; from: string; to: string; label: string; evidence: string; sources: Source[] };
   type View = { id: string; label: string; parent?: string; description: string };
   type Zone = { label: string; note: string; nodes: string[] };
-  type Model = { nodes: Node[]; edges: Edge[]; views: View[]; journey: { node: string; title: string; description: string; source: Source }[]; visualZones?: Record<string, Zone[]> };
+  type Preview = { path: string; startLine: number; endLine: number; note: string; code: string; url: string };
+  type Mode = 'overview' | 'dependencies' | 'execution' | 'source';
+  type Model = { nodes: Node[]; edges: Edge[]; views: View[]; journey: { node: string; title: string; description: string; source: Source }[]; visualZones?: Record<string, Zone[]>; sourceExcerpts?: Record<string, Preview> };
   class ArchitectureExplorer extends HTMLElement {
     connectedCallback() {
       if (this.dataset.ready) return;
@@ -59,11 +61,38 @@ const { model } = Astro.props;
       const button = (label: string, fn: () => void, className = '') => { const el = document.createElement('button'); el.textContent = label; el.className = className; el.type = 'button'; el.onclick = fn; return el; };
       const link = (src: Source) => { const a = document.createElement('a'); a.textContent = `${src.path} : ${src.line} ↗`; a.href = src.url; a.target = '_blank'; a.rel = 'noopener'; return a; };
       const getNode = (id: string) => model.nodes.find(n => n.id === id)!;
-      let view = 'system', selected = 'core', zoom = 1, step = -1;
+      let view = 'system', selected = 'core', zoom = 1, step = -1, mode: Mode = 'overview';
       const history: {view: string; selected: string; zoom: number; x: number; y: number}[] = [];
       let positions = new Map<string, {x:number;y:number}>();
       let restoring = false;
-      const setHash = () => { if (!restoring) window.history.replaceState(null, '', `#view=${encodeURIComponent(view)}&node=${encodeURIComponent(selected)}`); };
+      const setHash = () => { if (!restoring) window.history.replaceState(null, '', `#view=${encodeURIComponent(view)}&node=${encodeURIComponent(selected)}&mode=${mode}`); };
+      const updateMinimap = () => {
+        const mini=q<SVGSVGElement>('.ae-minimap');
+        const w=parseFloat(stage.style.width)||900,h=parseFloat(stage.style.height)||530;
+        mini.setAttribute('viewBox',`0 0 ${w} ${h}`);
+        const windowRect=q<SVGRectElement>('.ae-mini-window');
+        const left=Math.max(0,viewport.scrollLeft/zoom),top=Math.max(0,viewport.scrollTop/zoom);
+        windowRect.setAttribute('x',String(left));windowRect.setAttribute('y',String(top));
+        windowRect.setAttribute('width',String(Math.min(w,viewport.clientWidth/zoom)));
+        windowRect.setAttribute('height',String(Math.min(h,viewport.clientHeight/zoom)));
+      };
+      const buildMinimap = () => {
+        const ns='http://www.w3.org/2000/svg', zoneLayer=q('.ae-mini-zones'),nodeLayer=q('.ae-mini-nodes');
+        zoneLayer.replaceChildren();nodeLayer.replaceChildren();
+        this.querySelectorAll<HTMLElement>('.ae-zone').forEach(el=>{
+          const rect=document.createElementNS(ns,'rect');rect.setAttribute('x',el.style.left);
+          rect.setAttribute('y','14');rect.setAttribute('width',el.style.width);
+          rect.setAttribute('height',el.style.height);rect.setAttribute('rx','20');zoneLayer.append(rect);
+        });
+        for(const [id,p] of positions){
+          const rect=document.createElementNS(ns,'rect');
+          rect.setAttribute('x',String(p.x));rect.setAttribute('y',String(p.y));
+          rect.setAttribute('width',String(stage.classList.contains('has-zones')?330:230));
+          rect.setAttribute('height',String(stage.classList.contains('has-zones')?132:130));
+          rect.setAttribute('rx','10');rect.dataset.miniNode=id;nodeLayer.append(rect);
+        }
+        updateMinimap();
+      };
       const updateZoom = () => {
         stage.style.zoom=String(zoom);
         q<HTMLOutputElement>('output').value=`${Math.round(zoom*100)}%`;
@@ -72,13 +101,32 @@ const { model } = Astro.props;
           const drawingHeight=parseFloat(stage.style.height)||530;
           viewport.style.height=`${Math.max(270,Math.min(window.innerHeight*.7,drawingHeight*zoom+28))}px`;
         }else viewport.style.removeProperty('height');
+        updateMinimap();
       };
       const sources = (refs: Source[]) => { q('.ae-sources').replaceChildren(...refs.map(link)); };
+      const renderExcerpt = (id: string) => {
+        const container=q<HTMLElement>('.ae-source-preview');
+        const preview=model.sourceExcerpts?.[id];
+        container.hidden=mode!=='source'||!preview;
+        if(!preview) return;
+        q('.ae-preview-note').textContent=preview.note;
+        q('.ae-preview-path').textContent=`${preview.path} · lines ${preview.startLine}–${preview.endLine}`;
+        q<HTMLAnchorElement>('.ae-preview-link').href=preview.url;
+        const code=q('.ae-preview-code code');code.replaceChildren();
+        preview.code.replace(/\n$/,'').split('\n').forEach((sourceLine,index)=>{
+          const line=document.createElement('span');line.className='ae-code-line';
+          const number=document.createElement('span');number.className='ae-code-no';number.textContent=String(preview.startLine+index);
+          const content=document.createElement('span');content.textContent=sourceLine||' ';
+          line.append(number,content);code.append(line);
+        });
+      };
       const inspect = (id: string) => {
         selected = id; const node = getNode(id);
         q('[data-detail-title]').textContent = node.label; q('[data-detail-summary]').textContent = node.summary;
         q<HTMLButtonElement>('[data-action="drill"]').hidden = !node.child;
         sources(node.sources);
+        renderExcerpt(id);
+        this.querySelectorAll<HTMLElement>('[data-mini-node]').forEach(el=>el.classList.toggle('is-selected',el.dataset.miniNode===id));
         const edges = model.edges.filter(e => e.view === view && (e.from === id || e.to === id));
         const inbound = edges.filter(e => e.to === id).length;
         const outbound = edges.filter(e => e.from === id).length;
@@ -183,13 +231,17 @@ const { model } = Astro.props;
           let x1:number,y1:number,x2:number,y2:number;
           if(horizontal){x1=a.x+cardW/2+sign*cardW/2;y1=a.y+cardH/2+spread;x2=b.x+cardW/2-sign*cardW/2;y2=b.y+cardH/2+spread;}
           else{x1=a.x+cardW/2+spread;y1=a.y+cardH/2+sign*cardH/2;x2=b.x+cardW/2+spread;y2=b.y+cardH/2-sign*cardH/2;}
-          const d=horizontal?`M${x1},${y1} C${(x1+x2)/2},${y1} ${(x1+x2)/2},${y2} ${x2},${y2}`:`M${x1},${y1} C${x1},${(y1+y2)/2} ${x2},${(y1+y2)/2} ${x2},${y2}`;
+          // Manhattan connectors are easier to trace than long Bezier arcs.
+          // These are inferred visual routes for evidence edges, NOT runtime message paths.
+          const d=horizontal
+            ? `M${x1},${y1} L${(x1+x2)/2},${y1} L${(x1+x2)/2},${y2} L${x2},${y2}`
+            : `M${x1},${y1} L${x1},${(y1+y2)/2} L${x2},${(y1+y2)/2} L${x2},${y2}`;
           const path=document.createElementNS(ns,'path');path.setAttribute('d',d);
           path.dataset.edge=String(model.edges.indexOf(e));
           path.setAttribute('marker-end',`url(#${markerId}-out)`);svg.append(path);
         });
         q('[data-map-count]').textContent=`${nodes.length} components · ${edges.length} declared relationships`;
-        updateZoom();inspect(selected);
+        updateZoom();buildMinimap();inspect(selected);
         if(zoned && viewport.clientWidth<650)viewport.scrollLeft=Math.max(0,(positions.get(selected)?.x||0)-32);
       };
       const showStep = () => {
