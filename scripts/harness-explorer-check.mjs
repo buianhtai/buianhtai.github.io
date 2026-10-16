@@ -24,6 +24,11 @@ try{
   assert.equal(await app.locator('.ae-zone').count(),3,'Overview presents three conceptual zones');
   await app.locator('[data-node="core"]').click();
   assert.equal(await app.locator('.ae-zone.is-zone-active').count(),1,'Active module highlights its boundary');
+  assert.equal(await app.locator('.ae-zone-jump').count(),3,'Reader can jump directly between bounded zones');
+  await app.locator('.ae-zone-jump').first().click();
+  assert.match(await app.locator('[data-detail-title]').innerText(),/Composition/);
+  await app.locator('.ae-zone-jump').nth(1).click();
+  assert.match(await app.locator('[data-detail-title]').innerText(),/Agent runtime/);
   assert(await app.locator('.ae-edges > path.is-outgoing').count()>0,'Outgoing dependencies are visually distinguished');
   assert(await app.locator('.ae-edges > path.is-incoming').count()>0,'Incoming dependencies are visually distinguished');
   assert.match(await app.locator('[data-detail-stats]').innerText(),/outgoing.*incoming/);
@@ -57,6 +62,10 @@ try{
   assert.equal(await app.locator('[data-action="expand"]').evaluate(e=>e===document.activeElement),true);
   await app.locator('[data-action="only"]').click();assert.equal(await app.locator('.ae-inspector').isVisible(),false);
   await app.locator('[data-action="fit"]').click();
+  if(width===390){
+    const viewportHeight=await app.locator('.ae-viewport').evaluate(el=>el.getBoundingClientRect().height);
+    assert(viewportHeight<=701,'Fitted mobile canvas must not reserve excess blank height');
+  }
   await app.scrollIntoViewIfNeeded();await page.screenshot({path:`artifacts/harness-explorer/map-${theme}-${width}.png`,fullPage:true});
   await app.locator('[data-action="only"]').click();
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'No horizontal page overflow');
