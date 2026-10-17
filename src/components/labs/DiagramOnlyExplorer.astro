@@ -1,15 +1,15 @@
 ---
-interface Props { model:any; zones:any[]; snippets:any }
-const {model,zones,snippets}=Astro.props;
+interface Props { model:any; zones:any[]; snippets:any; handoffs:any }
+const {model,zones,snippets,handoffs}=Astro.props;
 ---
 <diagram-only-explorer class="de">
-  <script type="application/json" data-payload set:html={JSON.stringify({model,zones,excerpts:snippets.excerpts}).replace(/</g,'\\u003c')} />
+  <script type="application/json" data-payload set:html={JSON.stringify({model,zones,excerpts:snippets.excerpts,handoffs:handoffs.handoffs}).replace(/</g,'\\u003c')} />
   <div class="de-shell">
     <header class="de-top">
       <div><span class="de-overline">SOURCE-GROUNDED ARCHITECTURE</span><h1>DeepSeek Harness</h1></div>
       <nav class="de-tabs" aria-label="Select diagram mode">
         <button type="button" data-mode="full" aria-pressed="false">▦ Full model</button><button type="button" data-mode="architecture" aria-pressed="true">◇ Focus</button>
-        <button type="button" data-mode="flow" aria-pressed="false">⇢ Agent turn flow</button>
+        <button type="button" data-mode="flow" aria-pressed="false">⇢ Agent turn flow</button><button type="button" data-mode="code" aria-pressed="false">⌘ Code path</button>
       </nav>
       <a href={model.repository+'/tree/'+model.revision} target="_blank" rel="noopener noreferrer">Pinned source ↗</a>
     </header>
@@ -31,6 +31,7 @@ const {model,zones,snippets}=Astro.props;
         <h3>How this component connects</h3><p class="de-connect-explain">Arrows represent declared package or file imports. They are not measured runtime calls.</p>
         <div class="de-connect-summary" aria-label="Dependency direction summary"></div>
         <div class="de-related"></div>
+        <h3>Code-level handoffs</h3><p class="de-connect-explain">Verified methods, calls and events from the pinned TypeScript source. Not a network trace.</p><div class="de-handoffs"></div>
         <h3>Verified source evidence</h3><div class="de-sources"></div>
         <section class="de-source-preview" hidden aria-label="Source code reader">
           <div class="de-editor-top"><h3>Code reader</h3><span class="de-editor-tag">READ ONLY · PINNED REVISION</span></div>
@@ -56,7 +57,8 @@ type Src={path:string;line:number;url:string};
 type N={id:string;label:string;view:string;kind:string;summary:string;child?:string|null;sources:Src[]};
 type E={view:string;from:string;to:string;label:string;evidence:string;sources:Src[]};
 type Step={node:string;title:string;description:string;source:Src};
-type D={model:{revision:string;repository:string;nodes:N[];edges:E[];views:{id:string;label:string;parent:string|null}[];journey:Step[]};zones:{label:string;note:string;nodes:string[]}[];excerpts:Record<string,{code:string;startLine:number;path:string;url:string}>};
+type Handoff={id:string;from:string;to:string;label:string;operation:string;kind:string;source:Src;snippet:string;explanation:string};
+type D={model:{revision:string;repository:string;nodes:N[];edges:E[];views:{id:string;label:string;parent:string|null}[];journey:Step[]};zones:{label:string;note:string;nodes:string[]}[];handoffs:Handoff[];excerpts:Record<string,{code:string;startLine:number;path:string;url:string}>};
 class DiagramOnlyExplorer extends HTMLElement {
  connectedCallback(){
   if(this.dataset.ready)return;this.dataset.ready='true';
@@ -67,14 +69,14 @@ class DiagramOnlyExplorer extends HTMLElement {
   const el=(tag:string,cls:string,label:string)=>{const e=document.createElement(tag);e.className=cls;e.textContent=label;return e;};
   const btn=(label:string,run:()=>void,cls='')=>{const e=el('button',cls,label) as HTMLButtonElement;e.type='button';e.onclick=run;return e;};
   const evidence=(s:Src)=>{const a=el('a','de-source',s.path.split('/').slice(-2).join('/')+' : '+s.line+' ↗') as HTMLAnchorElement;a.href=s.url;a.target='_blank';a.rel='noopener noreferrer';return a;};
-  let mode:'full'|'architecture'|'flow'=viewport.clientWidth>700?'full':'architecture',view='system',selected:string|null=null,expanded=false,zoom=1,step=0,w=1300,h=640;
+  let mode:'full'|'architecture'|'flow'|'code'=viewport.clientWidth>700?'full':'architecture',view='system',selected:string|null=null,expanded=false,zoom=1,step=0,w=1300,h=640;
   let positions=new Map<string,{x:number;y:number;width:number;height:number}>();
   let activeSnippet:{id:string;path:string;code:string;startLine:number;url:string}|null=null;
   let editorQuery='';
-  let connections=false,showMap=viewport.clientWidth>=700;
+  let connections=false,showMap=viewport.clientWidth>=700,codeStep=0;
   q<HTMLElement>('.de-map-control').hidden=!showMap;
   q<HTMLButtonElement>('[data-action="minimap"]').setAttribute('aria-pressed',String(showMap));
-  const history:{mode:'full'|'architecture'|'flow';view:string;selected:string|null;expanded:boolean}[]=[];
+  const history:{mode:'full'|'architecture'|'flow'|'code';view:string;selected:string|null;expanded:boolean}[]=[];
   const scoped=()=>model.edges.filter(e=>e.view===view);
   const sourceEdges=(id:string)=>model.edges.filter(e=>e.view===lookup.get(id)?.view);
   const fullArcs=[['boot','core'],['api','core'],['api','session'],['core','llm'],['core','session'],['core','capabilities']] as const;
@@ -366,9 +368,50 @@ class DiagramOnlyExplorer extends HTMLElement {
     q('[data-status]').textContent='All 6 sourced stages · click any step for its implementation';
     q('[data-disclaimer]').textContent='Curated code walkthrough, not a measured network trace.';
   };
+
+  // Each card is a verified call site; connecting arrows show a guided reading
+  // order, NOT a proof that every callsite invokes the next one directly.
+  const codePath=()=>{
+    reset();const mobile=viewport.clientWidth<=700,tablet=viewport.clientWidth<1100;
+    const width=mobile?Math.max(290,viewport.clientWidth-3):(tablet?770:1220);
+    const cardW=mobile?width-46:(tablet?325:520);
+    const ys=mobile?[120,280,440,600,760,920,1080,1240]:[140,140,370,370,600,600,830,830];
+    const xs=mobile?data.handoffs.map(()=>23):data.handoffs.map((_,i)=>{
+      const col=i%4===0||i%4===3?0:1;
+      return tablet?(col?407:34):(col?650:42);
+    });
+    const height=mobile?1415:1040;canvas(width,height);
+    const labels=[
+      ['01 · INPUT & REQUEST','Admission and request preparation'],
+      ['02 · MODEL & STREAM','Model call and process-local frames'],
+      ['03 · TOOLS','Tool execution and scheduler dispatch'],
+      ['04 · SESSION EVENTS','Durable results and step boundaries']
+    ];
+    labels.forEach((item,i)=>{
+      if(mobile)group(item[0],item[1],10,20+i*320,width-20,306);
+      else group(item[0],item[1],13,37+i*230,width-26,223);
+    });
+    data.handoffs.forEach((h,i)=>{
+      const x=xs[i],y=ys[i],b=btn('',()=>inspectHandoff(i),'de-flow-node de-code-step');
+      b.dataset.codeStep=String(i);
+      b.style.cssText='left:'+x+'px;top:'+y+'px;width:'+cardW+'px;height:113px';
+      b.append(el('span','de-flow-no',String(i+1).padStart(2,'0')),el('strong','',h.label),el('span','de-inspect','↗'));
+      b.append(el('span','de-stage-owner',h.operation.length>58?h.operation.slice(0,55)+'…':h.operation));
+      if(i===codeStep)b.classList.add('is-selected');
+      q('.de-nodes').append(b);
+      positions.set('code-'+i,{x,y,width:cardW,height:113});
+      if(i>0){
+        const prev=positions.get('code-'+(i-1))!;
+        if(mobile){wire(x+cardW/2,prev.y+prev.height,x+cardW/2,y-12);}
+      }
+    });
+    q('[data-status]').textContent=data.handoffs.length+' verified callsites · click to view exact implementation';
+    q('[data-disclaimer]').textContent='Solid arrows: curated reading path. Each code card cites a real TypeScript method/call/event; not necessarily a direct invocation of the next card.';
+  };
   const render=()=>{
     const c=q('.de-crumbs');c.replaceChildren();
     if(mode==='flow')c.append(el('span','','Agent turn / ordered stages'));
+    else if(mode==='code')c.append(el('span','','Verified code handoffs / pinned source lines'));
     else if(mode==='full')c.append(el('span','','Full system / six subsystems / twenty-six packages'));
     else{
       let v=model.views.find(x=>x.id===view);
@@ -376,12 +419,12 @@ class DiagramOnlyExplorer extends HTMLElement {
       while(v){stack.unshift(v);v=model.views.find(x=>x.id===v!.parent);}
       stack.forEach((item,i)=>{if(i)c.append(el('span','de-separator','/'));c.append(btn(item.label,()=>{view=item.id;selected=null;expanded=false;hide();render();},'de-crumb'));});
     }
-    if(mode==='flow')flow();else if(mode==='full')fullModel();else if(expanded)neighborhood();else architecture();
+    if(mode==='flow')flow();else if(mode==='code')codePath();else if(mode==='full')fullModel();else if(expanded)neighborhood();else architecture();
     app.dataset.activeMode=mode;
-    q<HTMLElement>('.de-tour').hidden=mode!=='flow';
-    q<HTMLElement>('[data-step-status]').textContent='Stage '+(step+1)+' / '+model.journey.length;
+    q<HTMLElement>('.de-tour').hidden=mode!=='flow'&&mode!=='code';
+    q<HTMLElement>('[data-step-status]').textContent=mode==='code'?'Callsite '+(codeStep+1)+' / '+data.handoffs.length:'Stage '+(step+1)+' / '+model.journey.length;
     updateMinimap();
-    q<HTMLElement>('.de-hint').hidden=(mode==='flow'||mode==='full'||expanded);
+    q<HTMLElement>('.de-hint').hidden=(mode==='flow'||mode==='code'||mode==='full'||expanded);
     q<HTMLButtonElement>('[data-action="back"]').disabled=history.length===0;setZoom();
   };
   const sources=(refs:Src[])=>{const box=q('.de-sources');box.replaceChildren(...refs.slice(0,5).map(evidence));if(!refs.length)box.textContent='No direct evidence for this node in this view.';};
@@ -502,13 +545,43 @@ class DiagramOnlyExplorer extends HTMLElement {
       card.append(tools);box.append(card);
     }
   };
+
+  const renderHandoffs=(nodeId:string)=>{
+    const box=q('.de-handoffs');box.replaceChildren();
+    const linked=data.handoffs.filter(h=>h.from===nodeId||h.to===nodeId||nodeId==='core-agent-loop');
+    if(!linked.length){box.append(el('p','de-empty-relations','No verified method-level handoffs indexed for this component.'));return;}
+    linked.forEach(h=>{
+      const item=el('div','de-handoff','');
+      item.append(el('strong','',h.label),el('span','',h.from+' → '+h.to),el('code','',h.operation));
+      const bottom=el('div','de-relationship-controls','');
+      bottom.append(btn('View code L'+h.source.line,()=>preview(h.snippet,h.source),'de-code-nav'),evidence(h.source));
+      item.append(bottom);box.append(item);
+    });
+  };
+  const inspectHandoff=(i:number)=>{
+    codeStep=i;const h=data.handoffs[i];if(!h)return;
+    show();
+    this.querySelectorAll<HTMLElement>('[data-code-step]').forEach(x=>x.classList.toggle('is-selected',Number(x.dataset.codeStep)===i));
+    q<HTMLElement>('[data-step-status]').textContent='Callsite '+(i+1)+' / '+data.handoffs.length;
+    q('[data-kind]').textContent='VERIFIED '+h.kind.toUpperCase();
+    q('[data-title]').textContent=h.label;
+    q('[data-summary]').textContent=h.explanation;
+    q('[data-stats]').textContent=h.from+' → '+h.to+' · '+h.operation;
+    relationships(h.from,[]);
+    const rel=q('.de-related');rel.replaceChildren();
+    rel.append(btn('Inspect '+(lookup.get(h.from)?.label||h.from),()=>inspect(h.from),'de-related-button'));
+    if(h.to!==h.from)rel.append(btn('Inspect '+(lookup.get(h.to)?.label||h.to),()=>inspect(h.to),'de-related-button'));
+    const group=q('.de-connect-summary');group.replaceChildren(el('span','','CODE-EVIDENCED '+h.kind.toUpperCase()));
+    sources([h.source]);preview(h.snippet,h.source);renderHandoffs(h.from);
+    for(const a of ['expand','collapse','inside'])q<HTMLButtonElement>('[data-action="'+a+'"]').hidden=true;
+  };
   const inspectEdge=(edge:E)=>{
     show();q('[data-kind]').textContent='SOURCE-DECLARED RELATIONSHIP';
     q('[data-title]').textContent=(lookup.get(edge.from)?.label||edge.from)+' → '+(lookup.get(edge.to)?.label||edge.to);
     q('[data-summary]').textContent=edge.evidence||edge.label;
     q('[data-stats]').textContent='Dependent → dependency; not an observed runtime call';
     relationships(edge.from,[edge]);
-    sources(edge.sources);
+    sources(edge.sources);renderHandoffs(edge.from);
     const sample=edge.sources?.[0];
     const owner=sample?Object.entries(data.excerpts||{}).find(([,v])=>v.path===sample.path):undefined;
     if(owner)preview(owner[0],sample);else preview('');
@@ -532,7 +605,7 @@ class DiagramOnlyExplorer extends HTMLElement {
     const incoming=relevant.filter(e=>e.to===id),outgoing=relevant.filter(e=>e.from===id);
     q('[data-stats]').textContent=incoming.length+' incoming · '+outgoing.length+' outgoing';
     relationships(id,[...incoming,...outgoing]);
-    sources(n.sources);preview(id);
+    sources(n.sources);preview(id);renderHandoffs(id);
     if(mode==='full')drawContextEdges(id);
     q<HTMLButtonElement>('[data-action="expand"]').hidden=(mode!=='full'&&expanded)||(!incoming.length&&!outgoing.length);
     q<HTMLButtonElement>('[data-action="collapse"]').hidden=!expanded;
@@ -555,7 +628,7 @@ class DiagramOnlyExplorer extends HTMLElement {
     const rel=q('.de-related');rel.replaceChildren();q('.de-connect-summary').replaceChildren(el('span','','SOURCE-GUIDED ORDER · NOT A NETWORK TRACE'));
     if(i>0)rel.append(btn('← Previous: '+model.journey[i-1].title,()=>inspectFlow(i-1),'de-related-button'));
     if(i<model.journey.length-1)rel.append(btn('Next: '+model.journey[i+1].title+' →',()=>inspectFlow(i+1),'de-related-button'));
-    sources([s.source]);preview(s.node);
+    sources([s.source]);preview(s.node);renderHandoffs(s.node);
     q<HTMLButtonElement>('[data-action="expand"]').hidden=true;
     q<HTMLButtonElement>('[data-action="collapse"]').hidden=true;
     q<HTMLButtonElement>('[data-action="inside"]').hidden=true;
@@ -567,7 +640,7 @@ class DiagramOnlyExplorer extends HTMLElement {
     viewport.scrollTo({left:Math.max(0,px*zoom-45),top:Math.max(0,py*zoom-40)});
   };
   this.querySelectorAll<HTMLButtonElement>('button[data-mode]').forEach(b=>b.addEventListener('click',()=>{
-    mode=b.dataset.mode as 'full'|'architecture'|'flow';selected=null;expanded=false;zoom=1;hide();
+    mode=b.dataset.mode as 'full'|'architecture'|'flow'|'code';selected=null;expanded=false;zoom=1;hide();
     this.querySelectorAll<HTMLButtonElement>('button[data-mode]').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.mode===mode)));
     render();
     if(mode==='full'){
@@ -597,8 +670,8 @@ class DiagramOnlyExplorer extends HTMLElement {
       const expanded=app.classList.toggle('de-tools-open');
       q<HTMLButtonElement>('[data-action="mobile-tools"]').setAttribute('aria-expanded',String(expanded));return;
     }
-    if(action==='previous-step'){inspectFlow(Math.max(0,step-1));return;}
-    if(action==='next-step'){inspectFlow(Math.min(model.journey.length-1,step+1));return;}
+    if(action==='previous-step'){if(mode==='code')inspectHandoff(Math.max(0,codeStep-1));else inspectFlow(Math.max(0,step-1));return;}
+    if(action==='next-step'){if(mode==='code')inspectHandoff(Math.min(data.handoffs.length-1,codeStep+1));else inspectFlow(Math.min(model.journey.length-1,step+1));return;}
     if(action==='expand'&&selected){
       if(mode==='full'){
         const target=lookup.get(selected);
@@ -826,5 +899,20 @@ if(!customElements.get('diagram-only-explorer'))customElements.define('diagram-o
 .de-shell[data-active-mode="full"] .de-node.de-neighbor{outline:3px solid color-mix(in srgb,var(--de-accent) 50%,transparent);outline-offset:1px}
 .de-shell[data-active-mode="full"] .de-node.de-unrelated{opacity:.62}
 @media(max-width:700px){.de-relationship-controls button,.de-relationship-controls a{min-height:44px}}
+
+
+.de-handoffs{display:grid;gap:.55rem}
+.de-handoff{display:grid;gap:.35rem;border:1px solid var(--de-border);background:var(--de-bg);border-radius:9px;padding:.65rem}
+.de-handoff strong{font-size:.79rem}
+.de-handoff>span{font:600 .66rem var(--font-mono,monospace);color:var(--de-accent)}
+.de-handoff code{font-size:.69rem;white-space:normal;overflow-wrap:anywhere;color:var(--de-muted)}
+.de-code-step{border-style:solid}
+.de-code-step .de-stage-owner{max-width:calc(100% - 1rem);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.65rem}
+@media(max-width:700px){
+  .de-shell[data-active-mode="code"] .de-viewport{height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important}
+  .de-shell[data-active-mode="code"] .de-group p{font-size:.7rem}
+  .de-code-step strong{font-size:.87rem}
+  .de-shell[data-active-mode="code"] .de-stage{max-width:100%;overflow:hidden}
+}
 
 </style>
