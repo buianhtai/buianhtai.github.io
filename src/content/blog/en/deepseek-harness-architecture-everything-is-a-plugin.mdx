@@ -14,6 +14,7 @@ postLayout: "foundations"
 
 import Callout from '../../../components/mdx/Callout.astro';
 import Mermaid from '../../../components/mdx/Mermaid.astro';
+import '../../../styles/deepseek-harness-article.css';
 
 Imagine asking an agent to investigate a broken build. It reads files, calls a shell tool, sees a failed test, adjusts a patch, and tries again. Halfway through, the browser disconnects. The user reconnects and wants to know **which commands ran, what the model saw, and why the agent chose its next step**.
 
@@ -56,6 +57,7 @@ This works for a demo. It hides the decisions that matter in production: Who val
 
 ## 2. Architecture at a glance: a plugin tree, not a microservice mesh
 
+<div className="deepseek-article-diagram deepseek-diagram--overview">
 <Mermaid
   eyebrow="C4-INSPIRED / LOGICAL RUNTIME"
   title="One Cordis context, multiple swappable capabilities"
@@ -90,6 +92,7 @@ This works for a demo. It hides the decisions that matter in production: Who val
   ]}
   caption="A dashed event route should not be read as a remote protocol. Services and typed events are coordinated inside the Cordis runtime."
 />
+</div>
 
 The central mechanism is [Cordis](https://github.com/cordiverse/cordis), a plugin framework that contributes services, typed events, and managed registration lifetimes to a shared context. Instead of importing a concrete implementation everywhere, consumers access services through stable keys.
 
@@ -181,6 +184,7 @@ The most revealing code is in `packages/core/agent-loop/src/agent.ts`. It is wor
 - A *step* is one accepted model request and the resulting tool work.
 - Retries and next-step input do not necessarily require a new turn.
 
+<div className="deepseek-article-diagram deepseek-diagram--sequence">
 <Mermaid
   eyebrow="REQUEST LIFECYCLE / SOURCE-ALIGNED"
   title="One agent turn, from inbox to durable result"
@@ -221,6 +225,7 @@ The most revealing code is in `packages/core/agent-loop/src/agent.ts`. It is wor
     A->>S: append turn/end`}
   caption="Simplified from the pinned lifecycle documentation. The LLM adapter represents an in-process service interface, not proof of a particular HTTP transport."
 />
+</div>
 
 ### Source-level handoff map
 
@@ -258,6 +263,7 @@ Agent.followup(message)
 
 Giving a model a `deleteFile` or `runShell` function is easy. Giving it *controlled authority* is hard.
 
+<div className="deepseek-article-diagram deepseek-diagram--tools">
 <Mermaid
   eyebrow="SECURITY / EXTENSION SEAM"
   title="Guarded execution lives outside the agent prompt"
@@ -278,6 +284,7 @@ Giving a model a `deleteFile` or `runShell` function is easy. Giving it *control
     class Gate,Deny risk`}
   caption="Conceptual reduction of the documented tool-execution pipeline. Real hooks include projection, finalization, cancellation and tool-owned events."
 />
+</div>
 
 The order is not incidental. [The tool pipeline](https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/docs/tool-execution-pipeline.md) describes pre-execute waterfall hooks, monotonic guards, approval prompts, execution wrappers, post-execute transformations, normalized outcomes and a final event. In `tool-calls.ts`, the scheduler prepares a call before dispatch, and records ordered results with references back to the original call.
 
