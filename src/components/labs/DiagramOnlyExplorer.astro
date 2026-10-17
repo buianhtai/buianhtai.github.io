@@ -23,7 +23,7 @@ const {model,zones,snippets}=Astro.props;
       <div class="de-viewport" role="region" tabindex="0" aria-label="Interactive diagram; select any node for details and expand its dependencies">
         <div class="de-stage"><div class="de-zones"></div><svg class="de-edges" aria-hidden="true"></svg><div class="de-nodes"></div></div>
       </div>
-      <div class="de-hint">Select a node → inspect → expand its direct relationships</div><button type="button" data-action="mapjump" class="de-map-control" aria-label="Diagram minimap: click to navigate"><svg class="de-minimap" viewBox="0 0 150 86" preserveAspectRatio="none" aria-hidden="true"><g class="de-mini-zones"></g><g class="de-mini-nodes"></g><rect class="de-mini-window" x="0" y="0" width="10" height="10" rx="2"></rect></svg><span>OVERVIEW MAP</span></button>
+      <div class="de-hint">Select a node → inspect → expand its direct relationships</div><div class="de-full-help">One connected map · swipe sideways to explore all three areas · tap a package for details</div><button type="button" data-action="mapjump" class="de-map-control" aria-label="Diagram minimap: click to navigate"><svg class="de-minimap" viewBox="0 0 150 86" preserveAspectRatio="none" aria-hidden="true"><g class="de-mini-zones"></g><g class="de-mini-nodes"></g><rect class="de-mini-window" x="0" y="0" width="10" height="10" rx="2"></rect></svg><span>OVERVIEW MAP</span></button>
       <aside class="de-detail" hidden aria-label="Selected diagram element">
         <div class="de-detail-head"><span class="de-overline" data-kind></span><button type="button" data-action="close" aria-label="Close node information">✕</button></div>
         <h2 data-title></h2><p data-summary></p><p class="de-stats" data-stats></p>
@@ -448,7 +448,12 @@ class DiagramOnlyExplorer extends HTMLElement {
   this.querySelectorAll<HTMLButtonElement>('button[data-mode]').forEach(b=>b.addEventListener('click',()=>{
     mode=b.dataset.mode as 'full'|'architecture'|'flow';selected=null;expanded=false;zoom=1;hide();
     this.querySelectorAll<HTMLButtonElement>('button[data-mode]').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.mode===mode)));
-    render();viewport.scrollTo(0,0);
+    render();
+    if(mode==='full'){
+      zoom=viewport.clientWidth<=700?Math.max(.54,Math.min(.75,(viewport.clientWidth-24)/555)):Math.max(.45,Math.min(1,(viewport.clientWidth-24)/w));
+      setZoom();
+    }
+    viewport.scrollTo(0,0);
   }));
   app.addEventListener('click',event=>{
     const action=(event.target as HTMLElement).closest<HTMLElement>('[data-action]')?.dataset.action;
@@ -629,6 +634,11 @@ if(!customElements.get('diagram-only-explorer'))customElements.define('diagram-o
   .de-shell[data-active-mode="full"] .de-stage{max-width:none;overflow:visible}
   .de-shell[data-active-mode="full"] .de-map-control:not([hidden]){display:flex}
   .de-shell[data-active-mode="full"] .de-model-package{padding:.6rem .8rem}
+}
+
+.de-full-help{display:none}
+@media(max-width:700px){
+  .de-shell[data-active-mode="full"] .de-full-help{display:block;position:relative;padding:.6rem .85rem;background:var(--de-surface);border-top:1px solid var(--de-border);color:var(--de-muted);font-size:.73rem;line-height:1.4}
 }
 
 </style>
