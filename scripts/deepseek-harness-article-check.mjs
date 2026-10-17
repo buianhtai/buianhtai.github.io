@@ -30,6 +30,9 @@ try {
       await page.locator('h1').first().waitFor();
       assert.match(await page.locator('h1').first().innerText(),/DeepSeek Harness/);
       assert.equal(await page.locator('.mermaid-figure').count(),3,'Three architecture diagrams are present');
+      assert.equal(await page.locator('.deepseek-article-diagram').count(),3,'All diagrams use article-scoped drawing presentation');
+      const chartSurface=await page.locator('.deepseek-article-diagram .mermaid-scroll').first().evaluate(el=>getComputedStyle(el).backgroundColor);
+      assert.equal(chartSurface,'rgb(247, 251, 255)','Light drawing surface keeps Mermaid black text legible in both page themes');
       assert((await page.locator('a[href*="deepseek-harness-clarity"]').count())>=3,'Article links repeatedly to interactive full architecture explorer');
       const text=await page.locator('article').innerText();
       for(const section of ['What is DeepSeek Harness','How it actually works','Real use cases','What should an architect learn']){
