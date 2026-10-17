@@ -207,25 +207,25 @@ class DiagramOnlyExplorer extends HTMLElement {
       {label:'02 · EXECUTION CORE',note:'Default agent runtime and its capability plugins',ids:['core','capabilities']},
       {label:'03 · SERVICES & STATE',note:'Model adapters and session persistence',ids:['llm','session']}
     ];
-    canvas(1790,1260);
+    canvas(1790,1090);
     columns.forEach((col,i)=>{
       const x=26+i*590;
-      group(col.label,col.note,x,26,566,1188);
+      group(col.label,col.note,x,24,566,1038);
       col.ids.forEach((subId,j)=>{
-        const top=132+j*540;
+        const top=108+j*463;
         const n=lookup.get(subId);
         if(!n)return;
         const sub=document.createElement('section');sub.className='de-model-subsystem';
-        sub.style.cssText='left:'+(x+17)+'px;top:'+top+'px;width:530px;height:504px';
+        sub.style.cssText='left:'+(x+17)+'px;top:'+top+'px;width:530px;height:436px';
         sub.append(el('span','de-model-boundary','SUBSYSTEM / '+String(j+1).padStart(2,'0')));
         q('.de-zones').append(sub);
-        const header=add(n,x+32,top+23,500,96,true);
+        const header=add(n,x+32,top+23,500,83,true);
         header.classList.add('de-model-header');
         const packages=model.nodes.filter(p=>p.view===subId);
         packages.forEach((pkg,k)=>{
           const row=Math.floor(k/2),colIndex=k%2;
-          const bx=x+31+colIndex*252,by=top+150+row*113;
-          const card=add(pkg,bx,by,244,101,false);
+          const bx=x+31+colIndex*252,by=top+123+row*102;
+          const card=add(pkg,bx,by,244,91,false);
           card.classList.add('de-model-package');
         });
       });
@@ -450,7 +450,7 @@ class DiagramOnlyExplorer extends HTMLElement {
     this.querySelectorAll<HTMLButtonElement>('button[data-mode]').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.mode===mode)));
     render();
     if(mode==='full'){
-      zoom=viewport.clientWidth<=700?Math.max(.54,Math.min(.75,(viewport.clientWidth-24)/555)):Math.max(.45,Math.min(1,(viewport.clientWidth-24)/w));
+      zoom=viewport.clientWidth<=700?Math.max(.48,Math.min(.65,(viewport.clientWidth-40)/566)):viewport.clientWidth<1100?Math.max(.48,Math.min(.8,(viewport.clientWidth-24)/w)):Math.max(.52,Math.min(1,(viewport.clientWidth-24)/w,(viewport.clientHeight-28)/h));
       setZoom();
     }
     viewport.scrollTo(0,0);
@@ -518,7 +518,7 @@ class DiagramOnlyExplorer extends HTMLElement {
   this.querySelectorAll<HTMLButtonElement>('button[data-mode]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.mode===mode)));
   render();
   if(mode==='full'){
-    zoom=Math.max(.48,Math.min(1,(viewport.clientWidth-28)/w));
+    zoom=viewport.clientWidth>=1100?Math.max(.52,Math.min(1,(viewport.clientWidth-28)/w,(viewport.clientHeight-28)/h)):Math.max(.48,Math.min(.76,(viewport.clientWidth-28)/w));
     setZoom();viewport.scrollTo(0,0);
   }
  }
@@ -631,6 +631,7 @@ if(!customElements.get('diagram-only-explorer'))customElements.define('diagram-o
   .de-tabs{grid-template-columns:1fr 1fr 1fr}
   .de-tabs button{font-size:.68rem;padding:.6rem .22rem;min-width:0;min-height:48px;letter-spacing:-.01em}
   .de-shell[data-active-mode="full"] .de-viewport{height:min(66dvh,640px)!important;max-height:640px!important;overflow:auto!important;touch-action:pan-x pan-y;cursor:grab}
+  .de-shell[data-active-mode="full"] .de-buttons [data-action="fit"],.de-shell[data-active-mode="full"] .de-buttons [data-action="focus"]{display:inline-flex;min-height:44px}
   .de-shell[data-active-mode="full"] .de-stage{max-width:none;overflow:visible}
   .de-shell[data-active-mode="full"] .de-map-control:not([hidden]){display:flex}
   .de-shell[data-active-mode="full"] .de-model-package{padding:.6rem .8rem}
