@@ -196,6 +196,26 @@ try{
       await page.screenshot({path:'artifacts/harness-clarity/diagram-flow-detail-'+theme+'-'+width+'.png',fullPage:true});
       await app.locator('[data-action="close"]').click();
       assert.equal(await app.locator('.de-detail').isVisible(),false);
+      await app.locator('button[data-mode="code"]').click();
+      assert.equal(await app.locator('.de-code-step').count(),8,'Code path has eight directly pinned method and event call sites');
+      assert.equal(await app.locator('.de-code-edge').count(),7,'Every adjacent code-reading stage has a visible directional connector');
+      assert.equal(await app.locator('.de-group').count(),4,'Code callsites grouped into four responsibilities');
+      if(width===390){
+        const last=await app.locator('[data-code-step="7"]').boundingBox();
+        const surface=await app.locator('.de-viewport').boundingBox();
+        const lastGroup=await app.locator('.de-group').last().boundingBox();
+        assert(last&&surface&&lastGroup&&last.y+last.height<=surface.y+surface.height+1,'All code stages appear within the mobile page-scrollable diagram');
+        assert(last.y+last.height<=lastGroup.y+lastGroup.height+1,'Last code stage stays inside phase boundary');
+      }
+      await page.screenshot({path:'artifacts/harness-clarity/code-path-'+theme+'-'+width+'.png',fullPage:true});
+      await app.locator('[data-code-step="4"]').click();
+      assert.match(await app.locator('[data-title]').innerText(),/Execute requested tools/);
+      assert.equal(await app.locator('.de-source-preview').isVisible(),true,'Callsite opens pinned TypeScript source window');
+      assert.equal(await app.locator('.de-line-selected').count(),1,'Exact callsite source line is selected in code reader');
+      assert.match(await app.locator('.de-source-path').innerText(),/agent.ts/);
+      assert((await app.locator('.de-handoff').count())>=3,'Code inspector exposes additional linked handoffs');
+      await page.screenshot({path:'artifacts/harness-clarity/code-source-'+theme+'-'+width+'.png',fullPage:true});
+      await app.locator('[data-action="close"]').click();
       assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'No horizontal page overflow');
       assert.equal(await app.locator('.de-map-control').isVisible(),expectedMap);
       await app.locator('button[data-mode="full"]').click();
