@@ -174,13 +174,13 @@ class DiagramOnlyExplorer extends HTMLElement {
     if(!selected)return architecture();
     const center=lookup.get(selected)!;
     const incoming=scoped().filter(e=>e.to===selected),outgoing=scoped().filter(e=>e.from===selected);
-    reset();canvas(1310,Math.max(640,190+Math.max(incoming.length,outgoing.length)*163));
+    reset();canvas(1310,Math.max(680,170+Math.max(incoming.length,outgoing.length)*117));
     group('USED BY','Incoming declarations',20,24,371,h-50);
     group('FOCUS','Current component',469,24,367,h-50);
     group('USES','Outgoing declarations',914,24,373,h-50);
-    const cy=(h-112)/2;add(center,488,cy,333,112,true);
-    incoming.forEach((e,i)=>{const n=lookup.get(e.from);if(n)add(n,37,148+i*163,331,112);});
-    outgoing.forEach((e,i)=>{const n=lookup.get(e.to);if(n)add(n,930,148+i*163,333,112);});
+    const cy=(h-105)/2;add(center,488,cy,333,105,true);
+    incoming.forEach((e,i)=>{const n=lookup.get(e.from);if(n)add(n,37,143+i*117,331,105);});
+    outgoing.forEach((e,i)=>{const n=lookup.get(e.to);if(n)add(n,930,143+i*117,333,105);});
     incoming.forEach(e=>{const a=positions.get(e.from),b=positions.get(selected!);if(a&&b)wire(a.x+a.width,a.y+a.height/2,b.x,b.y+b.height/2,true,e);});
     outgoing.forEach(e=>{const a=positions.get(selected!),b=positions.get(e.to);if(a&&b)wire(a.x+a.width,a.y+a.height/2,b.x,b.y+b.height/2,false,e);});
     q('[data-status]').textContent=incoming.length+' incoming · '+outgoing.length+' outgoing · select another node to recenter';
@@ -193,10 +193,10 @@ class DiagramOnlyExplorer extends HTMLElement {
     const available=viewport.clientWidth,mobile=available<680,tablet=available<1100;
     if(mobile){
       const width=Math.max(325,available-4),card=Math.min(302,width-34);
-      flowSlots=model.journey.map((_,i)=>({x:(width-card)/2,y:105+i*173,w:card,h:112}));
-      canvas(width,flowSlots[5].y+206);
+      flowSlots=model.journey.map((_,i)=>({x:(width-card)/2,y:116+Math.floor(i/2)*405+(i%2)*160,w:card,h:112}));
+      canvas(width,flowSlots[5].y+194);
       const labels=['01 · INPUT & ADMISSION','02 · MODEL & STREAM','03 · TOOLS & CONTINUATION'];
-      [0,1,2].forEach(i=>group(labels[i],'Editorial phase · source-backed steps',8,25+i*375,width-16,365));
+      [0,1,2].forEach(i=>group(labels[i],'Editorial phase · source-backed steps',8,22+i*405,width-16,385));
     }else if(tablet){
       const left=37,right=393,top=143,middle=336,bottom=529;
       flowSlots=[
@@ -315,6 +315,7 @@ class DiagramOnlyExplorer extends HTMLElement {
     show();q('[data-kind]').textContent='CURATED STEP '+(i+1)+' / '+model.journey.length;
     q('[data-title]').textContent=s.title;q('[data-summary]').textContent=s.description;
     q('[data-stats]').textContent='Implementation · '+(owner?.label||s.node);
+    if(viewport.clientWidth<680 && flowSlots[i])viewport.scrollTo({top:Math.max(0,flowSlots[i].y*zoom-65)});
     const rel=q('.de-related');rel.replaceChildren();
     if(i>0)rel.append(btn('← Previous: '+model.journey[i-1].title,()=>inspectFlow(i-1),'de-related-button'));
     if(i<model.journey.length-1)rel.append(btn('Next: '+model.journey[i+1].title+' →',()=>inspectFlow(i+1),'de-related-button'));
@@ -420,5 +421,5 @@ if(!customElements.get('diagram-only-explorer'))customElements.define('diagram-o
 @media(max-width:700px){.de-map-control{width:110px;min-height:70px;right:7px;bottom:7px}.de-map-control svg{height:52px}.de-map-control span{font-size:.5rem}.de-legend{font-size:.62rem}}
 .de-hint{position:absolute;bottom:10px;left:10px;font-size:.7rem;padding:.6rem .8rem;background:var(--de-surface);border:1px solid var(--de-border);border-radius:9px;box-shadow:0 5px 17px #00000019;pointer-events:none}.de-footer{display:flex;justify-content:space-between;gap:.6rem;flex-wrap:wrap;border-top:1px solid var(--de-border);padding:.75rem 1rem;font-size:.72rem;color:var(--de-muted)}
 .de-fullscreen{position:fixed;inset:10px;z-index:9999;display:flex;flex-direction:column}.de-fullscreen .de-board{flex:1;min-height:0}.de-fullscreen .de-viewport{height:100%;max-height:none}
-@media(max-width:700px){.de-top{gap:.6rem;padding:.8rem}.de-top>div:first-child{width:100%}.de-tabs{flex:1}.de-tabs button{flex:1;font-size:.76rem;padding:.55rem .35rem}.de-tools{padding:.55rem}.de-buttons button{padding:.4rem .5rem}.de-viewport{height:min(73dvh,650px);min-height:350px}.de-detail{top:auto;bottom:0;width:100%;height:min(75%,620px);border-left:0;border-top:2px solid var(--de-accent);border-radius:14px 14px 0 0}.de-fullscreen{inset:0;border-radius:0}.de-hint{max-width:92%;font-size:.64rem}}
+@media(max-width:700px){.de-shell[data-active-mode="flow"] .de-group h3{max-width:112px;line-height:1.35}.de-shell[data-active-mode="flow"] .de-group p{display:none}.de-top{gap:.6rem;padding:.8rem}.de-top>div:first-child{width:100%}.de-tabs{flex:1}.de-tabs button{flex:1;font-size:.76rem;padding:.55rem .35rem}.de-tools{padding:.55rem}.de-buttons button{padding:.4rem .5rem}.de-viewport{height:min(73dvh,650px);min-height:350px}.de-detail{top:auto;bottom:0;width:100%;height:min(75%,620px);border-left:0;border-top:2px solid var(--de-accent);border-radius:14px 14px 0 0}.de-fullscreen{inset:0;border-radius:0}.de-hint{max-width:92%;font-size:.64rem}}
 </style>
