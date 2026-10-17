@@ -204,7 +204,9 @@ try{
         const last=await app.locator('[data-code-step="7"]').boundingBox();
         const surface=await app.locator('.de-viewport').boundingBox();
         const lastGroup=await app.locator('.de-group').last().boundingBox();
-        assert(last&&surface&&lastGroup&&last.y+last.height<=surface.y+surface.height+1,'All code stages appear within the mobile page-scrollable diagram');
+        const stageMetrics=await app.locator('.de-stage').evaluate(el=>({height:el.offsetHeight,styleHeight:el.style.height,zoom:getComputedStyle(el).zoom}));
+        assert(last&&surface&&lastGroup&&last.y+last.height<=surface.y+surface.height+1,
+          'All code stages appear within the mobile page-scrollable diagram: '+JSON.stringify({last,surface,lastGroup,stageMetrics}));
         assert(last.y+last.height<=lastGroup.y+lastGroup.height+1,'Last code stage stays inside phase boundary');
       }
       await page.screenshot({path:'artifacts/harness-clarity/code-path-'+theme+'-'+width+'.png',fullPage:true});
