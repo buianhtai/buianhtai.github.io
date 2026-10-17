@@ -8,7 +8,7 @@ const {model,zones,snippets}=Astro.props;
     <header class="de-top">
       <div><span class="de-overline">SOURCE-GROUNDED ARCHITECTURE</span><h1>DeepSeek Harness</h1></div>
       <nav class="de-tabs" aria-label="Select diagram mode">
-        <button type="button" data-mode="architecture" aria-pressed="true">◇ Architecture</button>
+        <button type="button" data-mode="full" aria-pressed="false">▦ Full model</button><button type="button" data-mode="architecture" aria-pressed="true">◇ Focus</button>
         <button type="button" data-mode="flow" aria-pressed="false">⇢ Agent turn flow</button>
       </nav>
       <a href={model.repository+'/tree/'+model.revision} target="_blank" rel="noopener noreferrer">Pinned source ↗</a>
@@ -52,13 +52,15 @@ class DiagramOnlyExplorer extends HTMLElement {
   const el=(tag:string,cls:string,label:string)=>{const e=document.createElement(tag);e.className=cls;e.textContent=label;return e;};
   const btn=(label:string,run:()=>void,cls='')=>{const e=el('button',cls,label) as HTMLButtonElement;e.type='button';e.onclick=run;return e;};
   const evidence=(s:Src)=>{const a=el('a','de-source',s.path.split('/').slice(-2).join('/')+' : '+s.line+' ↗') as HTMLAnchorElement;a.href=s.url;a.target='_blank';a.rel='noopener noreferrer';return a;};
-  let mode:'architecture'|'flow'='architecture',view='system',selected:string|null=null,expanded=false,zoom=1,step=0,w=1300,h=640;
+  let mode:'full'|'architecture'|'flow'=viewport.clientWidth>700?'full':'architecture',view='system',selected:string|null=null,expanded=false,zoom=1,step=0,w=1300,h=640;
   let positions=new Map<string,{x:number;y:number;width:number;height:number}>();
   let connections=false,showMap=viewport.clientWidth>=700;
   q<HTMLElement>('.de-map-control').hidden=!showMap;
   q<HTMLButtonElement>('[data-action="minimap"]').setAttribute('aria-pressed',String(showMap));
-  const history:{view:string;selected:string|null;expanded:boolean}[]=[];
+  const history:{mode:'full'|'architecture'|'flow';view:string;selected:string|null;expanded:boolean}[]=[];
   const scoped=()=>model.edges.filter(e=>e.view===view);
+  const sourceEdges=(id:string)=>model.edges.filter(e=>e.view===lookup.get(id)?.view);
+  const fullArcs=[['boot','core'],['api','core'],['api','session'],['core','llm'],['core','session'],['core','capabilities']] as const;
   const show=()=>{detail.hidden=false;if(viewport.clientWidth<=700)q<HTMLElement>('.de-backdrop').hidden=false;};
   const hide=()=>{detail.hidden=true;q<HTMLElement>('.de-backdrop').hidden=true;};
   const setZoom=()=>{stage.style.zoom=String(zoom);updateMinimap();};
@@ -196,6 +198,47 @@ class DiagramOnlyExplorer extends HTMLElement {
     q('[data-status]').textContent=ns.length+' components · '+(connections?'source dependency overlay ON':'click a component to inspect');
     q('[data-disclaimer]').textContent='Conceptual boundaries; not separate deployment or network processes.';
   };
+  // Full model = one coherent, source-grounded map with nested system and package boundaries.
+  // Never infer execution hops from package-import arrows.
+  const fullModel=()=>{
+    reset();
+    const columns=[
+      {label:'01 · ENTRY & ASSEMBLY',note:'Bootstrapping and remote access',ids:['boot','api']},
+      {label:'02 · EXECUTION CORE',note:'Default agent runtime and its capability plugins',ids:['core','capabilities']},
+      {label:'03 · SERVICES & STATE',note:'Model adapters and session persistence',ids:['llm','session']}
+    ];
+    canvas(1790,1260);
+    columns.forEach((col,i)=>{
+      const x=26+i*590;
+      group(col.label,col.note,x,26,566,1188);
+      col.ids.forEach((subId,j)=>{
+        const top=132+j*540;
+        const n=lookup.get(subId);
+        if(!n)return;
+        const sub=document.createElement('section');sub.className='de-model-subsystem';
+        sub.style.cssText='left:'+(x+17)+'px;top:'+top+'px;width:530px;height:504px';
+        sub.append(el('span','de-model-boundary','SUBSYSTEM / '+String(j+1).padStart(2,'0')));
+        q('.de-zones').append(sub);
+        const header=add(n,x+32,top+23,500,96,true);
+        header.classList.add('de-model-header');
+        const packages=model.nodes.filter(p=>p.view===subId);
+        packages.forEach((pkg,k)=>{
+          const row=Math.floor(k/2),colIndex=k%2;
+          const bx=x+31+colIndex*252,by=top+150+row*113;
+          const card=add(pkg,bx,by,244,101,false);
+          card.classList.add('de-model-package');
+        });
+      });
+    });
+    const evidence=model.edges.filter(e=>e.view==='system');
+    const key=(e:E)=>fullArcs.some(p=>p[0]===e.from&&p[1]===e.to);
+    evidence.filter(e=>connections||key(e)).forEach(e=>{
+      const a=positions.get(e.from),b=positions.get(e.to);
+      if(a&&b)wireOverlay(e);
+    });
+    q('[data-status]').textContent='6 subsystems · '+model.nodes.filter(n=>n.view!=='system'&&n.view!=='loop').length+' packages · '+(connections?evidence.length:'6 highlighted')+' verified dependency arrows';
+    q('[data-disclaimer]').textContent='Full model: source-backed architecture. Arrow = declared package dependency, not request order. Tap any component to inspect.';
+  };
   const neighborhood=()=>{
     if(!selected)return architecture();
     const center=lookup.get(selected)!;
@@ -309,18 +352,19 @@ class DiagramOnlyExplorer extends HTMLElement {
   const render=()=>{
     const c=q('.de-crumbs');c.replaceChildren();
     if(mode==='flow')c.append(el('span','','Agent turn / ordered stages'));
+    else if(mode==='full')c.append(el('span','','Full system / six subsystems / twenty-six packages'));
     else{
       let v=model.views.find(x=>x.id===view);
       const stack:typeof model.views=[];
       while(v){stack.unshift(v);v=model.views.find(x=>x.id===v!.parent);}
       stack.forEach((item,i)=>{if(i)c.append(el('span','de-separator','/'));c.append(btn(item.label,()=>{view=item.id;selected=null;expanded=false;hide();render();},'de-crumb'));});
     }
-    if(mode==='flow')flow();else if(expanded)neighborhood();else architecture();
+    if(mode==='flow')flow();else if(mode==='full')fullModel();else if(expanded)neighborhood();else architecture();
     app.dataset.activeMode=mode;
     q<HTMLElement>('.de-tour').hidden=mode!=='flow';
     q<HTMLElement>('[data-step-status]').textContent='Stage '+(step+1)+' / '+model.journey.length;
     updateMinimap();
-    q<HTMLElement>('.de-hint').hidden=(mode==='flow'||expanded);
+    q<HTMLElement>('.de-hint').hidden=(mode==='flow'||mode==='full'||expanded);
     q<HTMLButtonElement>('[data-action="back"]').disabled=history.length===0;setZoom();
   };
   const sources=(refs:Src[])=>{const box=q('.de-sources');box.replaceChildren(...refs.slice(0,5).map(evidence));if(!refs.length)box.textContent='No direct evidence for this node in this view.';};
@@ -347,11 +391,20 @@ class DiagramOnlyExplorer extends HTMLElement {
   };
   const inspect=(id:string)=>{
     const n=lookup.get(id);if(!n)return;
-    if(expanded&&selected!==id){selected=id;render();}else selected=id;
+    if(mode==='full'){
+      selected=id;
+      this.querySelectorAll<HTMLElement>('[data-node]').forEach(x=>x.classList.toggle('is-selected',x.dataset.node===id));
+      this.querySelectorAll<SVGElement>('[data-edge-from]').forEach(edge=>{
+        const linked=edge.dataset.edgeFrom===id||edge.dataset.edgeTo===id;
+        edge.classList.toggle('is-linked',linked);
+        edge.classList.toggle('is-muted',!linked);
+      });
+    } else if(expanded&&selected!==id){selected=id;render();}else selected=id;
     this.querySelectorAll<HTMLElement>('[data-node]').forEach(x=>x.classList.toggle('is-selected',x.dataset.node===id));
     show();q('[data-kind]').textContent=n.kind.toUpperCase();
     q('[data-title]').textContent=n.label;q('[data-summary]').textContent=n.summary;
-    const incoming=scoped().filter(e=>e.to===id),outgoing=scoped().filter(e=>e.from===id);
+    const relevant=mode==='full'?sourceEdges(id):scoped();
+    const incoming=relevant.filter(e=>e.to===id),outgoing=relevant.filter(e=>e.from===id);
     q('[data-stats]').textContent=incoming.length+' incoming · '+outgoing.length+' outgoing';
     const rel=q('.de-related');rel.replaceChildren();
     [...incoming,...outgoing].forEach(e=>{
@@ -360,7 +413,7 @@ class DiagramOnlyExplorer extends HTMLElement {
     });
     if(!incoming.length&&!outgoing.length)rel.textContent='No direct relationships shown in this view.';
     sources(n.sources);preview(id);
-    q<HTMLButtonElement>('[data-action="expand"]').hidden=expanded||(!incoming.length&&!outgoing.length);
+    q<HTMLButtonElement>('[data-action="expand"]').hidden=(mode!=='full'&&expanded)||(!incoming.length&&!outgoing.length);
     q<HTMLButtonElement>('[data-action="collapse"]').hidden=!expanded;
     q<HTMLButtonElement>('[data-action="inside"]').hidden=!n.child;
   };
@@ -393,7 +446,7 @@ class DiagramOnlyExplorer extends HTMLElement {
     viewport.scrollTo({left:Math.max(0,px*zoom-45),top:Math.max(0,py*zoom-40)});
   };
   this.querySelectorAll<HTMLButtonElement>('button[data-mode]').forEach(b=>b.addEventListener('click',()=>{
-    mode=b.dataset.mode as 'architecture'|'flow';selected=null;expanded=false;zoom=1;hide();
+    mode=b.dataset.mode as 'full'|'architecture'|'flow';selected=null;expanded=false;zoom=1;hide();
     this.querySelectorAll<HTMLButtonElement>('button[data-mode]').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.mode===mode)));
     render();viewport.scrollTo(0,0);
   }));
@@ -407,24 +460,34 @@ class DiagramOnlyExplorer extends HTMLElement {
     }
     if(action==='previous-step'){inspectFlow(Math.max(0,step-1));return;}
     if(action==='next-step'){inspectFlow(Math.min(model.journey.length-1,step+1));return;}
-    if(action==='expand'&&selected){expanded=true;zoom=1;render();inspect(selected);viewport.scrollTo(0,0);return;}
+    if(action==='expand'&&selected){
+      if(mode==='full'){
+        const target=lookup.get(selected);
+        if(!target)return;
+        history.push({mode,view,selected,expanded});
+        mode='architecture';view=target.view;expanded=true;zoom=1;
+        this.querySelectorAll<HTMLButtonElement>('button[data-mode]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.mode===mode)));
+        hide();render();inspect(selected);viewport.scrollTo(0,0);
+      }else{expanded=true;zoom=1;render();inspect(selected);viewport.scrollTo(0,0);}
+      return;
+    }
     if(action==='collapse'){expanded=false;render();if(selected)inspect(selected);return;}
     if(action==='inside'&&selected){
       const next=lookup.get(selected)?.child;
-      if(next){history.push({view,selected,expanded});view=next;selected=null;expanded=false;zoom=1;hide();render();viewport.scrollTo(0,0);}
+      if(next){history.push({mode,view,selected,expanded});mode='architecture';view=next;selected=null;expanded=false;zoom=1;hide();render();viewport.scrollTo(0,0);this.querySelectorAll<HTMLButtonElement>('button[data-mode]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.mode===mode)));}
       return;
     }
     if(action==='back'){
       const prior=history.pop();
-      if(prior){view=prior.view;selected=prior.selected;expanded=prior.expanded;hide();render();}
+      if(prior){mode=prior.mode;view=prior.view;selected=prior.selected;expanded=prior.expanded;zoom=1;hide();render();this.querySelectorAll<HTMLButtonElement>('button[data-mode]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.mode===mode)));}
       return;
     }
-    if(action==='fit'){zoom=Math.max(.25,Math.min(1,(viewport.clientWidth-24)/w,(viewport.clientHeight-24)/h));setZoom();viewport.scrollTo(0,0);return;}
+    if(action==='fit'){zoom=Math.max(.23,Math.min(1,(viewport.clientWidth-24)/w,(viewport.clientHeight-24)/h));setZoom();viewport.scrollTo(0,0);return;}
     if(action==='focus'){focus();return;}
     if(action==='reset'){zoom=1;setZoom();viewport.scrollTo(0,0);return;}
     if(action==='connections'){
       connections=!connections;q<HTMLButtonElement>('[data-action="connections"]').setAttribute('aria-pressed',String(connections));
-      if(mode==='architecture'&&!expanded)render();return;
+      if(mode==='full'||(mode==='architecture'&&!expanded))render();return;
     }
     if(action==='minimap'){
       showMap=!showMap;q<HTMLButtonElement>('[data-action="minimap"]').setAttribute('aria-pressed',String(showMap));
@@ -447,7 +510,12 @@ class DiagramOnlyExplorer extends HTMLElement {
   for(const e of ['pointerup','pointercancel','lostpointercapture'])viewport.addEventListener(e,()=>drag=null);
   viewport.addEventListener('scroll',()=>updateMinimap(),{passive:true});
   const resizeWatcher=new ResizeObserver(()=>updateMinimap());resizeWatcher.observe(viewport);
+  this.querySelectorAll<HTMLButtonElement>('button[data-mode]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.mode===mode)));
   render();
+  if(mode==='full'){
+    zoom=Math.max(.48,Math.min(1,(viewport.clientWidth-28)/w));
+    setZoom();viewport.scrollTo(0,0);
+  }
  }
 }
 if(!customElements.get('diagram-only-explorer'))customElements.define('diagram-only-explorer',DiagramOnlyExplorer);
@@ -537,6 +605,30 @@ if(!customElements.get('diagram-only-explorer'))customElements.define('diagram-o
   .de-related-button{min-height:44px}
   .de-shell.de-fullscreen{inset:0;overflow:auto;display:block}
   .de-shell.de-fullscreen .de-viewport{height:auto!important}
+}
+
+
+/* Comprehensive full-model canvas: all six subsystems and their child packages in one map. */
+.de-model-subsystem{position:absolute;border:1px dashed color-mix(in srgb,var(--de-accent) 45%,var(--de-border));border-radius:16px;background:color-mix(in srgb,var(--de-accent) 2%,var(--de-surface));pointer-events:none}
+.de-model-boundary{position:absolute;top:8px;right:13px;color:var(--de-muted);letter-spacing:.1em;font:700 .56rem var(--font-mono,monospace)}
+.de-model-header{border:2px solid color-mix(in srgb,var(--de-accent) 65%,var(--de-border));background:color-mix(in srgb,var(--de-accent) 9%,var(--de-surface))}
+.de-model-package{box-shadow:none!important;border-color:color-mix(in srgb,var(--de-accent) 15%,var(--de-border));padding:.85rem 1rem;gap:.25rem}
+.de-model-package strong{font-size:.89rem}
+.de-model-package .de-description{font-size:.68rem;-webkit-line-clamp:2}
+.de-model-header strong{font-size:1.05rem}
+.de-model-header .de-description{font-size:.74rem;-webkit-line-clamp:2}
+.de-shell[data-active-mode="full"] .de-viewport{height:min(86dvh,900px);min-height:530px;overflow:auto}
+.de-shell[data-active-mode="full"] .de-edges{z-index:1}
+.de-shell[data-active-mode="full"] .de-edge[data-edge-from]{stroke-dasharray:8 5;opacity:.8;stroke-width:3}
+.de-shell[data-active-mode="full"] .de-edge.is-muted{opacity:.12}
+.de-shell[data-active-mode="full"] .de-edge.is-linked{opacity:1;stroke-width:5}
+@media(max-width:700px){
+  .de-tabs{grid-template-columns:1fr 1fr 1fr}
+  .de-tabs button{font-size:.68rem;padding:.6rem .22rem;min-width:0;min-height:48px;letter-spacing:-.01em}
+  .de-shell[data-active-mode="full"] .de-viewport{height:min(66dvh,640px)!important;max-height:640px!important;overflow:auto!important;touch-action:pan-x pan-y;cursor:grab}
+  .de-shell[data-active-mode="full"] .de-stage{max-width:none;overflow:visible}
+  .de-shell[data-active-mode="full"] .de-map-control:not([hidden]){display:flex}
+  .de-shell[data-active-mode="full"] .de-model-package{padding:.6rem .8rem}
 }
 
 </style>
