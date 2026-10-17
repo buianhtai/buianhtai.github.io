@@ -1,0 +1,126 @@
+{
+  "revision": "1517a4dbca0a2789ff1d41ba439600f8547d23fa",
+  "description": "Verified TypeScript call sites; one logical agent turn can branch, retry or end early. No HTTP/network claims.",
+  "handoffs": [
+    {
+      "id": "queue",
+      "from": "file-agent.ts",
+      "to": "file-inbox.ts",
+      "label": "Claim queued input",
+      "operation": "preStep() → this.inbox.claim(...)",
+      "kind": "method-call",
+      "source": {
+        "path": "packages/core/agent-loop/src/agent.ts",
+        "line": 271,
+        "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/src/agent.ts#L271"
+      },
+      "snippet": "call-agent-claim",
+      "explanation": "The agent loop claims queued next-turn/next-step input through ReactLoopInbox."
+    },
+    {
+      "id": "request",
+      "from": "file-agent.ts",
+      "to": "file-agent.ts",
+      "label": "Prepare request",
+      "operation": "step() → this.prepareRequest(...)",
+      "kind": "method-call",
+      "source": {
+        "path": "packages/core/agent-loop/src/agent.ts",
+        "line": 410,
+        "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/src/agent.ts#L410"
+      },
+      "snippet": "call-agent-request",
+      "explanation": "The step resolves model options and a prepared adapter call; this is internal code, not an HTTP route."
+    },
+    {
+      "id": "stream",
+      "from": "file-agent.ts",
+      "to": "llm-llm",
+      "label": "Stream model attempt",
+      "operation": "preparedCall?.stream(request) ?? loopCtx.llm.stream(request)",
+      "kind": "service-call",
+      "source": {
+        "path": "packages/core/agent-loop/src/agent.ts",
+        "line": 453,
+        "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/src/agent.ts#L453"
+      },
+      "snippet": "call-agent-stream",
+      "explanation": "The loop invokes the LLM abstraction and consumes streamed chunks; the actual transport depends on the configured model adapter."
+    },
+    {
+      "id": "frames",
+      "from": "file-agent.ts",
+      "to": "file-assistant-stream.ts",
+      "label": "Emit assistant stream frames",
+      "operation": "new AssistantStreamAttempt(...) · emit('agent/assistant-stream')",
+      "kind": "constructor-event",
+      "source": {
+        "path": "packages/core/agent-loop/src/agent.ts",
+        "line": 443,
+        "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/src/agent.ts#L443"
+      },
+      "snippet": "call-agent-stream",
+      "explanation": "AssistantStreamAttempt frames are emitted to process-local listeners while a durable attempt is built."
+    },
+    {
+      "id": "tools",
+      "from": "file-agent.ts",
+      "to": "file-tool-calls.ts",
+      "label": "Execute requested tools",
+      "operation": "await executeToolCalls(...)",
+      "kind": "function-call",
+      "source": {
+        "path": "packages/core/agent-loop/src/agent.ts",
+        "line": 551,
+        "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/src/agent.ts#L551"
+      },
+      "snippet": "call-agent-tools",
+      "explanation": "Only after the model response contains tool-call blocks; the scheduler handles exclusive and parallel-safe execution."
+    },
+    {
+      "id": "dispatch",
+      "from": "file-tool-calls.ts",
+      "to": "core-tools",
+      "label": "Dispatch through tool scheduler",
+      "operation": "ctx.tools[TOOL_RUNTIME_SCHEDULER].dispatch(...)",
+      "kind": "service-call",
+      "source": {
+        "path": "packages/core/agent-loop/src/tool-calls.ts",
+        "line": 174,
+        "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/src/tool-calls.ts#L174"
+      },
+      "snippet": "call-tool-dispatch",
+      "explanation": "The tool-call function invokes the registered tool-runtime scheduler. This does not assert a network protocol."
+    },
+    {
+      "id": "persist",
+      "from": "file-tool-calls.ts",
+      "to": "file-tool-calls.ts",
+      "label": "Append ordered tool result",
+      "operation": "session.append('tool/result', ..., sourceEventSeqs)",
+      "kind": "session-event",
+      "source": {
+        "path": "packages/core/agent-loop/src/tool-calls.ts",
+        "line": 282,
+        "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/src/tool-calls.ts#L282"
+      },
+      "snippet": "call-tool-persist",
+      "explanation": "The result event is attached to its tool-call event sequence for durable ordering and replay."
+    },
+    {
+      "id": "continue",
+      "from": "file-agent.ts",
+      "to": "file-agent.ts",
+      "label": "Complete or continue step",
+      "operation": "session.append('step/end', ...)",
+      "kind": "session-event",
+      "source": {
+        "path": "packages/core/agent-loop/src/agent.ts",
+        "line": 358,
+        "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/src/agent.ts#L358"
+      },
+      "snippet": "call-agent-end",
+      "explanation": "The driver records step completion and may continue or end based on pending work and turn outcome."
+    }
+  ]
+}
