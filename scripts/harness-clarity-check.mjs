@@ -31,6 +31,11 @@ try{
         assert.equal(await app.locator('.de-model-subsystem').count(),6,'Full map shows six distinct nested subsystem boundaries');
         assert.equal(await app.locator('[data-node]').count(),32,'Full map includes all six subsystems and twenty-six source-backed packages');
         assert.equal(await app.locator('.de-edge').count(),6,'Full map shows six verified highlighted relationships by default');
+        if(width===1440){
+          const last=await app.locator('[data-node="session-session-checkpoint-policy"]').boundingBox();
+          const viewport=await app.locator('.de-viewport').boundingBox();
+          assert(last&&viewport&&last.y+last.height<=viewport.y+viewport.height+4,'Desktop full-model view shows the bottom package without internal scrolling');
+        }
         const packageNode=app.locator('[data-node="core-agent-loop"]');
         await packageNode.click();
         assert.match(await app.locator('[data-title]').innerText(),/agent-loop/);
@@ -182,6 +187,8 @@ try{
       if(width===390){
         assert(await app.locator('.de-viewport').evaluate(el=>getComputedStyle(el).overflowX==='auto'),'Mobile full map is pan-and-zoom canvas, not a cut-off stack');
         assert((await app.locator('.de-viewport').evaluate(el=>el.scrollWidth))>width,'Mobile full map is larger than the viewport');
+        await app.locator('.de-viewport').evaluate(el=>{el.scrollLeft=el.scrollWidth/2});
+        assert((await app.locator('.de-viewport').evaluate(el=>el.scrollLeft))>0,'Mobile can pan horizontally to reveal other subsystem areas');
       }
       await page.screenshot({path:'artifacts/harness-clarity/full-model-mobile-or-final-'+theme+'-'+width+'.png',fullPage:true});
       assert.deepEqual(errors,[],'No uncaught browser errors');
