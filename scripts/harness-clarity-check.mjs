@@ -40,6 +40,9 @@ try{
         await packageNode.click();
         assert.match(await app.locator('[data-title]').innerText(),/agent-loop/);
         assert((await app.locator('.de-sources a').count())>0,'Full-map package links to pinned code evidence');
+        assert((await app.locator('.de-relationship-card').count())>=4,'Package reveals source-declared direct relationships');
+        assert((await app.locator('.de-context-edge').count())>=4,'Selected package exposes directional, source-backed import arrows on the full map');
+        assert.match((await app.locator('.de-relationship-kind').allTextContents()).join(' '),/USES/,'Dependency meaning is explicitly labeled');
         await app.locator('[data-action="close"]').click();
         await app.locator('[data-action="connections"]').click();
         assert.equal(await app.locator('.de-edge').count(),16,'Expanded full-map layer shows all sixteen verified system dependencies');
@@ -130,9 +133,23 @@ try{
       await app.locator('[data-node="core-agent-loop"]').click();
       await app.locator('[data-action="inside"]').click();
       assert.equal(await app.locator('[data-node]').count(),7,'Agent-loop drill shows seven implementation files');
+      await app.locator('[data-node="file-index.ts"]').click();
+      assert((await app.locator('.de-editor-related .de-code-nav').count())>=3,'Code reader can jump between imported source files');
+      await app.locator('.de-editor-related .de-code-nav').first().click();
+      assert.match(await app.locator('[data-title]').innerText(),/ReactLoopAgent/,'Source import navigation selects linked code node');
       await app.locator('[data-node="file-agent.ts"]').click();
       assert.equal(await app.locator('.de-source-preview').isVisible(),true,'File click displays source content');
       assert((await app.locator('.de-code-row').count())>10,'Source content has real pinned lines');
+      assert((await app.locator('.de-syn-keyword').count())>0,'Code reader applies visible TypeScript syntax classes');
+      await app.locator('.de-editor-search').fill('private');
+      assert.match(await app.locator('.de-editor-status').innerText(),/matching lines/i,'Code reader searches actual cached snippet');
+      await app.locator('.de-editor-search').fill('');
+      await app.locator('.de-editor-line').fill('266');
+      await app.locator('[data-action="go-line"]').click();
+      assert.equal(await app.locator('.de-line-selected').count(),1,'Code reader navigates to exact cached line number');
+      await app.locator('[data-action="expand-editor"]').click();
+      assert.equal(await app.locator('.de-shell').evaluate(el=>el.classList.contains('de-code-expanded')),true,'Code reader can expand to wider panel');
+      await app.locator('[data-action="expand-editor"]').click();
       if(width===390){
         await app.locator('[data-action="dismiss"]').click({position:{x:20,y:120}});
         assert.equal(await app.locator('.de-detail').isVisible(),false,'Touching the backdrop dismisses the mobile sheet');
