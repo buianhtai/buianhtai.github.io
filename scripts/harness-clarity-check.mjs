@@ -137,7 +137,7 @@ try{
       assert((await app.locator('.de-editor-related .de-code-nav').count())>=3,'Code reader can jump between imported source files');
       await app.locator('.de-editor-related .de-code-nav').first().click();
       assert.match(await app.locator('[data-title]').innerText(),/ReactLoopAgent/,'Source import navigation selects linked code node');
-      await app.locator('[data-node="file-agent.ts"]').click();
+      assert.equal(await app.locator('.de-source-preview').isVisible(),true,'Related code file is already loaded; no second canvas click needed');
       assert.equal(await app.locator('.de-source-preview').isVisible(),true,'File click displays source content');
       assert((await app.locator('.de-code-row').count())>10,'Source content has real pinned lines');
       assert((await app.locator('.de-syn-keyword').count())>0,'Code reader applies visible TypeScript syntax classes');
