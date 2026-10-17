@@ -28,6 +28,16 @@ try{
       await page.waitForSelector('diagram-only-explorer[data-ready="true"]');
       assert.equal(await app.locator('.de-group').count(),3,'Only conceptual boundaries shown initially');
       assert.equal(await app.locator('[data-node]').count(),6,'All six system subsystems visible');
+      if(width===390){
+        for(const node of await app.locator('[data-node]').all()){
+          const box=await node.boundingBox();
+          assert(box&&box.x>=-1&&box.x+box.width<=width+1,'Every system component fits phone width');
+        }
+        const last=await app.locator('[data-node="session"]').boundingBox();
+        const viewportBox=await app.locator('.de-viewport').boundingBox();
+        assert(last&&viewportBox&&last.y+last.height<=viewportBox.y+viewportBox.height,'System boundaries expand naturally in vertical layout');
+        assert(await app.locator('.de-viewport').evaluate(el=>getComputedStyle(el).overflowY==='visible'),'Mobile uses page scrolling, not nested canvas scrolling');
+      }
       assert.equal(await app.locator('.de-edge').count(),0,'No initial spaghetti edges');
       assert.equal(await app.locator('.de-detail').isVisible(),false,'No sidebars until user selects node');
       assert.equal(await app.locator('.de-mini-zones rect').count(),3,'Minimap mirrors architecture boundaries');
@@ -43,20 +53,39 @@ try{
       assert.equal(await app.locator('.de-edge').count(),0,'Disabling overlay restores clean diagram');
       const expectedMap=width>=700;
       assert.equal(await app.locator('.de-map-control').isVisible(),expectedMap,'Mobile minimap is optional by default');
+      if(width===390){
+        await app.locator('[data-action="mobile-tools"]').click();
+        assert.equal(await app.locator('[data-action="mobile-tools"]').getAttribute('aria-expanded'),'true','Advanced controls expand on demand');
+      }
       await app.locator('[data-action="minimap"]').click();
       assert.equal(await app.locator('.de-map-control').isVisible(),!expectedMap);
       await app.locator('[data-action="minimap"]').click();
       assert.equal(await app.locator('.de-map-control').isVisible(),expectedMap);
+      if(width===390)await app.locator('[data-action="mobile-tools"]').click();
       await page.screenshot({path:'artifacts/harness-clarity/diagram-overview-'+theme+'-'+width+'.png',fullPage:true});
 
       await app.locator('[data-node="core"]').click();
       assert.equal(await app.locator('.de-detail').isVisible(),true,'Diagram node opens contextual content');
+      if(width===390){
+        assert.equal(await app.locator('.de-backdrop').isVisible(),true,'Mobile details provide a dismissible backdrop');
+        const bounds=await app.locator('.de-detail').boundingBox();
+        assert(bounds&&bounds.y>=0&&bounds.y+bounds.height<=901&&bounds.width>=width-1,'Details fit as a bottom sheet in the phone viewport');
+      }
       assert.match(await app.locator('[data-title]').innerText(),/Agent runtime/);
       assert((await app.locator('.de-sources a').count())>=1,'Selected component links to code evidence');
       await app.locator('[data-action="expand"]').click();
       assert.equal(await app.locator('.de-group').count(),3,'Expanded view has incoming, center, outgoing columns');
       assert((await app.locator('.de-edge').count())>=3,'Related dependency arrows appear on demand');
       assert((await app.locator('.de-node').count())>=4,'One-hop related nodes expand');
+      if(width===390){
+        const focus=await app.locator('[data-node="core"]').boundingBox();
+        const usedBy=await app.locator('.de-group').nth(1).boundingBox();
+        const uses=await app.locator('.de-group').nth(2).boundingBox();
+        assert(focus&&usedBy&&uses&&focus.y<usedBy.y&&usedBy.y<uses.y,'Mobile dependencies read focus, incoming then outgoing');
+        for(const node of await app.locator('[data-node]').all()){
+          const b=await node.boundingBox();assert(b&&b.x>=-1&&b.x+b.width<=width+1,'Expanded dependency cards never crop');
+        }
+      }
       if(width===1440){
         const header=await app.locator('.de-group h3').first().boundingBox();
         const viewport=await app.locator('.de-viewport').boundingBox();
@@ -79,6 +108,12 @@ try{
       assert((await app.locator('[data-node]').count())>=6,'Back restores previous architecture');
       await app.locator('button[data-mode="flow"]').click();
       assert.equal(await app.locator('.de-flow-node').count(),6,'Flow has six visible ordered nodes');
+      if(width===390){
+        const last=await app.locator('[data-step="5"]').boundingBox();
+        const canvas=await app.locator('.de-viewport').boundingBox();
+        assert(last&&canvas&&last.y+last.height<=canvas.y+canvas.height,'All six flow stages belong to one naturally scrolling mobile diagram');
+        assert.equal(await app.locator('.de-map-control').isVisible(),false,'No minimap covers mobile flow');
+      }
       assert.equal(await app.locator('.de-edge').count(),5,'Each ordered stage has an explicit connecting arrow');
       assert.equal(await app.locator('.de-tip').count(),5,'Arrowheads establish actual visual direction');
       assert.equal(await app.locator('.de-group').count(),3,'Source-grounded flow has three distinct editorial phase boundaries');
