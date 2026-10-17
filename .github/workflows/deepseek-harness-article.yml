@@ -1,0 +1,59 @@
+name: DeepSeek Harness article review
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/content/blog/en/deepseek-harness-architecture-everything-is-a-plugin.mdx'
+      - 'src/styles/deepseek-harness-article.css'
+      - 'scripts/deepseek-harness-article-check.mjs'
+      - '.github/workflows/deepseek-harness-article.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deepseek-article-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  visual:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install D2 renderer
+        shell: bash
+        run: |
+          set -euo pipefail
+          D2_VERSION="v0.9.0"
+          ARCHIVE="d2-${D2_VERSION}-linux-amd64.tar.gz"
+          curl --fail --location --retry 5 --retry-all-errors \
+            "https://github.com/d2lang/d2/releases/download/${D2_VERSION}/${ARCHIVE}" \
+            --output "$RUNNER_TEMP/$ARCHIVE"
+          tar -xzf "$RUNNER_TEMP/$ARCHIVE" -C "$RUNNER_TEMP"
+          make -sC "$RUNNER_TEMP/d2-${D2_VERSION}" install PREFIX="$HOME/.local"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Build full Astro site and search index
+        run: npm run build
+      - name: Install browser tooling
+        run: |
+          npm install --no-save --no-package-lock playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Verify editorial reader experience and capture screenshots
+        run: node scripts/deepseek-harness-article-check.mjs
+      - name: Upload reader screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deepseek-harness-article-review
+          path: artifacts/deepseek-harness-article/
+          if-no-files-found: warn
