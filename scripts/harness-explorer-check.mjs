@@ -5,7 +5,8 @@ import {chromium} from 'playwright';
 const model=JSON.parse(await readFile('src/data/architecture/deepseek-harness.json','utf8'));
 const previews=JSON.parse(await readFile('src/data/architecture/deepseek-harness-excerpts.json','utf8'));
 assert.equal(previews.revision,model.revision,'Source previews match pinned architecture commit');
-assert.equal(Object.keys(previews.excerpts).length,7,'All seven loop files have pinned excerpts');
+assert.equal(Object.keys(previews.excerpts).filter(id=>id.startsWith('file-')).length,7,'All seven loop files have pinned excerpts');
+assert((Object.keys(previews.excerpts).filter(id=>id.startsWith('call-')).length)>=7,'Source-linked code callsites retain their own pinned windows');
 for(const preview of Object.values(previews.excerpts)){assert(preview.url.includes('/'+model.revision+'/'));assert(preview.code.length>0);}
 const ids=new Set(model.nodes.map(n=>n.id));
 assert.equal(ids.size,model.nodes.length);
