@@ -441,6 +441,10 @@ class DiagramOnlyExplorer extends HTMLElement {
     }
     if(mode==='flow')flow();else if(mode==='code')codePath();else if(mode==='full')fullModel();else if(expanded)neighborhood();else architecture();
     app.dataset.activeMode=mode;
+    // Explicit mobile code-path height prevents stale intrinsic canvas height
+    // after switching from the shorter six-stage flow.
+    if(mode==='code'&&viewport.clientWidth<=700)viewport.style.setProperty('height',h+'px','important');
+    else viewport.style.removeProperty('height');
     q<HTMLElement>('.de-tour').hidden=mode!=='flow'&&mode!=='code';
     q<HTMLElement>('[data-step-status]').textContent=mode==='code'?'Callsite '+(codeStep+1)+' / '+data.handoffs.length:'Stage '+(step+1)+' / '+model.journey.length;
     updateMinimap();
