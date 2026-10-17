@@ -15,13 +15,13 @@ const {model,zones,snippets}=Astro.props;
     </header>
     <div class="de-tools">
       <nav class="de-crumbs" aria-label="Architecture levels"></nav>
-      <div class="de-buttons"><button type="button" data-action="back" disabled>← Back</button><button type="button" data-action="fit">Fit</button><button type="button" data-action="focus">Focus</button><button type="button" data-action="reset">100%</button><button type="button" data-action="fullscreen" aria-pressed="false">⛶ Expand</button></div>
+      <div class="de-buttons"><button type="button" data-action="back" disabled>← Back</button><button type="button" data-action="fit">Fit</button><button type="button" data-action="focus">Focus</button><button type="button" data-action="reset">100%</button><button type="button" data-action="connections" aria-pressed="false" title="Show source-backed dependency connections">Dependencies</button><button type="button" data-action="minimap" aria-pressed="true">Map</button><button type="button" data-action="fullscreen" aria-pressed="false">⛶ Expand</button></div>
     </div>
     <div class="de-board">
       <div class="de-viewport" role="region" tabindex="0" aria-label="Interactive diagram; select any node for details and expand its dependencies">
         <div class="de-stage"><div class="de-zones"></div><svg class="de-edges" aria-hidden="true"></svg><div class="de-nodes"></div></div>
       </div>
-      <div class="de-hint">Select a node → see details → expand related dependencies</div>
+      <div class="de-hint">Select a node → inspect → expand its direct relationships</div><button type="button" data-action="mapjump" class="de-map-control" aria-label="Diagram minimap: click to navigate"><svg class="de-minimap" viewBox="0 0 150 86" preserveAspectRatio="none" aria-hidden="true"><g class="de-mini-zones"></g><g class="de-mini-nodes"></g><rect class="de-mini-window" x="0" y="0" width="10" height="10" rx="2"></rect></svg><span>OVERVIEW MAP</span></button><div class="de-legend"><span>◌ Package import / dependency</span><span>→ Curated order in flow mode</span></div>
       <aside class="de-detail" hidden aria-label="Selected diagram element">
         <div class="de-detail-head"><span class="de-overline" data-kind></span><button type="button" data-action="close" aria-label="Close node information">✕</button></div>
         <h2 data-title></h2><p data-summary></p><p class="de-stats" data-stats></p>
@@ -52,17 +52,42 @@ class DiagramOnlyExplorer extends HTMLElement {
   const evidence=(s:Src)=>{const a=el('a','de-source',s.path.split('/').slice(-2).join('/')+' : '+s.line+' ↗') as HTMLAnchorElement;a.href=s.url;a.target='_blank';a.rel='noopener noreferrer';return a;};
   let mode:'architecture'|'flow'='architecture',view='system',selected:string|null=null,expanded=false,zoom=1,step=0,w=1300,h=640;
   let positions=new Map<string,{x:number;y:number;width:number;height:number}>();
+  let connections=false,showMap=true;
   const history:{view:string;selected:string|null;expanded:boolean}[]=[];
   const scoped=()=>model.edges.filter(e=>e.view===view);
   const show=()=>{detail.hidden=false;},hide=()=>{detail.hidden=true;};
-  const setZoom=()=>{stage.style.zoom=String(zoom);};
+  const setZoom=()=>{stage.style.zoom=String(zoom);updateMinimap();};
   const canvas=(width:number,height:number)=>{w=width;h=height;stage.style.width=width+'px';stage.style.height=height+'px';const svg=q<SVGSVGElement>('.de-edges');svg.setAttribute('viewBox','0 0 '+width+' '+height);svg.setAttribute('width',String(width));svg.setAttribute('height',String(height));};
   const reset=()=>{q('.de-nodes').replaceChildren();q('.de-zones').replaceChildren();q('.de-edges').replaceChildren();positions=new Map();};
-  const wire=(x1:number,y1:number,x2:number,y2:number,dashed=false)=>{
+  const updateMinimap=()=>{
+    const svg=q<SVGSVGElement>('.de-minimap'),ns='http://www.w3.org/2000/svg';
+    svg.setAttribute('viewBox','0 0 '+w+' '+h);
+    const z=q('.de-mini-zones'),n=q('.de-mini-nodes');z.replaceChildren();n.replaceChildren();
+    this.querySelectorAll<HTMLElement>('.de-group').forEach(group=>{
+      const rect=document.createElementNS(ns,'rect');
+      rect.setAttribute('x',String(parseFloat(group.style.left)||0));rect.setAttribute('y',String(parseFloat(group.style.top)||0));
+      rect.setAttribute('width',String(parseFloat(group.style.width)||0));rect.setAttribute('height',String(parseFloat(group.style.height)||0));rect.setAttribute('rx','16');z.append(rect);
+    });
+    for(const [id,p] of positions){
+      const r=document.createElementNS(ns,'rect');
+      r.setAttribute('x',String(p.x));r.setAttribute('y',String(p.y));r.setAttribute('width',String(p.width));r.setAttribute('height',String(p.height));r.setAttribute('rx','10');
+      if(id===selected)r.classList.add('is-selected');n.append(r);
+    }
+    const window=q<SVGRectElement>('.de-mini-window');
+    window.setAttribute('x',String(viewport.scrollLeft/zoom));window.setAttribute('y',String(viewport.scrollTop/zoom));
+    window.setAttribute('width',String(Math.min(w,viewport.clientWidth/zoom)));window.setAttribute('height',String(Math.min(h,viewport.clientHeight/zoom)));
+  };
+  const wire=(x1:number,y1:number,x2:number,y2:number,dashed=false,edge?:E)=>{
     const svg=q<SVGSVGElement>('.de-edges'),ns='http://www.w3.org/2000/svg',p=document.createElementNS(ns,'path');
     const xmid=(x1+x2)/2;
     p.setAttribute('d','M '+x1+' '+y1+' L '+xmid+' '+y1+' L '+xmid+' '+y2+' L '+(x2-10)+' '+y2);
     p.classList.add('de-edge');if(dashed)p.classList.add('de-incoming');
+    if(edge){
+      p.dataset.edgeFrom=edge.from;p.dataset.edgeTo=edge.to;p.setAttribute('tabindex','0');
+      p.setAttribute('role','button');p.setAttribute('aria-label','Dependency: '+edge.from+' uses '+edge.to);
+      p.onclick=()=>inspectEdge(edge);
+      p.onkeydown=ev=>{if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();inspectEdge(edge);}};
+    }
     svg.append(p);
     const tip=document.createElementNS(ns,'path');tip.classList.add('de-tip');
     tip.setAttribute('d','M '+(x2-19)+' '+(y2-6)+' L '+(x2-10)+' '+y2+' L '+(x2-19)+' '+(y2+6));svg.append(tip);
@@ -90,7 +115,11 @@ class DiagramOnlyExplorer extends HTMLElement {
       canvas(1180,Math.max(570,Math.ceil(ns.length/3)*184+138));
       ns.forEach((n,i)=>add(n,28+(i%3)*388,93+Math.floor(i/3)*184,338,138));
     }
-    q('[data-status]').textContent=ns.length+' components · select a node for details';
+    if(connections)scoped().forEach(e=>{
+      const a=positions.get(e.from),b=positions.get(e.to);
+      if(a&&b)wire(a.x+a.width,a.y+a.height/2,b.x,b.y+b.height/2,false,e);
+    });
+    q('[data-status]').textContent=ns.length+' components · '+(connections?'source dependencies visible':'click to inspect');
     q('[data-disclaimer]').textContent='Editorial grouping, not runtime boundaries.';
   };
   const neighborhood=()=>{
@@ -104,8 +133,8 @@ class DiagramOnlyExplorer extends HTMLElement {
     const cy=(h-112)/2;add(center,488,cy,333,112,true);
     incoming.forEach((e,i)=>{const n=lookup.get(e.from);if(n)add(n,37,148+i*163,331,112);});
     outgoing.forEach((e,i)=>{const n=lookup.get(e.to);if(n)add(n,930,148+i*163,333,112);});
-    incoming.forEach(e=>{const a=positions.get(e.from),b=positions.get(selected!);if(a&&b)wire(a.x+a.width,a.y+a.height/2,b.x,b.y+b.height/2,true);});
-    outgoing.forEach(e=>{const a=positions.get(selected!),b=positions.get(e.to);if(a&&b)wire(a.x+a.width,a.y+a.height/2,b.x,b.y+b.height/2);});
+    incoming.forEach(e=>{const a=positions.get(e.from),b=positions.get(selected!);if(a&&b)wire(a.x+a.width,a.y+a.height/2,b.x,b.y+b.height/2,true,e);});
+    outgoing.forEach(e=>{const a=positions.get(selected!),b=positions.get(e.to);if(a&&b)wire(a.x+a.width,a.y+a.height/2,b.x,b.y+b.height/2,false,e);});
     q('[data-status]').textContent=incoming.length+' incoming · '+outgoing.length+' outgoing · select another node to recenter';
     q('[data-disclaimer]').textContent='Arrows mean declared dependency/import, NOT runtime calls.';
   };
@@ -174,6 +203,7 @@ class DiagramOnlyExplorer extends HTMLElement {
       stack.forEach((item,i)=>{if(i)c.append(el('span','de-separator','/'));c.append(btn(item.label,()=>{view=item.id;selected=null;expanded=false;hide();render();},'de-crumb'));});
     }
     if(mode==='flow')flow();else if(expanded)neighborhood();else architecture();
+    updateMinimap();
     q<HTMLElement>('.de-hint').hidden=(mode==='flow'||expanded);
     q<HTMLButtonElement>('[data-action="back"]').disabled=history.length===0;setZoom();
   };
@@ -187,6 +217,17 @@ class DiagramOnlyExplorer extends HTMLElement {
     sample.code.replace(/\n$/,'').split('\n').forEach((line,i)=>{
       const row=el('span','de-code-row','');row.append(el('span','de-code-number',String(sample.startLine+i)),el('span','',line||' '));code.append(row);
     });
+  };
+  const inspectEdge=(edge:E)=>{
+    show();q('[data-kind]').textContent='SOURCE-DECLARED RELATIONSHIP';
+    q('[data-title]').textContent=(lookup.get(edge.from)?.label||edge.from)+' → '+(lookup.get(edge.to)?.label||edge.to);
+    q('[data-summary]').textContent=edge.evidence||edge.label;
+    q('[data-stats]').textContent='Dependent → dependency; not an observed runtime call';
+    const rel=q('.de-related');rel.replaceChildren();
+    rel.append(btn('Inspect '+(lookup.get(edge.from)?.label||edge.from),()=>inspect(edge.from),'de-related-button'));
+    rel.append(btn('Inspect '+(lookup.get(edge.to)?.label||edge.to),()=>inspect(edge.to),'de-related-button'));
+    sources(edge.sources);preview('');
+    for(const a of ['expand','collapse','inside'])q<HTMLButtonElement>('[data-action="'+a+'"]').hidden=true;
   };
   const inspect=(id:string)=>{
     const n=lookup.get(id);if(!n)return;
@@ -251,6 +292,19 @@ class DiagramOnlyExplorer extends HTMLElement {
     if(action==='fit'){zoom=Math.max(.25,Math.min(1,(viewport.clientWidth-24)/w,(viewport.clientHeight-24)/h));setZoom();viewport.scrollTo(0,0);return;}
     if(action==='focus'){focus();return;}
     if(action==='reset'){zoom=1;setZoom();viewport.scrollTo(0,0);return;}
+    if(action==='connections'){
+      connections=!connections;q<HTMLButtonElement>('[data-action="connections"]').setAttribute('aria-pressed',String(connections));
+      if(mode==='architecture'&&!expanded)render();return;
+    }
+    if(action==='minimap'){
+      showMap=!showMap;q<HTMLButtonElement>('[data-action="minimap"]').setAttribute('aria-pressed',String(showMap));
+      q<HTMLElement>('.de-map-control').hidden=!showMap;return;
+    }
+    if(action==='mapjump'){
+      const rect=q<SVGSVGElement>('.de-minimap').getBoundingClientRect();
+      const x=Math.max(0,Math.min(1,(event.clientX-rect.left)/rect.width)),y=Math.max(0,Math.min(1,(event.clientY-rect.top)/rect.height));
+      viewport.scrollTo({left:Math.max(0,x*w*zoom-viewport.clientWidth/2),top:Math.max(0,y*h*zoom-viewport.clientHeight/2)});return;
+    }
     if(action==='fullscreen'){
       const on=app.classList.toggle('de-fullscreen'),b=q<HTMLButtonElement>('[data-action="fullscreen"]');
       b.setAttribute('aria-pressed',String(on));b.textContent=on?'✕ Exit fullscreen':'⛶ Expand';return;
@@ -261,6 +315,8 @@ class DiagramOnlyExplorer extends HTMLElement {
   viewport.addEventListener('pointerdown',event=>{if(event.pointerType!=='mouse'||event.button!==0||(event.target as HTMLElement).closest('button'))return;drag={x:event.clientX,y:event.clientY,left:viewport.scrollLeft,top:viewport.scrollTop};viewport.setPointerCapture(event.pointerId);});
   viewport.addEventListener('pointermove',event=>{if(drag){viewport.scrollLeft=drag.left+drag.x-event.clientX;viewport.scrollTop=drag.top+drag.y-event.clientY;}});
   for(const e of ['pointerup','pointercancel','lostpointercapture'])viewport.addEventListener(e,()=>drag=null);
+  viewport.addEventListener('scroll',()=>updateMinimap(),{passive:true});
+  const resizeWatcher=new ResizeObserver(()=>updateMinimap());resizeWatcher.observe(viewport);
   render();
  }
 }
@@ -288,6 +344,11 @@ if(!customElements.get('diagram-only-explorer'))customElements.define('diagram-o
 .de-preview-link{font-size:.73rem;color:var(--de-accent);text-decoration:none}.de-source-preview pre{overflow:auto;max-height:290px;background:var(--de-bg);border:1px solid var(--de-border);border-radius:9px;padding:.5rem .15rem}
 .de-source-code{font:400 .68rem/1.6 var(--font-mono,monospace);white-space:pre}.de-code-row{display:block;padding:.05rem .3rem}
 .de-code-number{display:inline-block;min-width:2.4rem;padding-right:.5rem;margin-right:.6rem;text-align:right;color:var(--de-muted);border-right:1px solid var(--de-border)}
+
+.de-map-control{position:absolute;right:12px;bottom:12px;z-index:3;display:flex;flex-direction:column;gap:.15rem;width:164px;min-height:102px;background:var(--de-surface);color:var(--de-muted);border:1px solid var(--de-border);border-radius:11px;padding:6px;box-shadow:0 10px 32px #0002}.de-map-control svg{height:76px;width:100%;background:var(--de-bg);border-radius:7px}.de-map-control span{font:700 .57rem var(--font-mono,monospace);letter-spacing:.08em}.de-mini-zones rect{fill:color-mix(in srgb,var(--de-accent) 8%,var(--de-bg));stroke:var(--de-border);stroke-width:2}.de-mini-nodes rect{fill:color-mix(in srgb,var(--de-accent) 52%,var(--de-surface))}.de-mini-nodes rect.is-selected{fill:var(--de-accent)}.de-mini-window{fill:color-mix(in srgb,var(--de-accent) 13%,transparent);stroke:var(--de-accent);stroke-width:5}
+.de-legend{position:absolute;top:12px;left:12px;z-index:3;display:flex;gap:.55rem;flex-wrap:wrap;max-width:calc(100% - 205px);border:1px solid var(--de-border);border-radius:9px;background:var(--de-surface);padding:.5rem .6rem;font-size:.68rem;color:var(--de-muted);pointer-events:none}
+.de-edge[data-edge-from]{pointer-events:stroke;cursor:pointer;stroke-width:2.8;opacity:.65}.de-edge[data-edge-from]:hover{opacity:1;stroke-width:5}.de-buttons button[aria-pressed="true"]{border-color:var(--de-accent);background:color-mix(in srgb,var(--de-accent) 10%,var(--de-surface))}
+@media(max-width:700px){.de-map-control{width:110px;min-height:70px;right:7px;bottom:7px}.de-map-control svg{height:52px}.de-map-control span{font-size:.5rem}.de-legend{top:6px;left:6px;font-size:.56rem;max-width:calc(100% - 126px)}}
 .de-hint{position:absolute;bottom:10px;left:10px;font-size:.7rem;padding:.6rem .8rem;background:var(--de-surface);border:1px solid var(--de-border);border-radius:9px;box-shadow:0 5px 17px #00000019;pointer-events:none}.de-footer{display:flex;justify-content:space-between;gap:.6rem;flex-wrap:wrap;border-top:1px solid var(--de-border);padding:.75rem 1rem;font-size:.72rem;color:var(--de-muted)}
 .de-fullscreen{position:fixed;inset:10px;z-index:9999;display:flex;flex-direction:column}.de-fullscreen .de-board{flex:1;min-height:0}.de-fullscreen .de-viewport{height:100%;max-height:none}
 @media(max-width:700px){.de-top{gap:.6rem;padding:.8rem}.de-top>div:first-child{width:100%}.de-tabs{flex:1}.de-tabs button{flex:1;font-size:.76rem;padding:.55rem .35rem}.de-tools{padding:.55rem}.de-buttons button{padding:.4rem .5rem}.de-viewport{height:min(73dvh,650px);min-height:350px}.de-detail{top:auto;bottom:0;width:100%;height:min(75%,620px);border-left:0;border-top:2px solid var(--de-accent);border-radius:14px 14px 0 0}.de-fullscreen{inset:0;border-radius:0}.de-hint{max-width:92%;font-size:.64rem}}
