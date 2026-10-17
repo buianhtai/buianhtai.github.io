@@ -1,0 +1,24 @@
+/* Article-local Mermaid presentation. The shared Mermaid component intentionally
+   has a dark editorial canvas; source-generated text uses dark colors, so this
+   article opts into a light technical drawing surface in *both* site themes.
+   This avoids a dark-on-dark sequence diagram without changing other posts. */
+.deepseek-article-diagram {
+  margin: 2rem 0;
+}
+.deepseek-article-diagram .mermaid-figure--editorial .mermaid-scroll {
+  background-color: #f7fbff !important;
+  background-image: radial-gradient(#dbe6f0 0.7px, transparent 0.7px) !important;
+  background-size: 18px 18px;
+  overflow-x: auto;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+.deepseek-diagram--overview .mermaid-scroll { max-height: 515px; }
+.deepseek-diagram--sequence .mermaid-scroll { max-height: 640px; }
+.deepseek-diagram--tools .mermaid-scroll { max-height: 520px; }
+.deepseek-article-diagram .mermaid-gesture { font-size: 0.73rem; }
+@media (max-width: 640px) {
+  .deepseek-diagram--overview .mermaid-scroll { max-height: 460px; }
+  .deepseek-diagram--sequence .mermaid-scroll { max-height: 570px; }
+  .deepseek-diagram--tools .mermaid-scroll { max-height: 460px; }
+}
