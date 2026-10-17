@@ -4,6 +4,9 @@ on:
     branches: [main]
     paths:
       - 'src/components/labs/ArchitectureExplorer.astro'
+      - 'src/components/labs/ArchitectureClarityLab.astro'
+      - 'src/pages/en/labs/deepseek-harness-clarity.astro'
+      - 'scripts/harness-clarity-check.mjs'
       - 'src/data/architecture/**'
       - 'src/pages/en/labs/deepseek-harness.astro'
       - 'scripts/harness-explorer-check.mjs'
@@ -50,6 +53,15 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Verify explorer reader journeys
         run: node scripts/harness-explorer-check.mjs
+      - name: Verify clarity-first architecture storyboards
+        run: node scripts/harness-clarity-check.mjs
+      - name: Upload clarity prototype screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: harness-clarity-review
+          path: artifacts/harness-clarity/
+          if-no-files-found: warn
       - name: Upload review screenshots
         if: always()
         uses: actions/upload-artifact@v4
