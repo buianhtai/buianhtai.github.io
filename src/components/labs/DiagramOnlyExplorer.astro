@@ -402,7 +402,27 @@ class DiagramOnlyExplorer extends HTMLElement {
       positions.set('code-'+i,{x,y,width:cardW,height:113});
       if(i>0){
         const prev=positions.get('code-'+(i-1))!;
-        if(mobile){wire(x+cardW/2,prev.y+prev.height,x+cardW/2,y-12);}
+        const next={x,y,width:cardW,height:113};
+        const svg=q<SVGSVGElement>('.de-edges'),ns='http://www.w3.org/2000/svg';
+        const line=document.createElementNS(ns,'path'),tip=document.createElementNS(ns,'path');
+        let d='',t='';
+        if(Math.abs(prev.y-y)<4){
+          const right=x>prev.x,start=right?prev.x+prev.width:prev.x,end=right?x-10:x+cardW+10;
+          const cy=y+56;
+          d='M '+start+' '+cy+' H '+end;
+          t=right?'M '+(end-8)+' '+(cy-6)+' L '+end+' '+cy+' L '+(end-8)+' '+(cy+6):
+                  'M '+(end+8)+' '+(cy-6)+' L '+end+' '+cy+' L '+(end+8)+' '+(cy+6);
+        }else{
+          const xmid=mobile?x+cardW/2:(prev.x+prev.width/2);
+          const to=mobile?x+cardW/2:x+cardW/2;
+          const y0=prev.y+prev.height,y1=y-10,mid=(y0+y1)/2;
+          d='M '+xmid+' '+y0+' L '+xmid+' '+mid+' L '+to+' '+mid+' L '+to+' '+y1;
+          t='M '+(to-6)+' '+(y1-8)+' L '+to+' '+y1+' L '+(to+6)+' '+(y1-8);
+        }
+        line.setAttribute('d',d);tip.setAttribute('d',t);
+        line.classList.add('de-edge','de-code-edge');tip.classList.add('de-tip','de-code-tip');
+        line.setAttribute('aria-label','Guided code walkthrough: '+data.handoffs[i-1].label+' then '+h.label);
+        svg.append(line,tip);
       }
     });
     q('[data-status]').textContent=data.handoffs.length+' verified callsites · click to view exact implementation';
@@ -915,4 +935,5 @@ if(!customElements.get('diagram-only-explorer'))customElements.define('diagram-o
   .de-shell[data-active-mode="code"] .de-stage{max-width:100%;overflow:hidden}
 }
 
+.de-code-edge,.de-code-tip{stroke:var(--de-accent)!important;stroke-width:2.5}.de-shell[data-active-mode="code"] .de-flow-node:hover{border-color:var(--de-accent)}
 </style>
