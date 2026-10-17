@@ -1,0 +1,375 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://buianhtai.github.io/schemas/agent-platform-v1alpha1.schema.json",
+  "title": "Configuration-driven Agent v1alpha1",
+  "description": "Draft platform contract, not a Deep Agents native format. Tenant and workspace fields must be verified/overridden by the API before storing.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "apiVersion": {
+      "const": "agent-platform/v1alpha1"
+    },
+    "kind": {
+      "const": "Agent"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{1,62}$"
+        },
+        "tenantId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        }
+      },
+      "required": [
+        "id",
+        "tenantId",
+        "workspaceId",
+        "displayName"
+      ]
+    },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "runtime": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "enum": [
+                "simple",
+                "deep",
+                "workflow"
+              ]
+            },
+            "templateRef": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*@[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                  "minLength": 3,
+                  "maxLength": 160
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        },
+        "instructions": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 60000
+        },
+        "model": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "profileRef": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*@[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+              "minLength": 3,
+              "maxLength": 160
+            },
+            "parameters": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "temperature": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 2
+                }
+              },
+              "required": []
+            }
+          },
+          "required": [
+            "profileRef"
+          ]
+        },
+        "tools": {
+          "type": "array",
+          "maxItems": 50,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "ref": {
+                "type": "string",
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*@[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                "minLength": 3,
+                "maxLength": 160
+              },
+              "mode": {
+                "enum": [
+                  "read",
+                  "write"
+                ]
+              },
+              "approval": {
+                "enum": [
+                  "never",
+                  "always"
+                ]
+              }
+            },
+            "required": [
+              "ref",
+              "mode"
+            ],
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "mode": {
+                      "const": "write"
+                    }
+                  },
+                  "required": [
+                    "mode"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "approval": {
+                      "const": "always"
+                    }
+                  },
+                  "required": [
+                    "approval"
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        "skills": {
+          "type": "array",
+          "maxItems": 50,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "ref": {
+                "type": "string",
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*@[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                "minLength": 3,
+                "maxLength": 160
+              }
+            },
+            "required": [
+              "ref"
+            ]
+          }
+        },
+        "subagents": {
+          "type": "array",
+          "maxItems": 10,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "agentVersionRef": {
+                "type": "string",
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*@[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                "minLength": 3,
+                "maxLength": 160
+              },
+              "purpose": {
+                "type": "string",
+                "minLength": 8,
+                "maxLength": 400
+              }
+            },
+            "required": [
+              "agentVersionRef",
+              "purpose"
+            ]
+          }
+        },
+        "memory": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "threadPersistence": {
+              "type": "boolean"
+            },
+            "crossSession": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "threadPersistence",
+            "crossSession"
+          ]
+        },
+        "limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "maxSteps": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            },
+            "maxDurationSeconds": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 7200
+            },
+            "maxInputTokens": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "maxOutputTokens": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "maxCostUsd": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          },
+          "required": [
+            "maxSteps",
+            "maxDurationSeconds",
+            "maxInputTokens",
+            "maxOutputTokens",
+            "maxCostUsd"
+          ]
+        },
+        "output": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "format": {
+              "enum": [
+                "text",
+                "json"
+              ]
+            },
+            "schemaRef": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*@[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+              "minLength": 3,
+              "maxLength": 160
+            }
+          },
+          "required": [
+            "format"
+          ]
+        }
+      },
+      "required": [
+        "runtime",
+        "instructions",
+        "model",
+        "tools",
+        "skills",
+        "memory",
+        "limits",
+        "output"
+      ]
+    }
+  },
+  "required": [
+    "apiVersion",
+    "kind",
+    "metadata",
+    "spec"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "spec": {
+            "properties": {
+              "runtime": {
+                "properties": {
+                  "kind": {
+                    "const": "workflow"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "spec": {
+            "properties": {
+              "runtime": {
+                "required": [
+                  "templateRef"
+                ],
+                "properties": {
+                  "templateRef": {
+                    "type": "string",
+                    "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*@[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                    "minLength": 3,
+                    "maxLength": 160
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "spec": {
+            "properties": {
+              "output": {
+                "properties": {
+                  "format": {
+                    "const": "json"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "spec": {
+            "properties": {
+              "output": {
+                "required": [
+                  "schemaRef"
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}
