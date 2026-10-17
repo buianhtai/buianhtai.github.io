@@ -375,12 +375,12 @@ class DiagramOnlyExplorer extends HTMLElement {
     reset();const mobile=viewport.clientWidth<=700,tablet=viewport.clientWidth<1100;
     const width=mobile?Math.max(290,viewport.clientWidth-3):(tablet?770:1220);
     const cardW=mobile?width-46:(tablet?325:520);
-    const ys=mobile?[120,280,440,600,760,920,1080,1240]:[140,140,370,370,600,600,830,830];
+    const ys=mobile?data.handoffs.map((_,i)=>120+Math.floor(i/2)*390+(i%2)*158):[140,140,370,370,600,600,830,830];
     const xs=mobile?data.handoffs.map(()=>23):data.handoffs.map((_,i)=>{
       const col=i%4===0||i%4===3?0:1;
       return tablet?(col?407:34):(col?650:42);
     });
-    const height=mobile?1415:1040;canvas(width,height);
+    const height=mobile?1590:1040;canvas(width,height);
     const labels=[
       ['01 · INPUT & REQUEST','Admission and request preparation'],
       ['02 · MODEL & STREAM','Model call and process-local frames'],
@@ -388,7 +388,7 @@ class DiagramOnlyExplorer extends HTMLElement {
       ['04 · SESSION EVENTS','Durable results and step boundaries']
     ];
     labels.forEach((item,i)=>{
-      if(mobile)group(item[0],item[1],10,20+i*320,width-20,306);
+      if(mobile)group(item[0],item[1],10,20+i*390,width-20,372);
       else group(item[0],item[1],13,37+i*230,width-26,223);
     });
     data.handoffs.forEach((h,i)=>{
