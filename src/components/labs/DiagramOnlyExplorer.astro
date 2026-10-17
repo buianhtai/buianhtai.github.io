@@ -15,6 +15,7 @@ const {model,zones,snippets}=Astro.props;
     </header>
     <div class="de-tools">
       <nav class="de-crumbs" aria-label="Architecture levels"></nav>
+      <div class="de-tour" hidden><button type="button" data-action="previous-step" aria-label="Previous stage">←</button><span data-step-status>Step 1 / 6</span><button type="button" data-action="next-step" aria-label="Next stage">→</button></div>
       <div class="de-buttons"><button type="button" data-action="back" disabled>← Back</button><button type="button" data-action="fit">Fit</button><button type="button" data-action="focus">Focus</button><button type="button" data-action="reset">100%</button><button type="button" data-action="connections" aria-pressed="false" title="Show source-backed dependency connections">Dependencies</button><button type="button" data-action="minimap" aria-pressed="true">Map</button><button type="button" data-action="fullscreen" aria-pressed="false">⛶ Expand</button></div>
     </div>
     <div class="de-board">
@@ -71,7 +72,7 @@ class DiagramOnlyExplorer extends HTMLElement {
     for(const [id,p] of positions){
       const r=document.createElementNS(ns,'rect');
       r.setAttribute('x',String(p.x));r.setAttribute('y',String(p.y));r.setAttribute('width',String(p.width));r.setAttribute('height',String(p.height));r.setAttribute('rx','10');
-      if(id===selected)r.classList.add('is-selected');n.append(r);
+      if(id===selected||(mode==='flow'&&id==='stage-'+step))r.classList.add('is-selected');n.append(r);
     }
     const window=q<SVGRectElement>('.de-mini-window');
     window.setAttribute('x',String(viewport.scrollLeft/zoom));window.setAttribute('y',String(viewport.scrollTop/zoom));
@@ -147,7 +148,8 @@ class DiagramOnlyExplorer extends HTMLElement {
       const width=Math.max(325,available-4),card=Math.min(302,width-34);
       flowSlots=model.journey.map((_,i)=>({x:(width-card)/2,y:105+i*173,w:card,h:112}));
       canvas(width,flowSlots[5].y+206);
-      group('AGENT TURN · GUIDED SOURCE FLOW','Numbered progression · click to inspect the source',10,22,width-20,h-40);
+      const labels=['01 · INPUT & ADMISSION','02 · MODEL & STREAM','03 · TOOLS & CONTINUATION'];
+      [0,1,2].forEach(i=>group(labels[i],'Editorial phase · source-backed steps',8,25+i*375,width-16,365));
     }else if(tablet){
       const left=37,right=393,top=143,middle=336,bottom=529;
       flowSlots=[
@@ -156,25 +158,32 @@ class DiagramOnlyExplorer extends HTMLElement {
         {x:left,y:bottom,w:295,h:114},{x:right,y:bottom,w:295,h:114}
       ];
       canvas(725,735);
-      group('AGENT TURN · GUIDED SOURCE FLOW','Follow the arrows through six sourced stages',17,19,690,690);
+      group('01 · INPUT & ADMISSION','Claim and prepare',17,20,690,256);
+      group('02 · MODEL & STREAM','Assemble model output',17,280,690,230);
+      group('03 · TOOLS & CONTINUATION','Results and control',17,513,690,195);
     }else{
       flowSlots=[
         {x:75,y:150,w:300,h:115},{x:430,y:150,w:300,h:115},{x:785,y:150,w:300,h:115},
         {x:785,y:458,w:300,h:115},{x:430,y:458,w:300,h:115},{x:75,y:458,w:300,h:115}
       ];
       canvas(1180,700);
-      group('AGENT TURN · GUIDED SOURCE FLOW','Follow the numbered arrows. Click any stage for source evidence.',35,26,1110,650);
+      group('01 · INPUT & ADMISSION','Claim and assemble turn context',35,30,715,308);
+      group('02 · MODEL & STREAM','Prepare and settle assistant output',755,30,389,588);
+      group('03 · TOOLS & CONTINUATION','Execute and decide whether to loop',35,349,715,290);
     }
     const ns='http://www.w3.org/2000/svg',svg=q<SVGSVGElement>('.de-edges');
-    const arrow=(d:string,tip:string)=>{
-      const line=document.createElementNS(ns,'path');line.setAttribute('d',d);line.classList.add('de-edge');svg.append(line);
-      const head=document.createElementNS(ns,'path');head.setAttribute('d',tip);head.classList.add('de-tip');svg.append(head);
+    const arrow=(d:string,tip:string,index:number)=>{
+      const line=document.createElementNS(ns,'path');line.setAttribute('d',d);line.classList.add('de-edge','de-flow-edge');line.dataset.stepEdge=String(index);line.setAttribute('aria-label','Source-guided order: '+model.journey[index].title+' then '+model.journey[index+1].title);svg.append(line);
+      const head=document.createElementNS(ns,'path');head.setAttribute('d',tip);head.classList.add('de-tip','de-flow-tip');head.dataset.stepEdge=String(index);svg.append(head);
     };
     model.journey.forEach((story,i)=>{
       const slot=flowSlots[i],b=btn('',()=>inspectFlow(i),'de-flow-node');b.dataset.step=String(i);
       b.style.cssText='left:'+slot.x+'px;top:'+slot.y+'px;width:'+slot.w+'px;height:'+slot.h+'px';
       b.append(el('span','de-flow-no',String(i+1).padStart(2,'0')),el('strong','',story.title),el('span','de-inspect','↗'));
+      const sourceName=lookup.get(story.node)?.label||story.node;
+      b.append(el('span','de-stage-owner','◈ '+sourceName));
       if(step===i)b.classList.add('is-selected');q('.de-nodes').append(b);
+      positions.set('stage-'+i,{x:slot.x,y:slot.y,width:slot.w,height:slot.h});
       if(i>=model.journey.length-1)return;
       const next=flowSlots[i+1];
       if(Math.abs(slot.y-next.y)<4){
@@ -182,10 +191,10 @@ class DiagramOnlyExplorer extends HTMLElement {
         const y=slot.y+slot.h/2;
         arrow('M '+from+' '+y+' H '+to,right
           ?'M '+(to-8)+' '+(y-6)+' L '+to+' '+y+' L '+(to-8)+' '+(y+6)
-          :'M '+(to+8)+' '+(y-6)+' L '+to+' '+y+' L '+(to+8)+' '+(y+6));
+          :'M '+(to+8)+' '+(y-6)+' L '+to+' '+y+' L '+(to+8)+' '+(y+6),i);
       }else{
         const x=slot.x+slot.w/2,from=slot.y+slot.h,to=next.y-11;
-        arrow('M '+x+' '+from+' V '+to,'M '+(x-6)+' '+(to-8)+' L '+x+' '+to+' L '+(x+6)+' '+(to-8));
+        arrow('M '+x+' '+from+' V '+to,'M '+(x-6)+' '+(to-8)+' L '+x+' '+to+' L '+(x+6)+' '+(to-8),i);
       }
     });
     const last=flowSlots[5],note=el('div','de-loop','↶ Pending input or tool work may continue the loop');
@@ -203,6 +212,9 @@ class DiagramOnlyExplorer extends HTMLElement {
       stack.forEach((item,i)=>{if(i)c.append(el('span','de-separator','/'));c.append(btn(item.label,()=>{view=item.id;selected=null;expanded=false;hide();render();},'de-crumb'));});
     }
     if(mode==='flow')flow();else if(expanded)neighborhood();else architecture();
+    app.dataset.activeMode=mode;
+    q<HTMLElement>('.de-tour').hidden=mode!=='flow';
+    q<HTMLElement>('[data-step-status]').textContent='Stage '+(step+1)+' / '+model.journey.length;
     updateMinimap();
     q<HTMLElement>('.de-hint').hidden=(mode==='flow'||expanded);
     q<HTMLButtonElement>('[data-action="back"]').disabled=history.length===0;setZoom();
@@ -251,6 +263,8 @@ class DiagramOnlyExplorer extends HTMLElement {
   const inspectFlow=(i:number)=>{
     step=i;const s=model.journey[i],owner=lookup.get(s.node);
     this.querySelectorAll<HTMLElement>('[data-step]').forEach(x=>x.classList.toggle('is-selected',Number(x.dataset.step)===i));
+    this.querySelectorAll<SVGElement>('[data-step-edge]').forEach(x=>x.classList.toggle('is-active',Number(x.dataset.stepEdge)===i||Number(x.dataset.stepEdge)===i-1));
+    q<HTMLElement>('[data-step-status]').textContent='Stage '+(i+1)+' / '+model.journey.length;
     show();q('[data-kind]').textContent='CURATED STEP '+(i+1)+' / '+model.journey.length;
     q('[data-title]').textContent=s.title;q('[data-summary]').textContent=s.description;
     q('[data-stats]').textContent='Implementation · '+(owner?.label||s.node);
@@ -277,6 +291,8 @@ class DiagramOnlyExplorer extends HTMLElement {
     const action=(event.target as HTMLElement).closest<HTMLElement>('[data-action]')?.dataset.action;
     if(!action)return;
     if(action==='close'){hide();return;}
+    if(action==='previous-step'){inspectFlow(Math.max(0,step-1));return;}
+    if(action==='next-step'){inspectFlow(Math.min(model.journey.length-1,step+1));return;}
     if(action==='expand'&&selected){expanded=true;zoom=1;render();inspect(selected);viewport.scrollTo(0,0);return;}
     if(action==='collapse'){expanded=false;render();if(selected)inspect(selected);return;}
     if(action==='inside'&&selected){
@@ -345,6 +361,12 @@ if(!customElements.get('diagram-only-explorer'))customElements.define('diagram-o
 .de-source-code{font:400 .68rem/1.6 var(--font-mono,monospace);white-space:pre}.de-code-row{display:block;padding:.05rem .3rem}
 .de-code-number{display:inline-block;min-width:2.4rem;padding-right:.5rem;margin-right:.6rem;text-align:right;color:var(--de-muted);border-right:1px solid var(--de-border)}
 
+
+.de-tour{display:flex;align-items:center;gap:.25rem;padding:.16rem .3rem;border-radius:10px;border:1px solid var(--de-border);background:var(--de-bg)}.de-tour button{border:0;background:var(--de-surface);border-radius:7px;min-width:35px;min-height:32px}.de-tour span{font:700 .72rem var(--font-mono,monospace);color:var(--de-accent);padding:0 .2rem}
+.de-stage-owner{position:absolute;left:1.15rem;bottom:.75rem;color:var(--de-muted);font:600 .68rem var(--font-mono,monospace)}
+.de-flow-node{padding-bottom:1.65rem}.de-flow-edge{stroke-width:3}.de-flow-edge.is-active,.de-flow-tip.is-active{stroke-width:4;stroke:var(--de-accent);filter:drop-shadow(0 0 4px color-mix(in srgb,var(--de-accent) 30%,transparent))}
+.de-shell[data-active-mode="flow"] .de-legend span:first-child,.de-shell[data-active-mode="architecture"] .de-legend span:last-child{display:none}
+@media(max-width:700px){.de-tour{order:4;width:100%;justify-content:center}.de-stage-owner{font-size:.62rem}}
 .de-map-control{position:absolute;right:12px;bottom:12px;z-index:3;display:flex;flex-direction:column;gap:.15rem;width:164px;min-height:102px;background:var(--de-surface);color:var(--de-muted);border:1px solid var(--de-border);border-radius:11px;padding:6px;box-shadow:0 10px 32px #0002}.de-map-control svg{height:76px;width:100%;background:var(--de-bg);border-radius:7px}.de-map-control span{font:700 .57rem var(--font-mono,monospace);letter-spacing:.08em}.de-mini-zones rect{fill:color-mix(in srgb,var(--de-accent) 8%,var(--de-bg));stroke:var(--de-border);stroke-width:2}.de-mini-nodes rect{fill:color-mix(in srgb,var(--de-accent) 52%,var(--de-surface))}.de-mini-nodes rect.is-selected{fill:var(--de-accent)}.de-mini-window{fill:color-mix(in srgb,var(--de-accent) 13%,transparent);stroke:var(--de-accent);stroke-width:5}
 .de-legend{position:absolute;top:12px;left:12px;z-index:3;display:flex;gap:.55rem;flex-wrap:wrap;max-width:calc(100% - 205px);border:1px solid var(--de-border);border-radius:9px;background:var(--de-surface);padding:.5rem .6rem;font-size:.68rem;color:var(--de-muted);pointer-events:none}
 .de-edge[data-edge-from]{pointer-events:stroke;cursor:pointer;stroke-width:2.8;opacity:.65}.de-edge[data-edge-from]:hover{opacity:1;stroke-width:5}.de-buttons button[aria-pressed="true"]{border-color:var(--de-accent);background:color-mix(in srgb,var(--de-accent) 10%,var(--de-surface))}
