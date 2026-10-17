@@ -40,6 +40,11 @@ try{
       assert.equal(await app.locator('.de-group').count(),3,'Expanded view has incoming, center, outgoing columns');
       assert((await app.locator('.de-edge').count())>=3,'Related dependency arrows appear on demand');
       assert((await app.locator('.de-node').count())>=4,'One-hop related nodes expand');
+      if(width===1440){
+        const header=await app.locator('.de-group h3').first().boundingBox();
+        const viewport=await app.locator('.de-viewport').boundingBox();
+        assert(header&&viewport&&header.y>=viewport.y,'Expanded graph keeps its section headings in view');
+      }
       await app.locator('[data-action="close"]').click();
       await page.screenshot({path:'artifacts/harness-clarity/diagram-expanded-'+theme+'-'+width+'.png',fullPage:true});
 
@@ -52,6 +57,11 @@ try{
       assert.equal(await app.locator('.de-flow-node').count(),6,'Flow has six visible ordered nodes');
       assert.equal(await app.locator('.de-edge').count(),5,'Each ordered stage has an explicit connecting arrow');
       assert.equal(await app.locator('.de-tip').count(),5,'Arrowheads establish actual visual direction');
+      if(width===1440){
+        const last=await app.locator('[data-step="5"]').boundingBox();
+        const viewport=await app.locator('.de-viewport').boundingBox();
+        assert(last&&viewport&&last.y+last.height<=viewport.y+viewport.height,'All six steps fit the desktop canvas at readable size');
+      }
       assert.match(await app.locator('[data-disclaimer]').innerText(),/curated/i);
       await page.screenshot({path:'artifacts/harness-clarity/diagram-flow-'+theme+'-'+width+'.png',fullPage:true});
       await app.locator('[data-step="4"]').click();
