@@ -134,7 +134,7 @@ class DiagramOnlyExplorer extends HTMLElement {
     b.style.cssText='left:'+x+'px;top:'+y+'px;width:'+width+'px;height:'+height+'px';
     b.append(el('span','de-kind',n.kind==='Source file'?'{ } SOURCE FILE':'◇ '+n.kind.toUpperCase()),el('strong','',n.label),el('span','de-description',n.summary));
     if(focus||selected===n.id)b.classList.add('is-selected');
-    q('.de-nodes').append(b);positions.set(n.id,{x,y,width,height});
+    q('.de-nodes').append(b);positions.set(n.id,{x,y,width,height});return b;
   };
   const architecture=()=>{
     reset();
@@ -220,8 +220,7 @@ class DiagramOnlyExplorer extends HTMLElement {
         zone.items.forEach((item,i)=>{
           if(!item.node)return;
           const x=margin+13,y=zone.y+82+i*(cardH+gap);
-          add(item.node,x,y,zoneW-26,cardH,item.type==='focus');
-          const card=this.querySelector<HTMLElement>('[data-node="'+item.node.id+'"]');
+          const card=add(item.node,x,y,zoneW-26,cardH,item.type==='focus');
           if(card&&item.edge){
             const caption=el('span','de-mobile-direction',item.type==='in'?'← USED BY · IMPORTS THIS':'→ USES · DECLARED DEPENDENCY');
             card.prepend(caption);
