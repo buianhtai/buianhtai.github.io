@@ -28,9 +28,24 @@ const {model,zones,snippets}=Astro.props;
         <div class="de-detail-head"><span class="de-overline" data-kind></span><button type="button" data-action="close" aria-label="Close node information">✕</button></div>
         <h2 data-title></h2><p data-summary></p><p class="de-stats" data-stats></p>
         <div class="de-detail-actions"><button type="button" class="de-primary" data-action="expand">Expand related ↗</button><button type="button" data-action="collapse" hidden>Collapse</button><button type="button" data-action="inside" hidden>Explore inside ↳</button></div>
-        <h3>Related components</h3><div class="de-related"></div>
+        <h3>How this component connects</h3><p class="de-connect-explain">Arrows represent declared package or file imports. They are not measured runtime calls.</p>
+        <div class="de-connect-summary" aria-label="Dependency direction summary"></div>
+        <div class="de-related"></div>
         <h3>Verified source evidence</h3><div class="de-sources"></div>
-        <section class="de-source-preview" hidden aria-label="Source file excerpt"><h3>Source preview</h3><p class="de-source-path"></p><a class="de-preview-link" target="_blank" rel="noopener noreferrer">Open pinned implementation ↗</a><pre><code class="de-source-code"></code></pre></section>
+        <section class="de-source-preview" hidden aria-label="Source code reader">
+          <div class="de-editor-top"><h3>Code reader</h3><span class="de-editor-tag">READ ONLY · PINNED REVISION</span></div>
+          <div class="de-editor-title"><span class="de-source-path"></span><a class="de-preview-link" target="_blank" rel="noopener noreferrer">GitHub ↗</a></div>
+          <div class="de-editor-toolbar">
+            <label>Find <input class="de-editor-search" type="search" placeholder="symbol / text" aria-label="Find in cached source"/></label>
+            <label>Line <input class="de-editor-line" type="number" min="1" aria-label="Go to source line"/></label>
+            <button type="button" data-action="go-line">Go</button>
+            <button type="button" data-action="copy-source">Copy</button>
+            <button type="button" data-action="expand-editor" aria-pressed="false">Expand editor ↗</button>
+          </div>
+          <p class="de-editor-note"></p><p class="de-editor-status" role="status"></p>
+          <pre class="de-editor-window" tabindex="0" aria-label="Read-only TypeScript code with line numbers"><code class="de-source-code"></code></pre>
+          <div class="de-editor-related" aria-label="Code imports and linked components"></div>
+        </section>
       </aside>
     </div>
     <footer class="de-footer"><span data-status></span><span class="de-legend"><span>┄ Source imports / package dependencies</span><span>→ Source-linked reading order</span></span><span data-disclaimer></span></footer>
@@ -54,6 +69,8 @@ class DiagramOnlyExplorer extends HTMLElement {
   const evidence=(s:Src)=>{const a=el('a','de-source',s.path.split('/').slice(-2).join('/')+' : '+s.line+' ↗') as HTMLAnchorElement;a.href=s.url;a.target='_blank';a.rel='noopener noreferrer';return a;};
   let mode:'full'|'architecture'|'flow'=viewport.clientWidth>700?'full':'architecture',view='system',selected:string|null=null,expanded=false,zoom=1,step=0,w=1300,h=640;
   let positions=new Map<string,{x:number;y:number;width:number;height:number}>();
+  let activeSnippet:{id:string;path:string;code:string;startLine:number;url:string}|null=null;
+  let editorQuery='';
   let connections=false,showMap=viewport.clientWidth>=700;
   q<HTMLElement>('.de-map-control').hidden=!showMap;
   q<HTMLButtonElement>('[data-action="minimap"]').setAttribute('aria-pressed',String(showMap));
@@ -368,15 +385,73 @@ class DiagramOnlyExplorer extends HTMLElement {
     q<HTMLButtonElement>('[data-action="back"]').disabled=history.length===0;setZoom();
   };
   const sources=(refs:Src[])=>{const box=q('.de-sources');box.replaceChildren(...refs.slice(0,5).map(evidence));if(!refs.length)box.textContent='No direct evidence for this node in this view.';};
-  const preview=(id:string)=>{
-    const sample=data.excerpts?.[id],panel=q<HTMLElement>('.de-source-preview');panel.hidden=!sample;
-    if(!sample)return;
-    q('.de-source-path').textContent=sample.path+' · starting line '+sample.startLine;
-    q<HTMLAnchorElement>('.de-preview-link').href=sample.url;
-    const code=q('.de-source-code');code.replaceChildren();
-    sample.code.replace(/\n$/,'').split('\n').forEach((line,i)=>{
-      const row=el('span','de-code-row','');row.append(el('span','de-code-number',String(sample.startLine+i)),el('span','',line||' '));code.append(row);
+
+  const tokenise=(line:string)=>{
+    const fragment=document.createDocumentFragment();
+    const tokens=line.match(/\/\/.*$|\/\*.*?\*\/|'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"|`(?:\\.|[^`\\])*`|\b(?:import|export|from|type|interface|class|const|let|return|async|await|private|public|readonly|new|if|else|throw|function|extends|implements|Promise|void|boolean|number|string|null|undefined|this)\b|\b\d+\b|[A-Za-z_$][\w$]*|\s+|./g)||[];
+    for(const part of tokens){
+      const cls=part.startsWith('//')||part.startsWith('/*')?'de-syn-comment':
+        /^['"`]/.test(part)?'de-syn-string':
+        /^(import|export|from|type|interface|class|const|let|return|async|await|private|public|readonly|new|if|else|throw|function|extends|implements|Promise|void|boolean|number|string|null|undefined|this)$/.test(part)?'de-syn-keyword':
+        /^\d+$/.test(part)?'de-syn-number':null;
+      const span=el('span',cls||'',part);fragment.append(span);
+    }
+    return fragment;
+  };
+  const jumpToCachedLine=(line:number)=>{
+    const sample=activeSnippet;if(!sample)return;
+    const total=sample.code.replace(/\n$/,'').split('\n').length;
+    const row=this.querySelector<HTMLElement>('.de-code-row[data-line="'+line+'"]');
+    this.querySelectorAll<HTMLElement>('.de-code-row').forEach(x=>x.classList.toggle('de-line-selected',x===row));
+    if(row){row.scrollIntoView({block:'nearest'});q('.de-editor-status').textContent='Line '+line+' · cached source excerpt';}
+    else{
+      q('.de-editor-status').textContent='Line '+line+' is outside the cached excerpt ('+sample.startLine+'–'+(sample.startLine+total-1)+'). Use GitHub to see the original line.';
+    }
+  };
+  const highlightMatches=()=>{
+    const term=editorQuery.toLowerCase();
+    const rows=this.querySelectorAll<HTMLElement>('.de-code-row');
+    let count=0;
+    rows.forEach(r=>{
+      const body=r.querySelector<HTMLElement>('.de-code-text');
+      const hit=!!term&&!!body?.textContent?.toLowerCase().includes(term);
+      r.classList.toggle('de-line-match',hit);if(hit)count++;
     });
+    q('.de-editor-status').textContent=term?(count+' matching lines in excerpt'):'Browse pinned source and related imports';
+  };
+  const preview=(id:string,reference?:Src)=>{
+    const sample=data.excerpts?.[id]||(reference?Object.values(data.excerpts||{}).find(v=>v.path===reference.path):undefined);
+    const panel=q<HTMLElement>('.de-source-preview');panel.hidden=!sample;activeSnippet=sample?{...sample,id}:null;
+    if(!sample){q<HTMLElement>('.de-editor-related').replaceChildren();return;}
+    q('.de-source-path').textContent=sample.path.split('/').slice(-3).join('/')+' · L'+sample.startLine;
+    q<HTMLAnchorElement>('.de-preview-link').href=reference?.url||sample.url;
+    q<HTMLInputElement>('.de-editor-search').value='';editorQuery='';
+    q<HTMLInputElement>('.de-editor-line').value=String(reference?.line||sample.startLine);
+    const code=q('.de-source-code');code.replaceChildren();
+    const lines=sample.code.replace(/\n$/,'').split('\n');
+    lines.forEach((line,i)=>{
+      const lineNo=sample.startLine+i;
+      const row=el('span','de-code-row','');row.dataset.line=String(lineNo);
+      const gutter=el('button','de-code-number',String(lineNo)) as HTMLButtonElement;gutter.type='button';gutter.dataset.jumpLine=String(lineNo);gutter.title='Select line '+lineNo;
+      const body=el('span','de-code-text','');
+      body.append(tokenise(line||' '));
+      row.append(gutter,body);code.append(row);
+    });
+    q('.de-editor-note').textContent='Source snapshot '+model.revision.slice(0,9)+' · '+lines.length+' cached lines, not the complete repository file.';
+    q('.de-editor-status').textContent='Browse pinned source and related imports';
+    const relatives=q('.de-editor-related');relatives.replaceChildren();
+    const edges=model.edges.filter(e=>e.view==='loop'&&(e.from===id||e.to===id));
+    if(edges.length){
+      relatives.append(el('strong','','Related code files'));
+      const unique=new Set<string>();
+      edges.forEach(e=>{
+        const other=e.from===id?e.to:e.from;
+        if(unique.has(other))return;unique.add(other);
+        relatives.append(btn((e.from===id?'→ imports ':'← imported by ')+(lookup.get(other)?.label||other),()=>inspect(other),'de-code-nav'));
+      });
+    }
+    const pick=reference?.line;
+    if(pick)jumpToCachedLine(pick);
   };
   const inspectEdge=(edge:E)=>{
     show();q('[data-kind]').textContent='SOURCE-DECLARED RELATIONSHIP';
@@ -458,7 +533,20 @@ class DiagramOnlyExplorer extends HTMLElement {
   app.addEventListener('click',event=>{
     const action=(event.target as HTMLElement).closest<HTMLElement>('[data-action]')?.dataset.action;
     if(!action)return;
-    if(action==='close'||action==='dismiss'){hide();return;}
+    if(action==='close'||action==='dismiss'){hide();app.classList.remove('de-code-expanded');q<HTMLButtonElement>('[data-action="expand-editor"]').setAttribute('aria-pressed','false');return;}
+    if(action==='expand-editor'){
+      const on=app.classList.toggle('de-code-expanded');
+      const control=q<HTMLButtonElement>('[data-action="expand-editor"]');control.setAttribute('aria-pressed',String(on));control.textContent=on?'Compact editor ↙':'Expand editor ↗';
+      return;
+    }
+    if(action==='go-line'){
+      const line=Number(q<HTMLInputElement>('.de-editor-line').value);
+      if(Number.isSafeInteger(line)&&line>0)jumpToCachedLine(line);return;
+    }
+    if(action==='copy-source'&&activeSnippet){
+      const control=q<HTMLButtonElement>('[data-action="copy-source"]');
+      navigator.clipboard?.writeText(activeSnippet.code).then(()=>{q('.de-editor-status').textContent='Copied cached source excerpt';}).catch(()=>{q('.de-editor-status').textContent='Clipboard unavailable; select text in the code reader';});return;
+    }
     if(action==='mobile-tools'){
       const expanded=app.classList.toggle('de-tools-open');
       q<HTMLButtonElement>('[data-action="mobile-tools"]').setAttribute('aria-expanded',String(expanded));return;
@@ -507,6 +595,12 @@ class DiagramOnlyExplorer extends HTMLElement {
       const on=app.classList.toggle('de-fullscreen'),b=q<HTMLButtonElement>('[data-action="fullscreen"]');
       b.setAttribute('aria-pressed',String(on));b.textContent=on?'✕ Exit fullscreen':'⛶ Expand';return;
     }
+  });
+  q<HTMLInputElement>('.de-editor-search').addEventListener('input',event=>{editorQuery=(event.target as HTMLInputElement).value;highlightMatches();});
+  q<HTMLInputElement>('.de-editor-line').addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();q<HTMLButtonElement>('[data-action="go-line"]').click();}});
+  q<HTMLElement>('.de-source-code').addEventListener('click',event=>{
+    const num=(event.target as HTMLElement).closest<HTMLElement>('[data-jump-line]')?.dataset.jumpLine;
+    if(num)jumpToCachedLine(Number(num));
   });
   document.addEventListener('keydown',event=>{if(event.key==='Escape'){if(app.classList.contains('de-fullscreen'))q<HTMLButtonElement>('[data-action="fullscreen"]').click();else hide();}});
   let drag:{x:number;y:number;left:number;top:number}|null=null;
@@ -641,5 +735,36 @@ if(!customElements.get('diagram-only-explorer'))customElements.define('diagram-o
 @media(max-width:700px){
   .de-shell[data-active-mode="full"] .de-full-help{display:block;position:relative;padding:.6rem .85rem;background:var(--de-surface);border-top:1px solid var(--de-border);color:var(--de-muted);font-size:.73rem;line-height:1.4}
 }
+
+
+/* Source-aware IDE-like reader (read-only, no external editor runtime or editable state). */
+.de-code-expanded .de-detail{width:min(850px,calc(100% - 1rem))}
+.de-editor-top{display:flex;justify-content:space-between;gap:.5rem;align-items:center}
+.de-editor-top h3{margin:.8rem 0 .5rem}
+.de-editor-tag{font:700 .6rem var(--font-mono,monospace);color:var(--de-accent)}
+.de-editor-title{display:flex;align-items:center;justify-content:space-between;gap:.5rem;flex-wrap:wrap;border:1px solid var(--de-border);border-radius:10px 10px 0 0;padding:.7rem;background:var(--de-bg)}
+.de-editor-title .de-source-path{font:650 .72rem var(--font-mono,monospace);overflow-wrap:anywhere}
+.de-editor-toolbar{display:flex;flex-wrap:wrap;align-items:end;gap:.45rem;border:1px solid var(--de-border);border-top:0;padding:.55rem;background:var(--de-surface)}
+.de-editor-toolbar label{display:flex;gap:.3rem;align-items:center;font:.7rem var(--font-mono,monospace)}
+.de-editor-toolbar input{min-width:0;width:128px;min-height:36px;border:1px solid var(--de-border);border-radius:7px;background:var(--de-bg);color:var(--color-text);padding:.35rem .45rem}
+.de-editor-toolbar label:has(.de-editor-line) input{width:75px}
+.de-editor-toolbar button{min-height:36px;padding:.3rem .55rem;border:1px solid var(--de-border);border-radius:7px;background:var(--de-bg);font-size:.72rem}
+.de-editor-note,.de-editor-status{font-size:.71rem;line-height:1.5;color:var(--de-muted);margin:.45rem 0!important}
+.de-editor-window{border:1px solid var(--de-border);background:color-mix(in srgb,var(--de-bg) 94%,#0e2035);margin:0;max-height:370px;overflow:auto;overscroll-behavior:contain;tab-size:2;line-height:1.65;font:400 .77rem/1.65 var(--font-mono,monospace);padding:.55rem 0!important;border-radius:0 0 10px 10px}
+.de-code-expanded .de-editor-window{max-height:58dvh}
+.de-code-row{display:flex;min-width:max-content;white-space:pre;padding:0 .65rem 0 0}
+.de-code-row:hover{background:color-mix(in srgb,var(--de-accent) 7%,transparent)}
+.de-code-row.de-line-match{background:color-mix(in srgb,#d2a258 15%,transparent)}
+.de-code-row.de-line-selected{background:color-mix(in srgb,var(--de-accent) 19%,transparent);box-shadow:inset 3px 0 var(--de-accent)}
+.de-code-number{position:sticky;left:0;min-width:3.5rem;flex-shrink:0;border:0!important;text-align:right;background:var(--de-bg)!important;color:var(--de-muted)!important;padding:0 .75rem!important;font:inherit!important;opacity:.8}
+.de-code-text{white-space:pre}
+.de-syn-comment{color:#799d8f}.de-syn-string{color:#bf8448}.de-syn-keyword{color:#9d72ca;font-weight:600}.de-syn-number{color:#4e9dab}
+.de-editor-related{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.65rem}
+.de-editor-related strong{flex-basis:100%;font-size:.72rem}
+.de-code-nav{border:1px solid var(--de-border);border-radius:7px;background:var(--de-bg);padding:.55rem;font-size:.73rem;text-align:left}
+.de-connect-explain{font-size:.72rem!important;line-height:1.5;color:var(--de-muted)}
+.de-connect-summary{display:flex;gap:.4rem;flex-wrap:wrap}
+.de-connect-summary span{font:600 .7rem var(--font-mono,monospace);border:1px solid var(--de-border);padding:.35rem .5rem;border-radius:7px;background:var(--de-bg)}
+@media(max-width:700px){.de-code-expanded .de-detail{height:min(94dvh,900px);max-height:94dvh;width:100%}.de-editor-toolbar input{width:105px}.de-editor-toolbar{gap:.35rem}.de-code-row{font-size:.72rem}.de-editor-window{max-height:40dvh}}
 
 </style>
