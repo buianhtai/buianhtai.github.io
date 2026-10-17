@@ -108,34 +108,59 @@ class DiagramOnlyExplorer extends HTMLElement {
     q('[data-status]').textContent=incoming.length+' incoming · '+outgoing.length+' outgoing · select another node to recenter';
     q('[data-disclaimer]').textContent='Arrows mean declared dependency/import, NOT runtime calls.';
   };
-  // Full six-step snake layout: overview fits desktop without shrinking labels.
-  const flowPositions=[
-    {x:75,y:150},{x:430,y:150},{x:785,y:150},
-    {x:785,y:458},{x:430,y:458},{x:75,y:458}
-  ];
+  // Responsive editorial graph: single-column mobile, two-column tablet, 3x2 desktop.
+  let flowSlots:{x:number;y:number;w:number;h:number}[]=[];
   const flow=()=>{
-    reset();canvas(1180,700);
-    group('AGENT TURN · GUIDED SOURCE FLOW','Follow the numbered arrows. Click any stage for source evidence.',35,26,1110,650);
+    reset();
+    const available=viewport.clientWidth,mobile=available<680,tablet=available<1100;
+    if(mobile){
+      const width=Math.max(325,available-4),card=Math.min(302,width-34);
+      flowSlots=model.journey.map((_,i)=>({x:(width-card)/2,y:105+i*173,w:card,h:112}));
+      canvas(width,flowSlots[5].y+206);
+      group('AGENT TURN · GUIDED SOURCE FLOW','Numbered progression · click to inspect the source',10,22,width-20,h-40);
+    }else if(tablet){
+      const left=37,right=393,top=143,middle=336,bottom=529;
+      flowSlots=[
+        {x:left,y:top,w:295,h:114},{x:right,y:top,w:295,h:114},
+        {x:right,y:middle,w:295,h:114},{x:left,y:middle,w:295,h:114},
+        {x:left,y:bottom,w:295,h:114},{x:right,y:bottom,w:295,h:114}
+      ];
+      canvas(725,735);
+      group('AGENT TURN · GUIDED SOURCE FLOW','Follow the arrows through six sourced stages',17,19,690,690);
+    }else{
+      flowSlots=[
+        {x:75,y:150,w:300,h:115},{x:430,y:150,w:300,h:115},{x:785,y:150,w:300,h:115},
+        {x:785,y:458,w:300,h:115},{x:430,y:458,w:300,h:115},{x:75,y:458,w:300,h:115}
+      ];
+      canvas(1180,700);
+      group('AGENT TURN · GUIDED SOURCE FLOW','Follow the numbered arrows. Click any stage for source evidence.',35,26,1110,650);
+    }
     const ns='http://www.w3.org/2000/svg',svg=q<SVGSVGElement>('.de-edges');
     const arrow=(d:string,tip:string)=>{
       const line=document.createElementNS(ns,'path');line.setAttribute('d',d);line.classList.add('de-edge');svg.append(line);
       const head=document.createElementNS(ns,'path');head.setAttribute('d',tip);head.classList.add('de-tip');svg.append(head);
     };
-    model.journey.forEach((s,i)=>{
-      const pos=flowPositions[i],b=btn('',()=>inspectFlow(i),'de-flow-node');b.dataset.step=String(i);
-      b.style.cssText='left:'+pos.x+'px;top:'+pos.y+'px;width:300px;height:115px';
-      b.append(el('span','de-flow-no',String(i+1).padStart(2,'0')),el('strong','',s.title),el('span','de-inspect','↗'));
+    model.journey.forEach((story,i)=>{
+      const slot=flowSlots[i],b=btn('',()=>inspectFlow(i),'de-flow-node');b.dataset.step=String(i);
+      b.style.cssText='left:'+slot.x+'px;top:'+slot.y+'px;width:'+slot.w+'px;height:'+slot.h+'px';
+      b.append(el('span','de-flow-no',String(i+1).padStart(2,'0')),el('strong','',story.title),el('span','de-inspect','↗'));
       if(step===i)b.classList.add('is-selected');q('.de-nodes').append(b);
+      if(i>=model.journey.length-1)return;
+      const next=flowSlots[i+1];
+      if(Math.abs(slot.y-next.y)<4){
+        const right=next.x>slot.x,from=right?slot.x+slot.w:slot.x,to=right?next.x-11:next.x+next.w+11;
+        const y=slot.y+slot.h/2;
+        arrow('M '+from+' '+y+' H '+to,right
+          ?'M '+(to-8)+' '+(y-6)+' L '+to+' '+y+' L '+(to-8)+' '+(y+6)
+          :'M '+(to+8)+' '+(y-6)+' L '+to+' '+y+' L '+(to+8)+' '+(y+6));
+      }else{
+        const x=slot.x+slot.w/2,from=slot.y+slot.h,to=next.y-11;
+        arrow('M '+x+' '+from+' V '+to,'M '+(x-6)+' '+(to-8)+' L '+x+' '+to+' L '+(x+6)+' '+(to-8));
+      }
     });
-    const topY=207,bottomY=515;
-    // 1 → 2 → 3, then down to 4, then 4 → 5 → 6 (right to left).
-    arrow('M 375 '+topY+' H 420','M 412 '+(topY-6)+' L 420 '+topY+' L 412 '+(topY+6));
-    arrow('M 730 '+topY+' H 775','M 767 '+(topY-6)+' L 775 '+topY+' L 767 '+(topY+6));
-    arrow('M 935 265 V 449','M 929 441 L 935 449 L 941 441');
-    arrow('M 785 '+bottomY+' H 740','M 748 '+(bottomY-6)+' L 740 '+bottomY+' L 748 '+(bottomY+6));
-    arrow('M 430 '+bottomY+' H 385','M 393 '+(bottomY-6)+' L 385 '+bottomY+' L 393 '+(bottomY+6));
-    const note=el('div','de-loop','↶ Pending input or tool work may continue the loop');note.style.cssText='left:90px;top:602px;width:340px';q('.de-nodes').append(note);
-    q('[data-status]').textContent='All 6 ordered stages in one diagram · click any step to inspect';
+    const last=flowSlots[5],note=el('div','de-loop','↶ Pending input or tool work may continue the loop');
+    note.style.cssText='left:'+last.x+'px;top:'+(last.y+last.h+26)+'px;width:'+Math.max(270,last.w)+'px';q('.de-nodes').append(note);
+    q('[data-status]').textContent='All 6 sourced stages · click any step for its implementation';
     q('[data-disclaimer]').textContent='Curated code walkthrough, not a measured network trace.';
   };
   const render=()=>{
@@ -187,7 +212,7 @@ class DiagramOnlyExplorer extends HTMLElement {
   const focus=()=>{
     const pos=selected?positions.get(selected):null;
     zoom=Math.max(.65,Math.min(1.1,(viewport.clientWidth-25)/420));setZoom();
-    const px=mode==='flow'?flowPositions[step].x:pos?.x||0,py=mode==='flow'?flowPositions[step].y:pos?.y||0;
+    const px=mode==='flow'?flowSlots[step].x:pos?.x||0,py=mode==='flow'?flowSlots[step].y:pos?.y||0;
     viewport.scrollTo({left:Math.max(0,px*zoom-45),top:Math.max(0,py*zoom-40)});
   };
   this.querySelectorAll<HTMLButtonElement>('button[data-mode]').forEach(b=>b.addEventListener('click',()=>{
