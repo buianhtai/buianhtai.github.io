@@ -105,23 +105,45 @@ class DiagramOnlyExplorer extends HTMLElement {
     q('.de-nodes').append(b);positions.set(n.id,{x,y,width,height});
   };
   const architecture=()=>{
-    reset();const ns=model.nodes.filter(n=>n.view===view);
-    if(view==='system'){
-      canvas(1300,640);
-      data.zones.forEach((z,i)=>{
-        const x=27+i*426;group(z.label,z.note,x,28,397,556);
-        z.nodes.forEach((id,j)=>{const n=lookup.get(id);if(n)add(n,x+31,167+j*179,333,132);});
+    reset();
+    const ns=model.nodes.filter(n=>n.view===view);
+    const grouped=view==='system'?data.zones:
+      view==='core'?[
+        {label:'Contracts & prompts',note:'Agent interfaces, scope and prompts',nodes:['core-agent','core-scope','core-system-prompt']},
+        {label:'Execution & tools',note:'Loop driver and execution machinery',nodes:['core-agent-loop','core-tools']},
+        {label:'Session context',note:'Session contract and event history',nodes:['core-session']}
+      ]:
+      view==='loop'?[
+        {label:'Lifecycle & input',note:'Entry points and queued work',nodes:['file-index.ts','file-inbox.ts']},
+        {label:'Agent turn & tools',note:'Driver, streaming and scheduling',nodes:['file-agent.ts','file-assistant-stream.ts','file-tool-calls.ts']},
+        {label:'Context & policy',note:'Runtime assembly and limits',nodes:['file-runtime-context.ts','file-constants.ts']}
+      ]:null;
+    if(grouped){
+      const tallest=Math.max(...grouped.map(g=>g.nodes.length));
+      const stageH=Math.max(640,180+tallest*159);
+      canvas(1300,stageH);
+      grouped.forEach((zone,i)=>{
+        const x=27+i*426;
+        group(zone.label,zone.note,x,28,397,stageH-77);
+        zone.nodes.forEach((id,j)=>{
+          const n=lookup.get(id);
+          if(n&&n.view===view)add(n,x+31,150+j*159,333,124);
+        });
       });
     }else{
-      canvas(1180,Math.max(570,Math.ceil(ns.length/3)*184+138));
-      ns.forEach((n,i)=>add(n,28+(i%3)*388,93+Math.floor(i/3)*184,338,138));
+      const rows=Math.ceil(ns.length/3),height=Math.max(580,180+rows*167);
+      canvas(1210,height);
+      const area=model.views.find(v=>v.id===view);
+      group((area?.label||view).toUpperCase()+' · COMPONENT BOUNDARY',
+        'Source-declared packages · click a component to inspect direct dependencies',23,28,1164,height-70);
+      ns.forEach((n,i)=>add(n,41+(i%3)*386,153+Math.floor(i/3)*167,337,127));
     }
     if(connections)scoped().forEach(e=>{
       const a=positions.get(e.from),b=positions.get(e.to);
       if(a&&b)wire(a.x+a.width,a.y+a.height/2,b.x,b.y+b.height/2,false,e);
     });
-    q('[data-status]').textContent=ns.length+' components · '+(connections?'source dependencies visible':'click to inspect');
-    q('[data-disclaimer]').textContent='Editorial grouping, not runtime boundaries.';
+    q('[data-status]').textContent=ns.length+' components · '+(connections?'source dependency overlay ON':'click a component to inspect');
+    q('[data-disclaimer]').textContent='Conceptual boundaries; not separate deployment or network processes.';
   };
   const neighborhood=()=>{
     if(!selected)return architecture();
