@@ -28,11 +28,6 @@ const {model,zones,snippets,handoffs}=Astro.props;
         <div class="de-detail-head"><span class="de-overline" data-kind></span><button type="button" data-action="close" aria-label="Close node information">✕</button></div>
         <h2 data-title></h2><p data-summary></p><p class="de-stats" data-stats></p>
         <div class="de-detail-actions"><button type="button" class="de-primary" data-action="expand">Expand related ↗</button><button type="button" data-action="collapse" hidden>Collapse</button><button type="button" data-action="inside" hidden>Explore inside ↳</button></div>
-        <h3>How this component connects</h3><p class="de-connect-explain">Arrows represent declared package or file imports. They are not measured runtime calls.</p>
-        <div class="de-connect-summary" aria-label="Dependency direction summary"></div>
-        <div class="de-related"></div>
-        <h3>Code-level handoffs</h3><p class="de-connect-explain">Verified methods, calls and events from the pinned TypeScript source. Not a network trace.</p><div class="de-handoffs"></div>
-        <h3>Verified source evidence</h3><div class="de-sources"></div>
         <section class="de-source-preview" hidden aria-label="Source code reader">
           <div class="de-editor-top"><h3>Code reader</h3><span class="de-editor-tag">READ ONLY · PINNED REVISION</span></div>
           <div class="de-editor-title"><span class="de-source-path"></span><a class="de-preview-link" target="_blank" rel="noopener noreferrer">GitHub ↗</a></div>
@@ -47,6 +42,12 @@ const {model,zones,snippets,handoffs}=Astro.props;
           <pre class="de-editor-window" tabindex="0" aria-label="Read-only TypeScript code with line numbers"><code class="de-source-code"></code></pre>
           <div class="de-editor-related" aria-label="Code imports and linked components"></div>
         </section>
+        <h3>How this component connects</h3><p class="de-connect-explain">Arrows represent declared package or file imports. They are not measured runtime calls.</p>
+        <div class="de-connect-summary" aria-label="Dependency direction summary"></div>
+        <div class="de-related"></div>
+        <h3>Code-level handoffs</h3><p class="de-connect-explain">Verified methods, calls and events from the pinned TypeScript source. Not a network trace.</p><div class="de-handoffs"></div>
+        <h3>Verified source evidence</h3><div class="de-sources"></div>
+
       </aside>
     </div>
     <footer class="de-footer"><span data-status></span><span class="de-legend"><span>┄ Source imports / package dependencies</span><span>→ Source-linked reading order</span></span><span data-disclaimer></span></footer>
@@ -597,6 +598,7 @@ class DiagramOnlyExplorer extends HTMLElement {
     if(h.to!==h.from)rel.append(btn('Inspect '+(lookup.get(h.to)?.label||h.to),()=>inspect(h.to),'de-related-button'));
     const group=q('.de-connect-summary');group.replaceChildren(el('span','','CODE-EVIDENCED '+h.kind.toUpperCase()));
     sources([h.source]);preview(h.snippet,h.source);renderHandoffs(h.from);
+    detail.scrollTo({top:0});
     for(const a of ['expand','collapse','inside'])q<HTMLButtonElement>('[data-action="'+a+'"]').hidden=true;
   };
   const inspectEdge=(edge:E)=>{
