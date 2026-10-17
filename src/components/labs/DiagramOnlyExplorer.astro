@@ -453,15 +453,65 @@ class DiagramOnlyExplorer extends HTMLElement {
     const pick=reference?.line;
     if(pick)jumpToCachedLine(pick);
   };
+
+  const drawContextEdges=(id:string)=>{
+    if(mode!=='full')return;
+    const selectedNode=lookup.get(id);if(!selectedNode)return;
+    const relevant=model.edges.filter(e=>e.view===selectedNode.view&&(e.from===id||e.to===id));
+    const svg=q<SVGSVGElement>('.de-edges');
+    svg.querySelectorAll('[data-context-edge]').forEach(x=>x.remove());
+    this.querySelectorAll<HTMLElement>('.de-node').forEach(n=>{
+      const relevantNode=n.dataset.node===id||relevant.some(e=>e.from===n.dataset.node||e.to===n.dataset.node);
+      n.classList.toggle('de-neighbor',relevantNode);
+      n.classList.toggle('de-unrelated',!relevantNode&&selectedNode.view!=='system');
+    });
+    relevant.forEach(e=>{
+      const prev=svg.children.length;wireOverlay(e);
+      Array.from(svg.children).slice(prev).forEach(child=>{child.setAttribute('data-context-edge','true');child.classList.add('de-context-edge');});
+    });
+    this.querySelectorAll<SVGElement>('[data-edge-from]:not([data-context-edge])').forEach(edge=>{
+      const linked=edge.dataset.edgeFrom===id||edge.dataset.edgeTo===id;
+      edge.classList.toggle('is-linked',linked);
+      edge.classList.toggle('is-muted',!linked);
+    });
+  };
+  const relationships=(id:string,rels:E[])=>{
+    const box=q('.de-related'),stats=q('.de-connect-summary');box.replaceChildren();stats.replaceChildren();
+    const inCount=rels.filter(e=>e.to===id).length,outCount=rels.filter(e=>e.from===id).length;
+    stats.append(el('span','','← '+inCount+' used by'),el('span','','→ '+outCount+' uses'));
+    if(!rels.length){box.append(el('p','de-empty-relations','No verified direct relationships in this layer. Select a package or inspect the next level.'));return;}
+    for(const e of rels){
+      const direction=e.from===id?'USES':'USED BY';
+      const peer=e.from===id?e.to:e.from;
+      const name=lookup.get(peer)?.label||peer;
+      const source=e.sources?.[0];
+      const card=el('div','de-relationship-card','');
+      const head=el('div','de-relationship-head','');
+      head.append(el('span','de-relationship-kind',direction+' · '+e.label),el('strong','',name));
+      card.append(head,el('p','',e.evidence));
+      const tools=el('div','de-relationship-controls','');
+      tools.append(btn('Inspect '+name,()=>inspect(peer),'de-related-button'));
+      if(source){
+        const fragment=Object.entries(data.excerpts||{}).find(([,sample])=>sample.path===source.path);
+        if(fragment){
+          const id=fragment[0];
+          tools.append(btn('Code L'+source.line,()=>preview(id,source),'de-code-nav'));
+        }
+        tools.append(evidence(source));
+      }
+      card.append(tools);box.append(card);
+    }
+  };
   const inspectEdge=(edge:E)=>{
     show();q('[data-kind]').textContent='SOURCE-DECLARED RELATIONSHIP';
     q('[data-title]').textContent=(lookup.get(edge.from)?.label||edge.from)+' → '+(lookup.get(edge.to)?.label||edge.to);
     q('[data-summary]').textContent=edge.evidence||edge.label;
     q('[data-stats]').textContent='Dependent → dependency; not an observed runtime call';
-    const rel=q('.de-related');rel.replaceChildren();
-    rel.append(btn('Inspect '+(lookup.get(edge.from)?.label||edge.from),()=>inspect(edge.from),'de-related-button'));
-    rel.append(btn('Inspect '+(lookup.get(edge.to)?.label||edge.to),()=>inspect(edge.to),'de-related-button'));
-    sources(edge.sources);preview('');
+    relationships(edge.from,[edge]);
+    sources(edge.sources);
+    const sample=edge.sources?.[0];
+    const owner=sample?Object.entries(data.excerpts||{}).find(([,v])=>v.path===sample.path):undefined;
+    if(owner)preview(owner[0],sample);else preview('');
     for(const a of ['expand','collapse','inside'])q<HTMLButtonElement>('[data-action="'+a+'"]').hidden=true;
   };
   const inspect=(id:string)=>{
@@ -481,13 +531,9 @@ class DiagramOnlyExplorer extends HTMLElement {
     const relevant=mode==='full'?sourceEdges(id):scoped();
     const incoming=relevant.filter(e=>e.to===id),outgoing=relevant.filter(e=>e.from===id);
     q('[data-stats]').textContent=incoming.length+' incoming · '+outgoing.length+' outgoing';
-    const rel=q('.de-related');rel.replaceChildren();
-    [...incoming,...outgoing].forEach(e=>{
-      const other=lookup.get(e.from===id?e.to:e.from);
-      if(other)rel.append(btn((e.from===id?'→ Uses ':'← Used by ')+other.label,()=>inspect(other.id),'de-related-button'));
-    });
-    if(!incoming.length&&!outgoing.length)rel.textContent='No direct relationships shown in this view.';
+    relationships(id,[...incoming,...outgoing]);
     sources(n.sources);preview(id);
+    if(mode==='full')drawContextEdges(id);
     q<HTMLButtonElement>('[data-action="expand"]').hidden=(mode!=='full'&&expanded)||(!incoming.length&&!outgoing.length);
     q<HTMLButtonElement>('[data-action="collapse"]').hidden=!expanded;
     q<HTMLButtonElement>('[data-action="inside"]').hidden=!n.child;
@@ -506,7 +552,7 @@ class DiagramOnlyExplorer extends HTMLElement {
       if(box && (box.getBoundingClientRect().top<70 || box.getBoundingClientRect().bottom>window.innerHeight-85))
         box.scrollIntoView({block:'center',behavior:'instant'});
     }
-    const rel=q('.de-related');rel.replaceChildren();
+    const rel=q('.de-related');rel.replaceChildren();q('.de-connect-summary').replaceChildren(el('span','','SOURCE-GUIDED ORDER · NOT A NETWORK TRACE'));
     if(i>0)rel.append(btn('← Previous: '+model.journey[i-1].title,()=>inspectFlow(i-1),'de-related-button'));
     if(i<model.journey.length-1)rel.append(btn('Next: '+model.journey[i+1].title+' →',()=>inspectFlow(i+1),'de-related-button'));
     sources([s.source]);preview(s.node);
@@ -766,5 +812,19 @@ if(!customElements.get('diagram-only-explorer'))customElements.define('diagram-o
 .de-connect-summary{display:flex;gap:.4rem;flex-wrap:wrap}
 .de-connect-summary span{font:600 .7rem var(--font-mono,monospace);border:1px solid var(--de-border);padding:.35rem .5rem;border-radius:7px;background:var(--de-bg)}
 @media(max-width:700px){.de-code-expanded .de-detail{height:min(94dvh,900px);max-height:94dvh;width:100%}.de-editor-toolbar input{width:105px}.de-editor-toolbar{gap:.35rem}.de-code-row{font-size:.72rem}.de-editor-window{max-height:40dvh}}
+
+
+.de-relationship-card{border:1px solid var(--de-border);border-radius:10px;background:var(--de-bg);padding:.72rem;display:grid;gap:.45rem}
+.de-relationship-head{display:grid;gap:.2rem}
+.de-relationship-head strong{font-size:.85rem}
+.de-relationship-kind{font:700 .62rem var(--font-mono,monospace);color:var(--de-accent)}
+.de-relationship-card p{font-size:.69rem;line-height:1.4;color:var(--de-muted);margin:0}
+.de-relationship-controls{display:flex;flex-wrap:wrap;gap:.4rem;align-items:center}
+.de-relationship-controls button,.de-relationship-controls a{font-size:.68rem;padding:.5rem!important;min-height:34px}
+.de-empty-relations{font-size:.75rem;color:var(--de-muted)}
+.de-shell[data-active-mode="full"] .de-edge.de-context-edge{stroke-dasharray:3 3;stroke-width:4.5;stroke:var(--de-accent);opacity:1;pointer-events:stroke}
+.de-shell[data-active-mode="full"] .de-node.de-neighbor{outline:3px solid color-mix(in srgb,var(--de-accent) 50%,transparent);outline-offset:1px}
+.de-shell[data-active-mode="full"] .de-node.de-unrelated{opacity:.62}
+@media(max-width:700px){.de-relationship-controls button,.de-relationship-controls a{min-height:44px}}
 
 </style>
