@@ -3,20 +3,19 @@ import { spawn } from 'node:child_process';
 import { mkdir } from 'node:fs/promises';
 import { chromium } from 'playwright';
 
-const port = 4512;
-const path = '/en/blog/deepseek-harness-architecture-everything-is-a-plugin/';
+const port = 4512, path = '/en/blog/deepseek-harness-architecture-everything-is-a-plugin/';
 const base = 'http://127.0.0.1:' + port;
 const server = spawn('npm', ['run','preview','--','--host','127.0.0.1','--port',String(port)], { stdio:'ignore' });
 let browser;
 
 try {
   let ready = false;
-  for (let i=0;i<120;i++){
-    try { ready = (await fetch(base+path)).ok; } catch {}
-    if (ready) break;
+  for(let i=0;i<120;i++){
+    try{ready=(await fetch(base+path)).ok;}catch{}
+    if(ready)break;
     await new Promise(resolve=>setTimeout(resolve,250));
   }
-  assert(ready,'Pinned DeepSeek Harness architecture article must be published as a build route');
+  assert(ready,'Visual architecture article must exist as built route');
   browser=await chromium.launch();
   await mkdir('artifacts/deepseek-harness-article',{recursive:true});
   for(const width of [390,768,1440]){
@@ -26,34 +25,72 @@ try {
       const page=await ctx.newPage(),errors=[];
       page.on('pageerror',error=>errors.push(error.message));
       const response=await page.goto(base+path,{waitUntil:'domcontentloaded'});
-      assert(response?.ok(),'Article returns HTTP success');
+      assert(response?.ok(),'Article returns HTTP 200');
       await page.locator('h1').first().waitFor();
+      await page.locator('.hvs[data-ready="true"]').waitFor();
+      const root=page.locator('[data-harness-story]');
       assert.match(await page.locator('h1').first().innerText(),/DeepSeek Harness/);
-      assert.equal(await page.locator('.mermaid-figure').count(),3,'Three architecture diagrams are present');
-      assert.equal(await page.locator('.deepseek-article-diagram').count(),3,'All diagrams use article-scoped drawing presentation');
-      const chartSurface=await page.locator('.deepseek-article-diagram .mermaid-scroll').first().evaluate(el=>getComputedStyle(el).backgroundColor);
-      assert.equal(chartSurface,'rgb(247, 251, 255)','Light drawing surface keeps Mermaid black text legible in both page themes');
-      assert((await page.locator('a[href*="deepseek-harness-clarity"]').count())>=3,'Article links repeatedly to interactive full architecture explorer');
-      const text=await page.locator('article').innerText();
-      for(const section of ['What is DeepSeek Harness','How it actually works','Real use cases','What should an architect learn']){
-        assert(text.includes(section),'Article answers expected reader question: '+section);
+      assert.equal(await root.locator('.hvs-chapter').count(),5,'Five interactive editorial infographic chapters');
+      assert.equal(await root.locator('[data-capability]').count(),6,'Six clickable capability seams');
+      assert.equal(await root.locator('[data-stage]').count(),7,'Seven request stages');
+      assert.equal(await root.locator('[data-scenario]').count(),3,'Three illustrative policy branches');
+      assert.equal(await root.locator('[data-case]').count(),4,'Four example use cases');
+      assert.equal(await page.locator('.mermaid-figure').count(),0,'Visual atlas replaces dense Mermaid diagrams');
+      assert((await page.locator('a[href*="deepseek-harness-clarity"]').count())>=2,'Connects to existing code explorer');
+      // Model / system interaction with upstream provenance
+      await root.locator('[data-capability="tools"]').click();
+      assert.match(await root.locator('[data-service-title]').innerText(),/Tool registry/);
+      assert.match(await root.locator('[data-service-contract]').innerText(),/ctx.tools/);
+      assert.match(await root.locator('[data-service-source]').getAttribute('href'),/tool-calls.ts#L174/);
+      assert.equal(await root.locator('[data-capability="tools"]').getAttribute('aria-pressed'),'true');
+      // Source-guided stepper
+      await root.locator('[data-stage="5"]').click();
+      assert.match(await root.locator('[data-stage-title]').innerText(),/Run tools/);
+      assert.match(await root.locator('[data-stage-source]').getAttribute('href'),/#L551/);
+      await root.locator('[data-stage-next]').click();
+      assert.match(await root.locator('[data-stage-title]').innerText(),/Continue/);
+      assert.equal(await root.locator('[data-stage-next]').isDisabled(),true);
+      await root.locator('[data-stage-prev]').click();
+      assert.equal(await root.locator('[data-stage="5"]').getAttribute('aria-pressed'),'true');
+      // Guarded workflow alternatives
+      await root.locator('[data-scenario="denied"]').click();
+      assert.match(await root.locator('[data-outcome-title]').innerText(),/rejected before execution/i);
+      assert.equal(await root.locator('[data-policy-node="execute"]').getAttribute('data-outcome'),'skipped');
+      await root.locator('[data-scenario="approval"]').click();
+      assert.match(await root.locator('[data-outcome-title]').innerText(),/approval granted/i);
+      assert.equal(await root.locator('[data-policy-node="guard"]').getAttribute('data-outcome'),'review');
+      // Reversible comparison and applied use cases
+      await root.locator('[data-compare="hardcoded"]').click();
+      assert.match(await root.locator('[data-compare-center]').innerText(),/FIXED AGENT RUNNER/);
+      await root.locator('[data-compare="plugin"]').click();
+      assert.match(await root.locator('[data-compare-center]').innerText(),/CORDIS CONTEXT/);
+      await root.locator('[data-case="support"]').click();
+      assert.match(await root.locator('[data-case-title]').innerText(),/evidence/i);
+      assert.match(await root.locator('[data-case-caveat]').innerText(),/tenant/i);
+      await root.locator('[data-case="platform"]').click();
+      assert.match(await root.locator('[data-part="1"]').innerText(),/Capability contracts/);
+      assert.deepEqual(errors,[],'No JavaScript errors throughout interaction tour');
+      assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2),
+        'No horizontal page overflow after interactive selections');
+      for(const selector of ['.hvs-system-layout','.hvs-stage-body','.hvs-policy-track','.hvs-compare-visual','.hvs-case-detail']){
+        const bounds=await root.locator(selector).boundingBox();
+        assert(bounds&&bounds.width<=width+2,'Infographic panel respects viewport width: '+selector+' = '+JSON.stringify(bounds));
       }
-      assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2),'Article has no horizontal page overflow');
-      await page.locator('.mermaid-figure').first().scrollIntoViewIfNeeded();
-      // Mermaid loads from an external CDN and can be blocked in CI; the source
-      // and vector controls must remain usable even when external CDN is down.
-      for(const figure of await page.locator('.mermaid-figure').all()){
-        assert.equal(await figure.locator('.mermaid-control-buttons button').count(),3,'Editorial vector controls stay available');
-        assert((await figure.locator('pre.mermaid').count())===1,'Source diagram markup survives build');
-      }
+      // Reset to representative state and capture the complete editorial story.
+      await root.locator('[data-capability="agent"]').click();
+      await root.locator('[data-stage="3"]').click();
+      await root.locator('[data-scenario="read"]').click();
+      await root.locator('[data-case="coding"]').click();
       await page.evaluate(()=>window.scrollTo(0,0));
-      await page.screenshot({path:'artifacts/deepseek-harness-article/article-'+theme+'-'+width+'.png',fullPage:true});
-      assert.deepEqual(errors.filter(e=>!e.includes('Failed to fetch dynamically imported module')),[],'No JavaScript runtime errors from article');
+      await page.screenshot({path:'artifacts/deepseek-harness-article/visual-story-'+theme+'-'+width+'.png',fullPage:true});
+      for(const [name,id] of [['system','hvs-system'],['journey','hvs-journey'],['policy','hvs-policy'],['cases','hvs-cases']]){
+        await page.locator('#'+id).screenshot({path:'artifacts/deepseek-harness-article/'+name+'-'+theme+'-'+width+'.png'});
+      }
       await ctx.close();
     }
   }
-  console.log('DeepSeek Harness article: mobile/tablet/desktop, light/dark, source links and diagrams validated.');
-}finally{
+  console.log('Visual DeepSeek Harness story verified at 390, 768, 1440px in light/dark themes; all 5 chapter controls functional.');
+} finally {
   await browser?.close();
   server.kill();
 }
