@@ -1,0 +1,23 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import ArchitectureClarityLab from '../../../components/labs/ArchitectureClarityLab.astro';
+import model from '../../../data/architecture/deepseek-harness.json';
+import snippets from '../../../data/architecture/deepseek-harness-excerpts.json';
+const zones = [
+  {label:'Entry & assembly',note:'How plugins are composed and remote sessions are exposed',nodes:['boot','api']},
+  {label:'Execution core',note:'Agent behavior, tool execution and plugin capabilities',nodes:['core','capabilities']},
+  {label:'Services & state',note:'Model integration and persisted session history',nodes:['llm','session']},
+];
+---
+<BaseLayout title="DeepSeek Harness — clarity-first diagram prototype" description="Source-pinned clarity-first architecture explanations. Design prototype for review, not the published primary explorer." noindex>
+  <main class="clarity-page">
+    <div class="clarity-back"><a href="/en/labs/deepseek-harness/">← Current explorer</a><span>Unpublished V4 design review · Same pinned source model</span></div>
+    <ArchitectureClarityLab {model} {snippets} {zones} />
+  </main>
+</BaseLayout>
+<style>
+.clarity-page{width:min(1460px,calc(100% - 2rem));margin:2rem auto 4rem;}
+.clarity-back{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;margin-bottom:1rem;color:var(--color-text-muted);font-size:.8rem;}
+.clarity-back a{color:var(--color-accent);text-decoration:none;}
+@media(max-width:600px){.clarity-page{width:calc(100% - 1rem);margin:1rem auto 3rem;}}
+</style>
