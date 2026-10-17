@@ -51,6 +51,13 @@ try{
       await app.locator('[data-node="core"]').click();
       await app.locator('[data-action="inside"]').click();
       assert.equal(await app.locator('[data-node]').count(),6,'Drill from runtime subsystem to six packages');
+      await app.locator('[data-node="core-agent-loop"]').click();
+      await app.locator('[data-action="inside"]').click();
+      assert.equal(await app.locator('[data-node]').count(),7,'Agent-loop drill shows seven implementation files');
+      await app.locator('[data-node="file-agent.ts"]').click();
+      assert.equal(await app.locator('.de-source-preview').isVisible(),true,'File click displays source content');
+      assert((await app.locator('.de-code-row').count())>10,'Source content has real pinned lines');
+      await app.locator('[data-action="back"]').click();
       await app.locator('[data-action="back"]').click();
       assert((await app.locator('[data-node]').count())>=6,'Back restores previous architecture');
       await app.locator('button[data-mode="flow"]').click();
@@ -67,6 +74,7 @@ try{
       await app.locator('[data-step="4"]').click();
       assert.match(await app.locator('[data-title]').innerText(),/Schedule tools/);
       assert((await app.locator('.de-sources a').first().getAttribute('href')).includes(model.revision));
+      assert.equal(await app.locator('.de-source-preview').isVisible(),true,'Flow stage also reveals pinned implementation excerpt');
       await page.screenshot({path:'artifacts/harness-clarity/diagram-flow-detail-'+theme+'-'+width+'.png',fullPage:true});
       await app.locator('[data-action="close"]').click();
       assert.equal(await app.locator('.de-detail').isVisible(),false);
