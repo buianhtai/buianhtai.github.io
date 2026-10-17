@@ -41,10 +41,12 @@ try{
       await app.locator('[data-action="close"]').click();
       await app.locator('[data-action="connections"]').click();
       assert.equal(await app.locator('.de-edge').count(),0,'Disabling overlay restores clean diagram');
+      const expectedMap=width>=700;
+      assert.equal(await app.locator('.de-map-control').isVisible(),expectedMap,'Mobile minimap is optional by default');
       await app.locator('[data-action="minimap"]').click();
-      assert.equal(await app.locator('.de-map-control').isVisible(),false);
+      assert.equal(await app.locator('.de-map-control').isVisible(),!expectedMap);
       await app.locator('[data-action="minimap"]').click();
-      assert.equal(await app.locator('.de-map-control').isVisible(),true);
+      assert.equal(await app.locator('.de-map-control').isVisible(),expectedMap);
       await page.screenshot({path:'artifacts/harness-clarity/diagram-overview-'+theme+'-'+width+'.png',fullPage:true});
 
       await app.locator('[data-node="core"]').click();
@@ -103,7 +105,7 @@ try{
       await app.locator('[data-action="close"]').click();
       assert.equal(await app.locator('.de-detail').isVisible(),false);
       assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'No horizontal page overflow');
-      assert.equal(await app.locator('.de-map-control').isVisible(),true);
+      assert.equal(await app.locator('.de-map-control').isVisible(),expectedMap);
       assert.deepEqual(errors,[],'No uncaught browser errors');
       await ctx.close();
     }
