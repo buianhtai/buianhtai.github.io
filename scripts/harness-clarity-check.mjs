@@ -30,6 +30,21 @@ try{
       assert.equal(await app.locator('[data-node]').count(),6,'All six system subsystems visible');
       assert.equal(await app.locator('.de-edge').count(),0,'No initial spaghetti edges');
       assert.equal(await app.locator('.de-detail').isVisible(),false,'No sidebars until user selects node');
+      assert.equal(await app.locator('.de-mini-zones rect').count(),3,'Minimap mirrors architecture boundaries');
+      assert.equal(await app.locator('.de-mini-nodes rect').count(),6,'Minimap shows real architecture nodes');
+      await app.locator('[data-action="connections"]').click();
+      assert((await app.locator('.de-edge[data-edge-from]').count())>=5,'Source-derived dependency overlay is available');
+      const line=app.locator('.de-edge[data-edge-from]').first();
+      await line.dispatchEvent('click');
+      assert.match(await app.locator('[data-kind]').innerText(),/SOURCE-DECLARED/);
+      assert((await app.locator('.de-sources a').count())>0,'Connection inspector exposes provenance');
+      await app.locator('[data-action="close"]').click();
+      await app.locator('[data-action="connections"]').click();
+      assert.equal(await app.locator('.de-edge').count(),0,'Disabling overlay restores clean diagram');
+      await app.locator('[data-action="minimap"]').click();
+      assert.equal(await app.locator('.de-map-control').isVisible(),false);
+      await app.locator('[data-action="minimap"]').click();
+      assert.equal(await app.locator('.de-map-control').isVisible(),true);
       await page.screenshot({path:'artifacts/harness-clarity/diagram-overview-'+theme+'-'+width+'.png',fullPage:true});
 
       await app.locator('[data-node="core"]').click();
@@ -64,6 +79,15 @@ try{
       assert.equal(await app.locator('.de-flow-node').count(),6,'Flow has six visible ordered nodes');
       assert.equal(await app.locator('.de-edge').count(),5,'Each ordered stage has an explicit connecting arrow');
       assert.equal(await app.locator('.de-tip').count(),5,'Arrowheads establish actual visual direction');
+      assert.equal(await app.locator('.de-group').count(),3,'Source-grounded flow has three distinct editorial phase boundaries');
+      assert.equal(await app.locator('.de-stage-owner').count(),6,'Each flow component displays ownership');
+      assert.equal(await app.locator('.de-mini-nodes rect').count(),6,'Minimap includes flow nodes');
+      assert.equal(await app.locator('.de-tour').isVisible(),true,'Flow-only stage controls appear');
+      await app.locator('[data-action="next-step"]').click();
+      assert.match(await app.locator('[data-step-status]').innerText(),/Stage 2/);
+      await app.locator('[data-action="previous-step"]').click();
+      assert.match(await app.locator('[data-step-status]').innerText(),/Stage 1/);
+      await app.locator('[data-action="close"]').click();
       if(width===1440){
         const last=await app.locator('[data-step="5"]').boundingBox();
         const viewport=await app.locator('.de-viewport').boundingBox();
@@ -79,6 +103,7 @@ try{
       await app.locator('[data-action="close"]').click();
       assert.equal(await app.locator('.de-detail').isVisible(),false);
       assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'No horizontal page overflow');
+      assert.equal(await app.locator('.de-map-control').isVisible(),true);
       assert.deepEqual(errors,[],'No uncaught browser errors');
       await ctx.close();
     }
