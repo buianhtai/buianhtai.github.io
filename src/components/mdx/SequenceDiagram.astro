@@ -1,4 +1,5 @@
 ---
+import DiagramFrame from './DiagramFrame.astro';
 /**
  * SequenceDiagram — Time-ordered message exchange between named actors.
  *
@@ -83,8 +84,8 @@ function actorColor(a: Actor): string {
 const N = actors.length;
 ---
 
+<DiagramFrame {title} {caption} kind="Sequence">
 <div class="sd-wrap">
-  {title && <div class="sd-titlebar"><span class="sd-prompt">$</span> {title}</div>}
 
   <div class="sd-scroll">
     <div class="sd-inner" style={`--sd-cols: ${N}`}>
@@ -160,8 +161,8 @@ const N = actors.length;
     </div>
   </div>
 
-  {caption && <div class="sd-caption"><span class="sd-prompt">▶</span> {caption}</div>}
 </div>
+</DiagramFrame>
 
 <style>
   .sd-wrap {

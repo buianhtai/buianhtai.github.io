@@ -1,0 +1,128 @@
+---
+/** Shared reading controls for native diagrams. Keep layout in each renderer. */
+interface Props {
+  title?: string;
+  caption?: string;
+  kind?: string;
+}
+const { title, caption, kind = 'Diagram' } = Astro.props;
+const label = title || kind;
+---
+
+<diagram-frame class="not-prose">
+  <figure class="diagram-panel" aria-label={label}>
+    <header class="diagram-heading">
+      <span class="diagram-kind">{kind}</span>
+      <h3>{label}</h3>
+    </header>
+    <div class="diagram-toolbar" hidden>
+      <div role="group" aria-label={`Zoom ${label}`}>
+        <button type="button" data-action="out" aria-label="Zoom out">−</button>
+        <output aria-live="polite" aria-label="Zoom level">100%</output>
+        <button type="button" data-action="in" aria-label="Zoom in">+</button>
+        <button type="button" data-action="reset">Reset</button>
+      </div>
+      <button type="button" data-action="focus" aria-haspopup="dialog">Expand diagram ↗</button>
+    </div>
+    <div class="diagram-viewport" tabindex="0" role="region" aria-label={`${label}: scroll to explore`}>
+      <div class="diagram-content"><slot /></div>
+    </div>
+    <footer>
+      {caption && <figcaption>{caption}</figcaption>}
+      <p class="diagram-help" hidden>Zoom for detail. Swipe or scroll to explore.</p>
+    </footer>
+  </figure>
+  <dialog aria-label={`${label}: expanded diagram`}></dialog>
+</diagram-frame>
+
+<script>
+  class DiagramFrame extends HTMLElement {
+    observer?: ResizeObserver;
+    connectedCallback() {
+      if (this.dataset.ready) {
+        this.observer?.observe(this.querySelector('.diagram-viewport')!);
+        return;
+      }
+      this.dataset.ready = 'true';
+      const panel = this.querySelector<HTMLElement>('.diagram-panel')!;
+      const dialog = this.querySelector<HTMLDialogElement>('dialog')!;
+      const content = this.querySelector<HTMLElement>('.diagram-content')!;
+      const viewport = this.querySelector<HTMLElement>('.diagram-viewport')!;
+      const output = this.querySelector<HTMLOutputElement>('output')!;
+      const focus = this.querySelector<HTMLButtonElement>('[data-action="focus"]')!;
+      const minus = this.querySelector<HTMLButtonElement>('[data-action="out"]')!;
+      const plus = this.querySelector<HTMLButtonElement>('[data-action="in"]')!;
+      let zoom = 1;
+      const update = () => {
+        content.style.width = `${viewport.clientWidth}px`;
+        content.style.setProperty('zoom', String(zoom));
+        output.value = `${Math.round(zoom * 100)}%`;
+        minus.disabled = zoom <= 0.5;
+        plus.disabled = zoom >= 3;
+      };
+      this.querySelector<HTMLElement>('.diagram-toolbar')!.hidden = false;
+      this.querySelector<HTMLElement>('.diagram-help')!.hidden = false;
+      panel.addEventListener('click', (event) => {
+        const button = (event.target as HTMLElement).closest<HTMLButtonElement>('button[data-action]');
+        if (!button) return;
+        switch (button.dataset.action) {
+          case 'in': zoom = Math.min(3, zoom + 0.25); break;
+          case 'out': zoom = Math.max(0.5, zoom - 0.25); break;
+          case 'reset': zoom = 1; viewport.scrollTo(0, 0); break;
+          case 'focus':
+            if (dialog.open) dialog.close();
+            else {
+              dialog.append(panel);
+              focus.textContent = 'Close view ×';
+              focus.removeAttribute('aria-haspopup');
+              dialog.showModal();
+              focus.focus();
+            }
+            break;
+        }
+        update();
+      });
+      dialog.addEventListener('close', () => {
+        this.insertBefore(panel, dialog);
+        focus.textContent = 'Expand diagram ↗';
+        focus.setAttribute('aria-haspopup', 'dialog');
+        focus.focus();
+      });
+      this.observer = new ResizeObserver(update);
+      this.observer.observe(viewport);
+      update();
+    }
+    disconnectedCallback() { this.observer?.disconnect(); }
+  }
+  if (!customElements.get('diagram-frame')) customElements.define('diagram-frame', DiagramFrame);
+</script>
+
+<style>
+  diagram-frame { display: block; min-width: 0; margin: 2rem 0; color: var(--color-text); }
+  .diagram-panel { margin: 0; border: 1px solid var(--color-border); border-radius: 16px; overflow: hidden; background: var(--color-surface); }
+  .diagram-heading { padding: 1rem 1.25rem; }
+  .diagram-kind { font: 600 .7rem/1.5 var(--font-mono, monospace); color: var(--color-accent); letter-spacing: .08em; text-transform: uppercase; }
+  .diagram-heading h3 { margin: .25rem 0 0; font-size: 1rem; line-height: 1.5; color: var(--color-text); }
+  .diagram-toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: .5rem; padding: .5rem .75rem; border-block: 1px solid var(--color-border); background: var(--color-surface-2); }
+  .diagram-toolbar[hidden], .diagram-help[hidden] { display: none; }
+  .diagram-toolbar > div { display: flex; align-items: center; gap: .2rem; }
+  button { min-width: 44px; min-height: 44px; padding: .5rem .7rem; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--color-text); font: inherit; font-size: .8rem; cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--color-border); background: var(--color-surface); }
+  button:disabled { opacity: .4; cursor: default; }
+  button:focus-visible, .diagram-viewport:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -3px; }
+  output { min-width: 3.5rem; text-align: center; font: .75rem var(--font-mono, monospace); }
+  .diagram-viewport { overflow: auto; max-height: 640px; overscroll-behavior: contain; background: var(--color-bg); }
+  .diagram-content { box-sizing: border-box; }
+  .diagram-content :global(.ad-wrap), .diagram-content :global(.fc-wrap), .diagram-content :global(.sd-wrap), .diagram-content :global(.er-wrap), .diagram-content :global(.sm-wrap), .diagram-content :global(.sl-wrap), .diagram-content :global(.mm-wrap), .diagram-content :global(.nm-wrap) { border: 0; margin: 0; background: transparent; overflow: visible; }
+  .diagram-content :global(.ad-scroll), .diagram-content :global(.fc-body), .diagram-content :global(.sd-scroll), .diagram-content :global(.er-body), .diagram-content :global(.sm-body), .diagram-content :global(.sl-body), .diagram-content :global(.mm-body), .diagram-content :global(.nm-body) { overflow: visible; }
+  footer { padding: .75rem 1.25rem; border-top: 1px solid var(--color-border); }
+  figcaption { font-size: .85rem; line-height: 1.6; color: var(--color-text); }
+  .diagram-help { margin: .25rem 0 0; font-size: .75rem; color: var(--color-text-muted); }
+  dialog { width: calc(100vw - 2rem); max-width: 1600px; max-height: calc(100dvh - 2rem); padding: 0; border: 0; border-radius: 16px; background: var(--color-surface); color: var(--color-text); }
+  dialog::backdrop { background: rgb(0 0 0 / .7); }
+  dialog[open] .diagram-panel { display: flex; flex-direction: column; max-height: calc(100dvh - 2rem); }
+  dialog[open] .diagram-heading, dialog[open] .diagram-toolbar, dialog[open] footer { flex-shrink: 0; }
+  dialog[open] .diagram-viewport { flex: 1; min-height: 0; max-height: none; }
+  @media (max-width: 640px) { .diagram-heading, footer { padding: .75rem; } dialog { width: calc(100vw - 1rem); } }
+  @media print { .diagram-toolbar, .diagram-help { display: none; } .diagram-viewport { max-height: none; overflow: visible; } .diagram-content { zoom: 1 !important; } }
+</style>
