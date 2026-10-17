@@ -40,6 +40,9 @@ try{
         await packageNode.click();
         assert.match(await app.locator('[data-title]').innerText(),/agent-loop/);
         assert((await app.locator('.de-sources a').count())>0,'Full-map package links to pinned code evidence');
+        assert((await app.locator('.de-relationship-card').count())>=4,'Package reveals source-declared direct relationships');
+        assert((await app.locator('.de-context-edge').count())>=4,'Selected package exposes directional, source-backed import arrows on the full map');
+        assert.match((await app.locator('.de-relationship-kind').allTextContents()).join(' '),/USES/,'Dependency meaning is explicitly labeled');
         await app.locator('[data-action="close"]').click();
         await app.locator('[data-action="connections"]').click();
         assert.equal(await app.locator('.de-edge').count(),16,'Expanded full-map layer shows all sixteen verified system dependencies');
@@ -130,9 +133,23 @@ try{
       await app.locator('[data-node="core-agent-loop"]').click();
       await app.locator('[data-action="inside"]').click();
       assert.equal(await app.locator('[data-node]').count(),7,'Agent-loop drill shows seven implementation files');
-      await app.locator('[data-node="file-agent.ts"]').click();
+      await app.locator('[data-node="file-index.ts"]').click();
+      assert((await app.locator('.de-editor-related .de-code-nav').count())>=3,'Code reader can jump between imported source files');
+      await app.locator('.de-editor-related .de-code-nav').first().click();
+      assert.match(await app.locator('[data-title]').innerText(),/ReactLoopAgent/,'Source import navigation selects linked code node');
+      assert.equal(await app.locator('.de-source-preview').isVisible(),true,'Related code file is already loaded; no second canvas click needed');
       assert.equal(await app.locator('.de-source-preview').isVisible(),true,'File click displays source content');
       assert((await app.locator('.de-code-row').count())>10,'Source content has real pinned lines');
+      assert((await app.locator('.de-syn-keyword').count())>0,'Code reader applies visible TypeScript syntax classes');
+      await app.locator('.de-editor-search').fill('private');
+      assert.match(await app.locator('.de-editor-status').innerText(),/matching lines/i,'Code reader searches actual cached snippet');
+      await app.locator('.de-editor-search').fill('');
+      await app.locator('.de-editor-line').fill('266');
+      await app.locator('[data-action="go-line"]').click();
+      assert.equal(await app.locator('.de-line-selected').count(),1,'Code reader navigates to exact cached line number');
+      await app.locator('[data-action="expand-editor"]').click();
+      assert.equal(await app.locator('.de-shell').evaluate(el=>el.classList.contains('de-code-expanded')),true,'Code reader can expand to wider panel');
+      await app.locator('[data-action="expand-editor"]').click();
       if(width===390){
         await app.locator('[data-action="dismiss"]').click({position:{x:20,y:120}});
         assert.equal(await app.locator('.de-detail').isVisible(),false,'Touching the backdrop dismisses the mobile sheet');
@@ -179,6 +196,28 @@ try{
       await page.screenshot({path:'artifacts/harness-clarity/diagram-flow-detail-'+theme+'-'+width+'.png',fullPage:true});
       await app.locator('[data-action="close"]').click();
       assert.equal(await app.locator('.de-detail').isVisible(),false);
+      await app.locator('button[data-mode="code"]').click();
+      assert.equal(await app.locator('.de-code-step').count(),8,'Code path has eight directly pinned method and event call sites');
+      assert.equal(await app.locator('.de-code-edge').count(),7,'Every adjacent code-reading stage has a visible directional connector');
+      assert.equal(await app.locator('.de-group').count(),4,'Code callsites grouped into four responsibilities');
+      if(width===390){
+        const last=await app.locator('[data-code-step="7"]').boundingBox();
+        const surface=await app.locator('.de-viewport').boundingBox();
+        const lastGroup=await app.locator('.de-group').last().boundingBox();
+        const stageMetrics=await app.locator('.de-stage').evaluate(el=>({height:el.offsetHeight,styleHeight:el.style.height,zoom:getComputedStyle(el).zoom}));
+        assert(last&&surface&&lastGroup&&last.y+last.height<=surface.y+surface.height+1,
+          'All code stages appear within the mobile page-scrollable diagram: '+JSON.stringify({last,surface,lastGroup,stageMetrics}));
+        assert(last.y+last.height<=lastGroup.y+lastGroup.height+1,'Last code stage stays inside phase boundary');
+      }
+      await page.screenshot({path:'artifacts/harness-clarity/code-path-'+theme+'-'+width+'.png',fullPage:true});
+      await app.locator('[data-code-step="4"]').click();
+      assert.match(await app.locator('[data-title]').innerText(),/Execute requested tools/);
+      assert.equal(await app.locator('.de-source-preview').isVisible(),true,'Callsite opens pinned TypeScript source window');
+      assert.equal(await app.locator('.de-line-selected').count(),1,'Exact callsite source line is selected in code reader');
+      assert.match(await app.locator('.de-source-path').innerText(),/agent.ts/);
+      assert((await app.locator('.de-handoff').count())>=3,'Code inspector exposes additional linked handoffs');
+      await page.screenshot({path:'artifacts/harness-clarity/code-source-'+theme+'-'+width+'.png',fullPage:true});
+      await app.locator('[data-action="close"]').click();
       assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'No horizontal page overflow');
       assert.equal(await app.locator('.de-map-control').isVisible(),expectedMap);
       await app.locator('button[data-mode="full"]').click();

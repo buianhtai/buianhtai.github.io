@@ -57,6 +57,48 @@
       "note": "Concurrency policy default",
       "code": "/** Shared agent-loop scheduler defaults.\n * @module dsh-agent-loop/constants\n */\n\n/** Default maximum in-flight parallel-safe calls per agent step. */\nexport const DEFAULT_MAX_PARALLEL_TOOL_CALLS = 10",
       "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/src/constants.ts#L1-L6"
+    },
+    "call-agent-claim": {
+      "path": "packages/core/agent-loop/src/agent.ts",
+      "startLine": 266,
+      "code": "\n  private async preStep(target: InboxTarget, position: { turn: number; step: number }): Promise<PreparedStep> {\n    /* v8 ignore next -- private callers establish the running phase before proposing a step */\n    if (this.phase.kind !== 'running') throw new Error(`agent \"${this.id}\": pre-step outside running phase`)\n    const signal = this.phase.abort.signal\n    const claimed = this.inbox.claim(target, position.turn)\n    const assembly = await this.loopCtx.systemPrompt.assemble(assembleContextFor(this, signal))\n    signal.throwIfAborted()\n    const decision = await this.dispatch.waterfall(\n      'agent/pre-step', { messages: claimed, ...position, signal },\n      (): Promise<PreStepDecision> => {\n        const sections = renderContextSections(assembly)\n        const context = this.runtimeContext.project(joinContextSections(sections), sections)\n        return Promise.resolve<PreStepDecision>({\n          kind: 'enter',\n          messages: context === undefined ? claimed : [...claimed, context],\n        })\n      },\n    )\n",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/src/agent.ts#L266-L284"
+    },
+    "call-agent-request": {
+      "path": "packages/core/agent-loop/src/agent.ts",
+      "startLine": 400,
+      "code": "  private async step(decision: Extract<PreparedStep, { kind: 'enter' }>): Promise<StepEndReason | null> {\n    /* v8 ignore next -- private callers establish the running phase before executing a step */\n    if (this.phase.kind !== 'running') throw new Error(`agent \"${this.id}\": step outside running phase`)\n    const { turn, step, abort: { signal } } = this.phase\n    signal.throwIfAborted()\n\n    const { assembly } = decision\n    const renderedPrompt = renderPrompt(assembly)\n    let firstAttempt = true\n    while (true) {\n      const { config, preparedCall } = await this.prepareRequest(turn, step, signal)\n      const currentContext = this.loopCtx.systemPrompt.refreshContext(assembly, assembleContextFor(this, signal))\n      const sections = renderContextSections(currentContext)\n      const context = this.runtimeContext.project(joinContextSections(sections), sections)\n      signal.throwIfAborted()\n      const startsRequestSeries = firstAttempt && decision.startsRequestSeries === true\n      const commits = this.systemPrompt.project(renderedPrompt, {\n",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/src/agent.ts#L400-L416"
+    },
+    "call-agent-stream": {
+      "path": "packages/core/agent-loop/src/agent.ts",
+      "startLine": 440,
+      "code": "      }\n      firstAttempt = false\n      const request = this.buildRequest(config, preparedCall, assembly.tools, { turn, step }, startsRequestSeries, signal)\n      const live = new AssistantStreamAttempt(\n        this.session.id,\n        ++this.assistantAttemptCounter,\n        () => ++this.assistantStreamRevision,\n        turn,\n        step,\n        (frame) => { this.dispatch.emit('agent/assistant-stream', { frame }) },\n      )\n      let started = false\n      try {\n        const stream = preparedCall?.stream(request) ?? this.loopCtx.llm.stream(request)\n        signal.throwIfAborted()\n        live.start()\n        started = true\n        for await (const chunk of stream) {\n          signal.throwIfAborted()\n          live.push(chunk)\n        }\n        signal.throwIfAborted()\n      } catch (error: unknown) {\n",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/src/agent.ts#L440-L462"
+    },
+    "call-agent-tools": {
+      "path": "packages/core/agent-loop/src/agent.ts",
+      "startLine": 544,
+      "code": "            stream: live.stream,\n          }, { surfaceOp: 'append' }).seq,\n        )\n        if (finish.kind === 'max-tokens') return { kind: 'max-tokens' }\n\n        const toolCalls = message.content.filter(block => block.type === 'tool-call')\n        if (toolCalls.length === 0) return { kind: 'completed' }\n        const { concluded } = await executeToolCalls(\n          this.loopCtx, turn, step, toolCalls, signal,\n          context => this.inbox.splice('next-step', this.inbox.nextStep.length, 0, [context]),\n        )\n        return concluded ? { kind: 'completed' } : null\n      } catch (error: unknown) {\n",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/src/agent.ts#L544-L556"
+    },
+    "call-tool-dispatch": {
+      "path": "packages/core/agent-loop/src/tool-calls.ts",
+      "startLine": 165,
+      "code": "  const startCall = async (index: number): Promise<void> => {\n    // oxlint-disable-next-line typescript/no-non-null-assertion -- bounded index\n    const call = group[index]!\n    callSeqs[index] = appendToolCall(session, turn, step, call.block)\n    started++\n    const prepared = await ctx.tools[TOOL_RUNTIME_SCHEDULER].prepare(call.exec)\n    throwSchedulerFailure()\n    switch (prepared.kind) {\n      case 'dispatch': {\n        const promise = ctx.tools[TOOL_RUNTIME_SCHEDULER].dispatch(prepared.exec).then(\n          (outcome) => {\n            slots[index] = { exec: prepared.exec, result: outcome.result, needsPost: outcome.kind === 'post-result' }\n            return index\n          },\n          (error: unknown) => {\n            schedulerFailure ??= { error }\n            return index\n          },\n        )\n",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/src/tool-calls.ts#L165-L183"
+    },
+    "call-tool-persist": {
+      "path": "packages/core/agent-loop/src/tool-calls.ts",
+      "startLine": 262,
+      "code": "/** Append a started call and return the event seq that its result must cite. */\nfunction appendToolCall(session: Session, turn: number, step: number, block: ToolCallBlock): SessionSeq {\n  const event = session.append('tool/call', { turn, step, callId: block.id, name: block.name, arguments: block.arguments })\n  return event.seq\n}\n\n/** Append a model-ordered result linked to its call event. */\nfunction appendToolResult(\n  session: Session,\n  turn: number,\n  step: number,\n  block: ToolCallBlock,\n  result: ToolExecutionResult,\n  callSeq: SessionSeq,\n): void {\n  const message = createToolResultMessage({\n    callId: block.id,\n    content: result.content,\n    isError: result.isError,\n  })\n  session.append('tool/result', {\n    turn, step,\n    message,\n    ...result.error?.info ? { error: result.error.info } : {},\n    // The tool's private presentation payload (e.g. a result-time diff),\n    // persisted so a UI bridge reproduces the card on replay.\n    ...result.meta !== undefined ? { meta: result.meta } : {},\n  }, { surfaceOp: 'append', sourceEventSeqs: [callSeq] })\n}\n",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/src/tool-calls.ts#L262-L290"
+    },
+    "call-agent-end": {
+      "path": "packages/core/agent-loop/src/agent.ts",
+      "startLine": 352,
+      "code": "          } catch (recoveryError: unknown) {\n            throw new AggregateError([error, recoveryError], 'Step failed and its pending tool results could not be recorded', { cause: error })\n          }\n          throw error\n        } finally {\n          stopRecovery()\n          this.session.append('step/end', { turn, step })\n        }\n        signal.throwIfAborted()\n        if (turnEnds && this.inbox.nextStep.length === 0) {\n          await this.dispatch.serial('agent/turn-stopping', { turn, signal })\n          signal.throwIfAborted()\n        }\n        if (turnEnds && this.inbox.nextStep.length === 0) break\n        target = 'next-step'\n      }\n    } catch (error: unknown) {\n",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/packages/core/agent-loop/src/agent.ts#L352-L368"
     }
   }
 }
