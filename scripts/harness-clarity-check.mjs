@@ -62,6 +62,7 @@ try{
       await app.locator('[data-action="minimap"]').click();
       assert.equal(await app.locator('.de-map-control').isVisible(),expectedMap);
       if(width===390)await app.locator('[data-action="mobile-tools"]').click();
+      await page.evaluate(()=>{window.scrollTo(0,0);if(document.activeElement instanceof HTMLElement)document.activeElement.blur();});
       await page.screenshot({path:'artifacts/harness-clarity/diagram-overview-'+theme+'-'+width+'.png',fullPage:true});
 
       await app.locator('[data-node="core"]').click();
@@ -85,6 +86,10 @@ try{
         const usedBy=await app.locator('.de-group').nth(1).boundingBox();
         const uses=await app.locator('.de-group').nth(2).boundingBox();
         assert(focus&&usedBy&&uses&&focus.y<usedBy.y&&usedBy.y<uses.y,'Mobile dependencies read focus, incoming then outgoing');
+        for(const text of await app.locator('.de-group').nth(1).locator('.de-mobile-direction').allTextContents())
+          assert.match(text,/USED BY/,'Incoming label is correct even when the same component is also outbound');
+        for(const text of await app.locator('.de-group').nth(2).locator('.de-mobile-direction').allTextContents())
+          assert.match(text,/USES/,'Outgoing label is correct even when the same component is also inbound');
         for(const node of await app.locator('[data-node]').all()){
           const b=await node.boundingBox();assert(b&&b.x>=-1&&b.x+b.width<=width+1,'Expanded dependency cards never crop');
         }
@@ -95,6 +100,7 @@ try{
         assert(header&&viewport&&header.y>=viewport.y,'Expanded graph keeps its section headings in view');
       }
       await app.locator('[data-action="close"]').click();
+      await page.evaluate(()=>{window.scrollTo(0,0);if(document.activeElement instanceof HTMLElement)document.activeElement.blur();});
       await page.screenshot({path:'artifacts/harness-clarity/diagram-expanded-'+theme+'-'+width+'.png',fullPage:true});
 
       await app.locator('[data-node="core"]').click();
@@ -143,6 +149,7 @@ try{
         assert(last&&viewport&&last.y+last.height<=viewport.y+viewport.height,'All six steps fit the desktop canvas at readable size');
       }
       assert.match(await app.locator('[data-disclaimer]').innerText(),/curated/i);
+      await page.evaluate(()=>{window.scrollTo(0,0);if(document.activeElement instanceof HTMLElement)document.activeElement.blur();});
       await page.screenshot({path:'artifacts/harness-clarity/diagram-flow-'+theme+'-'+width+'.png',fullPage:true});
       await app.locator('[data-step="4"]').click();
       assert.match(await app.locator('[data-title]').innerText(),/Schedule tools/);
