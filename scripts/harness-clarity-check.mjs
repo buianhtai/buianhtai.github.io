@@ -75,7 +75,10 @@ try{
       assert((await app.locator('.de-sources a').count())>=1,'Selected component links to code evidence');
       await app.locator('[data-action="expand"]').click();
       assert.equal(await app.locator('.de-group').count(),3,'Expanded view has incoming, center, outgoing columns');
-      assert((await app.locator('.de-edge').count())>=3,'Related dependency arrows appear on demand');
+      if(width===390)
+        assert((await app.locator('.de-mobile-direction').count())>=3,'Mobile dependencies have explicit, readable direction labels');
+      else
+        assert((await app.locator('.de-edge').count())>=3,'Desktop related dependency arrows appear on demand');
       assert((await app.locator('.de-node').count())>=4,'One-hop related nodes expand');
       if(width===390){
         const focus=await app.locator('[data-node="core"]').boundingBox();
