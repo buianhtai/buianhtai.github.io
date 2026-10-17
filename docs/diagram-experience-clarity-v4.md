@@ -55,3 +55,46 @@ preserve deep links and the existing evidence model, then adapt reusable view
 contracts for Agno and DeerFlow. Symbol-level call graphs, syntax highlighting,
 semantically routed protocol flows, production traces, and automated model
 regeneration are later research/implementation tasks, not accomplished here.
+
+
+## V5 review: React Flow-style canvas (Astro-native implementation)
+
+The review route at \`/en/labs/deepseek-harness-clarity/\` now uses
+\`DiagramOnlyExplorer.astro\`, a lightweight DOM/SVG flow canvas. It borrows
+the important **interaction patterns** from React Flow without introducing
+React or \`@xyflow/react\` into this Astro-only site. It is **not** a React
+Flow dependency and should not be described as one.
+
+- Source-backed **nested boundaries**: system areas, runtime contract/tool/state
+  areas, and agent-loop source-file areas. Zones are conceptual groupings, not
+  processes, container deployments, or source-derived import edges.
+- **Select a node** for role, related components, evidence and pinned code excerpts.
+  **Expand** renders a one-hop USED BY → FOCUS → USES graph. **Explore inside**
+  dives into packages and source files, with history/back.
+- Optional **Dependency overlay** adds directional source-derived edges.
+  Edge click reveals provenance and both endpoints; hover emphasizes the edge.
+  Edge routing chooses left, right, up or down based on geometry.
+- **Agent turn flow** has six source-linked nodes inside three conceptual
+  phase boundaries (Input & Admission; Model & Stream; Tools & Continuation).
+  Desktop shows a full connected six-node story; tablet uses two columns;
+  phones use a single vertical progression. **Previous/Next** stages and
+  node-click provide contextual narrative and source evidence.
+- A clickable **minimap**, pan, zoom/fit/focus, fullscreen, mobile bottom
+  detail sheet and dark/light surfaces support exploration.
+- **Edge semantics are separated**: dashed strokes = pinned package/source
+  dependency; solid arrows = *editorially curated* reading order. Neither is
+  evidence of a distributed HTTP/SSE request or a measured trace.
+
+For a production-grade graph canvas, later investigate adopting an actual
+graph library with automatic nested layout, edge avoidance and drag/keyboard
+interaction. Do not imply that React Flow, runtime tracing or code-symbol
+call graph extraction is implemented here.
+
+### Required user acceptance
+
+Readers should (1) name the major subsystem boundaries at first glance,
+(2) inspect a component without leaving the drawing, (3) expand exactly its
+source-supported direct relationships, (4) follow six stages as one **visible
+directed flow**, and (5) drill from runtime to source excerpt without switching
+to a separate code-heavy layout. Mobile must preserve legibility, never fit
+the full model by reducing all text to an unreadable scale.
