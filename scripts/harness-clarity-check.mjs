@@ -106,6 +106,10 @@ try{
       await app.locator('[data-node="file-agent.ts"]').click();
       assert.equal(await app.locator('.de-source-preview').isVisible(),true,'File click displays source content');
       assert((await app.locator('.de-code-row').count())>10,'Source content has real pinned lines');
+      if(width===390){
+        await app.locator('[data-action="dismiss"]').click({position:{x:5,y:5}});
+        assert.equal(await app.locator('.de-detail').isVisible(),false,'Touching the backdrop dismisses the mobile sheet');
+      }
       await app.locator('[data-action="back"]').click();
       await app.locator('[data-action="back"]').click();
       assert((await app.locator('[data-node]').count())>=6,'Back restores previous architecture');
