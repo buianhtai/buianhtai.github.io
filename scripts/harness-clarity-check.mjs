@@ -26,6 +26,22 @@ try{
       await page.goto(base+path);
       const app=page.locator('diagram-only-explorer');
       await page.waitForSelector('diagram-only-explorer[data-ready="true"]');
+      if(width>700){
+        assert.equal(await app.locator('button[data-mode="full"]').getAttribute('aria-pressed'),'true','Desktop opens complete architecture map');
+        assert.equal(await app.locator('.de-model-subsystem').count(),6,'Full map shows six distinct nested subsystem boundaries');
+        assert.equal(await app.locator('[data-node]').count(),32,'Full map includes all six subsystems and twenty-six source-backed packages');
+        assert.equal(await app.locator('.de-edge').count(),6,'Full map shows six verified highlighted relationships by default');
+        const packageNode=app.locator('[data-node="core-agent-loop"]');
+        await packageNode.click();
+        assert.match(await app.locator('[data-title]').innerText(),/agent-loop/);
+        assert((await app.locator('.de-sources a').count())>0,'Full-map package links to pinned code evidence');
+        await app.locator('[data-action="close"]').click();
+        await app.locator('[data-action="connections"]').click();
+        assert.equal(await app.locator('.de-edge').count(),16,'Expanded full-map layer shows all sixteen verified system dependencies');
+        await app.locator('[data-action="connections"]').click();
+        await page.screenshot({path:'artifacts/harness-clarity/full-model-'+theme+'-'+width+'.png',fullPage:true});
+        await app.locator('button[data-mode="architecture"]').click();
+      }
       assert.equal(await app.locator('.de-group').count(),3,'Only conceptual boundaries shown initially');
       assert.equal(await app.locator('[data-node]').count(),6,'All six system subsystems visible');
       if(width===390){
@@ -160,6 +176,14 @@ try{
       assert.equal(await app.locator('.de-detail').isVisible(),false);
       assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'No horizontal page overflow');
       assert.equal(await app.locator('.de-map-control').isVisible(),expectedMap);
+      await app.locator('button[data-mode="full"]').click();
+      assert.equal(await app.locator('.de-model-subsystem').count(),6,'Complete model always has all six nested subsystem boundaries');
+      assert.equal(await app.locator('[data-node]').count(),32,'Complete model always exposes all packages');
+      if(width===390){
+        assert(await app.locator('.de-viewport').evaluate(el=>getComputedStyle(el).overflowX==='auto'),'Mobile full map is pan-and-zoom canvas, not a cut-off stack');
+        assert((await app.locator('.de-viewport').evaluate(el=>el.scrollWidth))>width,'Mobile full map is larger than the viewport');
+      }
+      await page.screenshot({path:'artifacts/harness-clarity/full-model-mobile-or-final-'+theme+'-'+width+'.png',fullPage:true});
       assert.deepEqual(errors,[],'No uncaught browser errors');
       await ctx.close();
     }
