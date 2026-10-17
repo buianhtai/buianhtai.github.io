@@ -3,6 +3,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 import DiagramOnlyExplorer from '../../../components/labs/DiagramOnlyExplorer.astro';
 import model from '../../../data/architecture/deepseek-harness.json';
 import snippets from '../../../data/architecture/deepseek-harness-excerpts.json';
+import handoffs from '../../../data/architecture/deepseek-harness-code-handoffs.json';
 const zones = [
   {label:'Entry & assembly',note:'How plugins are composed and remote sessions are exposed',nodes:['boot','api']},
   {label:'Execution core',note:'Agent behavior, tool execution and plugin capabilities',nodes:['core','capabilities']},
@@ -12,7 +13,7 @@ const zones = [
 <BaseLayout title="DeepSeek Harness — diagram-only architecture explorer prototype" description="Source-pinned clarity-first architecture explanations. Design prototype for review, not the published primary explorer." noindex>
   <main class="clarity-page">
     <div class="clarity-back"><a href="/en/labs/deepseek-harness/">← Current explorer</a><span>Diagram-only interactive design review · Same pinned source model</span></div>
-    <DiagramOnlyExplorer {model} {zones} {snippets} />
+    <DiagramOnlyExplorer {model} {zones} {snippets} {handoffs} />
   </main>
 </BaseLayout>
 <style>
