@@ -16,9 +16,10 @@ const {model,zones,snippets}=Astro.props;
     <div class="de-tools">
       <nav class="de-crumbs" aria-label="Architecture levels"></nav>
       <div class="de-tour" hidden><button type="button" data-action="previous-step" aria-label="Previous stage">←</button><span data-step-status>Step 1 / 6</span><button type="button" data-action="next-step" aria-label="Next stage">→</button></div>
-      <div class="de-buttons"><button type="button" data-action="back" disabled>← Back</button><button type="button" data-action="fit">Fit</button><button type="button" data-action="focus">Focus</button><button type="button" data-action="reset">100%</button><button type="button" data-action="connections" aria-pressed="false" title="Show source-backed dependency connections">Dependencies</button><button type="button" data-action="minimap" aria-pressed="true">Map</button><button type="button" data-action="fullscreen" aria-pressed="false">⛶ Expand</button></div>
+      <div class="de-buttons"><button type="button" data-action="back" disabled>← Back</button><button type="button" data-action="mobile-tools" aria-expanded="false" aria-controls="de-extra-actions">Options <span aria-hidden="true">⌄</span></button><button type="button" data-action="fit">Fit</button><button type="button" data-action="focus">Focus</button><button type="button" data-action="reset">100%</button><button type="button" data-action="connections" aria-pressed="false" title="Show source-backed dependency connections">Dependencies</button><button type="button" data-action="minimap" aria-pressed="true">Map</button><button type="button" data-action="fullscreen" aria-pressed="false">⛶ Expand</button></div>
     </div>
     <div class="de-board">
+      <button type="button" class="de-backdrop" data-action="close" aria-label="Close component details" hidden></button>
       <div class="de-viewport" role="region" tabindex="0" aria-label="Interactive diagram; select any node for details and expand its dependencies">
         <div class="de-stage"><div class="de-zones"></div><svg class="de-edges" aria-hidden="true"></svg><div class="de-nodes"></div></div>
       </div>
@@ -58,7 +59,8 @@ class DiagramOnlyExplorer extends HTMLElement {
   q<HTMLButtonElement>('[data-action="minimap"]').setAttribute('aria-pressed',String(showMap));
   const history:{view:string;selected:string|null;expanded:boolean}[]=[];
   const scoped=()=>model.edges.filter(e=>e.view===view);
-  const show=()=>{detail.hidden=false;},hide=()=>{detail.hidden=true;};
+  const show=()=>{detail.hidden=false;if(viewport.clientWidth<=700)q<HTMLElement>('.de-backdrop').hidden=false;};
+  const hide=()=>{detail.hidden=true;q<HTMLElement>('.de-backdrop').hidden=true;};
   const setZoom=()=>{stage.style.zoom=String(zoom);updateMinimap();};
   const canvas=(width:number,height:number)=>{w=width;h=height;stage.style.width=width+'px';stage.style.height=height+'px';const svg=q<SVGSVGElement>('.de-edges');svg.setAttribute('viewBox','0 0 '+width+' '+height);svg.setAttribute('width',String(width));svg.setAttribute('height',String(height));};
   const reset=()=>{q('.de-nodes').replaceChildren();q('.de-zones').replaceChildren();q('.de-edges').replaceChildren();positions=new Map();};
@@ -148,7 +150,29 @@ class DiagramOnlyExplorer extends HTMLElement {
         {label:'Agent turn & tools',note:'Driver, streaming and scheduling',nodes:['file-agent.ts','file-assistant-stream.ts','file-tool-calls.ts']},
         {label:'Context & policy',note:'Runtime assembly and limits',nodes:['file-runtime-context.ts','file-constants.ts']}
       ]:null;
-    if(grouped){
+    if(viewport.clientWidth<=700){
+      // Mobile is a single vertically-scannable drawing, not a clipped, shrunken desktop artboard.
+      const width=Math.max(290,viewport.clientWidth-2),margin=12,zoneWidth=width-24;
+      const sections=grouped||[{
+        label:(model.views.find(v=>v.id===view)?.label||view)+' components',
+        note:'Source-backed implementation units',nodes:ns.map(n=>n.id)
+      }];
+      let top=16;
+      const cardH=102,gap=12,header=91,footer=18;
+      const layouts=sections.map(z=>{
+        const count=z.nodes.filter(id=>lookup.get(id)?.view===view).length;
+        const height=header+count*(cardH+gap)+footer;
+        const out={zone:z,top,height};top+=height+12;return out;
+      });
+      canvas(width,top+8);
+      layouts.forEach(({zone,top,height})=>{
+        group(zone.label,zone.note,margin,top,zoneWidth,height);
+        zone.nodes.forEach((id,i)=>{
+          const n=lookup.get(id);
+          if(n&&n.view===view)add(n,margin+13,top+header+i*(cardH+gap),zoneWidth-26,cardH);
+        });
+      });
+    }else if(grouped){
       const tallest=Math.max(...grouped.map(g=>g.nodes.length));
       const stageH=Math.max(640,180+tallest*159);
       canvas(1300,stageH);
@@ -176,6 +200,38 @@ class DiagramOnlyExplorer extends HTMLElement {
     if(!selected)return architecture();
     const center=lookup.get(selected)!;
     const incoming=scoped().filter(e=>e.to===selected),outgoing=scoped().filter(e=>e.from===selected);
+    if(viewport.clientWidth<=700){
+      reset();
+      const width=Math.max(290,viewport.clientWidth-2),margin=12,zoneW=width-24;
+      const cardH=95,gap=9;
+      const zones=[
+        {label:'SELECTED COMPONENT',note:'Currently focused · tap a neighbor to explore',items:[{node:center,edge:null as E|null,type:'focus'}]},
+        {label:'USED BY  ·  '+incoming.length,note:'These components declare a dependency on '+center.label,items:incoming.map(e=>({node:lookup.get(e.from)!,edge:e,type:'in'}))},
+        {label:'USES  ·  '+outgoing.length,note:center.label+' declares a dependency on these components',items:outgoing.map(e=>({node:lookup.get(e.to)!,edge:e,type:'out'}))}
+      ];
+      let top=16;
+      const drawn=zones.map(z=>{
+        const height=85+Math.max(1,z.items.length)*(cardH+gap)+18;
+        const rect={...z,y:top,height};top+=height+12;return rect;
+      });
+      canvas(width,top+8);
+      drawn.forEach(zone=>{
+        group(zone.label,zone.note,margin,zone.y,zoneW,zone.height);
+        zone.items.forEach((item,i)=>{
+          if(!item.node)return;
+          const x=margin+13,y=zone.y+82+i*(cardH+gap);
+          add(item.node,x,y,zoneW-26,cardH,item.type==='focus');
+          const card=this.querySelector<HTMLElement>('[data-node="'+item.node.id+'"]');
+          if(card&&item.edge){
+            const caption=el('span','de-mobile-direction',item.type==='in'?'← USED BY · IMPORTS THIS':'→ USES · DECLARED DEPENDENCY');
+            card.prepend(caption);
+          }
+        });
+      });
+      q('[data-status]').textContent=incoming.length+' used-by · '+outgoing.length+' uses · tap any node to recenter';
+      q('[data-disclaimer]').textContent='Each relationship comes from a pinned manifest or source import; not a runtime call.';
+      return;
+    }
     reset();canvas(1310,Math.max(680,170+Math.max(incoming.length,outgoing.length)*117));
     group('USED BY','Incoming declarations',20,24,371,h-50);
     group('FOCUS','Current component',469,24,367,h-50);
@@ -192,7 +248,7 @@ class DiagramOnlyExplorer extends HTMLElement {
   let flowSlots:{x:number;y:number;w:number;h:number}[]=[];
   const flow=()=>{
     reset();
-    const available=viewport.clientWidth,mobile=available<680,tablet=available<1100;
+    const available=viewport.clientWidth,mobile=available<=700,tablet=available<1100;
     if(mobile){
       const width=Math.max(325,available-4),card=Math.min(302,width-34);
       flowSlots=model.journey.map((_,i)=>({x:(width-card)/2,y:116+Math.floor(i/2)*405+(i%2)*160,w:card,h:112}));
@@ -317,10 +373,11 @@ class DiagramOnlyExplorer extends HTMLElement {
     show();q('[data-kind]').textContent='CURATED STEP '+(i+1)+' / '+model.journey.length;
     q('[data-title]').textContent=s.title;q('[data-summary]').textContent=s.description;
     q('[data-stats]').textContent='Implementation · '+(owner?.label||s.node);
-    if(viewport.clientWidth<680 && flowSlots[i]){
+    if(viewport.clientWidth<=700 && flowSlots[i]){
       const pos=flowSlots[i],y=pos.y*zoom,bottom=(pos.y+pos.h)*zoom;
-      if(y<viewport.scrollTop+65||bottom>viewport.scrollTop+viewport.clientHeight-50)
-        viewport.scrollTo({top:Math.max(0,y-78)});
+      const box=this.querySelector<HTMLElement>('[data-step="'+i+'"]');
+      if(box && (box.getBoundingClientRect().top<70 || box.getBoundingClientRect().bottom>window.innerHeight-85))
+        box.scrollIntoView({block:'center',behavior:'instant'});
     }
     const rel=q('.de-related');rel.replaceChildren();
     if(i>0)rel.append(btn('← Previous: '+model.journey[i-1].title,()=>inspectFlow(i-1),'de-related-button'));
@@ -345,6 +402,10 @@ class DiagramOnlyExplorer extends HTMLElement {
     const action=(event.target as HTMLElement).closest<HTMLElement>('[data-action]')?.dataset.action;
     if(!action)return;
     if(action==='close'){hide();return;}
+    if(action==='mobile-tools'){
+      const expanded=app.classList.toggle('de-tools-open');
+      q<HTMLButtonElement>('[data-action="mobile-tools"]').setAttribute('aria-expanded',String(expanded));return;
+    }
     if(action==='previous-step'){inspectFlow(Math.max(0,step-1));return;}
     if(action==='next-step'){inspectFlow(Math.min(model.journey.length-1,step+1));return;}
     if(action==='expand'&&selected){expanded=true;zoom=1;render();inspect(selected);viewport.scrollTo(0,0);return;}
@@ -428,4 +489,54 @@ if(!customElements.get('diagram-only-explorer'))customElements.define('diagram-o
 .de-hint{position:absolute;bottom:10px;left:10px;font-size:.7rem;padding:.6rem .8rem;background:var(--de-surface);border:1px solid var(--de-border);border-radius:9px;box-shadow:0 5px 17px #00000019;pointer-events:none}.de-footer{display:flex;justify-content:space-between;gap:.6rem;flex-wrap:wrap;border-top:1px solid var(--de-border);padding:.75rem 1rem;font-size:.72rem;color:var(--de-muted)}
 .de-fullscreen{position:fixed;inset:10px;z-index:9999;display:flex;flex-direction:column}.de-fullscreen .de-board{flex:1;min-height:0}.de-fullscreen .de-viewport{height:100%;max-height:none}
 @media(max-width:700px){.de-shell[data-active-mode="flow"] .de-group h3{max-width:112px;line-height:1.35}.de-shell[data-active-mode="flow"] .de-group p{display:none}.de-top{gap:.6rem;padding:.8rem}.de-top>div:first-child{width:100%}.de-tabs{flex:1}.de-tabs button{flex:1;font-size:.76rem;padding:.55rem .35rem}.de-tools{padding:.55rem}.de-buttons button{padding:.4rem .5rem}.de-viewport{height:min(73dvh,650px);min-height:350px}.de-detail{top:auto;bottom:0;width:100%;height:min(75%,620px);border-left:0;border-top:2px solid var(--de-accent);border-radius:14px 14px 0 0}.de-fullscreen{inset:0;border-radius:0}.de-hint{max-width:92%;font-size:.64rem}}
+
+/* Touch-first explorer: diagrams are page-scrolling content, not miniature desktop canvases. */
+.de-backdrop{display:none}
+.de-buttons [data-action="mobile-tools"]{display:none}
+.de-mobile-direction{display:none}
+@media(max-width:700px){
+  .de-top{padding:1rem;display:grid;grid-template-columns:1fr auto;gap:.55rem}
+  .de-top>div:first-child{grid-column:1/-1}
+  .de-top h1{font-size:1.34rem}
+  .de-tabs{grid-column:1;min-width:0;display:grid;grid-template-columns:1fr 1fr}
+  .de-tabs button{font-size:.76rem;min-height:46px;line-height:1.25}
+  .de-top>a{grid-column:2;align-self:center;font-size:.7rem}
+  .de-tools{display:flex;flex-direction:column;align-items:stretch;gap:.4rem;padding:.5rem .65rem}
+  .de-crumbs{min-height:32px;font-size:.79rem;flex-wrap:wrap}
+  .de-buttons{display:flex;flex-wrap:wrap;align-items:center;gap:.4rem}
+  .de-buttons [data-action="mobile-tools"]{display:block;margin-left:auto}
+  .de-buttons [data-action="back"],.de-buttons [data-action="connections"]{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:.5rem .85rem;font-weight:650}
+  .de-buttons [data-action="fit"],.de-buttons [data-action="focus"],.de-buttons [data-action="reset"],.de-buttons [data-action="minimap"],.de-buttons [data-action="fullscreen"]{display:none}
+  .de-tools-open .de-buttons [data-action="fit"],.de-tools-open .de-buttons [data-action="focus"],.de-tools-open .de-buttons [data-action="reset"],.de-tools-open .de-buttons [data-action="minimap"],.de-tools-open .de-buttons [data-action="fullscreen"]{display:inline-flex;min-height:42px}
+  .de-tour{order:0;width:100%;min-height:46px}
+  .de-tour button{min-height:42px;min-width:44px}
+  .de-board{overflow:visible}
+  .de-viewport{height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important;cursor:default;touch-action:pan-y}
+  .de-viewport:active{cursor:default}
+  .de-stage{max-width:100%;overflow:hidden}
+  .de-group{padding:.82rem .9rem;border-radius:14px}
+  .de-group h3{font-size:.86rem;margin:0 0 .25rem;line-height:1.3;max-width:none}
+  .de-group p{font-size:.7rem;line-height:1.3;max-width:100%}
+  .de-node{padding:.65rem .85rem;justify-content:center;gap:.26rem;box-shadow:none;border-radius:10px;min-height:0!important}
+  .de-node .de-kind{font-size:.59rem}
+  .de-node strong{font-size:.92rem;line-height:1.22}
+  .de-node .de-description{font-size:.71rem;line-height:1.35;-webkit-line-clamp:2}
+  .de-mobile-direction{display:block;font:700 .59rem/1.25 var(--font-mono,monospace);color:var(--de-accent);letter-spacing:.02em}
+  .de-flow-node{display:flex;align-items:center;flex-wrap:wrap;padding:1.05rem 1rem 1.6rem!important;gap:.45rem;box-shadow:none}
+  .de-flow-node strong{font-size:.94rem;line-height:1.25}
+  .de-stage-owner{left:1rem;bottom:.45rem;font-size:.62rem}
+  .de-hint{display:none}
+  .de-map-control{display:none}
+  .de-legend{font-size:.62rem}
+  .de-footer{gap:.4rem;padding:.75rem .8rem}
+  .de-backdrop:not([hidden]){display:block;position:fixed;inset:0;z-index:1000;width:100%;height:100%;border:0;background:#0008;backdrop-filter:blur(2px)}
+  .de-detail{position:fixed;z-index:1001;left:0;right:0;top:auto;bottom:0;width:100%;height:auto;max-height:min(77dvh,760px);overflow:auto;overscroll-behavior:contain;background:var(--de-surface);border:1px solid var(--de-border);border-top:3px solid var(--de-accent);border-radius:20px 20px 0 0;box-shadow:0 -20px 60px #0005;padding:1.1rem 1.1rem max(1.2rem,env(safe-area-inset-bottom));}
+  .de-detail:before{content:'';display:block;width:42px;height:4px;background:var(--de-border);border-radius:6px;margin:-.5rem auto .9rem}
+  .de-detail-head button{min-width:44px;min-height:44px}
+  .de-detail-actions button{min-height:44px;font-weight:650}
+  .de-related-button{min-height:44px}
+  .de-shell.de-fullscreen{inset:0;overflow:auto;display:block}
+  .de-shell.de-fullscreen .de-viewport{height:auto!important}
+}
+
 </style>
