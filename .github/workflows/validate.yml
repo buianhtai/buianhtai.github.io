@@ -235,6 +235,9 @@ jobs:
       - name: Verify source-linked diagram-only viewer (desktop and mobile)
         timeout-minutes: 3
         run: node scripts/agno-diagrams-visual-check.mjs
+      - name: Validate DeepSeek Harness architecture article (mobile, desktop, light and dark)
+        run: node scripts/deepseek-harness-article-check.mjs
+
       - name: Render DeerFlow article diagrams and capture responsive screenshots
         timeout-minutes: 3
         run: node scripts/deerflow-diagram-visual-check.mjs
@@ -282,6 +285,14 @@ jobs:
           name: agno-architecture-explorer
           path: artifacts/agno-explorer/
           if-no-files-found: warn
+      - name: Upload DeepSeek Harness article screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deepseek-harness-article-review
+          path: artifacts/deepseek-harness-article/
+          if-no-files-found: warn
+
       - name: Upload DeerFlow light and dark screenshots
         if: always()
         uses: actions/upload-artifact@v4
