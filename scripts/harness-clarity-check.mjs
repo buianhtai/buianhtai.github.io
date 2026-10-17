@@ -129,8 +129,13 @@ try{
       assert.equal(await app.locator('.de-tour').isVisible(),true,'Flow-only stage controls appear');
       await app.locator('[data-action="next-step"]').click();
       assert.match(await app.locator('[data-step-status]').innerText(),/Stage 2/);
-      await app.locator('[data-action="previous-step"]').click();
-      assert.match(await app.locator('[data-step-status]').innerText(),/Stage 1/);
+      if(width===390){
+        await app.locator('.de-related-button').first().click();
+        assert.match(await app.locator('[data-step-status]').innerText(),/Stage 1/);
+      }else{
+        await app.locator('[data-action="previous-step"]').click();
+        assert.match(await app.locator('[data-step-status]').innerText(),/Stage 1/);
+      }
       await app.locator('[data-action="close"]').click();
       if(width===1440){
         const last=await app.locator('[data-step="5"]').boundingBox();
