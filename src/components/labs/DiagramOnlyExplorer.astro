@@ -1,9 +1,9 @@
 ---
-interface Props { model:any; zones:any[] }
-const {model,zones}=Astro.props;
+interface Props { model:any; zones:any[]; snippets:any }
+const {model,zones,snippets}=Astro.props;
 ---
 <diagram-only-explorer class="de">
-  <script type="application/json" data-payload set:html={JSON.stringify({model,zones}).replace(/</g,'\\u003c')} />
+  <script type="application/json" data-payload set:html={JSON.stringify({model,zones,excerpts:snippets.excerpts}).replace(/</g,'\\u003c')} />
   <div class="de-shell">
     <header class="de-top">
       <div><span class="de-overline">SOURCE-GROUNDED ARCHITECTURE</span><h1>DeepSeek Harness</h1></div>
@@ -28,6 +28,7 @@ const {model,zones}=Astro.props;
         <div class="de-detail-actions"><button type="button" class="de-primary" data-action="expand">Expand related ↗</button><button type="button" data-action="collapse" hidden>Collapse</button><button type="button" data-action="inside" hidden>Explore inside ↳</button></div>
         <h3>Related components</h3><div class="de-related"></div>
         <h3>Verified source evidence</h3><div class="de-sources"></div>
+        <section class="de-source-preview" hidden aria-label="Source file excerpt"><h3>Source preview</h3><p class="de-source-path"></p><a class="de-preview-link" target="_blank" rel="noopener noreferrer">Open pinned implementation ↗</a><pre><code class="de-source-code"></code></pre></section>
       </aside>
     </div>
     <footer class="de-footer"><span data-status></span><span data-disclaimer></span></footer>
@@ -38,7 +39,7 @@ type Src={path:string;line:number;url:string};
 type N={id:string;label:string;view:string;kind:string;summary:string;child?:string|null;sources:Src[]};
 type E={view:string;from:string;to:string;label:string;evidence:string;sources:Src[]};
 type Step={node:string;title:string;description:string;source:Src};
-type D={model:{revision:string;repository:string;nodes:N[];edges:E[];views:{id:string;label:string;parent:string|null}[];journey:Step[]};zones:{label:string;note:string;nodes:string[]}[]};
+type D={model:{revision:string;repository:string;nodes:N[];edges:E[];views:{id:string;label:string;parent:string|null}[];journey:Step[]};zones:{label:string;note:string;nodes:string[]}[];excerpts:Record<string,{code:string;startLine:number;path:string;url:string}>};
 class DiagramOnlyExplorer extends HTMLElement {
  connectedCallback(){
   if(this.dataset.ready)return;this.dataset.ready='true';
@@ -177,6 +178,16 @@ class DiagramOnlyExplorer extends HTMLElement {
     q<HTMLButtonElement>('[data-action="back"]').disabled=history.length===0;setZoom();
   };
   const sources=(refs:Src[])=>{const box=q('.de-sources');box.replaceChildren(...refs.slice(0,5).map(evidence));if(!refs.length)box.textContent='No direct evidence for this node in this view.';};
+  const preview=(id:string)=>{
+    const sample=data.excerpts?.[id],panel=q<HTMLElement>('.de-source-preview');panel.hidden=!sample;
+    if(!sample)return;
+    q('.de-source-path').textContent=sample.path+' · starting line '+sample.startLine;
+    q<HTMLAnchorElement>('.de-preview-link').href=sample.url;
+    const code=q('.de-source-code');code.replaceChildren();
+    sample.code.replace(/\n$/,'').split('\n').forEach((line,i)=>{
+      const row=el('span','de-code-row','');row.append(el('span','de-code-number',String(sample.startLine+i)),el('span','',line||' '));code.append(row);
+    });
+  };
   const inspect=(id:string)=>{
     const n=lookup.get(id);if(!n)return;
     if(expanded&&selected!==id){selected=id;render();}else selected=id;
@@ -191,7 +202,7 @@ class DiagramOnlyExplorer extends HTMLElement {
       if(other)rel.append(btn((e.from===id?'→ Uses ':'← Used by ')+other.label,()=>inspect(other.id),'de-related-button'));
     });
     if(!incoming.length&&!outgoing.length)rel.textContent='No direct relationships shown in this view.';
-    sources(n.sources);
+    sources(n.sources);preview(id);
     q<HTMLButtonElement>('[data-action="expand"]').hidden=expanded||(!incoming.length&&!outgoing.length);
     q<HTMLButtonElement>('[data-action="collapse"]').hidden=!expanded;
     q<HTMLButtonElement>('[data-action="inside"]').hidden=!n.child;
@@ -205,7 +216,7 @@ class DiagramOnlyExplorer extends HTMLElement {
     const rel=q('.de-related');rel.replaceChildren();
     if(i>0)rel.append(btn('← Previous: '+model.journey[i-1].title,()=>inspectFlow(i-1),'de-related-button'));
     if(i<model.journey.length-1)rel.append(btn('Next: '+model.journey[i+1].title+' →',()=>inspectFlow(i+1),'de-related-button'));
-    sources([s.source]);
+    sources([s.source]);preview(s.node);
     q<HTMLButtonElement>('[data-action="expand"]').hidden=true;
     q<HTMLButtonElement>('[data-action="collapse"]').hidden=true;
     q<HTMLButtonElement>('[data-action="inside"]').hidden=true;
@@ -271,6 +282,12 @@ if(!customElements.get('diagram-only-explorer'))customElements.define('diagram-o
 .de-flow-node{position:absolute;width:495px;height:112px;display:flex;align-items:center;gap:1rem;padding:1.3rem;border:1px solid var(--de-border);border-radius:14px;background:var(--de-surface);color:var(--color-text);box-shadow:0 8px 22px #00000014}.de-flow-node:hover,.de-flow-node.is-selected{border:2px solid var(--de-accent)}.de-flow-no{font:800 1.5rem var(--font-mono,monospace);color:var(--de-accent)}.de-flow-node strong{font-size:1.05rem;flex:1;text-align:left}.de-inspect{font-size:.73rem;color:var(--de-accent);font-weight:700}.de-loop{position:absolute;width:340px;font-size:.8rem;color:var(--de-muted);line-height:1.5}
 .de-detail{position:absolute;z-index:5;top:0;bottom:0;right:0;width:min(370px,100%);background:var(--de-surface);border-left:1px solid var(--de-border);box-shadow:-15px 0 40px #0003;overflow:auto;padding:1.3rem}.de-detail-head{display:flex;justify-content:space-between;align-items:center}.de-detail-head button{width:38px;height:38px;border:1px solid var(--de-border);border-radius:8px;background:var(--de-bg)}.de-detail h2{font-size:1.4rem;margin:.8rem 0}.de-detail>p{font-size:.88rem;line-height:1.6;color:var(--de-muted)}.de-detail p.de-stats{font:700 .77rem var(--font-mono,monospace);color:var(--de-accent)}.de-detail h3{font-size:.77rem;letter-spacing:.06em;text-transform:uppercase;margin:1.4rem 0 .6rem}.de-detail-actions{display:flex;flex-wrap:wrap;gap:.5rem;border-block:1px solid var(--de-border);padding:1rem 0}.de-detail-actions button{font-size:.77rem;padding:.65rem;border-radius:8px;background:var(--de-bg);border:1px solid var(--de-border)}.de-detail-actions button.de-primary{background:var(--de-accent);border-color:var(--de-accent);color:white}
 .de-related,.de-sources{display:grid;gap:.55rem}.de-related-button{font-size:.78rem;border:1px solid var(--de-border);border-radius:8px;background:var(--de-bg);padding:.7rem;text-align:left}.de-sources a{font-size:.73rem;color:var(--de-accent);text-decoration:none;overflow-wrap:anywhere}
+
+.de-source-preview{margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--de-border)}
+.de-source-preview[hidden]{display:none}.de-source-path{font:400 .7rem/1.5 var(--font-mono,monospace);color:var(--de-muted);overflow-wrap:anywhere}
+.de-preview-link{font-size:.73rem;color:var(--de-accent);text-decoration:none}.de-source-preview pre{overflow:auto;max-height:290px;background:var(--de-bg);border:1px solid var(--de-border);border-radius:9px;padding:.5rem .15rem}
+.de-source-code{font:400 .68rem/1.6 var(--font-mono,monospace);white-space:pre}.de-code-row{display:block;padding:.05rem .3rem}
+.de-code-number{display:inline-block;min-width:2.4rem;padding-right:.5rem;margin-right:.6rem;text-align:right;color:var(--de-muted);border-right:1px solid var(--de-border)}
 .de-hint{position:absolute;bottom:10px;left:10px;font-size:.7rem;padding:.6rem .8rem;background:var(--de-surface);border:1px solid var(--de-border);border-radius:9px;box-shadow:0 5px 17px #00000019;pointer-events:none}.de-footer{display:flex;justify-content:space-between;gap:.6rem;flex-wrap:wrap;border-top:1px solid var(--de-border);padding:.75rem 1rem;font-size:.72rem;color:var(--de-muted)}
 .de-fullscreen{position:fixed;inset:10px;z-index:9999;display:flex;flex-direction:column}.de-fullscreen .de-board{flex:1;min-height:0}.de-fullscreen .de-viewport{height:100%;max-height:none}
 @media(max-width:700px){.de-top{gap:.6rem;padding:.8rem}.de-top>div:first-child{width:100%}.de-tabs{flex:1}.de-tabs button{flex:1;font-size:.76rem;padding:.55rem .35rem}.de-tools{padding:.55rem}.de-buttons button{padding:.4rem .5rem}.de-viewport{height:min(73dvh,650px);min-height:350px}.de-detail{top:auto;bottom:0;width:100%;height:min(75%,620px);border-left:0;border-top:2px solid var(--de-accent);border-radius:14px 14px 0 0}.de-fullscreen{inset:0;border-radius:0}.de-hint{max-width:92%;font-size:.64rem}}
