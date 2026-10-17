@@ -22,7 +22,7 @@ const {model,zones,snippets}=Astro.props;
       <div class="de-viewport" role="region" tabindex="0" aria-label="Interactive diagram; select any node for details and expand its dependencies">
         <div class="de-stage"><div class="de-zones"></div><svg class="de-edges" aria-hidden="true"></svg><div class="de-nodes"></div></div>
       </div>
-      <div class="de-hint">Select a node → inspect → expand its direct relationships</div><button type="button" data-action="mapjump" class="de-map-control" aria-label="Diagram minimap: click to navigate"><svg class="de-minimap" viewBox="0 0 150 86" preserveAspectRatio="none" aria-hidden="true"><g class="de-mini-zones"></g><g class="de-mini-nodes"></g><rect class="de-mini-window" x="0" y="0" width="10" height="10" rx="2"></rect></svg><span>OVERVIEW MAP</span></button><div class="de-legend"><span>◌ Package import / dependency</span><span>→ Curated order in flow mode</span></div>
+      <div class="de-hint">Select a node → inspect → expand its direct relationships</div><button type="button" data-action="mapjump" class="de-map-control" aria-label="Diagram minimap: click to navigate"><svg class="de-minimap" viewBox="0 0 150 86" preserveAspectRatio="none" aria-hidden="true"><g class="de-mini-zones"></g><g class="de-mini-nodes"></g><rect class="de-mini-window" x="0" y="0" width="10" height="10" rx="2"></rect></svg><span>OVERVIEW MAP</span></button>
       <aside class="de-detail" hidden aria-label="Selected diagram element">
         <div class="de-detail-head"><span class="de-overline" data-kind></span><button type="button" data-action="close" aria-label="Close node information">✕</button></div>
         <h2 data-title></h2><p data-summary></p><p class="de-stats" data-stats></p>
@@ -32,7 +32,7 @@ const {model,zones,snippets}=Astro.props;
         <section class="de-source-preview" hidden aria-label="Source file excerpt"><h3>Source preview</h3><p class="de-source-path"></p><a class="de-preview-link" target="_blank" rel="noopener noreferrer">Open pinned implementation ↗</a><pre><code class="de-source-code"></code></pre></section>
       </aside>
     </div>
-    <footer class="de-footer"><span data-status></span><span data-disclaimer></span></footer>
+    <footer class="de-footer"><span data-status></span><span class="de-legend"><span>┄ Source imports / package dependencies</span><span>→ Source-linked reading order</span></span><span data-disclaimer></span></footer>
   </div>
 </diagram-only-explorer>
 <script>
@@ -368,9 +368,9 @@ if(!customElements.get('diagram-only-explorer'))customElements.define('diagram-o
 .de-shell[data-active-mode="flow"] .de-legend span:first-child,.de-shell[data-active-mode="architecture"] .de-legend span:last-child{display:none}
 @media(max-width:700px){.de-tour{order:4;width:100%;justify-content:center}.de-stage-owner{font-size:.62rem}}
 .de-map-control{position:absolute;right:12px;bottom:12px;z-index:3;display:flex;flex-direction:column;gap:.15rem;width:164px;min-height:102px;background:var(--de-surface);color:var(--de-muted);border:1px solid var(--de-border);border-radius:11px;padding:6px;box-shadow:0 10px 32px #0002}.de-map-control svg{height:76px;width:100%;background:var(--de-bg);border-radius:7px}.de-map-control span{font:700 .57rem var(--font-mono,monospace);letter-spacing:.08em}.de-mini-zones rect{fill:color-mix(in srgb,var(--de-accent) 8%,var(--de-bg));stroke:var(--de-border);stroke-width:2}.de-mini-nodes rect{fill:color-mix(in srgb,var(--de-accent) 52%,var(--de-surface))}.de-mini-nodes rect.is-selected{fill:var(--de-accent)}.de-mini-window{fill:color-mix(in srgb,var(--de-accent) 13%,transparent);stroke:var(--de-accent);stroke-width:5}
-.de-legend{position:absolute;top:12px;left:12px;z-index:3;display:flex;gap:.55rem;flex-wrap:wrap;max-width:calc(100% - 205px);border:1px solid var(--de-border);border-radius:9px;background:var(--de-surface);padding:.5rem .6rem;font-size:.68rem;color:var(--de-muted);pointer-events:none}
+.de-legend{display:flex;gap:.55rem;flex-wrap:wrap;align-items:center;font-size:.68rem;color:var(--de-muted)}
 .de-edge[data-edge-from]{pointer-events:stroke;cursor:pointer;stroke-width:2.8;opacity:.65}.de-edge[data-edge-from]:hover{opacity:1;stroke-width:5}.de-buttons button[aria-pressed="true"]{border-color:var(--de-accent);background:color-mix(in srgb,var(--de-accent) 10%,var(--de-surface))}
-@media(max-width:700px){.de-map-control{width:110px;min-height:70px;right:7px;bottom:7px}.de-map-control svg{height:52px}.de-map-control span{font-size:.5rem}.de-legend{top:6px;left:6px;font-size:.56rem;max-width:calc(100% - 126px)}}
+@media(max-width:700px){.de-map-control{width:110px;min-height:70px;right:7px;bottom:7px}.de-map-control svg{height:52px}.de-map-control span{font-size:.5rem}.de-legend{font-size:.62rem}}
 .de-hint{position:absolute;bottom:10px;left:10px;font-size:.7rem;padding:.6rem .8rem;background:var(--de-surface);border:1px solid var(--de-border);border-radius:9px;box-shadow:0 5px 17px #00000019;pointer-events:none}.de-footer{display:flex;justify-content:space-between;gap:.6rem;flex-wrap:wrap;border-top:1px solid var(--de-border);padding:.75rem 1rem;font-size:.72rem;color:var(--de-muted)}
 .de-fullscreen{position:fixed;inset:10px;z-index:9999;display:flex;flex-direction:column}.de-fullscreen .de-board{flex:1;min-height:0}.de-fullscreen .de-viewport{height:100%;max-height:none}
 @media(max-width:700px){.de-top{gap:.6rem;padding:.8rem}.de-top>div:first-child{width:100%}.de-tabs{flex:1}.de-tabs button{flex:1;font-size:.76rem;padding:.55rem .35rem}.de-tools{padding:.55rem}.de-buttons button{padding:.4rem .5rem}.de-viewport{height:min(73dvh,650px);min-height:350px}.de-detail{top:auto;bottom:0;width:100%;height:min(75%,620px);border-left:0;border-top:2px solid var(--de-accent);border-radius:14px 14px 0 0}.de-fullscreen{inset:0;border-radius:0}.de-hint{max-width:92%;font-size:.64rem}}
