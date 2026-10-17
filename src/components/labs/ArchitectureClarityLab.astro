@@ -1,0 +1,327 @@
+---
+interface Props { model: any; snippets: any; zones: any[] }
+const { model, snippets, zones } = Astro.props;
+const payload = { model, snippets: snippets.excerpts, zones };
+---
+<clarity-explorer class="ce">
+  <script type="application/json" data-clarity-model set:html={JSON.stringify(payload).replace(/</g, '\\u003c')} />
+  <header class="ce-head">
+    <div>
+      <p class="ce-overline">ARCHITECTURE READING LAB · DESIGN PROTOTYPE</p>
+      <h1>DeepSeek Harness, explained</h1>
+      <p>One system, four questions. Follow the structure, relationships, execution story, or implementation without mixing them together.</p>
+    </div>
+    <a class="ce-upstream" href={model.repository + '/tree/' + model.revision} target="_blank" rel="noopener noreferrer">Verified source · {model.revision.slice(0,7)} ↗</a>
+  </header>
+  <nav class="ce-tabs" aria-label="Choose architecture explanation">
+    <button type="button" data-ce-tab="overview" aria-pressed="true"><span>01</span> System</button>
+    <button type="button" data-ce-tab="dependencies" aria-pressed="false"><span>02</span> Relationships</button>
+    <button type="button" data-ce-tab="execution" aria-pressed="false"><span>03</span> Request journey</button>
+    <button type="button" data-ce-tab="source" aria-pressed="false"><span>04</span> Code</button>
+  </nav>
+  <section class="ce-screen" data-ce-panel="overview" aria-label="System architecture">
+    <div class="ce-intro">
+      <p class="ce-kicker">QUESTION 01</p><h2>What makes up this system?</h2>
+      <p>Three editorial areas, each with two real subsystems. No dependency spaghetti: first understand responsibilities, then open an area to inspect its source-backed packages.</p>
+    </div>
+    <div class="ce-zone-grid" data-ce-zones></div>
+    <article class="ce-area-detail" aria-live="polite">
+      <div><p class="ce-kicker">SELECTED AREA</p><h3 data-ce-zone-title>Execution core</h3><p data-ce-zone-note></p></div>
+      <div class="ce-area-modules" data-ce-zone-modules></div>
+      <button type="button" class="ce-primary" data-ce-go="dependencies">Inspect dependencies →</button>
+    </article>
+    <p class="ce-caution">These sections are editorial groupings of the pinned package model—not container, deployment, or runtime boundaries.</p>
+  </section>
+  <section class="ce-screen" data-ce-panel="dependencies" aria-label="Source-derived relationships" hidden>
+    <div class="ce-intro">
+      <p class="ce-kicker">QUESTION 02</p><h2>What does this component use?</h2>
+      <p>Focus on one component at a time. The left side shows direct dependents; the right shows declared dependencies. Each connection links to its evidence.</p>
+    </div>
+    <div class="ce-relation-picker"><label for="ce-component-picker">Inspect component</label><select id="ce-component-picker" data-ce-component></select></div>
+    <div class="ce-relation-workspace">
+      <section class="ce-rel-col">
+        <header><span class="ce-rel-direction">← INCOMING</span><h3>Used by</h3><p>Components that declare this as a dependency</p></header>
+        <div data-ce-inbound class="ce-relation-items"></div>
+      </section>
+      <article class="ce-rel-center">
+        <span class="ce-center-glyph">◈</span><p class="ce-kicker">CURRENT COMPONENT</p>
+        <h3 data-ce-focus-name></h3><p data-ce-focus-description></p>
+        <p class="ce-rel-count" data-ce-rel-count></p>
+        <div data-ce-node-sources class="ce-evidence"></div>
+      </article>
+      <section class="ce-rel-col">
+        <header><span class="ce-rel-direction">OUTGOING →</span><h3>Uses</h3><p>Dependencies/imports declared by this component</p></header>
+        <div data-ce-outbound class="ce-relation-items"></div>
+      </section>
+    </div>
+    <p class="ce-caution">Connection arrows mean manifest dependencies or lexical source imports. They do not establish request order or runtime method calls.</p>
+  </section>
+  <section class="ce-screen" data-ce-panel="execution" aria-label="Curated agent turn execution" hidden>
+    <div class="ce-intro">
+      <p class="ce-kicker">QUESTION 03</p><h2>What happens during one agent turn?</h2>
+      <p>Follow six explicit stages, ordered for learning, with implementation evidence. This is a source-grounded walkthrough, not an observed runtime trace.</p>
+    </div>
+    <div class="ce-execution-progress"><span>START · INPUT</span><span>CONTINUE OR STOP · END</span></div>
+    <div class="ce-steps" data-ce-steps role="group" aria-label="Select agent turn stage"></div>
+    <article class="ce-step-detail" aria-live="polite">
+      <div class="ce-step-number" data-ce-step-number></div>
+      <div class="ce-step-content"><p class="ce-kicker">IMPLEMENTATION WALKTHROUGH</p><h3 data-ce-step-title></h3><p data-ce-step-description></p><p class="ce-step-module" data-ce-step-owner></p><a data-ce-step-link target="_blank" rel="noopener noreferrer">Open evidence in source ↗</a></div>
+      <div class="ce-step-nav"><button type="button" data-ce-prev>← Previous</button><button type="button" data-ce-next>Next →</button></div>
+    </article>
+    <p class="ce-caution">A numbered stage is not a span or distributed service hop. Actual network protocols and storage writes require separate verification before appearing as runtime arrows.</p>
+  </section>
+  <section class="ce-screen" data-ce-panel="source" aria-label="Implementation source explorer" hidden>
+    <div class="ce-intro">
+      <p class="ce-kicker">QUESTION 04</p><h2>Where is this implemented?</h2>
+      <p>Choose an implementation file and read a short, pinned excerpt with line numbers. This view deliberately avoids treating imports as a call graph.</p>
+    </div>
+    <div class="ce-code-workspace">
+      <aside class="ce-file-list"><h3>Agent-loop · 7 files</h3><nav data-ce-files aria-label="Source files"></nav></aside>
+      <section class="ce-code-main" aria-label="Pinned source excerpt">
+        <div class="ce-code-head"><div><p class="ce-kicker">SOURCE EVIDENCE</p><h3 data-ce-file-name></h3><p data-ce-file-note></p></div><a data-ce-file-link target="_blank" rel="noopener noreferrer">Open GitHub ↗</a></div>
+        <p class="ce-file-path" data-ce-file-path></p>
+        <pre class="ce-code-block"><code data-ce-code></code></pre>
+        <p class="ce-caution">Static read-only excerpt from the pinned upstream revision. Not an execution trace.</p>
+      </section>
+    </div>
+  </section>
+  <footer class="ce-footer"><span>26 selected packages · 7 source files · source-pinned</span><span>No fabricated call edges or deployment claims</span></footer>
+  <noscript><p>Interactive exploration requires JavaScript. <a href={model.repository + '/tree/' + model.revision}>Browse the pinned upstream source</a>.</p></noscript>
+</clarity-explorer>
+<script>
+  type Snippet={path:string;startLine:number;endLine:number;note:string;code:string;url:string};
+  type N={id:string;label:string;summary:string;view:string;sources:{path:string;line:number;url:string}[]};
+  type E={view:string;from:string;to:string;label:string;evidence:string;sources:{path:string;line:number;url:string}[]};
+  type Zone={label:string;note:string;nodes:string[]};
+  type Story={node:string;title:string;description:string;source:{path:string;line:number;url:string}};
+  class ClarityExplorer extends HTMLElement{
+    connectedCallback(){
+      if(this.dataset.ready)return;
+      this.dataset.ready='true';
+      const raw=this.querySelector<HTMLScriptElement>('[data-clarity-model]');
+      if(!raw)return;
+      const data=JSON.parse(raw.textContent||'{}') as {model:{nodes:N[];edges:E[];journey:Story[];revision:string};snippets:Record<string,Snippet>;zones:Zone[]};
+      const q=<T extends Element=HTMLElement>(selector:string)=>this.querySelector<T>(selector)!;
+      const make=(tag:string,cls:string,text:string)=>{const el=document.createElement(tag);el.className=cls;el.textContent=text;return el;};
+      const node=(id:string)=>data.model.nodes.find(n=>n.id===id);
+      let activeZone=1,activeComponent='core-agent',activeStep=0,activeFile='file-agent.ts';
+      const switchMode=(mode:string)=>{
+        this.querySelectorAll<HTMLButtonElement>('[data-ce-tab]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.ceTab===mode)));
+        this.querySelectorAll<HTMLElement>('[data-ce-panel]').forEach(p=>p.hidden=p.dataset.cePanel!==mode);
+        if(mode==='overview')renderZones();
+        if(mode==='dependencies')renderDependencies();
+        if(mode==='execution')renderExecution();
+        if(mode==='source')renderSource();
+      };
+      const openSource=(src:{path:string;line:number;url:string})=>{
+        const a=document.createElement('a');a.href=src.url;a.target='_blank';a.rel='noopener noreferrer';a.className='ce-evidence-link';
+        a.textContent=src.path.split('/').slice(-2).join('/')+' : '+src.line+' ↗';return a;
+      };
+      const renderZones=()=>{
+        const grid=q('[data-ce-zones]');grid.replaceChildren();
+        data.zones.forEach((zone,index)=>{
+          const wrap=make('section','ce-zone'+(index===activeZone?' is-active':''),'');
+          const top=make('div','ce-zone-heading','');
+          top.append(make('span','ce-zone-icon',['◎','◇','▤'][index]||'◈'));
+          const label=make('div','ce-zone-label','');
+          label.append(make('h3','',zone.label),make('p','',zone.note));top.append(label);wrap.append(top);
+          zone.nodes.forEach(id=>{
+            const item=node(id);if(!item)return;
+            const btn=make('button','ce-zone-module','');
+            btn.type='button';btn.dataset.ceZoneNode=id;
+            btn.append(make('strong','',item.label),make('span','',item.summary));
+            btn.addEventListener('click',()=>{activeZone=index;activeComponent=id;renderZones();renderDependenciesData();});
+            wrap.append(btn);
+          });
+          grid.append(wrap);
+        });
+        const zone=data.zones[activeZone];
+        q('[data-ce-zone-title]').textContent=zone.label;q('[data-ce-zone-note]').textContent=zone.note;
+        q('[data-ce-zone-modules]').replaceChildren(...zone.nodes.map(id=>{
+          const item=node(id);return make('span','ce-detail-tag',item?.label||id);
+        }));
+      };
+      const componentSelect=q<HTMLSelectElement>('[data-ce-component]');
+      const groupViews=[['system','System / Subsystems'],['core','Agent runtime / Packages'],['loop','Agent loop / Source files']];
+      groupViews.forEach(([view,label])=>{
+        const group=document.createElement('optgroup');group.label=label;
+        data.model.nodes.filter(n=>n.view===view).forEach(n=>{const opt=document.createElement('option');opt.value=n.id;opt.textContent=n.label;group.append(opt);});
+        componentSelect.append(group);
+      });
+      const relationCard=(e:E,otherId:string,direction:'in'|'out')=>{
+        const item=node(otherId);
+        const wrap=make('article','ce-relation-card','');
+        const b=make('button','ce-relation-name',(direction==='in'?'← ':'→ ')+(item?.label||otherId));
+        b.type='button';b.addEventListener('click',()=>{activeComponent=otherId;renderDependenciesData();});
+        wrap.append(b,make('p','ce-relation-evidence',e.evidence));
+        e.sources.slice(0,1).forEach(s=>wrap.append(openSource(s)));
+        return wrap;
+      };
+      const renderDependenciesData=()=>{
+        const current=node(activeComponent);if(!current)return;
+        componentSelect.value=activeComponent;
+        q('[data-ce-focus-name]').textContent=current.label;
+        q('[data-ce-focus-description]').textContent=current.summary;
+        const edges=data.model.edges.filter(e=>e.view===current.view);
+        const inbound=edges.filter(e=>e.to===activeComponent);
+        const outbound=edges.filter(e=>e.from===activeComponent);
+        q('[data-ce-rel-count]').textContent=inbound.length+' incoming · '+outbound.length+' outgoing';
+        const fill=(selector:string,items:E[],direction:'in'|'out')=>{
+          const target=q(selector);target.replaceChildren();
+          if(!items.length)target.append(make('p','ce-empty','No declared relationships in this selected view.'));
+          items.forEach(e=>target.append(relationCard(e,direction==='in'?e.from:e.to,direction)));
+        };
+        fill('[data-ce-inbound]',inbound,'in');fill('[data-ce-outbound]',outbound,'out');
+        const refs=q('[data-ce-node-sources]');refs.replaceChildren(...current.sources.slice(0,2).map(openSource));
+      };
+      const renderDependencies=()=>renderDependenciesData();
+      componentSelect.addEventListener('change',()=>{activeComponent=componentSelect.value;renderDependenciesData();});
+      const renderExecution=()=>{
+        const track=q('[data-ce-steps]');track.replaceChildren();
+        data.model.journey.forEach((step,i)=>{
+          const b=make('button','ce-step'+(i===activeStep?' is-current':''),'');b.type='button';b.dataset.ceStep=String(i);
+          b.setAttribute('aria-current',i===activeStep?'step':'false');
+          b.append(make('span','ce-step-index',String(i+1).padStart(2,'0')),make('span','ce-step-label',step.title));
+          b.addEventListener('click',()=>{activeStep=i;renderExecution();});
+          track.append(b);
+        });
+        const step=data.model.journey[activeStep],owner=node(step.node);
+        q('[data-ce-step-number]').textContent=String(activeStep+1).padStart(2,'0')+' / '+String(data.model.journey.length).padStart(2,'0');
+        q('[data-ce-step-title]').textContent=step.title;q('[data-ce-step-description]').textContent=step.description;
+        q('[data-ce-step-owner]').textContent='Source module · '+(owner?.label||step.node);
+        q<HTMLAnchorElement>('[data-ce-step-link]').href=step.source.url;
+        q<HTMLButtonElement>('[data-ce-prev]').disabled=activeStep===0;
+        q<HTMLButtonElement>('[data-ce-next]').disabled=activeStep===data.model.journey.length-1;
+      };
+      q<HTMLButtonElement>('[data-ce-prev]').addEventListener('click',()=>{activeStep=Math.max(0,activeStep-1);renderExecution();});
+      q<HTMLButtonElement>('[data-ce-next]').addEventListener('click',()=>{activeStep=Math.min(data.model.journey.length-1,activeStep+1);renderExecution();});
+      const renderSource=()=>{
+        const files=q('[data-ce-files]');files.replaceChildren();
+        const all=data.model.nodes.filter(n=>n.view==='loop');
+        all.forEach(n=>{
+          const button=make('button','ce-file-option'+(n.id===activeFile?' is-current':''),'');button.type='button';
+          button.append(make('span','ce-file-glyph','{ }'),make('span','',n.label));
+          button.addEventListener('click',()=>{activeFile=n.id;renderSource();});
+          files.append(button);
+        });
+        const snippet=data.snippets[activeFile];
+        if(!snippet)return;
+        q('[data-ce-file-name]').textContent=node(activeFile)?.label||activeFile;
+        q('[data-ce-file-note]').textContent=snippet.note;
+        q('[data-ce-file-path]').textContent=snippet.path+' · lines '+snippet.startLine+'–'+snippet.endLine;
+        q<HTMLAnchorElement>('[data-ce-file-link]').href=snippet.url;
+        const code=q('[data-ce-code]');code.replaceChildren();
+        snippet.code.replace(/\n$/,'').split('\n').forEach((line,i)=>{
+          const wrap=make('span','ce-code-line','');
+          wrap.append(make('span','ce-code-number',String(snippet.startLine+i)),make('span','ce-code-text',line||' '));
+          code.append(wrap);
+        });
+      };
+      this.querySelectorAll<HTMLButtonElement>('[data-ce-tab]').forEach(b=>b.addEventListener('click',()=>switchMode(b.dataset.ceTab||'overview')));
+      this.querySelector<HTMLButtonElement>('[data-ce-go]')?.addEventListener('click',()=>switchMode('dependencies'));
+      renderZones();renderDependenciesData();renderExecution();renderSource();switchMode('overview');
+    }
+  }
+  if(!customElements.get('clarity-explorer'))customElements.define('clarity-explorer',ClarityExplorer);
+</script>
+<style is:global>
+  clarity-explorer.ce{--ce-text:var(--color-text,#1a2b3c);--ce-muted:var(--color-text-muted,#6b7685);--ce-line:var(--color-border,#d9e0e8);--ce-surface:var(--color-surface,#fff);--ce-bg:var(--color-bg,#f8fafc);--ce-accent:var(--color-accent,#0e8790);display:block;color:var(--ce-text);border:1px solid var(--ce-line);border-radius:20px;overflow:hidden;background:var(--ce-surface);}
+  .ce *{box-sizing:border-box;}
+  .ce button,.ce select{font:inherit;color:inherit;}
+  .ce button{cursor:pointer;min-height:44px;}
+  .ce button:focus-visible,.ce a:focus-visible,.ce select:focus-visible{outline:3px solid var(--ce-accent);outline-offset:2px;}
+  .ce a{color:var(--ce-accent);text-decoration:none;}
+  .ce-head{padding:2rem clamp(1rem,4vw,3rem);display:flex;justify-content:space-between;gap:2rem;align-items:center;border-bottom:1px solid var(--ce-line);}
+  .ce-overline,.ce-kicker{color:var(--ce-accent);letter-spacing:.1em;font-size:.72rem;font-family:var(--font-mono,monospace);font-weight:700;}
+  .ce-head h1{font-size:clamp(1.6rem,2.4vw,2.4rem);line-height:1.16;letter-spacing:-.04em;margin:.35rem 0 .7rem;}
+  .ce-head p:not(.ce-overline){font-size:.94rem;max-width:58ch;line-height:1.65;color:var(--ce-muted);margin:0;}
+  .ce-upstream{flex-shrink:0;font-size:.82rem;border:1px solid var(--ce-line);padding:.75rem;border-radius:10px;}
+  .ce-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));padding:.7rem clamp(.6rem,3vw,2rem);gap:.6rem;background:var(--ce-bg);border-bottom:1px solid var(--ce-line);}
+  .ce-tabs button{display:flex;gap:.8rem;align-items:center;justify-content:center;font-weight:650;font-size:.9rem;border:1px solid transparent;background:transparent;border-radius:10px;padding:.85rem;}
+  .ce-tabs button span{font:700 .73rem var(--font-mono,monospace);color:var(--ce-muted);}
+  .ce-tabs button[aria-pressed="true"]{border-color:var(--ce-accent);background:var(--ce-surface);box-shadow:0 3px 12px #0000000d;}
+  .ce-screen{padding:clamp(1rem,4vw,2.5rem);}
+  .ce-screen[hidden]{display:none!important;}
+  .ce-intro{margin-bottom:1.6rem;}
+  .ce-intro .ce-kicker{margin:0 0 .5rem;}
+  .ce-intro h2{font-size:clamp(1.4rem,2.3vw,2rem);letter-spacing:-.03em;margin:0 0 .5rem;line-height:1.24;}
+  .ce-intro>p:last-child{font-size:.95rem;line-height:1.7;color:var(--ce-muted);max-width:75ch;margin:0;}
+  .ce-caution{margin:1.3rem 0 0;font-size:.77rem;line-height:1.6;color:var(--ce-muted);}
+  .ce-zone-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem;}
+  .ce-zone{border:1px solid var(--ce-line);border-radius:15px;background:var(--ce-bg);padding:1.15rem;display:flex;flex-direction:column;gap:.65rem;}
+  .ce-zone.is-active{border-color:var(--ce-accent);box-shadow:inset 0 0 0 1px var(--ce-accent);}
+  .ce-zone-heading{display:flex;gap:.75rem;align-items:flex-start;min-height:100px;}
+  .ce-zone-icon{width:40px;height:40px;flex-shrink:0;border:1px solid var(--ce-line);border-radius:12px;display:grid;place-items:center;font-size:1.35rem;color:var(--ce-accent);background:var(--ce-surface);}
+  .ce-zone-label h3{font-size:1.1rem;line-height:1.35;margin:.1rem 0 .4rem;}
+  .ce-zone-label p{font-size:.78rem;line-height:1.5;color:var(--ce-muted);margin:0;}
+  .ce-zone-module{display:flex;flex-direction:column;text-align:left;gap:.3rem;background:var(--ce-surface);border:1px solid var(--ce-line);border-radius:10px;padding:.85rem;}
+  .ce-zone-module:hover,.ce-zone-module:focus-visible{border-color:var(--ce-accent);}
+  .ce-zone-module strong{font-size:.93rem;}
+  .ce-zone-module span{font-size:.77rem;line-height:1.5;color:var(--ce-muted);}
+  .ce-area-detail{display:flex;gap:1rem;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-top:1rem;border:1px solid var(--ce-line);border-radius:14px;padding:1rem 1.3rem;}
+  .ce-area-detail h3{font-size:1.1rem;margin:.15rem 0;}
+  .ce-area-detail>div:first-child{flex:1;min-width:180px;}
+  .ce-area-detail p:not(.ce-kicker){font-size:.8rem;color:var(--ce-muted);margin:.3rem 0 0;}
+  .ce-area-modules{display:flex;gap:.4rem;flex-wrap:wrap;}
+  .ce-detail-tag{font-size:.73rem;border-radius:100px;border:1px solid var(--ce-line);padding:.4rem .6rem;}
+  .ce-primary{padding:.7rem 1rem;background:var(--ce-accent);color:white!important;border:0;border-radius:10px;font-size:.82rem;}
+  .ce-relation-picker{display:flex;gap:1rem;align-items:center;margin-bottom:1.1rem;}
+  .ce-relation-picker label{font-weight:650;font-size:.9rem;}
+  .ce-relation-picker select{border:1px solid var(--ce-line);border-radius:9px;background:var(--ce-surface);padding:.7rem 1rem;max-width:100%;min-width:250px;}
+  .ce-relation-workspace{display:grid;grid-template-columns:minmax(0,1fr) minmax(230px,1.12fr) minmax(0,1fr);align-items:start;gap:1.1rem;}
+  .ce-rel-col{border:1px solid var(--ce-line);border-radius:13px;background:var(--ce-bg);min-width:0;overflow:hidden;}
+  .ce-rel-col header{padding:1rem;border-bottom:1px solid var(--ce-line);}
+  .ce-rel-direction{font:700 .7rem var(--font-mono,monospace);color:var(--ce-accent);}
+  .ce-rel-col h3{font-size:1.15rem;margin:.4rem 0;}
+  .ce-rel-col header p{font-size:.76rem;color:var(--ce-muted);line-height:1.45;margin:0;}
+  .ce-relation-items{padding:.65rem;display:grid;gap:.6rem;}
+  .ce-relation-card{background:var(--ce-surface);padding:.75rem;border:1px solid var(--ce-line);border-radius:9px;}
+  .ce-relation-name{width:100%;text-align:left;font-weight:650;font-size:.86rem;border:0;background:transparent;padding:0;}
+  .ce-relation-name:hover{color:var(--ce-accent);}
+  .ce-relation-evidence{font-size:.71rem;color:var(--ce-muted);line-height:1.5;margin:.25rem 0;}
+  .ce-evidence-link{display:inline-block;font-size:.7rem;line-height:1.5;overflow-wrap:anywhere;}
+  .ce-rel-center{border:2px solid var(--ce-accent);border-radius:14px;padding:1.35rem;text-align:center;min-height:280px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.5rem;}
+  .ce-center-glyph{font-size:2.2rem;color:var(--ce-accent);}
+  .ce-rel-center h3{font-size:1.4rem;margin:0;}
+  .ce-rel-center>p:not(.ce-kicker){font-size:.85rem;line-height:1.5;color:var(--ce-muted);margin:0;}
+  .ce-rel-center .ce-rel-count{color:var(--ce-text)!important;font-size:.8rem!important;font-weight:700;}
+  .ce-evidence{display:flex;flex-direction:column;gap:.3rem;}
+  .ce-empty{font-size:.8rem;color:var(--ce-muted);padding:.5rem;}
+  .ce-execution-progress{display:flex;justify-content:space-between;gap:1rem;padding:.35rem .2rem .85rem;font:700 .72rem var(--font-mono,monospace);letter-spacing:.04em;color:var(--ce-muted);}
+  .ce-steps{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:.55rem;}
+  .ce-step{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:.6rem;min-height:120px!important;border-radius:11px;border:1px solid var(--ce-line);background:var(--ce-bg);text-align:left;padding:1rem .85rem;}
+  .ce-step.is-current{border:2px solid var(--ce-accent);background:var(--ce-surface);box-shadow:0 3px 16px color-mix(in srgb,var(--ce-accent) 12%,transparent);}
+  .ce-step:not(:last-child)::after{content:'→';position:absolute;right:-.63rem;top:45%;z-index:2;font-size:1.2rem;font-weight:900;color:var(--ce-accent);line-height:1;background:var(--ce-surface);border-radius:100px;}
+  .ce-step-index{font:700 1.05rem var(--font-mono,monospace);color:var(--ce-accent);}
+  .ce-step-label{font-size:.88rem;line-height:1.4;font-weight:700;}
+  .ce-step-detail{margin-top:1rem;display:grid;grid-template-columns:110px minmax(0,1fr) auto;gap:1.5rem;align-items:center;padding:1.6rem;background:var(--ce-bg);border-radius:14px;border:1px solid var(--ce-line);}
+  .ce-step-number{font:700 1.7rem var(--font-mono,monospace);color:var(--ce-accent);}
+  .ce-step-content h3{font-size:1.3rem;margin:.25rem 0 .45rem;}
+  .ce-step-content p:not(.ce-kicker){font-size:.92rem;line-height:1.65;color:var(--ce-muted);margin:.2rem 0 .65rem;}
+  .ce-step-content .ce-step-module{font-weight:600;color:var(--ce-text)!important;}
+  .ce-step-content a{font-size:.84rem;font-weight:650;}
+  .ce-step-nav{display:flex;gap:.5rem;align-self:end;}
+  .ce-step-nav button{padding:.5rem .8rem;border:1px solid var(--ce-line);border-radius:8px;background:var(--ce-surface);font-size:.83rem;}
+  .ce-step-nav button:disabled{opacity:.4;cursor:default;}
+  .ce-code-workspace{display:grid;grid-template-columns:250px minmax(0,1fr);gap:1rem;align-items:start;}
+  .ce-file-list{border:1px solid var(--ce-line);border-radius:12px;padding:1rem;background:var(--ce-bg);}
+  .ce-file-list h3{font-size:.95rem;margin:0 0 .9rem;}
+  .ce-file-list nav{display:grid;gap:.35rem;}
+  .ce-file-option{display:flex;gap:.6rem;align-items:center;width:100%;text-align:left;border-radius:9px;background:transparent;border:1px solid transparent;padding:.65rem;font-size:.83rem;}
+  .ce-file-option.is-current{border-color:var(--ce-accent);background:var(--ce-surface);font-weight:700;}
+  .ce-file-glyph{font-family:var(--font-mono,monospace);color:var(--ce-accent);}
+  .ce-code-main{min-width:0;border:1px solid var(--ce-line);border-radius:12px;overflow:hidden;}
+  .ce-code-head{padding:1rem 1.2rem;display:flex;align-items:flex-start;gap:1rem;justify-content:space-between;}
+  .ce-code-head h3{font-size:1.2rem;margin:.25rem 0;}
+  .ce-code-head p:not(.ce-kicker){font-size:.85rem;line-height:1.5;color:var(--ce-muted);margin:0;}
+  .ce-code-head>a{white-space:nowrap;font-size:.8rem;font-weight:650;}
+  .ce-file-path{font:.72rem/1.5 var(--font-mono,monospace);color:var(--ce-muted);padding:0 1.2rem;overflow-wrap:anywhere;}
+  .ce-code-block{margin:0 1rem;padding:.9rem .2rem;border:1px solid var(--ce-line);border-radius:9px;background:var(--ce-bg);overflow:auto;max-height:510px;}
+  .ce-code-block code{display:block;font:400 .83rem/1.8 var(--font-mono,monospace);white-space:pre;}
+  .ce-code-line{display:block;white-space:pre;padding:0 .5rem;}
+  .ce-code-number{display:inline-block;min-width:2.8rem;text-align:right;padding-right:.7rem;margin-right:1rem;border-right:1px solid var(--ce-line);color:var(--ce-muted);user-select:none;}
+  .ce-code-main .ce-caution{padding:0 1.2rem 1rem;}
+  .ce-footer{border-top:1px solid var(--ce-line);padding:1.1rem clamp(1rem,4vw,2.5rem);display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;color:var(--ce-muted);font-size:.75rem;}
+  @media(max-width:950px){.ce-head{flex-direction:column;align-items:flex-start;}.ce-zone-grid{grid-template-columns:1fr;}.ce-zone-heading{min-height:0;}.ce-relation-workspace{grid-template-columns:1fr 1fr;}.ce-rel-center{grid-column:1/-1;grid-row:1;min-height:200px;}.ce-steps{grid-template-columns:repeat(3,minmax(0,1fr));}.ce-step:nth-child(3)::after{display:none;}.ce-step-detail{grid-template-columns:80px 1fr;}.ce-step-nav{grid-column:1/-1;justify-content:flex-end;}.ce-code-workspace{grid-template-columns:200px minmax(0,1fr);}}
+  @media(max-width:600px){.ce-head{padding:1.15rem;gap:1rem;}.ce-tabs{gap:.3rem;padding:.45rem;}.ce-tabs button{flex-direction:column;gap:.3rem;font-size:.7rem;padding:.6rem .15rem;}.ce-tabs button span{font-size:.66rem;}.ce-screen{padding:1rem;}.ce-intro>p:last-child{font-size:.88rem;}.ce-zone-grid{gap:.75rem;}.ce-area-detail{align-items:flex-start;}.ce-rel-center{grid-column:1;grid-row:1;min-height:0;}.ce-relation-workspace{grid-template-columns:1fr;}.ce-rel-col:first-child{grid-column:1;grid-row:2;}.ce-rel-col:last-child{grid-column:1;grid-row:3;}.ce-rel-col{min-height:0;}.ce-relation-picker{flex-direction:column;align-items:stretch;gap:.35rem;}.ce-relation-picker select{min-width:0;width:100%;}.ce-steps{grid-template-columns:1fr;gap:.65rem;}.ce-step{min-height:64px!important;padding:.68rem .85rem;flex-direction:row;align-items:center;gap:1rem;}.ce-step-index{min-width:2rem;}.ce-step:not(:last-child)::after{display:block;content:'↓';right:50%;top:auto;bottom:-.82rem;background:var(--ce-surface);}.ce-step:nth-child(3)::after{display:block;}.ce-step-detail{grid-template-columns:1fr;gap:.65rem;padding:1rem;}.ce-step-nav{grid-column:auto;justify-content:space-between;}.ce-code-workspace{grid-template-columns:1fr;}.ce-file-list nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));}.ce-file-option{font-size:.72rem;}.ce-code-head{flex-direction:column;gap:.3rem;}.ce-code-block{margin:0 .5rem;}.ce-code-block code{font-size:.74rem;}.ce-code-number{min-width:2.15rem;margin-right:.4rem;}.ce-execution-progress{font-size:.62rem;}}
+</style>
