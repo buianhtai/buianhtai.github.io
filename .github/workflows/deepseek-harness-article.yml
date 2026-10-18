@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - 'src/content/blog/en/deepseek-harness-architecture-everything-is-a-plugin.mdx'
+      - 'src/components/mdx/DeepSeekHarnessStory.astro'
       - 'src/styles/deepseek-harness-article.css'
       - 'scripts/deepseek-harness-article-check.mjs'
       - '.github/workflows/deepseek-harness-article.yml'

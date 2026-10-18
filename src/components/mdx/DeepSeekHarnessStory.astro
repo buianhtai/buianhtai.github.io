@@ -1,0 +1,493 @@
+---
+/** Source-pinned interactive editorial story. No inferred transport/deployment boundaries. */
+const commit = '1517a4dbca0a2789ff1d41ba439600f8547d23fa';
+const upstream = (p:string,line?:number) => 'https://github.com/deepseek-ai/deepseek-harness/blob/'+commit+'/'+p+(line?'#L'+line:'');
+const services = [
+  {id:'agent',index:'01',name:'Agent loop',subtitle:'Turn & step driver',contract:'ctx.agentLoop',relation:'Coordinates the other capabilities',file:'packages/core/agent-loop/src/agent.ts',line:410},
+  {id:'model',index:'02',name:'Model adapter',subtitle:'Prepare / stream',contract:'ctx.llm',relation:'Agent loop → model adapter',file:'packages/llm/llm/src/index.ts'},
+  {id:'tools',index:'03',name:'Tool registry',subtitle:'Guard & dispatch',contract:'ctx.tools',relation:'Agent loop → tool scheduler',file:'packages/core/agent-loop/src/tool-calls.ts',line:174},
+  {id:'session',index:'04',name:'Session log',subtitle:'Durable event facts',contract:'ctx.sessions',relation:'Loop → append-only session events',file:'packages/core/session/src/index.ts'},
+  {id:'prompt',index:'05',name:'Prompt builder',subtitle:'Context + schemas',contract:'ctx.systemPrompt',relation:'Loop → assembled model context',file:'packages/core/system-prompt/src/index.ts'},
+  {id:'policy',index:'06',name:'Policy hooks',subtitle:'Approvals & guards',contract:'tools/* events',relation:'Tool registry → policy interception',file:'docs/tool-execution-pipeline.md'}
+];
+const stages = [
+  {id:'claim',n:'01',title:'Claim input',short:'Inbox → loop',owner:'Agent',kind:'live',code:'preStep() / inbox.claim()',proof:'packages/core/agent-loop/src/agent.ts',line:271,detail:'The loop accepts queued user work. A first rejected claim can close a turn without spending a model step.'},
+  {id:'prepare',n:'02',title:'Prepare request',short:'Prompt + model',owner:'Agent + model',kind:'control',code:'prepareRequest()',proof:'packages/core/agent-loop/src/agent.ts',line:410,detail:'Request hooks and adapter preparation resolve the route before accepted user content is committed.'},
+  {id:'admit',n:'03',title:'Admit context',short:'Session facts',owner:'Session',kind:'durable',code:'user/message · request/context',proof:'docs/architecture.md',detail:'The accepted model-visible messages and request context are projected from the log.'},
+  {id:'stream',n:'04',title:'Stream model',short:'Transient chunks',owner:'Model',kind:'live',code:'llm.stream() · agent/assistant-stream',proof:'packages/core/agent-loop/src/agent.ts',line:453,detail:'The model stream produces live frames. Frames are distinct from a settled assistant message.'},
+  {id:'settle',n:'05',title:'Settle attempt',short:'Durable answer',owner:'Session',kind:'durable',code:'assistant/message or assistant/attempt',proof:'docs/agent-lifecycle.md',detail:'A completed response becomes a durable event; settled errors and retries can be represented separately.'},
+  {id:'dispatch',n:'06',title:'Run tools',short:'Guards → dispatch',owner:'Tools',kind:'conditional',code:'executeToolCalls()',proof:'packages/core/agent-loop/src/agent.ts',line:551,detail:'If the model requested tools, policy and the scheduler run them; no-tool replies skip this branch.'},
+  {id:'continue',n:'07',title:'Continue / end',short:'Step / turn facts',owner:'Agent + session',kind:'durable',code:'tool/result · step/end · turn/end',proof:'packages/core/agent-loop/src/tool-calls.ts',line:282,detail:'Linked results and step boundaries are recorded; the driver continues only if work remains.'}
+];
+const cases = [
+  {id:'coding',icon:'⌘',name:'Coding agent',need:'Controlled shell and filesystem access',parts:['Tool sandbox','Approvals','Durable transcript'],benefit:'Separate the agent policy from the model and shell implementation.',caveat:'Host security still needs isolation and least privilege.'},
+  {id:'support',icon:'◎',name:'Support diagnosis',need:'Explain what evidence the agent retrieved',parts:['Read-only tools','Session log','Live UI events'],benefit:'Track tool inputs/results while the UI streams investigation progress.',caveat:'Add authorization, redaction, tenant boundaries and retention.'},
+  {id:'evaluation',icon:'⟷',name:'Model evaluation',need:'Compare adapters without replacing the whole agent',parts:['Model seam','Profiles','Recorded outcomes'],benefit:'Hold the task and harness stable while swapping model providers.',caveat:'Performance and cost claims require actual evaluation data.'},
+  {id:'platform',icon:'▣',name:'Agent platform',need:'Compose tools and policies for different customers',parts:['Plugin config','Capability contracts','Lifecycle cleanup'],benefit:'Compile a declarative agent definition into a controlled runtime composition.',caveat:'Distributed leases, billing and enterprise governance are not automatic.'}
+];
+---
+<section class="hvs" data-harness-story aria-label="DeepSeek Harness visual architecture explorer">
+  <header class="hvs-cover">
+    <div class="hvs-meta"><span class="hvs-pulse"></span> FIELD GUIDE / SOURCE-PINNED <span>OCT 2026 · TYPESCRIPT</span></div>
+    <div class="hvs-cover-grid">
+      <div>
+        <p class="hvs-eyebrow">DEEPSEEK HARNESS / ARCHITECTURE ATLAS</p>
+        <h2>One agent.<br/><em>Everything pluggable.</em></h2>
+        <p class="hvs-lead">Explore the execution system around the model. Tap the architecture, step through a request, and test how tool policies change its outcome.</p>
+        <div class="hvs-actions">
+          <a href="#hvs-system">Explore architecture <span aria-hidden="true">↘</span></a>
+          <a class="hvs-secondary" href="/en/labs/deepseek-harness-clarity/">Open full code explorer ↗</a>
+        </div>
+      </div>
+      <div class="hvs-cover-art" aria-label="Agent composition illustration">
+        <div class="hvs-orbit hvs-orbit-a"></div><div class="hvs-orbit hvs-orbit-b"></div>
+        <div class="hvs-satellite hvs-sat-model">MODEL <span>↘</span></div>
+        <div class="hvs-satellite hvs-sat-tool">TOOLS <span>↗</span></div>
+        <div class="hvs-satellite hvs-sat-state">SESSION <span>↖</span></div>
+        <div class="hvs-satellite hvs-sat-policy">POLICY <span>↙</span></div>
+        <div class="hvs-core"><span class="hvs-core-glyph">◇</span><strong>AGENT</strong><small>LOOP</small></div>
+      </div>
+    </div>
+    <div class="hvs-cover-foot"><span>01 / SYSTEM</span><span>02 / REQUEST</span><span>03 / SECURITY</span><span>04 / DESIGN</span><span>05 / USE CASES</span></div>
+  </header>
+
+  <nav class="hvs-jump" aria-label="Explore visual chapters">
+    <a href="#hvs-system">01 Architecture</a><a href="#hvs-journey">02 Request journey</a><a href="#hvs-policy">03 Tool policy</a><a href="#hvs-compare">04 Why plugins?</a><a href="#hvs-cases">05 Use cases</a>
+  </nav>
+
+  <section id="hvs-system" class="hvs-chapter" aria-labelledby="hvs-system-title">
+    <div class="hvs-chapter-head"><div><p class="hvs-eyebrow">01 / WHAT IT IS</p><h3 id="hvs-system-title">A composed runtime, not six microservices</h3><p>Select a capability to inspect its contract and actual code.</p></div><span class="hvs-chapter-count">6 CAPABILITY SEAMS</span></div>
+    <div class="hvs-system-layout">
+      <div class="hvs-system-visual">
+        <div class="hvs-boundary-label">HOST / IN-PROCESS COMPOSITION</div>
+        <div class="hvs-system-entry"><span>USER · CLI · WEB</span><span class="hvs-down">↓</span><span>APPLICATION / AGENT API</span></div>
+        <div class="hvs-cordis">
+          <div class="hvs-cordis-title"><span class="hvs-grid-icon">▦</span> CORDIS PLUGIN CONTEXT <small>mounted services + typed events</small></div>
+          <div class="hvs-model-grid">
+            {services.map((s) => (
+              <button type="button" class:list={['hvs-capability',s.id==='agent'?'is-active':'']} data-capability={s.id} aria-pressed={s.id==='agent'?'true':'false'}>
+                <span class="hvs-cap-index">{s.index} · {s.contract}</span><strong>{s.name}</strong><small>{s.subtitle}</small>
+              </button>
+            ))}
+          </div>
+          <div class="hvs-service-links" aria-label="Verified direction of service relationships">
+            <span class="hvs-link-hub">AGENT LOOP USES</span>
+            <span>↗ <b>Prompt</b></span><span>↗ <b>Model</b></span><span>↗ <b>Tools</b></span><span>↗ <b>Session</b></span>
+            <small>Tool registry → policy hooks</small>
+          </div>
+          <div class="hvs-cordis-end">Ordered bundles + profile patches → effective plugin tree</div>
+        </div>
+        <p class="hvs-graph-caption"><span class="hvs-key-square"></span> Nested boundary = logical code composition. Selecting a box explains its relationship to the agent loop.</p>
+      </div>
+      <aside class="hvs-inspect" aria-live="polite">
+        <p class="hvs-eyebrow">SELECTED / CAPABILITY</p>
+        <div class="hvs-inspect-icon">01</div>
+        <h4 data-service-title>Agent loop</h4>
+        <code data-service-contract>ctx.agentLoop</code>
+        <p class="hvs-inspect-desc" data-service-desc>Turn & step driver</p>
+        <div class="hvs-inspect-separator"></div>
+        <p class="hvs-small-label">HOW IT CONNECTS</p>
+        <strong class="hvs-relation" data-service-relation>Coordinates the other capabilities</strong>
+        <p class="hvs-inspect-note">This is a service relationship inside Cordis. It is not automatically an HTTP request.</p>
+        <a data-service-source href={upstream(services[0].file,services[0].line)} target="_blank" rel="noopener noreferrer">Inspect pinned source ↗</a>
+      </aside>
+    </div>
+  </section>
+
+  <section id="hvs-journey" class="hvs-chapter" aria-labelledby="hvs-journey-title">
+    <div class="hvs-chapter-head"><div><p class="hvs-eyebrow">02 / HOW IT WORKS</p><h3 id="hvs-journey-title">Follow one agent turn</h3><p>Tap a stage or use the arrows. Conditional branches do not run on every request.</p></div><span class="hvs-chapter-count">7 CODE-ALIGNED STAGES</span></div>
+    <div class="hvs-journey">
+      <div class="hvs-timeline" role="group" aria-label="Select an execution stage">
+        {stages.map((step,i)=>(<button type="button" class:list={['hvs-step',i===0?'is-active':'']} data-stage={i} aria-pressed={i===0?'true':'false'}>
+          <span>{step.n}</span><strong>{step.title}</strong><small>{step.short}</small>
+        </button>))}
+      </div>
+      <div class="hvs-stage-body">
+        <div class="hvs-stage-graphic" aria-label="Selected stage data lanes">
+          <div class="hvs-stage-rail"><div><span class="hvs-stage-dot"></span> AGENT</div><div><span class="hvs-stage-dot"></span> MODEL</div><div><span class="hvs-stage-dot"></span> TOOLS</div><div><span class="hvs-stage-dot"></span> SESSION</div></div>
+          <div class="hvs-lane-vis">
+            <div class="hvs-lane hvs-agent-lane"><span class="hvs-lane-bar"></span></div>
+            <div class="hvs-lane hvs-model-lane"><span class="hvs-lane-bar"></span></div>
+            <div class="hvs-lane hvs-tools-lane"><span class="hvs-lane-bar"></span></div>
+            <div class="hvs-lane hvs-session-lane"><span class="hvs-lane-bar"></span></div>
+            <div class="hvs-stage-bubble" data-stage-owner>AGENT / LIVE</div>
+          </div>
+        </div>
+        <aside class="hvs-stage-detail">
+          <div class="hvs-stage-counter"><span data-stage-number>01 / 07</span><span data-stage-kind>LIVE COORDINATION</span></div>
+          <h4 data-stage-title>Claim input</h4>
+          <p data-stage-description>The loop accepts queued user work. A first rejected claim can close a turn without spending a model step.</p>
+          <code data-stage-code>preStep() / inbox.claim()</code>
+          <div class="hvs-stage-controls"><button type="button" data-stage-prev aria-label="Previous execution stage" disabled>← Previous</button><button type="button" data-stage-next>Next stage →</button></div>
+          <a data-stage-source href={upstream(stages[0].proof,stages[0].line)} target="_blank" rel="noopener noreferrer">Read source at line 271 ↗</a>
+        </aside>
+      </div>
+      <p class="hvs-under-note"><span class="hvs-key-line"></span> Stage links are a source-guided reading order, not a captured trace. Live chunks and durable facts are different event types.</p>
+    </div>
+  </section>
+
+  <section id="hvs-policy" class="hvs-chapter" aria-labelledby="hvs-policy-title">
+    <div class="hvs-chapter-head"><div><p class="hvs-eyebrow">03 / WHY SECURITY LIVES OUTSIDE THE PROMPT</p><h3 id="hvs-policy-title">Try a tool policy</h3><p>Change the configured example to see how the same tool pipeline branches.</p></div><span class="hvs-chapter-count">INTERACTIVE / POLICY LAB</span></div>
+    <div class="hvs-policy">
+      <div class="hvs-policy-choices" role="group" aria-label="Choose an illustrative tool authorization scenario">
+        <button type="button" data-scenario="read" aria-pressed="true" class="is-active"><span>01</span> Allowed read</button>
+        <button type="button" data-scenario="approval" aria-pressed="false"><span>02</span> Approved write</button>
+        <button type="button" data-scenario="denied" aria-pressed="false"><span>03</span> Blocked command</button>
+      </div>
+      <div class="hvs-policy-track">
+        <div class="hvs-policy-row">
+          <div class="hvs-policy-node" data-policy-node="intent"><small>01</small><strong>Tool call</strong><span>Model proposes</span></div>
+          <i aria-hidden="true">→</i><div class="hvs-policy-node" data-policy-node="pre"><small>02</small><strong>Pre-execute</strong><span>Policy hooks</span></div>
+          <i aria-hidden="true">→</i><div class="hvs-policy-node" data-policy-node="guard"><small>03</small><strong>Guard</strong><span>Allow / deny / ask</span></div>
+          <i aria-hidden="true">→</i><div class="hvs-policy-node" data-policy-node="execute"><small>04</small><strong>Dispatch</strong><span>Tool body or skip</span></div>
+          <i aria-hidden="true">→</i><div class="hvs-policy-node" data-policy-node="result"><small>05</small><strong>Result</strong><span>Durable event</span></div>
+        </div>
+        <div class="hvs-policy-outcome"><span data-outcome-icon>✓</span><div><strong data-outcome-title>Authorized read executed</strong><p data-outcome-text>Illustrative guard allows a read-only call; the tool result is recorded.</p></div></div>
+      </div>
+      <p class="hvs-under-note">These scenarios are **illustrative policies**, not DeepSeek Harness default permissions. See the <a href={upstream('docs/tool-execution-pipeline.md')} target="_blank" rel="noopener">documented tool pipeline ↗</a>.</p>
+    </div>
+  </section>
+
+  <section id="hvs-compare" class="hvs-chapter" aria-labelledby="hvs-compare-title">
+    <div class="hvs-chapter-head"><div><p class="hvs-eyebrow">04 / WHY THIS DESIGN</p><h3 id="hvs-compare-title">What changes when the harness is pluggable?</h3><p>Switch designs to see what is fixed and what can be replaced.</p></div><span class="hvs-chapter-count">DESIGN TRADE-OFF</span></div>
+    <div class="hvs-compare">
+      <div class="hvs-compare-toggle" role="group" aria-label="Compare agent architecture styles"><button type="button" data-compare="hardcoded" aria-pressed="false">Hard-coded agent</button><button type="button" class="is-active" data-compare="plugin" aria-pressed="true">DeepSeek-style composition</button></div>
+      <div class="hvs-compare-visual" data-compare-visual="plugin">
+        <div class="hvs-compare-stack"><div data-compare-center>CORDIS CONTEXT</div><span data-compare-slot>Loop</span><span data-compare-slot>Model</span><span data-compare-slot>Tools</span><span data-compare-slot>Session</span><span data-compare-slot>Policy</span></div>
+        <div class="hvs-compare-explanation"><span class="hvs-eyebrow" data-compare-kicker>REPLACEABLE / COMPOSED</span><h4 data-compare-title>Change capabilities without forking the driver.</h4><p data-compare-detail>Providers register behind stable service keys. Profiles and patches decide what mounts. Reversible effects handle cleanup when plugins unload.</p><div class="hvs-tradeoff"><strong>Trade-off</strong><span data-compare-cost>More extension points mean more lifecycle and ordering complexity.</span></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="hvs-cases" class="hvs-chapter" aria-labelledby="hvs-cases-title">
+    <div class="hvs-chapter-head"><div><p class="hvs-eyebrow">05 / WHERE IT HELPS</p><h3 id="hvs-cases-title">Explore a use case</h3><p>Choose a scenario to see which harness capabilities matter—and what you still need to build.</p></div><span class="hvs-chapter-count">4 USE CASES</span></div>
+    <div class="hvs-cases">
+      <div class="hvs-case-list" role="group" aria-label="Choose a practical agent architecture use case">
+        {cases.map((c,i)=>(<button type="button" data-case={c.id} class:list={['hvs-case',i===0?'is-active':'']} aria-pressed={i===0?'true':'false'}><span>{c.icon}</span><strong>{c.name}</strong><small>Explore ↗</small></button>))}
+      </div>
+      <div class="hvs-case-detail">
+        <span class="hvs-eyebrow">PRACTICAL PATTERN / <span data-case-label>CODING AGENT</span></span>
+        <h4 data-case-title>Controlled shell and filesystem access</h4>
+        <div class="hvs-case-flow"><span data-part="0">Tool sandbox</span><i>→</i><span data-part="1">Approvals</span><i>→</i><span data-part="2">Durable transcript</span></div>
+        <p class="hvs-why"><strong>What to borrow</strong><span data-case-benefit>Separate the agent policy from the model and shell implementation.</span></p>
+        <p class="hvs-caution"><strong>Don't assume it's built-in</strong><span data-case-caveat>Host security still needs isolation and least privilege.</span></p>
+      </div>
+    </div>
+  </section>
+
+  <section class="hvs-takeaways" aria-label="What architects can learn">
+    <p class="hvs-eyebrow">THE ARCHITECT'S TAKEAWAYS</p>
+    <h3>Borrow the boundaries.<br/>Not the complexity blindly.</h3>
+    <div class="hvs-takeaway-grid">
+      <div><span>01 / COMPOSITION</span><strong>Swap capabilities, not the whole agent.</strong></div>
+      <div><span>02 / DURABILITY</span><strong>Model-visible facts should be reconstructable.</strong></div>
+      <div><span>03 / SAFETY</span><strong>Authorize at the tool boundary, not in a prompt.</strong></div>
+      <div><span>04 / RECOVERY</span><strong>Separate live frames from committed outcomes.</strong></div>
+    </div>
+    <div class="hvs-bottom-links">
+      <a href="/en/labs/deepseek-harness-clarity/">Inspect the complete implementation ↗</a>
+      <a href={upstream('docs/architecture.md')} target="_blank" rel="noopener noreferrer">Read upstream architecture ↗</a>
+      <a href={upstream('SAFETY.md')} target="_blank" rel="noopener noreferrer">Security and preview limitations ↗</a>
+    </div>
+    <p class="hvs-disclaimer">Source: DeepSeek Harness <a href={'https://github.com/deepseek-ai/deepseek-harness/tree/'+commit} target="_blank" rel="noopener noreferrer">1517a4d</a>. Logical code boundaries and documented behavior—not measured performance, production security certification, or separate deployments. Developer preview: use disposable environments and least privilege.</p>
+  </section>
+</section>
+<script>
+  const story=document.querySelector<HTMLElement>('[data-harness-story]');
+  if(story){
+    const pin='1517a4dbca0a2789ff1d41ba439600f8547d23fa';
+    const link=(path:string,line?:number)=>'https://github.com/deepseek-ai/deepseek-harness/blob/'+pin+'/'+path+(line?'#L'+line:'');
+    const services={
+      agent:{index:'01',name:'Agent loop',contract:'ctx.agentLoop',desc:'Turn & step driver',relation:'Coordinates the other capabilities',path:'packages/core/agent-loop/src/agent.ts',line:410},
+      model:{index:'02',name:'Model adapter',contract:'ctx.llm',desc:'Prepare and stream the model request',relation:'Agent loop → model adapter (service call)',path:'docs/architecture.md'},
+      tools:{index:'03',name:'Tool registry',contract:'ctx.tools',desc:'Guard, approve, schedule and dispatch tools',relation:'Agent loop → guarded tool scheduler',path:'packages/core/agent-loop/src/tool-calls.ts',line:174},
+      session:{index:'04',name:'Session log',contract:'ctx.sessions',desc:'Stores durable model-visible events',relation:'Agent loop → append-only session facts',path:'docs/architecture.md'},
+      prompt:{index:'05',name:'Prompt builder',contract:'ctx.systemPrompt',desc:'Composes prompt sections and tool schemas',relation:'Agent loop → prompt assembly',path:'docs/architecture.md'},
+      policy:{index:'06',name:'Policy hooks',contract:'tools/* events',desc:'Interception and authorization at tool boundaries',relation:'Tool registry → policy hooks; not HTTP',path:'docs/tool-execution-pipeline.md'}
+    };
+    const stages=[
+      {title:'Claim input',kind:'LIVE / AGENT',owner:'AGENT',description:'The loop accepts queued user work. A first rejected claim can close a turn without spending a model step.',code:'preStep() / inbox.claim()',proof:'packages/core/agent-loop/src/agent.ts',line:271},
+      {title:'Prepare request',kind:'CONTROL / MODEL',owner:'AGENT',description:'Request hooks and adapter preparation resolve the route before accepted user content is committed.',code:'prepareRequest()',proof:'packages/core/agent-loop/src/agent.ts',line:410},
+      {title:'Admit context',kind:'DURABLE / SESSION',owner:'SESSION',description:'The accepted model-visible messages and request context are projected from the log.',code:'user/message · request/context',proof:'docs/architecture.md'},
+      {title:'Stream model',kind:'LIVE / MODEL',owner:'MODEL',description:'The model stream produces live frames. Frames are distinct from a settled assistant message.',code:'llm.stream() · agent/assistant-stream',proof:'packages/core/agent-loop/src/agent.ts',line:453},
+      {title:'Settle attempt',kind:'DURABLE / SESSION',owner:'SESSION',description:'A completed response becomes a durable event; settled errors and retries can be represented separately.',code:'assistant/message or assistant/attempt',proof:'docs/agent-lifecycle.md'},
+      {title:'Run tools',kind:'CONDITIONAL / TOOLS',owner:'TOOLS',description:'If the model requested tools, policy and the scheduler run them; no-tool replies skip this branch.',code:'executeToolCalls()',proof:'packages/core/agent-loop/src/agent.ts',line:551},
+      {title:'Continue / end',kind:'DURABLE / SESSION',owner:'SESSION',description:'Linked results and step boundaries are recorded; the driver continues only if work remains.',code:'tool/result · step/end · turn/end',proof:'packages/core/agent-loop/src/tool-calls.ts',line:282}
+    ];
+    const scenarios={
+      read:{icon:'✓',title:'Authorized read executed',text:'Illustrative guard allows a read-only call. The tool result is recorded.',states:['complete','complete','allowed','complete','complete']},
+      approval:{icon:'✓',title:'One-time approval granted',text:'The approval provider grants this write. Guards still apply before dispatch.',states:['complete','complete','review','complete','complete']},
+      denied:{icon:'×',title:'Command rejected before execution',text:'Policy refuses the operation. The tool body is skipped; the denied outcome is recorded.',states:['complete','complete','denied','skipped','complete']}
+    };
+    const compare={
+      hardcoded:{kicker:'TIGHTLY COUPLED / ONE IMPLEMENTATION',title:'Changes ripple through the central loop.',detail:'Model, tools, policy and storage are directly wired. Simple to begin with; hard to replace independently.',cost:'Fewer abstractions, but more integration changes as the product grows.',center:'FIXED AGENT RUNNER'},
+      plugin:{kicker:'REPLACEABLE / COMPOSED',title:'Change capabilities without forking the driver.',detail:'Providers register behind stable service keys. Profiles and patches decide what mounts. Reversible effects handle cleanup when plugins unload.',cost:'More extension points mean more lifecycle and ordering complexity.',center:'CORDIS CONTEXT'}
+    };
+    const useCases={
+      coding:{name:'CODING AGENT',need:'Controlled shell and filesystem access',parts:['Tool sandbox','Approvals','Durable transcript'],benefit:'Separate the agent policy from the model and shell implementation.',caveat:'Host security still needs isolation and least privilege.'},
+      support:{name:'SUPPORT DIAGNOSIS',need:'Explain what evidence the agent retrieved',parts:['Read-only tools','Session log','Live UI events'],benefit:'Track tool inputs/results while the UI streams investigation progress.',caveat:'Add authorization, redaction, tenant boundaries and retention.'},
+      evaluation:{name:'MODEL EVALUATION',need:'Compare adapters without replacing the whole agent',parts:['Model seam','Profiles','Recorded outcomes'],benefit:'Hold the task and harness stable while swapping model providers.',caveat:'Performance and cost claims require actual evaluation data.'},
+      platform:{name:'AGENT PLATFORM',need:'Compose tools and policies for different customers',parts:['Plugin config','Capability contracts','Lifecycle cleanup'],benefit:'Compile a declarative agent definition into a controlled runtime composition.',caveat:'Distributed leases, billing and enterprise governance are not automatic.'}
+    };
+    const pick=<T extends HTMLElement>(selector:string)=>story.querySelector<T>(selector)!;
+    const text=(selector:string,value:string)=>{pick<HTMLElement>(selector).textContent=value;};
+    const updateGroup=(sel:string,key:string,value:string)=>{
+      story.querySelectorAll<HTMLButtonElement>(sel).forEach(b=>{
+        const on=b.dataset[key]===value;b.classList.toggle('is-active',on);b.setAttribute('aria-pressed',String(on));
+      });
+    };
+    story.querySelectorAll<HTMLButtonElement>('[data-capability]').forEach(b=>b.addEventListener('click',()=>{
+      const id=b.dataset.capability as keyof typeof services;const v=services[id];if(!v)return;
+      updateGroup('[data-capability]','capability',id);
+      text('.hvs-inspect-icon',v.index);text('[data-service-title]',v.name);text('[data-service-contract]',v.contract);
+      text('[data-service-desc]',v.desc);text('[data-service-relation]',v.relation);
+      pick<HTMLAnchorElement>('[data-service-source]').href=link(v.path,v.line);
+    }));
+    let stepIndex=0;
+    const selectStage=(i:number)=>{
+      stepIndex=Math.min(stages.length-1,Math.max(0,i));const v=stages[stepIndex];
+      updateGroup('[data-stage]','stage',String(stepIndex));
+      text('[data-stage-number]',String(stepIndex+1).padStart(2,'0')+' / 07');text('[data-stage-kind]',v.kind);
+      text('[data-stage-title]',v.title);text('[data-stage-description]',v.description);text('[data-stage-code]',v.code);
+      text('[data-stage-owner]',v.owner+' / '+v.kind.split(' / ')[0]);
+      pick<HTMLAnchorElement>('[data-stage-source]').href=link(v.proof,v.line);
+      text('[data-stage-source]',v.line?'Read source at line '+v.line+' ↗':'Read documented lifecycle ↗');
+      const bars=story.querySelectorAll<HTMLElement>('.hvs-lane');const owners=['AGENT','MODEL','TOOLS','SESSION'];
+      bars.forEach((bar,j)=>bar.classList.toggle('is-lit',owners[j]===v.owner));
+      pick<HTMLButtonElement>('[data-stage-prev]').disabled=stepIndex===0;
+      pick<HTMLButtonElement>('[data-stage-next]').disabled=stepIndex===stages.length-1;
+      const active=pick<HTMLElement>('[data-stage="'+stepIndex+'"]');
+      active.scrollIntoView({behavior:'auto',block:'nearest',inline:'nearest'});
+    };
+    story.querySelectorAll<HTMLButtonElement>('[data-stage]').forEach(b=>b.addEventListener('click',()=>selectStage(Number(b.dataset.stage))));
+    pick<HTMLButtonElement>('[data-stage-prev]').addEventListener('click',()=>selectStage(stepIndex-1));
+    pick<HTMLButtonElement>('[data-stage-next]').addEventListener('click',()=>selectStage(stepIndex+1));
+    const selectScenario=(key:keyof typeof scenarios)=>{
+      const v=scenarios[key];updateGroup('[data-scenario]','scenario',key);
+      story.querySelectorAll<HTMLElement>('[data-policy-node]').forEach((node,i)=>{
+        node.dataset.outcome=v.states[i];
+      });
+      text('[data-outcome-icon]',v.icon);text('[data-outcome-title]',v.title);text('[data-outcome-text]',v.text);
+      pick<HTMLElement>('.hvs-policy-outcome').dataset.kind=key;
+    };
+    story.querySelectorAll<HTMLButtonElement>('[data-scenario]').forEach(b=>b.addEventListener('click',()=>selectScenario(b.dataset.scenario as keyof typeof scenarios)));
+    const selectCompare=(key:keyof typeof compare)=>{
+      const v=compare[key];updateGroup('[data-compare]','compare',key);
+      pick<HTMLElement>('.hvs-compare-visual').dataset.compareVisual=key;
+      text('[data-compare-center]',v.center);text('[data-compare-kicker]',v.kicker);text('[data-compare-title]',v.title);
+      text('[data-compare-detail]',v.detail);text('[data-compare-cost]',v.cost);
+    };
+    story.querySelectorAll<HTMLButtonElement>('[data-compare]').forEach(b=>b.addEventListener('click',()=>selectCompare(b.dataset.compare as keyof typeof compare)));
+    const selectCase=(key:keyof typeof useCases)=>{
+      const v=useCases[key];updateGroup('[data-case]','case',key);
+      text('[data-case-label]',v.name);text('[data-case-title]',v.need);
+      v.parts.forEach((part,i)=>text('[data-part="'+i+'"]',part));
+      text('[data-case-benefit]',v.benefit);text('[data-case-caveat]',v.caveat);
+    };
+    story.querySelectorAll<HTMLButtonElement>('[data-case]').forEach(b=>b.addEventListener('click',()=>selectCase(b.dataset.case as keyof typeof useCases)));
+    selectScenario('read');
+    story.dataset.ready='true';
+  }
+</script>
+<style>
+  .hvs{--bg:#0d1b2d;--panel:#13243a;--panel2:#192d43;--line:#355067;--text:#ecf5f8;--muted:#a9bbca;--mint:#70e6cb;--blue:#9ecaf9;--amber:#ffd28f;--violet:#b5a6fc;color:var(--text);font-family:var(--font-sans,system-ui,sans-serif);max-width:100%;min-width:0;margin:2rem 0 3rem}
+  .hvs *{box-sizing:border-box}
+  .hvs button,.hvs a{font-family:inherit}
+  .hvs button{cursor:pointer}
+  .hvs button:focus-visible,.hvs a:focus-visible{outline:3px solid var(--amber);outline-offset:3px}
+  .hvs-cover{background:radial-gradient(circle at 80% 40%,#1d4460,transparent 48%),var(--bg);border:1px solid var(--line);border-radius:20px;overflow:hidden;box-shadow:0 22px 50px #06152122}
+  .hvs-meta{display:flex;align-items:center;gap:.65rem;padding:1rem 1.6rem;border-bottom:1px solid #ffffff20;color:var(--muted);font:700 .65rem/1.5 var(--font-mono,monospace);letter-spacing:.13em}
+  .hvs-meta>span:last-child{margin-left:auto}.hvs-pulse{width:8px;height:8px;border-radius:50%;background:var(--mint);box-shadow:0 0 0 5px #70e6cb1a}
+  .hvs-cover-grid{display:grid;grid-template-columns:1.1fr .9fr;min-height:372px;align-items:center;gap:1rem;padding:2.1rem 2.6rem}
+  .hvs-eyebrow{font:700 .65rem/1.5 var(--font-mono,monospace);letter-spacing:.15em;color:var(--mint)!important;margin:0 0 .7rem!important}
+  .hvs-cover h2{font-size:clamp(2.4rem,5vw,4.3rem);line-height:1.06;letter-spacing:-.065em;margin:.15rem 0 1.1rem;color:var(--text);font-weight:770}
+  .hvs-cover h2 em{font-style:normal;color:var(--mint)}
+  .hvs-lead{font-size:.97rem;max-width:440px;color:#cbdae4;line-height:1.7;margin:0}
+  .hvs-actions{display:flex;flex-wrap:wrap;gap:.65rem;margin-top:1.6rem}
+  .hvs-actions a,.hvs-bottom-links a{border:1px solid var(--mint);border-radius:9px;text-decoration:none;color:#092b32;background:var(--mint);padding:.75rem 1rem;font-size:.79rem;font-weight:760;display:inline-flex;align-items:center;gap:.7rem}
+  .hvs-actions a.hvs-secondary{color:var(--text);background:transparent;border-color:var(--line)}
+  .hvs-cover-art{position:relative;aspect-ratio:1;max-width:360px;min-width:240px;margin:auto;width:100%;display:grid;place-items:center;isolation:isolate}
+  .hvs-orbit{position:absolute;border:1px dashed #79d4db65;border-radius:50%;width:76%;height:76%;transform:rotate(-23deg)}
+  .hvs-orbit-b{width:50%;height:50%;border-style:solid;border-color:#9fceef44}
+  .hvs-core{z-index:2;background:linear-gradient(140deg,#245b69,#1d384e);border:2px solid var(--mint);border-radius:22px;width:33%;aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:0 0 70px #79fae61f;line-height:1.25}
+  .hvs-core-glyph{font-size:2.4rem;color:var(--mint);line-height:1}.hvs-core strong{font-size:.9rem;letter-spacing:.1em}.hvs-core small{font-size:.6rem;color:var(--muted)}
+  .hvs-satellite{position:absolute;z-index:3;font:700 .64rem var(--font-mono,monospace);letter-spacing:.06em;background:#142a41;border:1px solid var(--line);border-radius:8px;padding:.6rem .75rem;display:flex;gap:.5rem;align-items:center;box-shadow:0 12px 25px #0004}.hvs-satellite span{color:var(--mint)}
+  .hvs-sat-model{top:13%;left:3%}.hvs-sat-tool{top:14%;right:1%}.hvs-sat-state{bottom:14%;left:-2%}.hvs-sat-policy{bottom:14%;right:0}
+  .hvs-cover-foot{display:flex;gap:1rem;justify-content:space-between;flex-wrap:wrap;padding:1rem 1.6rem;border-top:1px solid #ffffff20;color:#b0c8d8;font:700 .64rem var(--font-mono,monospace);letter-spacing:.08em}
+  .hvs-jump{display:flex;gap:.4rem;flex-wrap:wrap;margin:1rem 0 2rem;padding:.4rem;background:var(--bg);border-radius:11px;border:1px solid var(--line)}
+  .hvs-jump a{flex:1;min-width:140px;color:#c3d8e3;text-align:center;text-decoration:none;font-size:.75rem;font-weight:650;padding:.65rem;border-radius:7px}.hvs-jump a:hover,.hvs-jump a:focus-visible{background:var(--panel2);color:var(--mint)}
+  .hvs-chapter{scroll-margin-top:90px;margin:2.5rem 0;border:1px solid var(--line);border-radius:17px;background:var(--bg);overflow:hidden}
+  .hvs-chapter-head{display:flex;justify-content:space-between;align-items:end;gap:1rem;padding:1.55rem 1.7rem 1.25rem}
+  .hvs-chapter-head h3{font-size:clamp(1.35rem,2.6vw,2rem);letter-spacing:-.045em;line-height:1.2;color:var(--text);margin:0 0 .45rem}
+  .hvs-chapter-head p:last-child{font-size:.81rem;color:var(--muted);margin:0;line-height:1.5}
+  .hvs-chapter-count{white-space:nowrap;color:var(--amber);font:700 .63rem var(--font-mono,monospace);letter-spacing:.11em;padding-bottom:.3rem}
+  .hvs-system-layout{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(230px,.6fr);gap:1rem;padding:0 1.35rem 1.3rem}
+  .hvs-system-visual{background:#102238;border:1px solid #42607b;border-radius:12px;padding:1.1rem;min-width:0}
+  .hvs-boundary-label,.hvs-cordis-title,.hvs-cordis-end{font:700 .65rem var(--font-mono,monospace);letter-spacing:.08em;color:var(--muted)}
+  .hvs-system-entry{display:flex;justify-content:center;align-items:center;flex-direction:column;gap:.35rem;margin:.85rem auto;font:700 .69rem var(--font-mono,monospace)}
+  .hvs-system-entry>span:first-child,.hvs-system-entry>span:last-child{padding:.5rem 1rem;border:1px solid #49728b;background:#1a3851;border-radius:6px;max-width:100%;text-align:center}
+  .hvs-system-entry .hvs-down{color:var(--mint)}
+  .hvs-cordis{border:2px solid #49878c;border-radius:13px;padding:.8rem;box-shadow:inset 0 0 0 4px #66cbc40a}
+  .hvs-cordis-title{display:flex;align-items:center;gap:.5rem;color:var(--mint)}.hvs-cordis-title small{margin-left:auto;text-transform:none;font-size:.63rem;color:var(--muted);letter-spacing:0;font-weight:500;text-align:right}
+  .hvs-grid-icon{font-size:1.1rem}
+  .hvs-model-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.55rem;margin:.8rem 0}
+  .hvs-capability{display:flex;flex-direction:column;align-items:start;justify-content:start;text-align:left;gap:.32rem;min-width:0;min-height:112px;background:#1a3248;border:1px solid #48627a;color:var(--text);padding:.7rem;border-radius:9px;transition:background .15s,border-color .15s,transform .15s}
+  .hvs-capability:hover{border-color:var(--mint);transform:translateY(-2px)}
+  .hvs-capability.is-active{background:#1d4a50;border-color:var(--mint);box-shadow:inset 0 0 0 1px #7af1d455}
+  .hvs-cap-index{font:700 .56rem var(--font-mono,monospace);color:var(--mint);letter-spacing:-.015em;overflow-wrap:anywhere}
+  .hvs-capability strong{font-size:.85rem;line-height:1.2}.hvs-capability small{font-size:.68rem;color:#b9cdd6;line-height:1.35}
+  .hvs-cordis-end{text-align:center;border-top:1px dashed #6aa5a799;padding:.65rem 0 0;font-weight:500;letter-spacing:0}
+  .hvs-graph-caption,.hvs-under-note{font-size:.71rem!important;line-height:1.55!important;color:#bacbd4!important;margin:.85rem .1rem 0!important}
+  .hvs-key-square{display:inline-block;width:10px;height:10px;border:1px solid var(--mint);margin-right:.5rem}.hvs-key-line{display:inline-block;width:17px;border-top:2px solid var(--mint);vertical-align:middle;margin-right:.5rem}
+  .hvs-inspect{border:1px solid var(--line);border-radius:12px;background:#183047;padding:1.25rem;display:flex;flex-direction:column;align-items:flex-start}
+  .hvs-inspect-icon{display:grid;place-items:center;width:52px;height:52px;border-radius:12px;background:#29525c;color:var(--mint);font:700 1.25rem var(--font-mono,monospace);margin:1rem 0}
+  .hvs-inspect h4,.hvs-stage-detail h4,.hvs-case-detail h4{font-size:1.3rem;color:var(--text);line-height:1.25;margin:0 0 .4rem}
+  .hvs-inspect code,.hvs-stage-detail code{display:inline-block;color:var(--mint);font:700 .76rem var(--font-mono,monospace);padding:.35rem .5rem;background:#0f2335;border:1px solid #3f6175;border-radius:6px;overflow-wrap:anywhere}
+  .hvs-inspect-desc{font-size:.79rem;color:var(--muted);line-height:1.6}.hvs-inspect-separator{height:1px;background:var(--line);width:100%;margin:.7rem 0 1.2rem}
+  .hvs-small-label{font:700 .61rem var(--font-mono,monospace);letter-spacing:.12em;color:var(--amber)}.hvs-relation{font-size:.87rem;line-height:1.5}
+  .hvs-inspect-note{color:var(--muted);font-size:.74rem;line-height:1.6}
+  .hvs-inspect>a,.hvs-stage-detail>a{margin-top:auto;padding-top:1.3rem;text-decoration:none;font-size:.77rem;color:var(--mint);font-weight:700}
+  .hvs-journey{padding:0 1.35rem 1.3rem}
+  .hvs-timeline{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:.3rem;padding-bottom:1rem;overflow-x:auto}
+  .hvs-step{position:relative;border:1px solid #43627b;border-radius:8px;background:#152a3e;color:var(--text);text-align:left;min-width:0;padding:.75rem .6rem;display:grid;gap:.32rem;min-height:101px}
+  .hvs-step:after{content:'';position:absolute;bottom:-1px;left:0;right:0;height:3px;background:transparent;border-radius:0 0 8px 8px}
+  .hvs-step.is-active{border-color:var(--mint);background:#21464c}.hvs-step.is-active:after{background:var(--mint)}
+  .hvs-step>span{font:700 .62rem var(--font-mono,monospace);color:var(--mint)}
+  .hvs-step strong{font-size:.73rem;line-height:1.25}.hvs-step small{font-size:.62rem;color:#b7c9d2;line-height:1.3}
+  .hvs-stage-body{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(270px,.9fr);gap:.9rem;background:#11263b;padding:.9rem;border:1px solid #3e5e77;border-radius:12px}
+  .hvs-stage-graphic{display:grid;grid-template-columns:79px 1fr;gap:.55rem;border-radius:9px;padding:.85rem;background:#081c2d;min-height:300px}
+  .hvs-stage-rail{display:grid;grid-template-rows:repeat(4,1fr);font:700 .61rem var(--font-mono,monospace);letter-spacing:.055em;color:var(--muted)}
+  .hvs-stage-rail>div{display:flex;gap:.4rem;align-items:center}.hvs-stage-dot{height:7px;width:7px;background:#5f788e;border-radius:50%}
+  .hvs-lane-vis{position:relative;display:grid;grid-template-rows:repeat(4,1fr)}
+  .hvs-lane{border-left:1px dashed #5a7589;display:flex;align-items:center}.hvs-lane:after{content:'';height:1px;background:#2a475d;flex:1}.hvs-lane-bar{display:block;width:13%;height:7px;background:#54758a;border-radius:6px;transition:width .2s}
+  .hvs-lane.is-lit .hvs-lane-bar{width:72%;background:var(--mint);box-shadow:0 0 18px #6be6cf44}
+  .hvs-stage-bubble{position:absolute;bottom:.45rem;right:.5rem;border:1px solid #618b95;background:#22414e;border-radius:6px;padding:.45rem .7rem;font:700 .62rem var(--font-mono,monospace);color:var(--mint)}
+  .hvs-stage-detail{display:flex;flex-direction:column;align-items:start;padding:.9rem .85rem}
+  .hvs-stage-counter{width:100%;display:flex;justify-content:space-between;gap:.5rem;color:var(--amber);font:700 .66rem var(--font-mono,monospace);letter-spacing:.065em;margin-bottom:1.6rem}
+  .hvs-stage-detail h4{font-size:1.6rem}.hvs-stage-detail>p{font-size:.85rem;color:#d0dee6;line-height:1.7}
+  .hvs-stage-controls{display:flex;gap:.5rem;margin-top:1.3rem;flex-wrap:wrap}
+  .hvs-stage-controls button{border:1px solid #71989d;border-radius:7px;background:#24434e;color:var(--text);padding:.65rem .85rem;font-size:.73rem;font-weight:700;min-height:40px}.hvs-stage-controls button:disabled{opacity:.3;cursor:not-allowed}
+  .hvs-policy,.hvs-compare,.hvs-cases{padding:0 1.35rem 1.3rem}
+  .hvs-policy-choices,.hvs-compare-toggle{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem}
+  .hvs-policy-choices button,.hvs-compare-toggle button{border:1px solid #4c7086;border-radius:8px;background:#152d43;color:var(--text);padding:.7rem .8rem;font-size:.76rem;min-height:44px}
+  .hvs-policy-choices button span{color:var(--mint);margin-right:.65rem;font:700 .68rem var(--font-mono,monospace)}
+  .hvs-policy-choices button.is-active,.hvs-compare-toggle button.is-active{background:#1d4a50;border-color:var(--mint);color:var(--mint)}
+  .hvs-policy-track{border:1px solid var(--line);border-radius:12px;background:#11263b;padding:1.2rem}
+  .hvs-policy-row{display:flex;align-items:stretch;gap:.45rem}
+  .hvs-policy-row>i{font-style:normal;color:var(--mint);align-self:center}
+  .hvs-policy-node{min-width:0;flex:1;border:1px solid #4b6478;border-radius:9px;padding:.75rem .55rem;background:#1b3248;display:grid;gap:.33rem;text-align:center;transition:background .2s}
+  .hvs-policy-node small{font:700 .65rem var(--font-mono,monospace);color:var(--muted)}.hvs-policy-node strong{font-size:.76rem}.hvs-policy-node span{font-size:.65rem;color:#c1d4df}
+  .hvs-policy-node[data-outcome="complete"],.hvs-policy-node[data-outcome="allowed"]{background:#1e4848;border-color:#6dd7bf}
+  .hvs-policy-node[data-outcome="review"]{background:#594127;border-color:var(--amber)}
+  .hvs-policy-node[data-outcome="denied"]{background:#54333b;border-color:#ef8f93}
+  .hvs-policy-node[data-outcome="skipped"]{opacity:.44}
+  .hvs-policy-outcome{display:flex;align-items:center;gap:.8rem;margin-top:1rem;padding:1rem;border-radius:9px;border:1px solid #5b8f83;background:#20433f}
+  .hvs-policy-outcome[data-kind="denied"]{border-color:#b7747b;background:#442932}
+  .hvs-policy-outcome>span{font-size:1.5rem;color:var(--mint);display:grid;place-items:center;width:43px;height:43px;border:1px solid currentColor;border-radius:50%;flex-shrink:0}
+  .hvs-policy-outcome[data-kind="denied"]>span{color:#ffb2b2}
+  .hvs-policy-outcome strong{font-size:.9rem}.hvs-policy-outcome p{font-size:.74rem;line-height:1.5;color:#d4e3e8;margin:.3rem 0 0}
+  .hvs-policy .hvs-under-note a{color:var(--mint)}
+  .hvs-compare-visual{display:grid;grid-template-columns:1fr 1fr;gap:1.3rem;padding:1.3rem;border-radius:12px;border:1px solid var(--line);background:#10243a}
+  .hvs-compare-stack{border:1px dashed #68a49c;border-radius:14px;display:grid;grid-template-columns:repeat(2,1fr);gap:.6rem;padding:1rem;background:#162d42}
+  .hvs-compare-stack>div{grid-column:1/-1;background:#23545a;border:1px solid var(--mint);color:var(--mint);font:750 .84rem var(--font-mono,monospace);padding:1rem;text-align:center;border-radius:9px;letter-spacing:.07em}
+  .hvs-compare-stack>span{font:700 .76rem var(--font-mono,monospace);color:var(--text);background:#234158;border:1px solid #6b8c9f;border-radius:7px;text-align:center;padding:.85rem .3rem}
+  .hvs-compare-visual[data-compare-visual="hardcoded"] .hvs-compare-stack{border-style:solid;border-color:#c98d75}
+  .hvs-compare-visual[data-compare-visual="hardcoded"] .hvs-compare-stack>div{background:#5d3a40;border-color:#c78d7b;color:#ffe1c5}
+  .hvs-compare-visual[data-compare-visual="hardcoded"] .hvs-compare-stack>span{border-style:dashed;opacity:.65}
+  .hvs-compare-explanation{display:flex;flex-direction:column;align-items:start;justify-content:center}
+  .hvs-compare-explanation h4{font-size:1.45rem;line-height:1.3;color:var(--text);margin:0 0 .7rem}.hvs-compare-explanation>p{font-size:.82rem;line-height:1.7;color:#d0dfe8}
+  .hvs-tradeoff{border-top:1px solid var(--line);margin-top:.75rem;padding-top:.75rem;display:grid;gap:.3rem;font-size:.77rem;color:#d2dfea}.hvs-tradeoff strong{color:var(--amber)}
+  .hvs-cases{display:grid;grid-template-columns:minmax(200px,.38fr) minmax(0,.62fr);gap:1rem}
+  .hvs-case-list{display:grid;gap:.45rem}
+  .hvs-case{display:grid;grid-template-columns:40px 1fr auto;align-items:center;gap:.6rem;background:#1a3045;border:1px solid #405f76;border-radius:9px;text-align:left;color:var(--text);padding:.8rem;min-height:62px}
+  .hvs-case.is-active{background:#205056;border-color:var(--mint)}
+  .hvs-case>span{color:var(--mint);font-size:1.25rem}.hvs-case strong{font-size:.78rem}.hvs-case small{font-size:.64rem;color:var(--muted)}
+  .hvs-case-detail{background:#162b42;border:1px solid var(--line);border-radius:12px;padding:1.3rem;display:flex;flex-direction:column;gap:.8rem}
+  .hvs-case-detail h4{font-size:1.24rem}
+  .hvs-case-flow{display:flex;align-items:center;gap:.35rem;flex-wrap:wrap}
+  .hvs-case-flow>span{border:1px solid #5e9b9f;border-radius:7px;color:var(--mint);background:#173b44;padding:.65rem;font-size:.72rem;font-weight:650}.hvs-case-flow i{font-style:normal;color:var(--mint)}
+  .hvs-why,.hvs-caution{display:grid;gap:.3rem;font-size:.77rem;line-height:1.6;margin:.2rem 0;color:#cddde7}.hvs-why strong{color:var(--mint)}.hvs-caution strong{color:var(--amber)}
+  .hvs-takeaways{padding:2rem;background:#102239;border:1px solid var(--line);border-radius:17px}
+  .hvs-takeaways h3{font-size:clamp(1.6rem,3vw,2.5rem);line-height:1.2;letter-spacing:-.04em;color:var(--text);margin:.2rem 0 1.5rem}
+  .hvs-takeaway-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.6rem}
+  .hvs-takeaway-grid>div{border:1px solid #416078;background:#182f46;padding:1rem;min-height:98px;border-radius:9px;display:flex;flex-direction:column;gap:.6rem}
+  .hvs-takeaway-grid span{color:var(--mint);font:700 .61rem var(--font-mono,monospace);letter-spacing:.1em}.hvs-takeaway-grid strong{font-size:.9rem;color:var(--text);line-height:1.4}
+  .hvs-bottom-links{display:flex;gap:.5rem;flex-wrap:wrap;margin:1.4rem 0}.hvs-bottom-links a{background:transparent;color:var(--mint);font-size:.72rem;padding:.65rem .7rem}
+  .hvs-disclaimer{font-size:.7rem!important;line-height:1.65!important;color:var(--muted)!important;margin:0!important}.hvs-disclaimer a{color:var(--mint)}
+  @media(max-width:1040px){
+    .hvs-cover-grid{padding:2rem;grid-template-columns:1fr .85fr}
+    .hvs-timeline{grid-template-columns:repeat(7,minmax(98px,1fr))}
+    .hvs-system-layout{grid-template-columns:minmax(0,1fr) 230px}
+    .hvs-model-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .hvs-capability{min-height:97px}
+    .hvs-stage-body{grid-template-columns:1fr .9fr}
+  }
+  @media(max-width:760px){
+    .hvs-cover-grid{grid-template-columns:1fr;gap:0}
+    .hvs-cover-art{max-width:270px}
+    .hvs-system-layout,.hvs-stage-body,.hvs-compare-visual,.hvs-cases{grid-template-columns:1fr}
+    .hvs-inspect{min-height:255px}
+    .hvs-timeline{display:flex;scroll-snap-type:x mandatory;overflow-x:auto;padding-bottom:.65rem}
+    .hvs-step{flex:0 0 136px;scroll-snap-align:start;min-height:94px}
+    .hvs-stage-graphic{min-height:205px}
+    .hvs-stage-counter{margin-bottom:.6rem}
+    .hvs-policy-row{flex-wrap:wrap;justify-content:center}
+    .hvs-policy-node{flex:1 1 29%;min-width:91px;max-width:170px}
+    .hvs-policy-row>i{display:none}
+    .hvs-case-list{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .hvs-case{grid-template-columns:27px 1fr;gap:.4rem}
+    .hvs-case small{display:none}
+  }
+  @media(max-width:480px){
+    .hvs{margin:1rem 0 2rem}
+    .hvs-cover{border-radius:13px}
+    .hvs-meta{padding:.75rem .95rem;font-size:.56rem}
+    .hvs-meta>span:last-child{display:none}
+    .hvs-cover-grid{padding:1.35rem 1.1rem}
+    .hvs-cover h2{font-size:2.45rem}
+    .hvs-lead{font-size:.83rem}
+    .hvs-cover-art{max-width:220px;min-width:0}
+    .hvs-satellite{font-size:.54rem;padding:.42rem .46rem}
+    .hvs-cover-foot{gap:.7rem;padding:.8rem 1rem}
+    .hvs-cover-foot>span{font-size:.52rem}
+    .hvs-jump{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.2rem}
+    .hvs-jump a{min-width:0;font-size:.67rem}
+    .hvs-chapter{border-radius:12px;margin:1.5rem 0}
+    .hvs-chapter-head{display:block;padding:1.15rem .95rem}
+    .hvs-chapter-count{display:block;margin-top:.75rem}
+    .hvs-system-layout,.hvs-journey,.hvs-policy,.hvs-compare,.hvs-cases{padding:0 .75rem .75rem}
+    .hvs-system-visual{padding:.65rem}
+    .hvs-model-grid{gap:.42rem}
+    .hvs-capability{padding:.6rem;min-height:103px}
+    .hvs-cap-index{font-size:.52rem}
+    .hvs-capability strong{font-size:.78rem}
+    .hvs-cordis-title{display:block;line-height:1.65}
+    .hvs-cordis-title small{display:block;text-align:left}
+    .hvs-stage-body{padding:.55rem}
+    .hvs-stage-graphic{grid-template-columns:65px 1fr}
+    .hvs-stage-detail{padding:.65rem}
+    .hvs-policy-choices{display:grid;grid-template-columns:1fr}
+    .hvs-policy-node{flex:1 1 42%;font-size:.7rem}
+    .hvs-policy-track{padding:.7rem}
+    .hvs-compare-visual{padding:.8rem}
+    .hvs-takeaways{padding:1.15rem}
+    .hvs-takeaway-grid{grid-template-columns:1fr}
+    .hvs-bottom-links{flex-direction:column;align-items:stretch}
+    .hvs-bottom-links a{justify-content:center}
+    .hvs-actions a{min-height:44px}
+  }
+  @media(prefers-reduced-motion:reduce){.hvs *{transition:none!important}}
+
+  /* Guard dark technical canvases from global Tailwind prose heading/strong ink. */
+  .hvs strong,.hvs button strong,.hvs b{color:#eef9fb!important}
+  .hvs .hvs-why strong{color:var(--mint)!important}
+  .hvs .hvs-caution strong,.hvs .hvs-tradeoff strong{color:var(--amber)!important}
+  .hvs .hvs-relation{color:#f1f8fc!important}
+  .hvs .hvs-policy-outcome strong{color:#f1f8fc!important}
+  .hvs-service-links{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:.35rem;border-top:1px solid #486f7c;margin-top:.8rem;padding-top:.8rem}
+  .hvs-service-links .hvs-link-hub{flex-basis:100%;text-align:center;color:var(--amber);font:750 .62rem var(--font-mono,monospace);letter-spacing:.08em}
+  .hvs-service-links>span:not(.hvs-link-hub){padding:.33rem .5rem;border:1px solid #488a8a;border-radius:6px;color:var(--mint);font:.62rem var(--font-mono,monospace)}
+  .hvs-service-links>span b{font-weight:650}
+  .hvs-service-links>small{flex-basis:100%;text-align:center;color:#bccdda;font-size:.64rem}
+
+</style>
