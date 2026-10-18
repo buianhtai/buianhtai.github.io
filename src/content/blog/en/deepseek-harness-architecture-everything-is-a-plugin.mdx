@@ -1,6 +1,6 @@
 ---
-title: "DeepSeek Harness Architecture: An Interactive Visual Guide"
-description: "Explore how DeepSeek Harness works through five interactive infographics: Cordis plugins, agent-turn execution, tool authorization, architecture trade-offs, and use cases."
+title: "How DeepSeek Harness Works: An Illustrated, Step-by-Step Architecture"
+description: "One connected architecture diagram, seven source-linked request stages, tool failure scenarios and patterns to borrow from DeepSeek Harness."
 pubDate: 2026-10-17
 updatedDate: 2026-10-18
 tags: ["ai", "agents", "deepseek", "deepseek-harness", "architecture", "typescript", "plugins", "agent-platform"]
@@ -13,34 +13,18 @@ draft: false
 postLayout: "foundations"
 ---
 
-import DeepSeekHarnessStory from '../../../components/mdx/DeepSeekHarnessStory.astro';
+import DeepSeekHarnessByteByByte from '../../../components/mdx/DeepSeekHarnessByteByByte.astro';
 
-**An agent is more than a model and a while-loop.** It also needs tools, permissions, state, streaming and reliable boundaries. DeepSeek Harness explores what happens when *even those capabilities—and the agent loop itself—are plugins*.
+**What happens when a user asks an AI coding agent to investigate a failing test?** DeepSeek Harness offers a useful architecture lesson: the model is only one part of the system. The agent loop coordinates a prompt builder, model adapter, tool-execution pipeline and session event log.
 
-Instead of another long architecture walkthrough, use this **interactive atlas**. Select components to understand their relationships, step through a real code-aligned request, change tool policy scenarios, compare design approaches, and explore practical use cases.
+The interactive guide below starts with **one connected system diagram**. Follow the numbered request path; click any component or stage to see its purpose and the exact source code behind it.
 
-<DeepSeekHarnessStory />
+<DeepSeekHarnessByteByByte />
 
-## What makes the architecture worth studying?
+## Why does this matter?
 
-**Three unusual decisions** distinguish [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) from a minimal tool-calling loop.
+The main design idea is **separation of responsibilities**. The agent driver coordinates work; the model generates proposals; tools enforce guards and approvals; the session keeps durable facts. Cordis makes these capabilities composable through service contracts, so different runtime profiles can swap implementations without rebuilding the entire agent.
 
-**Replaceable runtime:** [Cordis](https://github.com/cordiverse/cordis) supplies service injection, typed events and reversible plugin registrations. The model adapter, tools, session providers, prompt assembly and agent driver can be composed from ordered profiles and bundles.
+The diagrams show **in-process logical boundaries**, not a distributed network of microservices. The seven steps are source-guided, not a complete runtime trace. The project remains a developer preview and has not been security-audited; see its [safety limitations](https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/SAFETY.md).
 
-**Reconstructable context:** the session event log is the source of model-visible state, while `agent/*` events drive live coordination and transient UI streaming. A streamed chunk isn't automatically a committed assistant response.
-
-**Tool authorization outside the prompt:** tool guards, approvals, execution wrappers and result normalization sit in the capability pipeline. An instruction to the model is not the authorization boundary.
-
-## How to read the visuals
-
-The **System** map shows logical plugin and service contracts—*not six containers or HTTP calls*. The **Request journey** is a source-guided walkthrough; a rejected turn, tool-free response or retry can take a different path. The **Tool policy** scenarios are illustrative configurations rather than default DeepSeek permissions.
-
-Every technical section offers pinned upstream code or documentation. For the actual imported packages, method call sites, and line-by-line TypeScript, open the [full architecture and Code path explorer](/en/labs/deepseek-harness-clarity/).
-
-## What not to copy blindly
-
-DeepSeek Harness is **developer-preview software**, not an audited production security boundary. Plugin flexibility creates lifecycle, ordering and configuration complexity. Its session log doesn't automatically make external side effects exactly-once, and an in-process Cordis service is not a distributed job queue.
-
-For an enterprise platform, borrow the interfaces and session/event distinctions, then add your own tenant isolation, worker leasing, secret management, audit retention, idempotency, approvals and cost controls. See the upstream [safety notice](https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/SAFETY.md).
-
-*Source snapshot:* [DeepSeek Harness at commit `1517a4d`](https://github.com/deepseek-ai/deepseek-harness/tree/1517a4dbca0a2789ff1d41ba439600f8547d23fa), reviewed October 17, 2026. For the original design contracts see [architecture](https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/docs/architecture.md), [Cordis primer](https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/docs/cordis-primer.md), [turn lifecycle](https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/docs/agent-lifecycle.md), and [tool pipeline](https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/docs/tool-execution-pipeline.md).
+For deeper technical exploration, open the [interactive source and dependency graph](/en/labs/deepseek-harness-clarity/) and compare the guide against the upstream [architecture](https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/docs/architecture.md), [agent lifecycle](https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/docs/agent-lifecycle.md), and [tool execution pipeline](https://github.com/deepseek-ai/deepseek-harness/blob/1517a4dbca0a2789ff1d41ba439600f8547d23fa/docs/tool-execution-pipeline.md).
