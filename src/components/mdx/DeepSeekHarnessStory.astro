@@ -70,6 +70,11 @@ const cases = [
               </button>
             ))}
           </div>
+          <div class="hvs-service-links" aria-label="Verified direction of service relationships">
+            <span class="hvs-link-hub">AGENT LOOP USES</span>
+            <span>↗ <b>Prompt</b></span><span>↗ <b>Model</b></span><span>↗ <b>Tools</b></span><span>↗ <b>Session</b></span>
+            <small>Tool registry → policy hooks</small>
+          </div>
           <div class="hvs-cordis-end">Ordered bundles + profile patches → effective plugin tree</div>
         </div>
         <p class="hvs-graph-caption"><span class="hvs-key-square"></span> Nested boundary = logical code composition. Selecting a box explains its relationship to the agent loop.</p>
@@ -472,4 +477,17 @@ const cases = [
     .hvs-actions a{min-height:44px}
   }
   @media(prefers-reduced-motion:reduce){.hvs *{transition:none!important}}
+
+  /* Guard dark technical canvases from global Tailwind prose heading/strong ink. */
+  .hvs strong,.hvs button strong,.hvs b{color:#eef9fb!important}
+  .hvs .hvs-why strong{color:var(--mint)!important}
+  .hvs .hvs-caution strong,.hvs .hvs-tradeoff strong{color:var(--amber)!important}
+  .hvs .hvs-relation{color:#f1f8fc!important}
+  .hvs .hvs-policy-outcome strong{color:#f1f8fc!important}
+  .hvs-service-links{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:.35rem;border-top:1px solid #486f7c;margin-top:.8rem;padding-top:.8rem}
+  .hvs-service-links .hvs-link-hub{flex-basis:100%;text-align:center;color:var(--amber);font:750 .62rem var(--font-mono,monospace);letter-spacing:.08em}
+  .hvs-service-links>span:not(.hvs-link-hub){padding:.33rem .5rem;border:1px solid #488a8a;border-radius:6px;color:var(--mint);font:.62rem var(--font-mono,monospace)}
+  .hvs-service-links>span b{font-weight:650}
+  .hvs-service-links>small{flex-basis:100%;text-align:center;color:#bccdda;font-size:.64rem}
+
 </style>
