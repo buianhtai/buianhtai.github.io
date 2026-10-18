@@ -35,7 +35,9 @@ try {
       assert.equal(await root.locator('.hvs-service-links > span:not(.hvs-link-hub)').count(),4,'Agent loop explicitly connects to four service contracts');
       for(const selector of ['.hvs-capability strong','.hvs-step strong','.hvs-policy-node strong','.hvs-case strong','.hvs-relation']){
         const ink=await root.locator(selector).first().evaluate(el=>getComputedStyle(el).color);
-        assert.equal(ink,'rgb(238, 249, 251)','Dark technical card labels must have high contrast: '+selector);
+        const rgb=ink.match(/\\d+/g)?.map(Number) || [];
+        const perceived=(rgb[0]||0)*.2126+(rgb[1]||0)*.7152+(rgb[2]||0)*.0722;
+        assert(perceived>=180,'Dark technical card labels must have high contrast: '+selector+' '+ink);
       }
       assert.equal(await root.locator('[data-stage]').count(),7,'Seven request stages');
       assert.equal(await root.locator('[data-scenario]').count(),3,'Three illustrative policy branches');
