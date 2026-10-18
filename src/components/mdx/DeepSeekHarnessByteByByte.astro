@@ -7,13 +7,13 @@ import excerptBank from '../../data/architecture/deepseek-harness-excerpts.json'
 const pin = excerptBank.revision;
 const sourceUrl=(path:string,line?:number)=> 'https://github.com/deepseek-ai/deepseek-harness/blob/'+pin+'/'+path+(line?'#L'+line:'');
 const rawSteps=[
-  {number:'01',id:'claim',title:'Claim the input',what:'The agent loop claims a queued message from its inbox.',why:'Claiming work separates message arrival from admitting a model step.',owner:'agent',kind:'control',reference:'call-agent-claim',needle:'this.inbox.claim('},
-  {number:'02',id:'prepare',title:'Prepare the request',what:'The loop builds the model request from accepted context and tool schemas.',why:'The LLM provider is behind a replaceable service contract.',owner:'prompt',kind:'control',reference:'call-agent-request',needle:'prepareRequest('},
-  {number:'03',id:'stream',title:'Ask the model',what:'The model adapter streams response chunks. Live frames update the UI.',why:'Streaming progress is not yet a durable assistant message.',owner:'model',kind:'live',reference:'call-agent-stream',needle:'.stream('},
-  {number:'04',id:'tools',title:'Check for tool calls',what:'If the response requests tools, the agent enters the tool-execution path.',why:'A model can propose an operation; it does not authorize it.',owner:'tools',kind:'conditional',reference:'call-agent-tools',needle:'executeToolCalls('},
-  {number:'05',id:'dispatch',title:'Guard and dispatch',what:'The scheduler prepares tool calls and dispatches only admissible operations.',why:'Policy and approval belong at execution boundaries, not in prompts.',owner:'tools',kind:'conditional',reference:'call-tool-dispatch',needle:'.dispatch('},
-  {number:'06',id:'persist',title:'Record the outcome',what:'Tool calls and results are appended with linkage in session history.',why:'Durable facts let later context and transcript views explain decisions.',owner:'session',kind:'durable',reference:'call-tool-persist',needle:"session.append('tool/result'"},
-  {number:'07',id:'continue',title:'Continue or finish',what:'The driver records a step boundary and decides whether work remains.',why:'A turn can include several model steps, or finish without any tools.',owner:'agent',kind:'durable',reference:'call-agent-end',needle:"session.append('step/end'"}
+  {number:'01',id:'claim',from:'Inbox',to:'Agent loop',title:'Claim the input',what:'The agent loop claims a queued message from its inbox.',why:'Claiming work separates message arrival from admitting a model step.',owner:'agent',kind:'control',reference:'call-agent-claim',needle:'this.inbox.claim('},
+  {number:'02',id:'prepare',from:'Agent loop',to:'Prompt builder',title:'Prepare the request',what:'The loop builds the model request from accepted context and tool schemas.',why:'The LLM provider is behind a replaceable service contract.',owner:'prompt',kind:'control',reference:'call-agent-request',needle:'prepareRequest('},
+  {number:'03',id:'stream',from:'Agent loop',to:'LLM adapter',title:'Ask the model',what:'The model adapter streams response chunks. Live frames update the UI.',why:'Streaming progress is not yet a durable assistant message.',owner:'model',kind:'live',reference:'call-agent-stream',needle:'.stream('},
+  {number:'04',id:'tools',from:'Model result',to:'Agent loop / tools',title:'Check for tool calls',what:'If the response requests tools, the agent enters the tool-execution path.',why:'A model can propose an operation; it does not authorize it.',owner:'tools',kind:'conditional',reference:'call-agent-tools',needle:'executeToolCalls('},
+  {number:'05',id:'dispatch',from:'Tool scheduler',to:'Guarded executor',title:'Guard and dispatch',what:'The scheduler prepares tool calls and dispatches only admissible operations.',why:'Policy and approval belong at execution boundaries, not in prompts.',owner:'tools',kind:'conditional',reference:'call-tool-dispatch',needle:'.dispatch('},
+  {number:'06',id:'persist',from:'Tool runner',to:'Session event log',title:'Record the outcome',what:'Tool calls and results are appended with linkage in session history.',why:'Durable facts let later context and transcript views explain decisions.',owner:'session',kind:'durable',reference:'call-tool-persist',needle:"session.append('tool/result'"},
+  {number:'07',id:'continue',from:'Agent loop',to:'Step/end session event',title:'Continue or finish',what:'The driver records a step boundary and decides whether work remains.',why:'A turn can include several model steps, or finish without any tools.',owner:'agent',kind:'durable',reference:'call-agent-end',needle:"session.append('step/end'"}
 ];
 const steps=rawSteps.map(({reference,needle,...step})=>{
   const src=excerptBank.excerpts[reference as keyof typeof excerptBank.excerpts];
@@ -55,7 +55,7 @@ const machine=JSON.stringify({steps,modules}).replace(/</g,'\\u003c');
               <div class="bgo-service-row">
                 <span class="bgo-arrow-direction" aria-hidden="true">→</span>
                 <button class="bgo-service" type="button" data-bgo-node={m.id} aria-label={'Inspect '+m.name}>
-                  <span class="bgo-service-index">{String(i+2).padStart(2,'0')}</span>
+                  <span class="bgo-service-index">{['CTX','LLM','TOOL','LOG'][i]}</span>
                   <span class="bgo-service-text"><strong>{m.name}</strong><small>{m.sub}</small></span>
                   <span class="bgo-service-key">{m.key}</span>
                 </button>
@@ -87,6 +87,7 @@ const machine=JSON.stringify({steps,modules}).replace(/</g,'\\u003c');
       <div class="bgo-spotlight">
         <span class="bgo-kicker" data-bgo-spotlight-kind>CONTROL / AGENT LOOP</span>
         <div class="bgo-spotlight-heading"><span data-bgo-step-num>01</span><h4 data-bgo-step-title>Claim the input</h4></div>
+        <div class="bgo-handoff" aria-label="Component to component handoff"><span data-bgo-from>Inbox</span><b aria-hidden="true">→</b><span data-bgo-to>Agent loop</span></div>
         <p data-bgo-step-what>The agent loop claims a queued message from its inbox.</p>
         <div class="bgo-reason"><b>WHY THIS MATTERS</b><span data-bgo-step-why>Claiming work separates message arrival from admitting a model step.</span></div>
         <div class="bgo-nav-controls"><button type="button" data-bgo-prev disabled>← Previous</button><span data-bgo-progress>1 of 7</span><button type="button" data-bgo-next>Next →</button></div>
@@ -132,7 +133,7 @@ const machine=JSON.stringify({steps,modules}).replace(/</g,'\\u003c');
 <script>
   const root=document.querySelector<HTMLElement>('[data-bgo-root]');
   if(root){
-    type Step={number:string;id:string;title:string;what:string;why:string;owner:string;kind:string;source:string;line:number;code:string;url:string};
+    type Step={number:string;id:string;from:string;to:string;title:string;what:string;why:string;owner:string;kind:string;source:string;line:number;code:string;url:string};
     type Mod={id:string;name:string;sub:string;why:string;key:string;file:string};
     const data=JSON.parse(root.querySelector('[data-bgo-data]')?.textContent||'{}') as {steps:Step[];modules:Mod[]};
     const q=<T extends HTMLElement=HTMLElement>(selector:string)=>root.querySelector<T>(selector)!;
@@ -151,6 +152,7 @@ const machine=JSON.stringify({steps,modules}).replace(/</g,'\\u003c');
         b.classList.toggle('is-linked',b.dataset.bgoNode===s.owner);
       });
       show('[data-bgo-step-num]',s.number);show('[data-bgo-step-title]',s.title);
+      show('[data-bgo-from]',s.from);show('[data-bgo-to]',s.to);
       show('[data-bgo-step-what]',s.what);show('[data-bgo-step-why]',s.why);
       show('[data-bgo-spotlight-kind]',s.kind.toUpperCase()+' / '+s.owner.toUpperCase());
       show('[data-bgo-code-file]',s.source.split('/').pop()+' · L'+s.line);
@@ -345,4 +347,10 @@ const machine=JSON.stringify({steps,modules}).replace(/</g,'\\u003c');
     .bgo-code-header{flex-wrap:wrap}
   }
   @media(prefers-reduced-motion:reduce){.bgo *{scroll-behavior:auto!important}}
+
+  .bgo-handoff{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;padding:.45rem 0 .55rem}
+  .bgo-handoff span{display:inline-flex;align-items:center;min-height:34px;border:1px solid #8bc0b9;border-radius:6px;background:#fff;color:#206c65;font-weight:750;font-size:.71rem;padding:.45rem .6rem}
+  .bgo-handoff b{color:#018774!important;font-size:1.2rem}
+  .bgo-service-index{min-width:29px;text-align:center;font-size:.55rem;color:#5e7a8b}
+
 </style>
