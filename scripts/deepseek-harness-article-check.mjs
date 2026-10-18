@@ -36,6 +36,8 @@ try {
       assert((await page.locator('a[href*="deepseek-harness-clarity"]').count())>=2,'Code explorer is linked');
       assert.equal(await guide.locator('[data-bgo-step="0"]').getAttribute('aria-pressed'),'true');
       assert.match(await guide.locator('[data-bgo-code-preview]').innerText(),/this.inbox.claim/,'Pinned source snippet is visible immediately');
+      assert.match(await guide.locator('[data-bgo-from]').innerText(),/Inbox/);
+      assert.match(await guide.locator('[data-bgo-to]').innerText(),/Agent loop/);
       const codeEvidence=await guide.locator('[data-bgo-source-link]').getAttribute('href');
       assert.match(codeEvidence,/github.com\/deepseek-ai\/deepseek-harness\/blob\/1517a4d/,'Code link pins study revision');
       // One unified model: clicking a service explains its role and provenance.
@@ -48,6 +50,8 @@ try {
       // Stepper reveals code and highlights owning component.
       await guide.locator('[data-bgo-step="2"]').click();
       assert.match(await guide.locator('[data-bgo-step-title]').innerText(),/Ask the model/i);
+      assert.match(await guide.locator('[data-bgo-from]').innerText(),/Agent loop/);
+      assert.match(await guide.locator('[data-bgo-to]').innerText(),/LLM adapter/);
       assert.match(await guide.locator('[data-bgo-code-preview]').innerText(),/AssistantStreamAttempt|\.stream\(/);
       assert.equal(await guide.locator('[data-bgo-node="model"]').evaluate(el=>el.classList.contains('is-linked')),true);
       await guide.locator('[data-bgo-next]').click();
