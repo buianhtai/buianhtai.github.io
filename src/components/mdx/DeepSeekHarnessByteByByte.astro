@@ -1,0 +1,356 @@
+---
+/**
+ * Byte-sized source-guided visual learning experience.
+ * Diagram means logical in-process service use, NOT separately deployed services.
+ */
+import excerptBank from '../../data/architecture/deepseek-harness-excerpts.json';
+const pin = excerptBank.revision;
+const sourceUrl=(path:string,line?:number)=> 'https://github.com/deepseek-ai/deepseek-harness/blob/'+pin+'/'+path+(line?'#L'+line:'');
+const rawSteps=[
+  {number:'01',id:'claim',from:'Inbox',to:'Agent loop',title:'Claim the input',what:'The agent loop claims a queued message from its inbox.',why:'Claiming work separates message arrival from admitting a model step.',owner:'agent',kind:'control',reference:'call-agent-claim',needle:'this.inbox.claim('},
+  {number:'02',id:'prepare',from:'Agent loop',to:'Prompt builder',title:'Prepare the request',what:'The loop builds the model request from accepted context and tool schemas.',why:'The LLM provider is behind a replaceable service contract.',owner:'prompt',kind:'control',reference:'call-agent-request',needle:'prepareRequest('},
+  {number:'03',id:'stream',from:'Agent loop',to:'LLM adapter',title:'Ask the model',what:'The model adapter streams response chunks. Live frames update the UI.',why:'Streaming progress is not yet a durable assistant message.',owner:'model',kind:'live',reference:'call-agent-stream',needle:'.stream('},
+  {number:'04',id:'tools',from:'Model result',to:'Agent loop / tools',title:'Check for tool calls',what:'If the response requests tools, the agent enters the tool-execution path.',why:'A model can propose an operation; it does not authorize it.',owner:'tools',kind:'conditional',reference:'call-agent-tools',needle:'executeToolCalls('},
+  {number:'05',id:'dispatch',from:'Tool scheduler',to:'Guarded executor',title:'Guard and dispatch',what:'The scheduler prepares tool calls and dispatches only admissible operations.',why:'Policy and approval belong at execution boundaries, not in prompts.',owner:'tools',kind:'conditional',reference:'call-tool-dispatch',needle:'.dispatch('},
+  {number:'06',id:'persist',from:'Tool runner',to:'Session event log',title:'Record the outcome',what:'Tool calls and results are appended with linkage in session history.',why:'Durable facts let later context and transcript views explain decisions.',owner:'session',kind:'durable',reference:'call-tool-persist',needle:"session.append('tool/result'"},
+  {number:'07',id:'continue',from:'Agent loop',to:'Step/end session event',title:'Continue or finish',what:'The driver records a step boundary and decides whether work remains.',why:'A turn can include several model steps, or finish without any tools.',owner:'agent',kind:'durable',reference:'call-agent-end',needle:"session.append('step/end'"}
+];
+const steps=rawSteps.map(({reference,needle,...step})=>{
+  const src=excerptBank.excerpts[reference as keyof typeof excerptBank.excerpts];
+  const lines=src.code.replace(/\n$/,'').split('\n');
+  const idx=Math.max(0,lines.findIndex(line=>line.includes(needle)));
+  const a=Math.max(0,idx-2),b=Math.min(lines.length,idx+4);
+  return {...step,source:src.path,line:src.startLine+idx,code:lines.slice(a,b).map((s,i)=>String(src.startLine+a+i).padStart(3,' ')+'  '+s).join('\n'),url:sourceUrl(src.path,src.startLine+idx)};
+});
+const modules=[
+  {id:'prompt',name:'Prompt + context',sub:'Build request and tool schemas',why:'The loop obtains context and tools before the LLM call.',key:'ctx.systemPrompt',file:'docs/architecture.md'},
+  {id:'model',name:'LLM adapter',sub:'Prepare and stream a model call',why:'The model provider is replaceable through a service boundary.',key:'ctx.llm',file:'docs/architecture.md'},
+  {id:'tools',name:'Tools + guards',sub:'Policy, approval and dispatch',why:'Generated tool calls pass an execution pipeline independent of prompts.',key:'ctx.tools',file:'docs/tool-execution-pipeline.md'},
+  {id:'session',name:'Session event log',sub:'Record accepted, model-visible facts',why:'Stored facts are distinct from transient streaming frames.',key:'ctx.sessions',file:'docs/architecture.md'}
+];
+const machine=JSON.stringify({steps,modules}).replace(/</g,'\\u003c');
+---
+<section class="bgo" data-bgo-root aria-label="DeepSeek Harness explained one step at a time">
+  <div class="bgo-intro">
+    <div class="bgo-label"><span class="bgo-label-dot"></span> VISUAL SYSTEM DESIGN / CODE-PINNED</div>
+    <h2>How does a DeepSeek agent actually work?</h2>
+    <p>Follow one request through the runtime. <strong>One diagram. Seven steps. Real code.</strong></p>
+    <a href="#bgo-map">Start with the diagram <span aria-hidden="true">↘</span></a>
+  </div>
+
+  <section class="bgo-story" id="bgo-map" aria-labelledby="bgo-map-title">
+    <header class="bgo-heading"><div><span class="bgo-section-number">01 / THE BIG PICTURE</span><h3 id="bgo-map-title">One runtime. Four capabilities around the agent.</h3><p>This is logical code composition inside Cordis—not a microservice deployment diagram.</p></div><a href="/en/labs/deepseek-harness-clarity/">Explore full source graph ↗</a></header>
+    <div class="bgo-diagram" data-bgo-diagram>
+      <div class="bgo-client"><span class="bgo-client-icon">◉</span><div><strong>YOU / CLI / WEB</strong><small>“Investigate this failing test”</small></div><span class="bgo-client-note">Input</span></div>
+      <div class="bgo-input-arrow" aria-hidden="true"><span>① enqueue input</span><b>↓</b></div>
+      <div class="bgo-runtime">
+        <div class="bgo-runtime-title"><span>▣</span> CORDIS PLUGIN RUNTIME <small>in-process service contracts</small></div>
+        <div class="bgo-core-layout">
+          <button type="button" class="bgo-agent" data-bgo-node="agent" aria-label="Inspect agent loop">
+            <span class="bgo-node-index">CENTER / DRIVER</span><span class="bgo-agent-logo">◇</span><strong>Agent loop</strong><small>turns · steps · retry</small><code>ctx.agentLoop</code>
+            <span class="bgo-agent-pointer">USES SERVICE PORTS →</span>
+          </button>
+          <div class="bgo-services" aria-label="Services used by the agent loop">
+            {modules.map((m,i)=>(
+              <div class="bgo-service-row">
+                <span class="bgo-arrow-direction" aria-hidden="true">→</span>
+                <button class="bgo-service" type="button" data-bgo-node={m.id} aria-label={'Inspect '+m.name}>
+                  <span class="bgo-service-index">{['CTX','LLM','TOOL','LOG'][i]}</span>
+                  <span class="bgo-service-text"><strong>{m.name}</strong><small>{m.sub}</small></span>
+                  <span class="bgo-service-key">{m.key}</span>
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div class="bgo-runtime-footer">Profiles + bundles decide which plugin implements each service.</div>
+      </div>
+      <div class="bgo-bottom-channel">
+        <div><span>↳ LIVE PROGRESS</span><strong>agent/assistant-stream</strong><small>UI updates; transient frames</small></div>
+        <div><span>↳ DURABLE FACTS</span><strong>assistant/message · tool/result</strong><small>session events; replayable context</small></div>
+      </div>
+      <p class="bgo-map-legend"><span class="bgo-legend-node"></span> Click a component to learn why it exists. <span class="bgo-legend-arrow">→</span> Means “uses an in-process service”—not HTTP.</p>
+    </div>
+    <div class="bgo-service-detail" data-bgo-node-detail hidden aria-live="polite">
+      <div><span class="bgo-kicker">COMPONENT / <span data-bgo-node-name></span></span><h4 data-bgo-node-why></h4><code data-bgo-node-key></code></div>
+      <a href="#" target="_blank" rel="noopener noreferrer" data-bgo-node-link>Source docs ↗</a>
+      <button type="button" data-bgo-close-node aria-label="Close component details">×</button>
+    </div>
+  </section>
+
+  <section class="bgo-story" id="bgo-steps" aria-labelledby="bgo-steps-title">
+    <header class="bgo-heading"><div><span class="bgo-section-number">02 / FOLLOW ONE REQUEST</span><h3 id="bgo-steps-title">What happens after you press Enter?</h3><p>Click any numbered step. The diagram above highlights the owner, and the actual TypeScript appears below.</p></div><span class="bgo-inline-chip">SOURCE-GUIDED</span></header>
+    <div class="bgo-step-scroll" role="group" aria-label="Select request processing step">
+      {steps.map((s,i)=><button type="button" class:list={['bgo-step',i===0&&'is-active']} data-bgo-step={i} aria-pressed={i===0?'true':'false'}><b>{s.number}</b><span>{s.title}</span></button>)}
+    </div>
+    <div class="bgo-walkthrough">
+      <div class="bgo-spotlight">
+        <span class="bgo-kicker" data-bgo-spotlight-kind>CONTROL / AGENT LOOP</span>
+        <div class="bgo-spotlight-heading"><span data-bgo-step-num>01</span><h4 data-bgo-step-title>Claim the input</h4></div>
+        <div class="bgo-handoff" aria-label="Component to component handoff"><span data-bgo-from>Inbox</span><b aria-hidden="true">→</b><span data-bgo-to>Agent loop</span></div>
+        <p data-bgo-step-what>The agent loop claims a queued message from its inbox.</p>
+        <div class="bgo-reason"><b>WHY THIS MATTERS</b><span data-bgo-step-why>Claiming work separates message arrival from admitting a model step.</span></div>
+        <div class="bgo-nav-controls"><button type="button" data-bgo-prev disabled>← Previous</button><span data-bgo-progress>1 of 7</span><button type="button" data-bgo-next>Next →</button></div>
+      </div>
+      <aside class="bgo-code">
+        <div class="bgo-code-header"><span><span class="bgo-code-dot"></span><span class="bgo-code-dot"></span><span class="bgo-code-dot"></span> PINNED TYPESCRIPT / REAL CODE</span><a data-bgo-source-link href={steps[0].url} target="_blank" rel="noopener noreferrer">Open source ↗</a></div>
+        <div class="bgo-code-file" data-bgo-code-file>agent.ts · L271</div>
+        <pre tabindex="0"><code data-bgo-code-preview>{steps[0].code}</code></pre>
+        <p>Only a short excerpt is shown. <a href="/en/labs/deepseek-harness-clarity/">Explore the entire code graph ↗</a></p>
+      </aside>
+    </div>
+    <p class="bgo-accuracy"><b>Read correctly:</b> This is a source-guided request walkthrough, not a captured network trace. Tool stages are conditional; model frames stream while session facts are committed at multiple boundaries.</p>
+  </section>
+
+  <section class="bgo-story" id="bgo-failures" aria-labelledby="bgo-failures-title">
+    <header class="bgo-heading"><div><span class="bgo-section-number">03 / WHAT IF?</span><h3 id="bgo-failures-title">Understand the architecture through failures.</h3><p>Choose a situation. See what changes—and what stays safe.</p></div></header>
+    <div class="bgo-scenario-options" role="group" aria-label="Choose system behavior scenario">
+      <button type="button" class="is-active" data-bgo-case="normal" aria-pressed="true">✓ Model answers</button>
+      <button type="button" data-bgo-case="denied" aria-pressed="false">⊘ Tool denied</button>
+      <button type="button" data-bgo-case="disconnect" aria-pressed="false">↻ Browser disconnects</button>
+    </div>
+    <div class="bgo-scenario-map">
+      <div class="bgo-scenario-rail"><div data-bgo-scenario-box="model">MODEL <span>responds</span></div><b>→</b><div data-bgo-scenario-box="tool">TOOLS <span>optional</span></div><b>→</b><div data-bgo-scenario-box="session">SESSION <span>settled facts</span></div><b>→</b><div data-bgo-scenario-box="ui">UI <span>renders</span></div></div>
+      <div class="bgo-scenario-answer"><strong data-bgo-case-title>No tool call? Skip execution.</strong><p data-bgo-case-detail>The response settles in the session log. The agent can end the turn without invoking a tool.</p><small data-bgo-case-warning>The model reply and the durable session record are different concepts.</small></div>
+    </div>
+  </section>
+
+  <section class="bgo-lessons" aria-labelledby="bgo-lessons-title">
+    <div class="bgo-heading"><div><span class="bgo-section-number">04 / WHAT WE CAN LEARN</span><h3 id="bgo-lessons-title">Three patterns worth borrowing.</h3></div></div>
+    <div class="bgo-lessons-grid">
+      <article><span>01 / COMPOSITION</span><div class="bgo-lesson-art"><b>AGENT</b><i>→</i><b>PORT</b><i>→</i><b>PROVIDER</b></div><h4>Replace a capability, not the entire agent.</h4><p>Model, tools and state depend on contracts instead of one implementation.</p></article>
+      <article><span>02 / EVENT HISTORY</span><div class="bgo-lesson-art"><b>LIVE</b><i>≠</i><b>COMMITTED</b></div><h4>Keep streaming separate from durable truth.</h4><p>Replayable session facts make failures easier to explain.</p></article>
+      <article><span>03 / SECURITY</span><div class="bgo-lesson-art"><b>MODEL</b><i>→</i><b>GUARD</b><i>→</i><b>TOOL</b></div><h4>Enforce permissions at execution time.</h4><p>A prompt is not an authorization boundary.</p></article>
+    </div>
+    <div class="bgo-usecases"><span class="bgo-section-number">USE IT FOR</span><div><span>⌘ Coding agents</span><span>◎ Troubleshooting assistants</span><span>◇ Configurable agent platforms</span></div></div>
+    <div class="bgo-takeaway"><strong>The lesson:</strong> Borrow explicit boundaries, session events and guardrails—not a claim that the preview runtime is already enterprise-ready.</div>
+  </section>
+  <footer class="bgo-footer">
+    <p>Source snapshot <a href={'https://github.com/deepseek-ai/deepseek-harness/tree/'+pin} target="_blank" rel="noopener noreferrer">DeepSeek Harness · 1517a4d</a>. Its plugin boundaries are in-process logical contracts. No inferred HTTP, worker fleet, or benchmark figures. Project is a developer preview; see <a href={sourceUrl('SAFETY.md')} target="_blank" rel="noopener noreferrer">upstream safety limits ↗</a>.</p>
+  </footer>
+  <script type="application/json" data-bgo-data set:html={machine}></script>
+</section>
+<script>
+  const root=document.querySelector<HTMLElement>('[data-bgo-root]');
+  if(root){
+    type Step={number:string;id:string;from:string;to:string;title:string;what:string;why:string;owner:string;kind:string;source:string;line:number;code:string;url:string};
+    type Mod={id:string;name:string;sub:string;why:string;key:string;file:string};
+    const data=JSON.parse(root.querySelector('[data-bgo-data]')?.textContent||'{}') as {steps:Step[];modules:Mod[]};
+    const q=<T extends HTMLElement=HTMLElement>(selector:string)=>root.querySelector<T>(selector)!;
+    const show=(selector:string,value:string)=>{q(selector).textContent=value;};
+    const pin='1517a4dbca0a2789ff1d41ba439600f8547d23fa';
+    const source=(path:string)=>'https://github.com/deepseek-ai/deepseek-harness/blob/'+pin+'/'+path;
+    let selected=0;
+    const selectStep=(index:number)=>{
+      selected=Math.max(0,Math.min(data.steps.length-1,index));
+      const s=data.steps[selected];
+      root.querySelectorAll<HTMLButtonElement>('[data-bgo-step]').forEach(b=>{
+        const on=Number(b.dataset.bgoStep)===selected;
+        b.classList.toggle('is-active',on);b.setAttribute('aria-pressed',String(on));
+      });
+      root.querySelectorAll<HTMLButtonElement>('[data-bgo-node]').forEach(b=>{
+        b.classList.toggle('is-linked',b.dataset.bgoNode===s.owner);
+      });
+      show('[data-bgo-step-num]',s.number);show('[data-bgo-step-title]',s.title);
+      show('[data-bgo-from]',s.from);show('[data-bgo-to]',s.to);
+      show('[data-bgo-step-what]',s.what);show('[data-bgo-step-why]',s.why);
+      show('[data-bgo-spotlight-kind]',s.kind.toUpperCase()+' / '+s.owner.toUpperCase());
+      show('[data-bgo-code-file]',s.source.split('/').pop()+' · L'+s.line);
+      show('[data-bgo-code-preview]',s.code);
+      q<HTMLAnchorElement>('[data-bgo-source-link]').href=s.url;
+      q<HTMLButtonElement>('[data-bgo-prev]').disabled=selected===0;
+      q<HTMLButtonElement>('[data-bgo-next]').disabled=selected===data.steps.length-1;
+      show('[data-bgo-progress]',(selected+1)+' of '+data.steps.length);
+    };
+    root.querySelectorAll<HTMLButtonElement>('[data-bgo-step]').forEach(b=>b.addEventListener('click',()=>selectStep(Number(b.dataset.bgoStep))));
+    q<HTMLButtonElement>('[data-bgo-prev]').addEventListener('click',()=>selectStep(selected-1));
+    q<HTMLButtonElement>('[data-bgo-next]').addEventListener('click',()=>selectStep(selected+1));
+    root.querySelectorAll<HTMLButtonElement>('[data-bgo-node]').forEach(b=>b.addEventListener('click',()=>{
+      const id=b.dataset.bgoNode;
+      const m=data.modules.find(item=>item.id===id);
+      const agent=id==='agent';
+      q('[data-bgo-node-detail]').hidden=false;
+      show('[data-bgo-node-name]',agent?'Agent loop':m?.name||'');
+      show('[data-bgo-node-why]',agent?'The central turn/step driver coordinates other services.':m?.why||'');
+      show('[data-bgo-node-key]',agent?'ctx.agentLoop':m?.key||'');
+      q<HTMLAnchorElement>('[data-bgo-node-link]').href=source(agent?'packages/core/agent-loop/src/agent.ts':m?.file||'docs/architecture.md');
+      root.querySelectorAll<HTMLButtonElement>('[data-bgo-node]').forEach(n=>n.classList.toggle('is-linked',n===b));
+    }));
+    q<HTMLButtonElement>('[data-bgo-close-node]').addEventListener('click',()=>{q('[data-bgo-node-detail]').hidden=true;selectStep(selected);});
+    const scenarios={
+      normal:{title:'No tool call? Skip execution.',detail:'The model finishes without requesting tools. The settled answer is recorded, and the turn may end.',warning:'The model response and committed session history are separate concepts.',states:['active','muted','active','active']},
+      denied:{title:'Tool rejected before execution.',detail:'A policy or approval guard blocks the requested action; the tool body is skipped. The result can still be captured as an outcome.',warning:'This is an illustrative deny decision—not the project’s default policy.',states:['active','denied','active','active']},
+      disconnect:{title:'The UI disconnects. Durable history remains.',detail:'Live frames may be missed by a disconnected browser, but already-committed session facts can be projected when it reconnects.',warning:'A process crash before settlement is different: unsaved streaming frames are not magically durable.',states:['active','muted','active','disconnected']}
+    } as const;
+    root.querySelectorAll<HTMLButtonElement>('[data-bgo-case]').forEach(b=>b.addEventListener('click',()=>{
+      const id=b.dataset.bgoCase as keyof typeof scenarios,v=scenarios[id];if(!v)return;
+      root.querySelectorAll<HTMLButtonElement>('[data-bgo-case]').forEach(x=>{
+        const on=x===b;x.classList.toggle('is-active',on);x.setAttribute('aria-pressed',String(on));
+      });
+      show('[data-bgo-case-title]',v.title);show('[data-bgo-case-detail]',v.detail);show('[data-bgo-case-warning]',v.warning);
+      root.querySelectorAll<HTMLElement>('[data-bgo-scenario-box]').forEach((node,i)=>node.dataset.state=v.states[i]);
+    }));
+    selectStep(0);root.dataset.ready='true';
+  }
+</script>
+<style>
+  .bgo{--ink:#142336;--dim:#4d6171;--outline:#cfd9e4;--pale:#f6f9fc;--teal:#047f73;--green:#d6f6ea;--blue:#e4f0ff;--orange:#fff0de;--purple:#ede7ff;--white:#fff;margin:2.5rem 0 3rem;max-width:100%;min-width:0;color:var(--ink);font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
+  .bgo *{box-sizing:border-box}
+  .bgo button{cursor:pointer;font-family:inherit}
+  .bgo button:focus-visible,.bgo a:focus-visible{outline:3px solid #d1761b;outline-offset:3px}
+  .bgo strong,.bgo b,.bgo h2,.bgo h3,.bgo h4{color:var(--ink)!important}
+  .bgo-intro{border-radius:17px;border:1px solid #b8dbd3;background:linear-gradient(125deg,#eefcf7,#edf6ff);padding:2.15rem 2.3rem;position:relative;overflow:hidden}
+  .bgo-intro:after{content:'◇';font:250px/1 system-ui;position:absolute;right:-45px;bottom:-92px;color:#c7e3e5;pointer-events:none}
+  .bgo-intro>*{position:relative;z-index:1}
+  .bgo-label,.bgo-section-number,.bgo-kicker{font:750 .67rem/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;letter-spacing:.1em;color:#166d65}
+  .bgo-label{display:flex;align-items:center;gap:.45rem}.bgo-label-dot{display:inline-block;width:9px;height:9px;background:var(--teal);border-radius:50%}
+  .bgo-intro h2{font-size:clamp(1.8rem,4vw,3.1rem);max-width:630px;line-height:1.11;letter-spacing:-.055em;margin:.75rem 0 1rem!important}
+  .bgo-intro p{font-size:1rem;line-height:1.6;max-width:510px;color:var(--dim)!important}
+  .bgo-intro>a{display:inline-flex;align-items:center;gap:1rem;background:var(--teal);color:#fff!important;text-decoration:none;border-radius:7px;padding:.7rem 1rem;font-size:.81rem;font-weight:720;margin-top:.5rem}
+  .bgo-story{scroll-margin-top:100px;margin:2.3rem 0;border:1px solid var(--outline);border-radius:14px;padding:1.3rem;background:#fff}
+  .bgo-heading{display:flex;gap:1rem;align-items:end;justify-content:space-between;margin-bottom:1.15rem}
+  .bgo-heading h3{font-size:clamp(1.35rem,2.8vw,2rem);letter-spacing:-.04em;line-height:1.19;margin:.25rem 0 .4rem!important}
+  .bgo-heading p{font-size:.83rem;color:var(--dim)!important;line-height:1.5;margin:0!important;max-width:570px}
+  .bgo-heading>a{white-space:nowrap;text-decoration:none;border:1px solid var(--outline);padding:.56rem .7rem;border-radius:6px;color:#086d70;font-size:.73rem;font-weight:730}
+  .bgo-inline-chip{font:.64rem ui-monospace,monospace;color:var(--teal);border:1px solid #a6cfcc;border-radius:4px;padding:.4rem}
+  .bgo-diagram{border:1px solid #cbd9e8;border-radius:10px;background:#f6fafc;padding:1.2rem}
+  .bgo-client{background:var(--white);border:1px solid #9caec2;border-radius:8px;display:flex;gap:.7rem;align-items:center;max-width:395px;margin:auto;padding:.65rem .9rem}
+  .bgo-client-icon{background:#e4ebf3;color:#385b73;display:grid;place-items:center;width:37px;height:37px;border-radius:6px;font-size:1.25rem}
+  .bgo-client div{display:grid;gap:.1rem}.bgo-client strong{font-size:.74rem;letter-spacing:.02em}.bgo-client small{font-size:.68rem;color:var(--dim)}
+  .bgo-client-note{font-size:.61rem;color:#647c8e;margin-left:auto;white-space:nowrap}
+  .bgo-input-arrow{text-align:center;height:60px;display:flex;flex-direction:column;align-items:center;gap:0}
+  .bgo-input-arrow span{font:700 .61rem ui-monospace,monospace;color:var(--teal);padding-top:.35rem}.bgo-input-arrow b{color:var(--teal)!important;font-size:1.6rem;font-weight:400;line-height:1.25}
+  .bgo-runtime{border:2px solid #9bcabf;border-radius:10px;background:#effaf6;padding:1rem}
+  .bgo-runtime-title{display:flex;align-items:center;gap:.4rem;color:#1f7167;font:750 .7rem ui-monospace,monospace;letter-spacing:.08em}.bgo-runtime-title span{font-size:1.15rem}
+  .bgo-runtime-title small{margin-left:auto;letter-spacing:0;text-transform:none;font-size:.65rem;color:#536c65}
+  .bgo-core-layout{display:grid;grid-template-columns:minmax(155px,.7fr) minmax(0,1.3fr);gap:1rem;align-items:center;padding:.8rem 0}
+  .bgo-agent{min-height:214px;border:2px solid #3f8a81;border-radius:10px;background:#d6f6ea;display:flex;flex-direction:column;gap:.45rem;text-align:center;align-items:center;justify-content:center;padding:.85rem;color:var(--ink)}
+  .bgo-agent-logo{font-size:2.4rem;line-height:1;color:var(--teal)}.bgo-agent strong{font-size:1.12rem}.bgo-agent small{font-size:.74rem;color:#2a645d}
+  .bgo-agent code{font-size:.67rem;background:#bdeadd;padding:.28rem .4rem;border-radius:3px;color:#1d6b61}
+  .bgo-node-index,.bgo-agent-pointer{font:700 .55rem ui-monospace,monospace;letter-spacing:.05em;color:#087b71}
+  .bgo-agent-pointer{margin-top:.5rem;font-size:.61rem}
+  .bgo-services{display:grid;gap:.5rem}
+  .bgo-service-row{display:grid;grid-template-columns:21px minmax(0,1fr);align-items:center;gap:.35rem}
+  .bgo-arrow-direction{font-size:1.45rem;color:var(--teal);text-align:center}
+  .bgo-service{display:flex;align-items:center;gap:.7rem;min-width:0;width:100%;padding:.68rem;background:#fff;border:1px solid #adc2d1;border-radius:7px;color:var(--ink);text-align:left}
+  .bgo-service-index{font:750 .67rem ui-monospace,monospace;color:#5e7a8b}
+  .bgo-service-text{display:flex;flex-direction:column;gap:.1rem;flex:1;min-width:0}
+  .bgo-service-text strong{font-size:.77rem}.bgo-service-text small{font-size:.65rem;color:var(--dim);line-height:1.4}
+  .bgo-service-key{font:600 .62rem ui-monospace,monospace;color:#0c767b;overflow-wrap:anywhere;max-width:135px;text-align:right}
+  .bgo-runtime-footer{border-top:1px dashed #92beb1;padding-top:.8rem;text-align:center;font-size:.69rem;color:#46685f}
+  .bgo-bottom-channel{display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-top:.7rem}
+  .bgo-bottom-channel>div{border-radius:7px;border:1px solid #b2c6d7;background:var(--blue);padding:.7rem;display:grid;gap:.2rem}
+  .bgo-bottom-channel>div:nth-child(2){background:var(--orange);border-color:#e3c5a5}
+  .bgo-bottom-channel span{font:750 .58rem ui-monospace,monospace;color:#447199}
+  .bgo-bottom-channel>div:nth-child(2) span{color:#9b6529}
+  .bgo-bottom-channel strong{font-size:.71rem}.bgo-bottom-channel small{font-size:.64rem;color:var(--dim)}
+  .bgo-map-legend{font-size:.67rem!important;line-height:1.5!important;color:var(--dim)!important;margin:.8rem 0 0!important}
+  .bgo-legend-node{display:inline-block;width:10px;height:10px;background:var(--green);border:1px solid #3f8a81;vertical-align:middle;margin-right:.2rem}.bgo-legend-arrow{color:var(--teal);font-size:1rem;vertical-align:middle}
+  .bgo-agent:hover,.bgo-service:hover,.bgo-agent.is-linked,.bgo-service.is-linked{outline:3px solid #f3b548;outline-offset:1px}
+  .bgo-service-detail{position:relative;display:flex;justify-content:space-between;align-items:center;gap:1rem;background:#e8f9f7;border:1px solid #92c8c0;border-radius:8px;padding:1rem;margin-top:.8rem}
+  .bgo-service-detail[hidden]{display:none}.bgo-service-detail h4{font-size:1rem;margin:.3rem 0!important;line-height:1.4}
+  .bgo-service-detail code{font-size:.7rem;color:#216d70}.bgo-service-detail>a{margin-left:auto;white-space:nowrap;color:#036f6a;font-weight:700;font-size:.7rem}
+  .bgo-service-detail>button{border:0;background:transparent;color:#305e5e;font-size:1.3rem}
+  .bgo-step-scroll{display:flex;flex-wrap:nowrap;overflow-x:auto;gap:.38rem;padding:0 0 .85rem;scroll-snap-type:x mandatory;scrollbar-width:thin}
+  .bgo-step{border:1px solid #c7d5e0;border-radius:7px;background:#f6f9fc;min-width:115px;flex:1 0 115px;max-width:195px;min-height:65px;display:flex;align-items:flex-start;gap:.4rem;flex-direction:column;text-align:left;padding:.55rem;color:var(--ink);scroll-snap-align:start}
+  .bgo-step b{font:.8rem ui-monospace,monospace;color:var(--teal)!important}.bgo-step span{font-size:.73rem;font-weight:700}
+  .bgo-step.is-active{border-color:#2b9d89;background:var(--green);box-shadow:inset 0 -3px #14927c}
+  .bgo-walkthrough{display:grid;grid-template-columns:minmax(0,.95fr) minmax(0,1.05fr);gap:.8rem}
+  .bgo-spotlight{background:#f1f9f8;border:1px solid #b5d8d2;border-radius:8px;padding:1.2rem;display:flex;flex-direction:column;min-height:270px}
+  .bgo-spotlight-heading{display:flex;align-items:center;gap:.8rem;margin:.6rem 0}
+  .bgo-spotlight-heading>span{font:750 1.8rem ui-monospace,monospace;color:#048479}
+  .bgo-spotlight h4{font-size:1.25rem;letter-spacing:-.03em;margin:0!important}
+  .bgo-spotlight>p{font-size:.85rem;color:#344d59!important;line-height:1.6!important;margin:.3rem 0 .7rem!important}
+  .bgo-reason{display:grid;gap:.25rem;border-left:3px solid #33a08f;padding:.4rem .75rem;background:#e0f4ee;border-radius:2px}
+  .bgo-reason b{font:.63rem ui-monospace,monospace;color:#087a6d!important}.bgo-reason span{font-size:.78rem;color:#3a5a60;line-height:1.5}
+  .bgo-nav-controls{display:flex;align-items:center;gap:.55rem;margin-top:auto;padding-top:1.1rem}
+  .bgo-nav-controls button{min-height:42px;padding:.6rem .7rem;border:1px solid #98bcb8;border-radius:6px;background:#fff;color:#1f5e5a;font-size:.73rem;font-weight:700}
+  .bgo-nav-controls button:last-child{background:#147b73;color:#fff;border-color:#147b73}.bgo-nav-controls button:disabled{opacity:.35;cursor:not-allowed}
+  .bgo-nav-controls span{font:700 .65rem ui-monospace,monospace;color:#66817e;margin:auto}
+  .bgo-code{background:#102035;border:1px solid #304b62;border-radius:8px;overflow:hidden;min-width:0;display:flex;flex-direction:column}
+  .bgo-code-header{display:flex;justify-content:space-between;gap:.6rem;padding:.67rem .8rem;background:#1a3047;border-bottom:1px solid #3a5569;color:#b9d3e5;font:650 .6rem ui-monospace,monospace;letter-spacing:.05em}
+  .bgo-code-dot{display:inline-block;width:7px;height:7px;background:#cf6671;border-radius:50%;margin-right:3px}.bgo-code-dot:nth-child(2){background:#e1ac55}.bgo-code-dot:nth-child(3){background:#68b89c}
+  .bgo-code-header a{color:#a6ebdd;text-decoration:none;white-space:nowrap;font-size:.65rem}
+  .bgo-code-file{padding:.7rem .85rem .3rem;color:#8fbbd2;font:.67rem ui-monospace,monospace;overflow-wrap:anywhere}
+  .bgo-code pre{background:transparent!important;border:0!important;padding:.6rem .8rem!important;margin:0!important;overflow:auto;max-height:235px;flex:1;min-height:118px}
+  .bgo-code pre code{color:#e4eff7!important;font:500 .7rem/1.8 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre}
+  .bgo-code>p{font-size:.68rem;color:#b9ccde!important;line-height:1.55!important;border-top:1px solid #34516b;margin:0!important;padding:.65rem .85rem}.bgo-code>p a{color:#b5eae4}
+  .bgo-accuracy{font-size:.71rem!important;color:var(--dim)!important;line-height:1.6!important;margin:.8rem 0 0!important}
+  .bgo-scenario-options{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:.9rem}
+  .bgo-scenario-options button{border:1px solid #bbcede;border-radius:7px;background:#f4f8fa;color:#244659;font-size:.75rem;font-weight:700;padding:.65rem .8rem;min-height:44px}
+  .bgo-scenario-options button.is-active{background:var(--green);border-color:#51a48f;color:#036b60}
+  .bgo-scenario-map{border:1px solid #cbd9e3;border-radius:9px;background:#f8fbfd;padding:1rem}
+  .bgo-scenario-rail{display:flex;align-items:center;justify-content:space-between;gap:.35rem}
+  .bgo-scenario-rail>div{flex:1;min-width:0;text-align:center;padding:.75rem .3rem;border:1px solid #9ab7c5;border-radius:6px;background:#e5f0fa;color:#305b72;font-size:.74rem;font-weight:750}
+  .bgo-scenario-rail>div span{display:block;font-size:.61rem;color:var(--dim);font-weight:500;margin-top:.25rem}
+  .bgo-scenario-rail>b{color:var(--teal)!important;font-size:1.1rem}
+  .bgo-scenario-rail [data-state="active"]{background:#dff8ed;border-color:#54ad94}
+  .bgo-scenario-rail [data-state="muted"]{opacity:.55}
+  .bgo-scenario-rail [data-state="denied"]{background:#ffe0de;border-color:#c87575}
+  .bgo-scenario-rail [data-state="disconnected"]{background:#fbe6d1;border:2px dashed #c78c42}
+  .bgo-scenario-answer{border-top:1px solid #d5e0e8;margin-top:1rem;padding-top:1rem}
+  .bgo-scenario-answer strong{font-size:.97rem}.bgo-scenario-answer p{font-size:.79rem;color:var(--dim)!important;line-height:1.55!important;margin:.4rem 0!important}
+  .bgo-scenario-answer small{display:block;font-size:.69rem;color:#89582e}
+  .bgo-lessons{padding:1.25rem;border:1px solid var(--outline);background:#fff;border-radius:14px}
+  .bgo-lessons-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.65rem}
+  .bgo-lessons-grid article{padding:1rem;border-radius:9px;border:1px solid #cad9e5;background:#f7fafc;min-width:0}
+  .bgo-lessons-grid article>span{font:.67rem ui-monospace,monospace;color:#0d7970}
+  .bgo-lesson-art{display:flex;align-items:center;justify-content:center;gap:.3rem;margin:1rem 0;padding:.8rem .25rem;background:#e3f6ef;border-radius:6px}
+  .bgo-lessons-grid article:nth-child(2) .bgo-lesson-art{background:#e8efff}
+  .bgo-lessons-grid article:nth-child(3) .bgo-lesson-art{background:#fff0df}
+  .bgo-lesson-art b{background:#fff;border:1px solid #a9bfcb;border-radius:5px;font-size:.6rem;padding:.4rem;white-space:nowrap}
+  .bgo-lesson-art i{font-style:normal;color:#537b7a}
+  .bgo-lessons-grid h4{font-size:.95rem;line-height:1.35;margin:.45rem 0!important}
+  .bgo-lessons-grid p{color:var(--dim)!important;font-size:.77rem!important;line-height:1.55!important;margin:0!important}
+  .bgo-usecases{border-top:1px solid #d6e0e9;margin-top:1.1rem;padding-top:1rem}
+  .bgo-usecases>div{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.4rem}
+  .bgo-usecases>div span{border:1px solid #a9c9d0;background:#eff7f9;border-radius:30px;padding:.4rem .65rem;font-size:.7rem;color:#3c6571}
+  .bgo-takeaway{margin-top:1rem;padding:.9rem;background:#e9f7f2;border-left:3px solid #0f8779;color:#35605a;font-size:.78rem;line-height:1.6}
+  .bgo-footer p{font-size:.7rem!important;line-height:1.65!important;color:var(--dim)!important}.bgo-footer a{color:#117d75}
+  @media(max-width:870px){
+    .bgo-core-layout{grid-template-columns:minmax(140px,.7fr) minmax(0,1.3fr);gap:.6rem}
+    .bgo-service-key{display:none}
+    .bgo-lessons-grid{grid-template-columns:1fr 1fr}
+    .bgo-lessons-grid article:last-child{grid-column:1/-1}
+  }
+  @media(max-width:680px){
+    .bgo-intro{padding:1.35rem 1.15rem}
+    .bgo-story{padding:.85rem}
+    .bgo-heading{align-items:flex-start;flex-direction:column}
+    .bgo-heading>a{white-space:normal}
+    .bgo-diagram{padding:.7rem}
+    .bgo-core-layout{grid-template-columns:1fr;gap:.2rem}
+    .bgo-agent{min-height:145px}
+    .bgo-agent-pointer{display:none}
+    .bgo-services{position:relative;padding-left:.4rem;gap:.4rem}
+    .bgo-arrow-direction{transform:rotate(90deg);font-size:1.2rem}
+    .bgo-service-row{grid-template-columns:22px 1fr}
+    .bgo-runtime-title{display:block;line-height:1.7}
+    .bgo-runtime-title small{display:block;margin:0}
+    .bgo-service-key{display:block;font-size:.58rem}
+    .bgo-walkthrough{grid-template-columns:1fr}
+    .bgo-spotlight{min-height:260px}
+    .bgo-lessons-grid{grid-template-columns:1fr}
+    .bgo-lessons-grid article:last-child{grid-column:auto}
+    .bgo-service-detail{align-items:flex-start;flex-wrap:wrap;padding-right:2rem}
+    .bgo-service-detail>button{position:absolute;top:.4rem;right:.3rem}
+  }
+  @media(max-width:420px){
+    .bgo-client-note{display:none}
+    .bgo-runtime{padding:.65rem}
+    .bgo-bottom-channel{grid-template-columns:1fr}
+    .bgo-service-key{display:none}
+    .bgo-scenario-rail{flex-wrap:wrap;justify-content:center}
+    .bgo-scenario-rail>div{flex:1 1 37%;min-width:91px}
+    .bgo-scenario-rail>b{display:none}
+    .bgo-nav-controls{flex-wrap:wrap}
+    .bgo-code-header{flex-wrap:wrap}
+  }
+  @media(prefers-reduced-motion:reduce){.bgo *{scroll-behavior:auto!important}}
+
+  .bgo-handoff{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;padding:.45rem 0 .55rem}
+  .bgo-handoff span{display:inline-flex;align-items:center;min-height:34px;border:1px solid #8bc0b9;border-radius:6px;background:#fff;color:#206c65;font-weight:750;font-size:.71rem;padding:.45rem .6rem}
+  .bgo-handoff b{color:#018774!important;font-size:1.2rem}
+  .bgo-service-index{min-width:29px;text-align:center;font-size:.55rem;color:#5e7a8b}
+
+</style>
