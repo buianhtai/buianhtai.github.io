@@ -32,6 +32,11 @@ try {
       assert.match(await page.locator('h1').first().innerText(),/DeepSeek Harness/);
       assert.equal(await root.locator('.hvs-chapter').count(),5,'Five interactive editorial infographic chapters');
       assert.equal(await root.locator('[data-capability]').count(),6,'Six clickable capability seams');
+      assert.equal(await root.locator('.hvs-service-links > span:not(.hvs-link-hub)').count(),4,'Agent loop explicitly connects to four service contracts');
+      for(const selector of ['.hvs-capability strong','.hvs-step strong','.hvs-policy-node strong','.hvs-case strong','.hvs-relation']){
+        const ink=await root.locator(selector).first().evaluate(el=>getComputedStyle(el).color);
+        assert.equal(ink,'rgb(238, 249, 251)','Dark technical card labels must have high contrast: '+selector);
+      }
       assert.equal(await root.locator('[data-stage]').count(),7,'Seven request stages');
       assert.equal(await root.locator('[data-scenario]').count(),3,'Three illustrative policy branches');
       assert.equal(await root.locator('[data-case]').count(),4,'Four example use cases');
@@ -81,7 +86,7 @@ try {
       await root.locator('[data-stage="3"]').click();
       await root.locator('[data-scenario="read"]').click();
       await root.locator('[data-case="coding"]').click();
-      await page.evaluate(()=>window.scrollTo(0,0));
+      await page.evaluate(()=>{document.activeElement instanceof HTMLElement && document.activeElement.blur();window.scrollTo(0,0);});
       await page.screenshot({path:'artifacts/deepseek-harness-article/visual-story-'+theme+'-'+width+'.png',fullPage:true});
       for(const [name,id] of [['system','hvs-system'],['journey','hvs-journey'],['policy','hvs-policy'],['cases','hvs-cases']]){
         await page.locator('#'+id).screenshot({path:'artifacts/deepseek-harness-article/'+name+'-'+theme+'-'+width+'.png'});
