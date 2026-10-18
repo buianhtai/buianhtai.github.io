@@ -47,16 +47,16 @@ try {
       assert.equal(await guide.locator('[data-bgo-node-detail]').isVisible(),false);
       // Stepper reveals code and highlights owning component.
       await guide.locator('[data-bgo-step="2"]').click();
-      assert.match(await guide.locator('[data-bgo-step-title]').innerText(),/Ask the model/);
+      assert.match(await guide.locator('[data-bgo-step-title]').innerText(),/Ask the model/i);
       assert.match(await guide.locator('[data-bgo-code-preview]').innerText(),/AssistantStreamAttempt|\.stream\(/);
       assert.equal(await guide.locator('[data-bgo-node="model"]').evaluate(el=>el.classList.contains('is-linked')),true);
       await guide.locator('[data-bgo-next]').click();
-      assert.match(await guide.locator('[data-bgo-step-title]').innerText(),/Check for tool calls/);
+      assert.match(await guide.locator('[data-bgo-step-title]').innerText(),/Check for tool calls/i);
       assert.match(await guide.locator('[data-bgo-code-preview]').innerText(),/executeToolCalls/);
       await guide.locator('[data-bgo-step="6"]').click();
       assert.equal(await guide.locator('[data-bgo-next]').isDisabled(),true);
       await guide.locator('[data-bgo-prev]').click();
-      assert.match(await guide.locator('[data-bgo-step-title]').innerText(),/Record the outcome/);
+      assert.match(await guide.locator('[data-bgo-step-title]').innerText(),/Record the outcome/i);
       // Failure paths must change the outcome, not just a highlighted tab.
       await guide.locator('[data-bgo-case="denied"]').click();
       assert.match(await guide.locator('[data-bgo-case-title]').innerText(),/rejected before execution/i);
