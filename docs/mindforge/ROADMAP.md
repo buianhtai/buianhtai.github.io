@@ -122,3 +122,12 @@ Increment 1 does **not** complete all of #73, #74 or #77: in-browser mobile/e2e 
 - Mobile control buttons exercised and 2D maze swipe verified in Chromium.
 - Actual WebGL rendering, real iOS Safari and Android touch testing **pending after merge**.
 - Existing score format / local storage and audio opt-in preserved, no additional runtime assets.
+
+## Sudoku Garden — 2D number puzzle (#103, new Arcade game)
+- New standalone route: `/mindforge/arcade/sudoku/`, linked from the Arcade landing page.
+- Three difficulties: Beginner 4×4, Normal 6×6, Advanced 9×9; different Sudoku box shapes.
+- Randomly generated **single-solution** puzzles validated by bitmask MRV solver during clue removal (100 samples per mode passed uniqueness/row/column/box correctness tests).
+- Phone-first touch numpad with 2-row 9-number layout at narrow widths, selectable cells, optional large/scrollable board, keyboard navigation, note pencil, undo, erase, 3 hints, pause.
+- EN/VI, local resume and best scores, no time pressure, reused opt-in sound kit; no external puzzle data.
+- Chromium responsive/interactions at 320, 390, 768, 1280px; full Beginner solve UI and save/resume tested in sandbox with a storage shim.
+- Production GitHub Pages delivery and physical-device iOS Safari/Android QA pending; keep issue #103 open until verified.
