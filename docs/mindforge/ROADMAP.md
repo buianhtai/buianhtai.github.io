@@ -10,9 +10,9 @@ Train habits of attention, memory, reasoning, and evidence-based decisions throu
 
 | Release | Task | Issue | Status |
 |---|---|---|---|
-| V2.1 | Motion system / feedback | [#73](https://github.com/buianhtai/buianhtai.github.io/issues/73) | In progress |
-| V2.1 | Animated Memory Matrix | [#74](https://github.com/buianhtai/buianhtai.github.io/issues/74) | In progress |
-| V2.1 | Progress trend visuals | [#77](https://github.com/buianhtai/buianhtai.github.io/issues/77) | In progress (first chart) |
+| V2.1 | Motion system / feedback | [#73](https://github.com/buianhtai/buianhtai.github.io/issues/73) | In review — [PR #83](https://github.com/buianhtai/buianhtai.github.io/pull/83) |
+| V2.1 | Animated Memory Matrix | [#74](https://github.com/buianhtai/buianhtai.github.io/issues/74) | In review — [PR #83](https://github.com/buianhtai/buianhtai.github.io/pull/83) |
+| V2.1 | Progress trend visuals | [#77](https://github.com/buianhtai/buianhtai.github.io/issues/77) | In review (first chart) — [PR #83](https://github.com/buianhtai/buianhtai.github.io/pull/83) |
 | V2.1 | Mobile QA + accessibility | [#78](https://github.com/buianhtai/buianhtai.github.io/issues/78) | Backlog |
 | V2.2 | Pattern Builder | [#75](https://github.com/buianhtai/buianhtai.github.io/issues/75) | Backlog |
 | V2.2 | Focus Challenge | [#76](https://github.com/buianhtai/buianhtai.github.io/issues/76) | Backlog |
