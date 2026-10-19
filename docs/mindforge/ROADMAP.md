@@ -93,3 +93,11 @@ Increment 1 does **not** complete all of #73, #74 or #77: in-browser mobile/e2e 
 - Audio roles: select, tap, step, move, place, undo, collect, correct, wrong and level complete. Works in Visual Arcade and 3D Lab.
 - Sound off by default, opt-in, volume and mute persistent across games, controls in EN/VI; no autoplay, microphone, tracking, or external audio assets.
 - Tested mocked-AudioContext sound trigger/UI and no overflow in Chromium at 320, 390, 768 and 1280 px; physical iOS/Android and live Pages deployment QA remain open.
+
+## V2.5 Picture Worlds, Mobile First (#98)
+- Six distinct, procedurally selected SVG environments: Mountain Valley, Tropical Coast, Colorful City, Autumn Forest, Snowy Mountains, Desert Canyon.
+- Scenery and changed objects vary between consecutive rounds; two images in one round use the same environment for a fair comparison.
+- On phones, before/after tabs display one large image. On tablets/desktop, two images remain visible side by side.
+- Six labeled touch choices remain accessible under the image, minimum 48px height. Score rules (Beginner/Normal/Advanced), sound toggle, motion toggle, and offline score history remain unchanged.
+- QA: Chromium 320/390/768/1280px x 6 rounds; advanced x 8 rounds, no JS exceptions or page overflow; JS syntax check.
+- Continue issue #98 for post-deploy real-device iOS/Android/browser QA and future randomized object packs with varied positions.
