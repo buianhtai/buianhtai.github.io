@@ -87,3 +87,9 @@ Increment 1 does **not** complete all of #73, #74 or #77: in-browser mobile/e2e 
 - Add Undo for Tower and Maze: restores cells / robot position / gems / move count; disable after completion.
 - Avoid stale WebGL launch if user exits while a module is loading; preserve bilingual and reduced-motion settings.
 - QA: 1,500 randomized puzzle tests, 4 responsive viewports, and Undo state restoration verified in Chromium. Real-WebGL and real-device Safari/Android testing pending.
+
+## V2.5 — Optional sound effects (#96)
+- Earshot-inspired named sound roles, original browser Web Audio implementation only (no Earshot Python runtime or recorded samples).
+- Audio roles: select, tap, step, move, place, undo, collect, correct, wrong and level complete. Works in Visual Arcade and 3D Lab.
+- Sound off by default, opt-in, volume and mute persistent across games, controls in EN/VI; no autoplay, microphone, tracking, or external audio assets.
+- Tested mocked-AudioContext sound trigger/UI and no overflow in Chromium at 320, 390, 768 and 1280 px; physical iOS/Android and live Pages deployment QA remain open.
