@@ -38,3 +38,10 @@
 @media(max-width:440px){.mf-chart{padding:6px 0}.mf-chart .mf-axis-label{font-size:14px}}
 @media(prefers-reduced-motion:reduce){.game-card,.stat,.panel,.hero .brain-main,.challenge,.memory-cell.lit,.feedback,.option.correct,.option.wrong,.result-icon,.result-score,.chart-bar,.meter>span,.mf-timer>i,.mf-chart .mf-line{animation:none!important;transition:none!important;transform:none!important;stroke-dashoffset:0!important}}
 body.reduce-motion .game-card,body.reduce-motion .stat,body.reduce-motion .panel,body.reduce-motion .hero .brain-main,body.reduce-motion .challenge,body.reduce-motion .memory-cell.lit,body.reduce-motion .feedback,body.reduce-motion .option.correct,body.reduce-motion .option.wrong,body.reduce-motion .result-icon,body.reduce-motion .result-score,body.reduce-motion .chart-bar,body.reduce-motion .meter>span,body.reduce-motion .mf-timer>i,body.reduce-motion .mf-chart .mf-line{animation:none!important;transition:none!important;transform:none!important;stroke-dashoffset:0!important}
+
+/* Visual Arcade entry link on home and practice pages. */
+.mf-arcade-cta{display:flex;align-items:center;gap:16px;margin:19px 0;padding:17px 20px;border:1px solid #9a87fa74;border-radius:19px;background:linear-gradient(105deg,#25264b,#3e346b);color:#fff;text-decoration:none;box-shadow:0 12px 30px #3e346b27;transition:transform .18s,border-color .18s}
+.mf-arcade-cta:hover{transform:translateY(-2px);border-color:#aea0ff}.mf-arcade-cta:focus-visible{outline:3px solid var(--purple);outline-offset:3px}
+.mf-arcade-emoji{font-size:37px;flex:none}.mf-arcade-copy{display:grid;gap:6px;min-width:0}.mf-arcade-copy strong{font-size:15px;color:#fff}.mf-arcade-copy small{font-size:12px;line-height:1.5;color:#d6d2f9}.mf-arcade-arrow{margin-left:auto;color:#c9baff;font-size:27px}
+@media(max-width:480px){.mf-arcade-cta{padding:15px 13px;gap:11px}.mf-arcade-emoji{font-size:29px}.mf-arcade-copy strong{font-size:13px}.mf-arcade-copy small{font-size:11px}}
+@media(prefers-reduced-motion:reduce){.mf-arcade-cta{transition:none;transform:none!important}}body.reduce-motion .mf-arcade-cta{transition:none;transform:none!important}
