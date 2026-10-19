@@ -1,4 +1,4 @@
-const CACHE='mindforge-v25-audio-20261019';
+const CACHE='mindforge-v25-scene-worlds-20261019';
 const CORE=['./','./index.html','./manifest.webmanifest','./assets/icon.svg','./visuals.css','./visuals.js','./arcade/','./arcade/index.html','./arcade/3d/','./arcade/3d/index.html','./arcade/sound-kit.js'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(CORE)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
