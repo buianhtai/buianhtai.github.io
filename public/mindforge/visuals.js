@@ -31,7 +31,14 @@
   chart.innerHTML='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 180" role="img" aria-label="'+esc(tr('Accuracy in the last','Độ chính xác trong'))+' '+values.length+' '+esc(tr('sessions','lượt chơi'))+'">'+grid+'<polyline class="mf-line" points="'+path+'"/>'+dots+nums+'</svg><p class="mf-summary">'+esc(tr('Sessions and accuracy','Lượt chơi và độ chính xác'))+': '+labels+'</p>';
   const summary=chart.nextElementSibling;if(summary?.classList.contains('tiny'))summary.hidden=true;
  }
- function enhance(){memoryPreview();renderTrend()}
+ 
+ function arcadeEntry(){
+  const games=app.querySelector('.workspace .games');if(!games||app.querySelector('.mf-arcade-cta'))return;
+  const vi=document.documentElement.lang==='vi';const a=document.createElement('a');a.className='mf-arcade-cta';a.href='./arcade/';
+  a.innerHTML='<span class="mf-arcade-emoji" aria-hidden="true">🧊</span><span class="mf-arcade-copy"><strong>'+(vi?'Khám phá Visual Arcade — Trò chơi 3D & hình ảnh':'Explore Visual Arcade — 3D & picture games')+'</strong><small>'+(vi?'Xoay khối 3D, tìm điểm khác nhau và giải mê cung.':'Rotate 3D cubes, spot the difference and solve mazes.')+'</small></span><span class="mf-arcade-arrow" aria-hidden="true">↗</span>';
+  games.insertAdjacentElement('afterend',a);
+ }
+ function enhance(){memoryPreview();renderTrend();arcadeEntry()}
  const observer=new MutationObserver(enhance);observer.observe(app,{childList:true,subtree:true});
  app.addEventListener('click',event=>{
   const cell=event.target.closest('.memory-cell[data-cell]');if(!cell)return;
