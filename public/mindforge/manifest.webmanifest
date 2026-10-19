@@ -1,0 +1,19 @@
+{
+  "id": "./",
+  "name": "MindForge — Thinking Playground",
+  "short_name": "MindForge",
+  "description": "Reasoning, memory, focus and critical thinking games.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f7f7fc",
+  "theme_color": "#181a3a",
+  "icons": [
+    {
+      "src": "assets/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
