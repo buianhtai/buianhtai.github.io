@@ -46,3 +46,10 @@ Increment 1:
 - `public/mindforge/index.html`: source references to optional visual assets.
 
 Increment 1 does **not** complete all of #73, #74 or #77: in-browser mobile/e2e testing and a deeper trend comparison remain necessary.
+
+## Visual Arcade pilot (new game genres)
+- **#84:** Playable cube rotation (CSS 3D), image detective (SVG hotspots), and isometric pathfinding: implemented on `feat/mindforge-visual-arcade-pilot` for review.
+- **#85:** Visual asset library, illustration polishing, full accessibility and age-specific tuning: backlog.
+- **#86:** Explore performance-tested WebGL/Three.js scenes with accessible 2D fallback: research backlog.
+- **Pilot testing:** desktop Chromium 1280px and mobile emulation 390px via in-memory HTML, plus all three game flows; production deployment and Safari/Android still pending.
+- **Navigation:** the Visual Arcade sits under `/mindforge/arcade/`, linked from MindForge Dashboard and Practice, with independent local high scores.
