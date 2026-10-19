@@ -141,3 +141,13 @@ Increment 1 does **not** complete all of #73, #74 or #77: in-browser mobile/e2e 
 - QA: independent BFS verification of **all 45 levels**, and full browser drag playthroughs at **320/390/768/1280** px across each difficulty (12 wins), plus hint, undo, and language switching checks. No JS errors or horizontal overflow.
 - Acceptance pending: real GitHub Pages build and physical Safari/Android touch validation; hosted persistence reload cannot be simulated by navigation in this testing environment.
 - [Track issue #105](https://github.com/buianhtai/buianhtai.github.io/issues/105).
+
+## V2.9 — Unified MindForge Game Library — #107
+- New bilingual VI/EN, mobile-first `/mindforge/games/` catalogue covering all 13 existing playable games: 5 classic exercises, 3 Visual Arcade, 3 Spatial Lab, Sudoku, and Traffic Escape.
+- Primary discovery controls: search and skill chips; secondary collapsible filters: age guidance (4–6/7–12/13–17/adults/60+), difficulty and approximate session duration; 6-card progressive disclosure on first visit.
+- Original vector SVG game illustrations without remote asset dependencies. Each entry launches its specific game directly through safe, allowlisted URL parameters for the classic, Arcade, and 3D worlds; Sudoku and Traffic retain their direct routes.
+- Existing MindForge family dashboard and practice remain unchanged except for a library entry; Arcade header links to library. WebGL only loads when a 3D game is opened.
+- No account required to browse; existing profiles/scores/settings remain in existing per-game stores. Informal recommended age/time only, **not** official ratings or measured times.
+- Chromium Playwright tests at 320/390/768/1280 px: 13 game links, skill/age/difficulty/time filters, bilingual switch, search (empty/results), show more, viewport overflow and no page JS errors.
+- QA remaining: public Pages workflow/live URL, physical iOS Safari/Android, real WebGL and cached routes, screen readers and actual navigation to direct links.
+- [Issue #107](https://github.com/buianhtai/buianhtai.github.io/issues/107) remains open until post-deploy QA.
