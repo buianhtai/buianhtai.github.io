@@ -62,3 +62,11 @@ Increment 1 does **not** complete all of #73, #74 or #77: in-browser mobile/e2e 
 - **Data:** locally stored scores keyed by profile + difficulty + game. Existing `mindforge-arcade-scores-v1` data remains readable for normal mode.
 - **Verification:** Chromium 320px, 390px, 1280px: 54 playable rounds per viewport, 900 randomized advanced spatial-orientation samples overall; no JS errors or horizontal overflow. Live Pages, iOS Safari, Android physical-device validation remain open.
 - **Release gate:** #88 stays open until live Pages verification and UX feedback are collected.
+
+## Visual Arcade V2.3 — Graphic overhaul (#90)
+- Original vector cover illustrations and more legible 3D cube/maze game pieces replace emoji-heavy artwork.
+- Picture Detective scenes are repainted using layered SVG while preserving 6 changeable object categories and hotspot positions.
+- Responsive design tested at 320 / 390 / 768 / 1280; Advanced maze is no longer clipped.
+- Accessibility: reduced-motion styles, focus states, text labels retained; on-device Safari/Android still require release QA.
+- No remote assets, font downloads, analytics or added runtime dependency.
+- [PR](https://github.com/buianhtai/buianhtai.github.io/pulls?q=is%3Apr+mindforge+graphics) to review; issue #90 remains open until post-deploy QA.
