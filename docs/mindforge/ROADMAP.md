@@ -53,3 +53,12 @@ Increment 1 does **not** complete all of #73, #74 or #77: in-browser mobile/e2e 
 - **#86:** Explore performance-tested WebGL/Three.js scenes with accessible 2D fallback: research backlog.
 - **Pilot testing:** desktop Chromium 1280px and mobile emulation 390px via in-memory HTML, plus all three game flows; production deployment and Safari/Android still pending.
 - **Navigation:** the Visual Arcade sits under `/mindforge/arcade/`, linked from MindForge Dashboard and Practice, with independent local high scores.
+
+## Visual Arcade V2.2 — difficulty and interaction (#88)
+- **Beginner** (4 rounds): three-choice cube, one scene change, solvable 3×3 maze.
+- **Normal** (6 rounds): four-choice cube, one scene change, solvable 4×4 maze.
+- **Advanced** (8 rounds): cube spatial orientation determined by a front/top pair, two image differences, solvable 5×5 maze with two crystals and route-efficiency evaluation.
+- **UX:** visible mode selector; clearer game cards, progress and results; corrected overlapping illustration targets and added explicit keyboard/touch object choices.
+- **Data:** locally stored scores keyed by profile + difficulty + game. Existing `mindforge-arcade-scores-v1` data remains readable for normal mode.
+- **Verification:** Chromium 320px, 390px, 1280px: 54 playable rounds per viewport, 900 randomized advanced spatial-orientation samples overall; no JS errors or horizontal overflow. Live Pages, iOS Safari, Android physical-device validation remain open.
+- **Release gate:** #88 stays open until live Pages verification and UX feedback are collected.
