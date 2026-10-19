@@ -101,3 +101,24 @@ Increment 1 does **not** complete all of #73, #74 or #77: in-browser mobile/e2e 
 - Six labeled touch choices remain accessible under the image, minimum 48px height. Score rules (Beginner/Normal/Advanced), sound toggle, motion toggle, and offline score history remain unchanged.
 - QA: Chromium 320/390/768/1280px x 6 rounds; advanced x 8 rounds, no JS exceptions or page overflow; JS syntax check.
 - Continue issue #98 for post-deploy real-device iOS/Android/browser QA and future randomized object packs with varied positions.
+
+## V2.6 Phone-first controls and randomized layouts — #100, #101
+**Shipped on feature branch:** `feat/mindforge-v26-touch-random-puzzles`
+
+### Touch UX
+- 3D Cube: large arrow/orbit controls directly under canvas, reset camera, and keyboard alternatives.
+- 3D Tower: tap blueprint cells, or use Previous/Next cell, +/− block, Undo without scrolling to precise 3D meshes.
+- 3D Maze: direct movement + Undo bar immediately under canvas; 2D Maze also supports board swipes.
+- Larger buttons and no accidental page gesture takeover outside the game interaction area.
+
+### Content variety
+- Picture Detective: +Bird and +Flower objects (8 categories total), adjustable per-round object offsets with synchronized hitboxes, six existing background worlds.
+- Tower: staircase, pyramid, checker, ridge and skyline blueprints; variants rotate and mirror.
+- Maze: one of four opposite-corner start/goal pairs, random obstacles/gems with solvability guarantee.
+
+### Verification
+- Chromium UI at 320, 390, 768, 1280px: 24 complete picture rounds, 8 additional Advanced rounds, no JS errors / horizontal overflow.
+- 150 generated Towers and Mazes for each of 3 difficulties × 4 viewports: **1,800 each**, all structurally valid and all mazes solvable.
+- Mobile control buttons exercised and 2D maze swipe verified in Chromium.
+- Actual WebGL rendering, real iOS Safari and Android touch testing **pending after merge**.
+- Existing score format / local storage and audio opt-in preserved, no additional runtime assets.
