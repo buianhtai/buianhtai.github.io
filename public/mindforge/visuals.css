@@ -1,0 +1,40 @@
+/* MindForge V2: accessible motion design system. */
+:root{--mf-ease:cubic-bezier(.2,.8,.2,1)}
+.game-card,.stat,.panel{animation:mf-rise .36s var(--mf-ease) both}
+.games .game-card:nth-child(2){animation-delay:40ms}.games .game-card:nth-child(3){animation-delay:80ms}.games .game-card:nth-child(4){animation-delay:120ms}.games .game-card:nth-child(5){animation-delay:160ms}
+.hero .brain-main{animation:mf-float 5.5s ease-in-out infinite}
+.challenge{animation:mf-rise .36s var(--mf-ease) both}
+.memory-cell{position:relative;min-width:0;min-height:44px;transition:background-color .18s,border-color .18s,box-shadow .18s,transform .18s;touch-action:manipulation}
+.memory-cell.lit{animation:mf-memory-glow .8s ease-in-out both}
+.memory-cell.selected{transform:scale(.95);box-shadow:0 0 0 3px #20ac9330 inset}
+.memory-cell.revealed{box-shadow:0 0 0 3px #7e6ae930 inset}
+.memory-cell.mistake{box-shadow:0 0 0 3px #ef7f9630 inset}
+.memory-cell:focus-visible{outline:3px solid var(--purple);outline-offset:3px}
+.feedback{animation:mf-rise .28s var(--mf-ease) both}
+.option.correct{animation:mf-good .36s var(--mf-ease) both}
+.option.wrong{animation:mf-wrong .31s ease both}
+.result-icon{animation:mf-celebrate .65s var(--mf-ease) both}
+.result-score{animation:mf-rise .45s var(--mf-ease) both}
+.chart-bar,.meter>span{animation:mf-bar .62s var(--mf-ease) both;transform-origin:bottom center}
+.mf-timer{height:5px;border-radius:99px;background:var(--surface3);overflow:hidden;max-width:380px;margin:-5px auto 20px}
+.mf-timer>i{display:block;height:100%;width:100%;background:linear-gradient(90deg,var(--mint),var(--purple));border-radius:inherit;animation:mf-countdown var(--mf-duration,4300ms) linear both;transform-origin:left}
+.mf-chart{display:block;min-height:145px;padding:10px 8px 2px;overflow:hidden}
+.mf-chart svg{width:100%;height:auto;display:block;overflow:visible}
+.mf-chart .mf-gridline{stroke:var(--border);stroke-width:1;stroke-dasharray:3 6}
+.mf-chart .mf-axis-label{font-size:12px;fill:var(--muted);font-weight:700}
+.mf-chart .mf-line{stroke:var(--purple);stroke-width:4;stroke-linejoin:round;stroke-linecap:round;fill:none;stroke-dasharray:900;stroke-dashoffset:900;animation:mf-trace .9s ease-out forwards}
+.mf-chart .mf-dot{fill:var(--surface);stroke:var(--purple);stroke-width:4;transition:r .18s}
+.mf-chart .mf-dot:hover{r:8}
+.mf-summary{margin-top:8px;color:var(--muted);font-size:12px;line-height:1.6}
+@keyframes mf-rise{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:translateY(0)}}
+@keyframes mf-float{0%,100%{transform:translateY(0) rotate(-9deg)}50%{transform:translateY(-9px) rotate(-6deg)}}
+@keyframes mf-memory-glow{0%{filter:brightness(1);transform:scale(.95)}50%{filter:brightness(1.16);transform:scale(1.04)}100%{filter:brightness(1);transform:scale(1)}}
+@keyframes mf-good{0%{transform:scale(.98)}55%{transform:scale(1.02)}100%{transform:scale(1)}}
+@keyframes mf-wrong{0%,100%{transform:translateX(0)}30%{transform:translateX(-3px)}70%{transform:translateX(3px)}}
+@keyframes mf-celebrate{0%{transform:scale(.6) rotate(-9deg);opacity:.5}65%{transform:scale(1.14) rotate(4deg)}100%{transform:scale(1) rotate(0);opacity:1}}
+@keyframes mf-bar{from{transform:scaleY(.05)}to{transform:scaleY(1)}}
+@keyframes mf-countdown{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+@keyframes mf-trace{to{stroke-dashoffset:0}}
+@media(max-width:440px){.mf-chart{padding:6px 0}.mf-chart .mf-axis-label{font-size:14px}}
+@media(prefers-reduced-motion:reduce){.game-card,.stat,.panel,.hero .brain-main,.challenge,.memory-cell.lit,.feedback,.option.correct,.option.wrong,.result-icon,.result-score,.chart-bar,.meter>span,.mf-timer>i,.mf-chart .mf-line{animation:none!important;transition:none!important;transform:none!important;stroke-dashoffset:0!important}}
+body.reduce-motion .game-card,body.reduce-motion .stat,body.reduce-motion .panel,body.reduce-motion .hero .brain-main,body.reduce-motion .challenge,body.reduce-motion .memory-cell.lit,body.reduce-motion .feedback,body.reduce-motion .option.correct,body.reduce-motion .option.wrong,body.reduce-motion .result-icon,body.reduce-motion .result-score,body.reduce-motion .chart-bar,body.reduce-motion .meter>span,body.reduce-motion .mf-timer>i,body.reduce-motion .mf-chart .mf-line{animation:none!important;transition:none!important;transform:none!important;stroke-dashoffset:0!important}
