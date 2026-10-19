@@ -70,3 +70,11 @@ Increment 1 does **not** complete all of #73, #74 or #77: in-browser mobile/e2e 
 - Accessibility: reduced-motion styles, focus states, text labels retained; on-device Safari/Android still require release QA.
 - No remote assets, font downloads, analytics or added runtime dependency.
 - [PR](https://github.com/buianhtai/buianhtai.github.io/pulls?q=is%3Apr+mindforge+graphics) to review; issue #90 remains open until post-deploy QA.
+
+## Spatial 3D Lab MVP — Three.js (#92, #86)
+- Three real WebGL mini-games, at `/mindforge/arcade/3d/`: **Cube Orbit** (opposite/right face orientation), **Tower Architect** (blueprint reconstruction), **Maze Rover** (obstacle route + crystal collection).
+- Levels: Beginner 4, Normal 6, Advanced 8. Mouse/touch orbit, keyboard D-pad and +/- alternative controls, bilingual, reduced motion, local progress.
+- Pinned Three.js ESM `0.186.1` loads lazily from jsDelivr; the lightweight Arcade is separate. Network access is required for the 3D engine (offline fallback link instead of broken canvas).
+- Test evidence: 1,500 randomly generated puzzles, geometry orientation and maze connectivity verified; responsive landing UI and fallback checked in Chromium at 320/390/768/1280. Actual WebGL rendering and physical devices must still be validated on the hosted site.
+- Follow-up #86: evaluate mid-range mobile FPS/GPU memory, full nonvisual controls and CDN/self-hosting strategy before classing this production ready.
+- No claim that these games raise measured IQ.
