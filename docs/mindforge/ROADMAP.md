@@ -78,3 +78,12 @@ Increment 1 does **not** complete all of #73, #74 or #77: in-browser mobile/e2e 
 - Test evidence: 1,500 randomly generated puzzles, geometry orientation and maze connectivity verified; responsive landing UI and fallback checked in Chromium at 320/390/768/1280. Actual WebGL rendering and physical devices must still be validated on the hosted site.
 - Follow-up #86: evaluate mid-range mobile FPS/GPU memory, full nonvisual controls and CDN/self-hosting strategy before classing this production ready.
 - No claim that these games raise measured IQ.
+
+## Gameplay-first UX refinement (V2.4) — #94
+- Policy: 2D is standard for observation/memory/focus and visual logic. Three.js reserved for truly spatial challenges (cube inspection, 3D building); 3D maze is optional alongside default 2D pathfinding.
+- Compact the Spatial Lab landing for 320–390px screens with direct game controls and clear micro-instructions.
+- Hide home selection while playing; show an accessible objective above the 3D viewport on mobile.
+- Offer a prominent 2D Arcade alternative. Three.js loads only when a 3D world is launched; continue graceful no-WebGL fallback.
+- Add Undo for Tower and Maze: restores cells / robot position / gems / move count; disable after completion.
+- Avoid stale WebGL launch if user exits while a module is loading; preserve bilingual and reduced-motion settings.
+- QA: 1,500 randomized puzzle tests, 4 responsive viewports, and Undo state restoration verified in Chromium. Real-WebGL and real-device Safari/Android testing pending.
