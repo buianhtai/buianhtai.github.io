@@ -131,3 +131,13 @@ Increment 1 does **not** complete all of #73, #74 or #77: in-browser mobile/e2e 
 - EN/VI, local resume and best scores, no time pressure, reused opt-in sound kit; no external puzzle data.
 - Chromium responsive/interactions at 320, 390, 768, 1280px; full Beginner solve UI and save/resume tested in sandbox with a storage shim.
 - Production GitHub Pages delivery and physical-device iOS Safari/Android QA pending; keep issue #103 open until verified.
+
+## V2.8 — Traffic Escape (sliding-vehicle logic game) — #105
+- Adds phone-first 2D `/mindforge/arcade/traffic/` with 45 independently solved puzzles, 14 beginner, 18 normal, 13 advanced.
+- Difficulty based on verified minimum number of sliding moves: 2–3 / 4–6 / 7–11.
+- Drag or tap a car and use large direction buttons; Undo, Reset, context-sensitive shortest-path Hint, bilingual EN/VI, reduced motion, device-local progress, per-level best moves.
+- Existing opt-in MindForge Sound Kit is reused without new dependencies, no Three.js required.
+- Linked on Arcade landing page. Service worker precaches Traffic Escape assets.
+- QA: independent BFS verification of **all 45 levels**, and full browser drag playthroughs at **320/390/768/1280** px across each difficulty (12 wins), plus hint, undo, and language switching checks. No JS errors or horizontal overflow.
+- Acceptance pending: real GitHub Pages build and physical Safari/Android touch validation; hosted persistence reload cannot be simulated by navigation in this testing environment.
+- [Track issue #105](https://github.com/buianhtai/buianhtai.github.io/issues/105).
