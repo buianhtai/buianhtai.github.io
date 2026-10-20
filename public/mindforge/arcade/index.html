@@ -139,8 +139,9 @@ body.reduce-motion .mf-cover-float,body.reduce-motion .maze-tile .mf-player,body
 
 .traffic-promo{background:linear-gradient(100deg,#183e50,#2d365e 62%,#4e2f54);border-color:#78d6c58c;margin-top:-7px}.traffic-promo .sudoku-promo-tag{color:#a2f2d7}.traffic-promo .sudoku-cover svg{filter:drop-shadow(0 7px 12px #00192d80)}
 </style>
+<link rel="stylesheet" href="./experience.css">
 </head>
-<body>
+<body data-mf-experience-page="arcade">
 <div id="app"></div>
 <script>
 (()=>{'use strict';
@@ -392,5 +393,6 @@ const launchGame=new URLSearchParams(location.search).get('game');if(['cube','sc
 })();
 </script>
 <script src="./sound-kit.js" defer></script>
+<script src="./experience.js" defer></script>
 </body>
 </html>
