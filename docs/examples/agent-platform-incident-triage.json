@@ -1,0 +1,66 @@
+{
+  "apiVersion": "agent-platform/v1alpha1",
+  "kind": "Agent",
+  "metadata": {
+    "id": "incident-triage",
+    "tenantId": "tenant-demo",
+    "workspaceId": "ops",
+    "displayName": "Incident Triage"
+  },
+  "spec": {
+    "runtime": {
+      "kind": "deep",
+      "templateRef": null
+    },
+    "instructions": "Investigate failures and cite supporting evidence. Never mutate external systems without approval.",
+    "model": {
+      "profileRef": "model-balanced@2",
+      "parameters": {
+        "temperature": 0.1
+      }
+    },
+    "tools": [
+      {
+        "ref": "knowledge.search@3",
+        "mode": "read"
+      },
+      {
+        "ref": "logs.query@2",
+        "mode": "read"
+      },
+      {
+        "ref": "incidents.create@1",
+        "mode": "write",
+        "approval": "always"
+      }
+    ],
+    "skills": [
+      {
+        "ref": "root-cause-analysis@1.0.0"
+      },
+      {
+        "ref": "technical-report@1.2.0"
+      }
+    ],
+    "subagents": [
+      {
+        "agentVersionRef": "log-investigator@4",
+        "purpose": "Investigate correlated logs and traces"
+      }
+    ],
+    "memory": {
+      "threadPersistence": true,
+      "crossSession": false
+    },
+    "limits": {
+      "maxSteps": 20,
+      "maxDurationSeconds": 180,
+      "maxInputTokens": 200000,
+      "maxOutputTokens": 20000,
+      "maxCostUsd": 0.5
+    },
+    "output": {
+      "format": "text"
+    }
+  }
+}
