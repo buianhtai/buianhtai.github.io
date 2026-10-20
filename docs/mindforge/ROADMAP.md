@@ -159,3 +159,12 @@ Increment 1 does **not** complete all of #73, #74 or #77: in-browser mobile/e2e 
 - Chromium Playwright: 320/390/768/1280px across light/dark and EN/VI; search, filtering, 13 distinct launch routes, Show More, empty state and theme switching all passed; viewport checks also at 280/360/414/600/1024px, no horizontal overflow or JavaScript errors.
 - Bumped offline cache version to force the refreshed UI. Screenshots at 320/390/1280 reviewed.
 - **Pending** actual hosted GitHub Pages verification, iOS/Android device and assistive-technology audit. Keep [#109](https://github.com/buianhtai/buianhtai.github.io/issues/109) open until those checks are complete.
+
+## V3.1 — Shared professional gameplay UI (#111)
+- Reusable zero-dependency `arcade/experience.css` and `experience.js` applied to **Sudoku Garden, Traffic Escape, Three.js Lab (Cube/Tower/Maze), and the original Visual Arcade**.
+- Consistent MindForge masthead, shared all-games navigation, theme controls tied to the library's `mf-library-theme`, VI/EN localized labels, and keyboard-visible focus treatment.
+- Calm light/dark editorial chrome with intentionally contrasting dark game surfaces: numerical Sudoku board, Traffic vehicles, WebGL viewport, and illustrated Arcade puzzles keep existing high-contrast rendering and state handling. Less hero overhead before starting a game on phones.
+- Does not alter puzzle generation, scoring, session history, WebGL loading, opt-in audio or difficulty logic. No extra network libraries or image assets.
+- Local Chromium smoke tests with embedded shared assets: 320/390/768/1280px, both themes across Sudoku, Traffic, 3D Lab and Arcade, no detected page errors / horizontal overflow; manual interaction checks (Sudoku number entry, Traffic selection, Arcade play/back and language, 3D Lab language) passed.
+- `sw.js` precaches both new shared assets; cache version incremented.
+- Still pending: public GitHub Pages route/service-worker tests and physical iOS/Android, WebGL and accessibility audit. [#111](https://github.com/buianhtai/buianhtai.github.io/issues/111) stays open.
