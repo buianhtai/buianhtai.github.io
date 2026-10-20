@@ -1,0 +1,46 @@
+name: MindForge Math task coordination
+
+# Safe dependency reconciliation only. No agent execution or automatic merging.
+on:
+  issues:
+    types: [closed, reopened, edited, labeled, unlabeled]
+  pull_request:
+    types: [closed]
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Preview issue label changes without applying them'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+concurrency:
+  group: mindforge-math-task-coordination
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    name: Reconcile Math Learning dependencies
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.merged == true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify coordinator safety and dependency logic
+        run: |
+          node --check scripts/mindforge/math-task-coordinator.mjs
+          node --test tests/mindforge/math-task-coordinator.test.mjs
+      - name: Update only allowlisted Math V1 issue labels
+        run: node scripts/mindforge/math-task-coordinator.mjs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MATH_AUTOMATION_DRY_RUN: ${{ inputs.dry_run || 'false' }}
