@@ -184,3 +184,11 @@ Increment 1 does **not** complete all of #73, #74 or #77: in-browser mobile/e2e 
 - Math Quest is the **14th game** in the main game library and linked on the Visual Arcade landing page. Offline service worker cache updated.
 - Chromium Playwright tested at 280,320,390,768,1280px, including 4,500 random arithmetic examples (3 difficulties × 3 modes × 100 × 5 viewports), and user interaction including incorrect then correct, keyboard Enter, language and theme switch; zero browser JS errors and page overflow.
 - **Pending:** physical iOS/Android, public Pages deployment confirmation, and real-device cross-route theme consistency. Keep #115 open until these are verified.
+
+## V3.4 — Math Quest presentation-style Auto Next (#117)
+- Math Quest adds a 5–9-step question deck indicator and gentle incoming-question transitions.
+- After a correct answer, **Auto Next is enabled by default**, displays feedback for 2.2 seconds and then advances. In reduced-motion environments auto-next defaults off; optional toggle (stored as `mf-math-auto-next-v1`) is always available.
+- After first wrong answer stay for retry. After second wrong answer, display the explanation/solution and require manual Next. Players can press Next immediately or swipe left after feedback; unanswered questions never auto-advance.
+- Cancellation prevents duplicate nexts when manually advancing, restarting or changing modes. Existing scoring, questions and state persistence unchanged; no new runtime assets.
+- QA: Chromium 280,320,390,768,1280px validated correct auto, wrong freeze, manual next, preference restoration, swipe-next, reduced-motion default, and no console errors or horizontal overflow.
+- [Issue #117](https://github.com/buianhtai/buianhtai.github.io/issues/117) kept open for live Pages and physical-device testing.
