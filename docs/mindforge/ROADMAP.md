@@ -201,3 +201,11 @@ Increment 1 does **not** complete all of #73, #74 or #77: in-browser mobile/e2e 
 - **Wave 3:** [#127 integrated mobile E2E release QA](https://github.com/buianhtai/buianhtai.github.io/issues/127).
 - **Workflow reference:** [super-board](https://github.com/EricTechPro/super-board) for GitHub Project dependency-aware Build → QA → Review. Currently issues/docs only: super-board not installed, GitHub Project board not yet set up and no unattended merges enabled.
 - **Scope:** early counting 1–10, quantity comparison ≤10 and number bonds to 10; leave existing Math Quest generators/scores unchanged. Expand content only after functional pilot.
+
+## Math Learning Wave 1 — Guided visual Learn MVP (#124)
+- New [interactive Learn with pictures page](https://buianhtai.github.io/mindforge/arcade/math/learn/) with three original VI/EN topics from the existing content contract: Count to 10, Compare groups, and Make 10.
+- Each topic includes three short guided lessons with **Watch → Try → Explain**, interactive ten-frame / paired-object controls, answer checking, strategy hints and explanations.
+- Lesson completion and currently selected lesson stored independently under `mf-math-learn-v1`, preserving existing `mf-math-quest-v1` game results and shared `mf-library-theme` preference. No accounts or telemetry.
+- Math Quest has a visible direct learning link. The existing game modes remain unchanged; PWA cache includes visual lessons and their static dependencies.
+- Node fixtures and math tests added to CI; desktop/mobile and real iOS/Android screen checks remain a post-merge QA requirement.
+- Work tracked in [#124](https://github.com/buianhtai/buianhtai.github.io/issues/124); new topic Practice and Review in #125/#126 follow separately.
