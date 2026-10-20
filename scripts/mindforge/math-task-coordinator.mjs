@@ -25,7 +25,7 @@ const LABEL_STYLE=[
 ];
 export function getBlockers(body){
  const text=typeof body==='string'?body:'';
- const match=text.match(/^##[ \t]+Blocked by[ \t]*\r?\n([\s\S]*?)(?=\r?\n##[ \t]+|$)/im);
+ const match=text.match(/^##[ \t]+Blocked by[ \t]*\r?\n([\s\S]*?)(?=\r?\n##[ \t]+|(?![\s\S]))/im);
  if(!match)return {ids:[],error:'missing ## Blocked by section'};
  const lines=match[1].split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
  if(lines.some(x=>/^none(?:[.\s]|$)/i.test(x)||/^[-*][ \t]+none(?:[.\s]|$)/i.test(x)))return {ids:[]};
@@ -67,7 +67,7 @@ export function labelDiff(issue,record){
 function requestFactory(repo,token,base){
  return async (method,path,body,allow=[] )=>{
   const res=await fetch(base+'/repos/'+repo+path,{
-   method,headers:{Accept:'application/vnd.github+json',Authorization:'Bearer '+token,'X-GitHub-Api-Version':'2022-11-28','User-Agent':'MindForge-Math-Coordinator'},
+   method,headers:{Accept:'application/vnd.github+json','Content-Type':'application/json',Authorization:'Bearer '+token,'X-GitHub-Api-Version':'2022-11-28','User-Agent':'MindForge-Math-Coordinator'},
    ...(body!==undefined?{body:JSON.stringify(body)}:{})
   });
   if(!res.ok&&!allow.includes(res.status)){
