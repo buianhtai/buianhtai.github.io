@@ -1,4 +1,4 @@
-const CACHE='mindforge-v33-math-quest-shared-theme-20261020';
+const CACHE='mindforge-v34-math-slide-auto-next-20261020';
 const CORE=['./','./index.html','./manifest.webmanifest','./assets/icon.svg','./visuals.css','./visuals.js','./memory-images.js','./professional-theme.css','./arcade/','./arcade/index.html','./arcade/experience.css','./arcade/experience.js','./games/','./games/index.html','./arcade/3d/','./arcade/3d/index.html','./arcade/sudoku/','./arcade/sudoku/index.html','./arcade/traffic/','./arcade/traffic/index.html','./arcade/math/','./arcade/math/index.html','./arcade/sound-kit.js'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(CORE)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
