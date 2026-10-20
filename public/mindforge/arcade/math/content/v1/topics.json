@@ -1,0 +1,1346 @@
+{
+  "schemaVersion": 1,
+  "contentVersion": "1.0.0",
+  "licenseNote": "Original MindForge educational content; no third-party questions or assets.",
+  "topics": [
+    {
+      "id": "count-to-10",
+      "name": {
+        "en": "Count to 10",
+        "vi": "Đếm đến 10"
+      },
+      "ageGuidance": "5-7 (informal)",
+      "prerequisites": [],
+      "objectives": [
+        {
+          "en": "Match a set of objects to a numeral from 0 to 10.",
+          "vi": "Ghép nhóm đồ vật với số từ 0 đến 10."
+        },
+        {
+          "en": "Count each object once.",
+          "vi": "Đếm mỗi đồ vật đúng một lần."
+        },
+        {
+          "en": "Explain the total after counting.",
+          "vi": "Nói tổng số sau khi đếm."
+        }
+      ],
+      "lessons": [
+        {
+          "id": "count-to-10-lesson-1",
+          "topicId": "count-to-10",
+          "title": {
+            "en": "Step 1: Count to 10",
+            "vi": "Bước 1: Đếm đến 10"
+          },
+          "steps": [
+            {
+              "id": "observe",
+              "mode": "explain",
+              "prompt": {
+                "en": "Watch this example and count with me.",
+                "vi": "Con hãy xem ví dụ và đếm cùng nhé."
+              },
+              "manipulative": {
+                "kind": "ten-frame",
+                "counts": [
+                  1
+                ],
+                "target": 10
+              }
+            },
+            {
+              "id": "try",
+              "mode": "try",
+              "prompt": {
+                "en": "How many counters can you see?",
+                "vi": "Con nhìn thấy bao nhiêu chấm tròn?"
+              },
+              "manipulative": {
+                "kind": "ten-frame",
+                "counts": [
+                  1
+                ],
+                "target": 10
+              },
+              "answerSpec": {
+                "kind": "number",
+                "value": 1
+              },
+              "hintSteps": [
+                {
+                  "en": "Point to each counter once, from left to right.",
+                  "vi": "Chỉ vào từng chấm tròn một lần, từ trái sang phải."
+                },
+                {
+                  "en": "Say the last number you counted.",
+                  "vi": "Nói số cuối cùng con vừa đếm."
+                }
+              ],
+              "explanation": {
+                "en": "There are 1 counters, so the answer is 1.",
+                "vi": "Có 1 chấm tròn nên đáp án là 1."
+              }
+            },
+            {
+              "id": "reflect",
+              "mode": "reflect",
+              "prompt": {
+                "en": "Tell someone how you found the answer.",
+                "vi": "Kể cho người bên cạnh con đã tìm ra đáp án như thế nào."
+              }
+            }
+          ]
+        },
+        {
+          "id": "count-to-10-lesson-2",
+          "topicId": "count-to-10",
+          "title": {
+            "en": "Step 2: Count to 10",
+            "vi": "Bước 2: Đếm đến 10"
+          },
+          "steps": [
+            {
+              "id": "observe",
+              "mode": "explain",
+              "prompt": {
+                "en": "Let's try another example together.",
+                "vi": "Mình cùng thử thêm một ví dụ nhé."
+              },
+              "manipulative": {
+                "kind": "ten-frame",
+                "counts": [
+                  2
+                ],
+                "target": 10
+              }
+            },
+            {
+              "id": "try",
+              "mode": "try",
+              "prompt": {
+                "en": "How many counters can you see?",
+                "vi": "Con nhìn thấy bao nhiêu chấm tròn?"
+              },
+              "manipulative": {
+                "kind": "ten-frame",
+                "counts": [
+                  2
+                ],
+                "target": 10
+              },
+              "answerSpec": {
+                "kind": "number",
+                "value": 2
+              },
+              "hintSteps": [
+                {
+                  "en": "Point to each counter once, from left to right.",
+                  "vi": "Chỉ vào từng chấm tròn một lần, từ trái sang phải."
+                },
+                {
+                  "en": "Say the last number you counted.",
+                  "vi": "Nói số cuối cùng con vừa đếm."
+                }
+              ],
+              "explanation": {
+                "en": "There are 2 counters, so the answer is 2.",
+                "vi": "Có 2 chấm tròn nên đáp án là 2."
+              }
+            },
+            {
+              "id": "reflect",
+              "mode": "reflect",
+              "prompt": {
+                "en": "Tell someone how you found the answer.",
+                "vi": "Kể cho người bên cạnh con đã tìm ra đáp án như thế nào."
+              }
+            }
+          ]
+        },
+        {
+          "id": "count-to-10-lesson-3",
+          "topicId": "count-to-10",
+          "title": {
+            "en": "Step 3: Count to 10",
+            "vi": "Bước 3: Đếm đến 10"
+          },
+          "steps": [
+            {
+              "id": "observe",
+              "mode": "explain",
+              "prompt": {
+                "en": "Find the answer by yourself.",
+                "vi": "Con thử tự tìm đáp án nhé."
+              },
+              "manipulative": {
+                "kind": "ten-frame",
+                "counts": [
+                  4
+                ],
+                "target": 10
+              }
+            },
+            {
+              "id": "try",
+              "mode": "try",
+              "prompt": {
+                "en": "How many counters can you see?",
+                "vi": "Con nhìn thấy bao nhiêu chấm tròn?"
+              },
+              "manipulative": {
+                "kind": "ten-frame",
+                "counts": [
+                  4
+                ],
+                "target": 10
+              },
+              "answerSpec": {
+                "kind": "number",
+                "value": 4
+              },
+              "hintSteps": [
+                {
+                  "en": "Point to each counter once, from left to right.",
+                  "vi": "Chỉ vào từng chấm tròn một lần, từ trái sang phải."
+                },
+                {
+                  "en": "Say the last number you counted.",
+                  "vi": "Nói số cuối cùng con vừa đếm."
+                }
+              ],
+              "explanation": {
+                "en": "There are 4 counters, so the answer is 4.",
+                "vi": "Có 4 chấm tròn nên đáp án là 4."
+              }
+            },
+            {
+              "id": "reflect",
+              "mode": "reflect",
+              "prompt": {
+                "en": "Tell someone how you found the answer.",
+                "vi": "Kể cho người bên cạnh con đã tìm ra đáp án như thế nào."
+              }
+            }
+          ]
+        }
+      ],
+      "examples": [
+        {
+          "id": "count-to-10-practice-1",
+          "topicId": "count-to-10",
+          "schemaVersion": 1,
+          "seed": 1001,
+          "difficulty": "starter",
+          "prompt": {
+            "en": "How many counters can you see?",
+            "vi": "Con nhìn thấy bao nhiêu chấm tròn?"
+          },
+          "manipulative": {
+            "kind": "ten-frame",
+            "counts": [
+              1
+            ],
+            "target": 10
+          },
+          "answerSpec": {
+            "kind": "number",
+            "value": 1
+          },
+          "hintSteps": [
+            {
+              "en": "Point to each counter once, from left to right.",
+              "vi": "Chỉ vào từng chấm tròn một lần, từ trái sang phải."
+            },
+            {
+              "en": "Say the last number you counted.",
+              "vi": "Nói số cuối cùng con vừa đếm."
+            }
+          ],
+          "explanation": {
+            "en": "There are 1 counters, so the answer is 1.",
+            "vi": "Có 1 chấm tròn nên đáp án là 1."
+          }
+        },
+        {
+          "id": "count-to-10-practice-2",
+          "topicId": "count-to-10",
+          "schemaVersion": 1,
+          "seed": 1002,
+          "difficulty": "normal",
+          "prompt": {
+            "en": "How many counters can you see?",
+            "vi": "Con nhìn thấy bao nhiêu chấm tròn?"
+          },
+          "manipulative": {
+            "kind": "ten-frame",
+            "counts": [
+              2
+            ],
+            "target": 10
+          },
+          "answerSpec": {
+            "kind": "number",
+            "value": 2
+          },
+          "hintSteps": [
+            {
+              "en": "Point to each counter once, from left to right.",
+              "vi": "Chỉ vào từng chấm tròn một lần, từ trái sang phải."
+            },
+            {
+              "en": "Say the last number you counted.",
+              "vi": "Nói số cuối cùng con vừa đếm."
+            }
+          ],
+          "explanation": {
+            "en": "There are 2 counters, so the answer is 2.",
+            "vi": "Có 2 chấm tròn nên đáp án là 2."
+          }
+        },
+        {
+          "id": "count-to-10-practice-3",
+          "topicId": "count-to-10",
+          "schemaVersion": 1,
+          "seed": 1003,
+          "difficulty": "normal",
+          "prompt": {
+            "en": "How many counters can you see?",
+            "vi": "Con nhìn thấy bao nhiêu chấm tròn?"
+          },
+          "manipulative": {
+            "kind": "ten-frame",
+            "counts": [
+              4
+            ],
+            "target": 10
+          },
+          "answerSpec": {
+            "kind": "number",
+            "value": 4
+          },
+          "hintSteps": [
+            {
+              "en": "Point to each counter once, from left to right.",
+              "vi": "Chỉ vào từng chấm tròn một lần, từ trái sang phải."
+            },
+            {
+              "en": "Say the last number you counted.",
+              "vi": "Nói số cuối cùng con vừa đếm."
+            }
+          ],
+          "explanation": {
+            "en": "There are 4 counters, so the answer is 4.",
+            "vi": "Có 4 chấm tròn nên đáp án là 4."
+          }
+        },
+        {
+          "id": "count-to-10-practice-4",
+          "topicId": "count-to-10",
+          "schemaVersion": 1,
+          "seed": 1004,
+          "difficulty": "advanced",
+          "prompt": {
+            "en": "How many counters can you see?",
+            "vi": "Con nhìn thấy bao nhiêu chấm tròn?"
+          },
+          "manipulative": {
+            "kind": "ten-frame",
+            "counts": [
+              6
+            ],
+            "target": 10
+          },
+          "answerSpec": {
+            "kind": "number",
+            "value": 6
+          },
+          "hintSteps": [
+            {
+              "en": "Point to each counter once, from left to right.",
+              "vi": "Chỉ vào từng chấm tròn một lần, từ trái sang phải."
+            },
+            {
+              "en": "Say the last number you counted.",
+              "vi": "Nói số cuối cùng con vừa đếm."
+            }
+          ],
+          "explanation": {
+            "en": "There are 6 counters, so the answer is 6.",
+            "vi": "Có 6 chấm tròn nên đáp án là 6."
+          }
+        },
+        {
+          "id": "count-to-10-practice-5",
+          "topicId": "count-to-10",
+          "schemaVersion": 1,
+          "seed": 1005,
+          "difficulty": "advanced",
+          "prompt": {
+            "en": "How many counters can you see?",
+            "vi": "Con nhìn thấy bao nhiêu chấm tròn?"
+          },
+          "manipulative": {
+            "kind": "ten-frame",
+            "counts": [
+              8
+            ],
+            "target": 10
+          },
+          "answerSpec": {
+            "kind": "number",
+            "value": 8
+          },
+          "hintSteps": [
+            {
+              "en": "Point to each counter once, from left to right.",
+              "vi": "Chỉ vào từng chấm tròn một lần, từ trái sang phải."
+            },
+            {
+              "en": "Say the last number you counted.",
+              "vi": "Nói số cuối cùng con vừa đếm."
+            }
+          ],
+          "explanation": {
+            "en": "There are 8 counters, so the answer is 8.",
+            "vi": "Có 8 chấm tròn nên đáp án là 8."
+          }
+        },
+        {
+          "id": "count-to-10-practice-6",
+          "topicId": "count-to-10",
+          "schemaVersion": 1,
+          "seed": 1006,
+          "difficulty": "advanced",
+          "prompt": {
+            "en": "How many counters can you see?",
+            "vi": "Con nhìn thấy bao nhiêu chấm tròn?"
+          },
+          "manipulative": {
+            "kind": "ten-frame",
+            "counts": [
+              10
+            ],
+            "target": 10
+          },
+          "answerSpec": {
+            "kind": "number",
+            "value": 10
+          },
+          "hintSteps": [
+            {
+              "en": "Point to each counter once, from left to right.",
+              "vi": "Chỉ vào từng chấm tròn một lần, từ trái sang phải."
+            },
+            {
+              "en": "Say the last number you counted.",
+              "vi": "Nói số cuối cùng con vừa đếm."
+            }
+          ],
+          "explanation": {
+            "en": "There are 10 counters, so the answer is 10.",
+            "vi": "Có 10 chấm tròn nên đáp án là 10."
+          }
+        }
+      ]
+    },
+    {
+      "id": "compare-to-10",
+      "name": {
+        "en": "Compare groups",
+        "vi": "So sánh nhóm"
+      },
+      "ageGuidance": "5-7 (informal)",
+      "prerequisites": [
+        "count-to-10"
+      ],
+      "objectives": [
+        {
+          "en": "Recognize more, fewer and equal groups.",
+          "vi": "Nhận biết nhiều hơn, ít hơn và bằng nhau."
+        },
+        {
+          "en": "Compare two groups up to ten items.",
+          "vi": "So sánh hai nhóm có tối đa mười đồ vật."
+        },
+        {
+          "en": "Explain a comparison by matching objects.",
+          "vi": "Giải thích so sánh bằng cách ghép từng cặp."
+        }
+      ],
+      "lessons": [
+        {
+          "id": "compare-to-10-lesson-1",
+          "topicId": "compare-to-10",
+          "title": {
+            "en": "Step 1: Compare groups",
+            "vi": "Bước 1: So sánh nhóm"
+          },
+          "steps": [
+            {
+              "id": "observe",
+              "mode": "explain",
+              "prompt": {
+                "en": "Watch this example and count with me.",
+                "vi": "Con hãy xem ví dụ và đếm cùng nhé."
+              },
+              "manipulative": {
+                "kind": "two-groups",
+                "counts": [
+                  2,
+                  5
+                ],
+                "target": 10
+              }
+            },
+            {
+              "id": "try",
+              "mode": "try",
+              "prompt": {
+                "en": "Which group has more counters, or are they equal?",
+                "vi": "Nhóm nào có nhiều chấm tròn hơn, hay hai nhóm bằng nhau?"
+              },
+              "manipulative": {
+                "kind": "two-groups",
+                "counts": [
+                  2,
+                  5
+                ],
+                "target": 10
+              },
+              "answerSpec": {
+                "kind": "side",
+                "value": "right"
+              },
+              "hintSteps": [
+                {
+                  "en": "Match one counter on the left with one on the right.",
+                  "vi": "Ghép mỗi chấm bên trái với một chấm bên phải."
+                },
+                {
+                  "en": "The group with counters left over has more; no leftovers means equal.",
+                  "vi": "Nhóm còn chấm tròn thừa sẽ nhiều hơn; không thừa nghĩa là bằng nhau."
+                }
+              ],
+              "explanation": {
+                "en": "Left has 2, right has 5; the right group has more.",
+                "vi": "Bên trái có 2, bên phải có 5; bên phải nhiều hơn."
+              }
+            },
+            {
+              "id": "reflect",
+              "mode": "reflect",
+              "prompt": {
+                "en": "Tell someone how you found the answer.",
+                "vi": "Kể cho người bên cạnh con đã tìm ra đáp án như thế nào."
+              }
+            }
+          ]
+        },
+        {
+          "id": "compare-to-10-lesson-2",
+          "topicId": "compare-to-10",
+          "title": {
+            "en": "Step 2: Compare groups",
+            "vi": "Bước 2: So sánh nhóm"
+          },
+          "steps": [
+            {
+              "id": "observe",
+              "mode": "explain",
+              "prompt": {
+                "en": "Let's try another example together.",
+                "vi": "Mình cùng thử thêm một ví dụ nhé."
+              },
+              "manipulative": {
+                "kind": "two-groups",
+                "counts": [
+                  5,
+                  2
+                ],
+                "target": 10
+              }
+            },
+            {
+              "id": "try",
+              "mode": "try",
+              "prompt": {
+                "en": "Which group has more counters, or are they equal?",
+                "vi": "Nhóm nào có nhiều chấm tròn hơn, hay hai nhóm bằng nhau?"
+              },
+              "manipulative": {
+                "kind": "two-groups",
+                "counts": [
+                  5,
+                  2
+                ],
+                "target": 10
+              },
+              "answerSpec": {
+                "kind": "side",
+                "value": "left"
+              },
+              "hintSteps": [
+                {
+                  "en": "Match one counter on the left with one on the right.",
+                  "vi": "Ghép mỗi chấm bên trái với một chấm bên phải."
+                },
+                {
+                  "en": "The group with counters left over has more; no leftovers means equal.",
+                  "vi": "Nhóm còn chấm tròn thừa sẽ nhiều hơn; không thừa nghĩa là bằng nhau."
+                }
+              ],
+              "explanation": {
+                "en": "Left has 5, right has 2; the left group has more.",
+                "vi": "Bên trái có 5, bên phải có 2; bên trái nhiều hơn."
+              }
+            },
+            {
+              "id": "reflect",
+              "mode": "reflect",
+              "prompt": {
+                "en": "Tell someone how you found the answer.",
+                "vi": "Kể cho người bên cạnh con đã tìm ra đáp án như thế nào."
+              }
+            }
+          ]
+        },
+        {
+          "id": "compare-to-10-lesson-3",
+          "topicId": "compare-to-10",
+          "title": {
+            "en": "Step 3: Compare groups",
+            "vi": "Bước 3: So sánh nhóm"
+          },
+          "steps": [
+            {
+              "id": "observe",
+              "mode": "explain",
+              "prompt": {
+                "en": "Find the answer by yourself.",
+                "vi": "Con thử tự tìm đáp án nhé."
+              },
+              "manipulative": {
+                "kind": "two-groups",
+                "counts": [
+                  4,
+                  4
+                ],
+                "target": 10
+              }
+            },
+            {
+              "id": "try",
+              "mode": "try",
+              "prompt": {
+                "en": "Which group has more counters, or are they equal?",
+                "vi": "Nhóm nào có nhiều chấm tròn hơn, hay hai nhóm bằng nhau?"
+              },
+              "manipulative": {
+                "kind": "two-groups",
+                "counts": [
+                  4,
+                  4
+                ],
+                "target": 10
+              },
+              "answerSpec": {
+                "kind": "side",
+                "value": "equal"
+              },
+              "hintSteps": [
+                {
+                  "en": "Match one counter on the left with one on the right.",
+                  "vi": "Ghép mỗi chấm bên trái với một chấm bên phải."
+                },
+                {
+                  "en": "The group with counters left over has more; no leftovers means equal.",
+                  "vi": "Nhóm còn chấm tròn thừa sẽ nhiều hơn; không thừa nghĩa là bằng nhau."
+                }
+              ],
+              "explanation": {
+                "en": "Left has 4, right has 4; both groups are equal.",
+                "vi": "Bên trái có 4, bên phải có 4; hai nhóm bằng nhau."
+              }
+            },
+            {
+              "id": "reflect",
+              "mode": "reflect",
+              "prompt": {
+                "en": "Tell someone how you found the answer.",
+                "vi": "Kể cho người bên cạnh con đã tìm ra đáp án như thế nào."
+              }
+            }
+          ]
+        }
+      ],
+      "examples": [
+        {
+          "id": "compare-to-10-practice-1",
+          "topicId": "compare-to-10",
+          "schemaVersion": 1,
+          "seed": 2001,
+          "difficulty": "starter",
+          "prompt": {
+            "en": "Which group has more counters, or are they equal?",
+            "vi": "Nhóm nào có nhiều chấm tròn hơn, hay hai nhóm bằng nhau?"
+          },
+          "manipulative": {
+            "kind": "two-groups",
+            "counts": [
+              2,
+              5
+            ],
+            "target": 10
+          },
+          "answerSpec": {
+            "kind": "side",
+            "value": "right"
+          },
+          "hintSteps": [
+            {
+              "en": "Match one counter on the left with one on the right.",
+              "vi": "Ghép mỗi chấm bên trái với một chấm bên phải."
+            },
+            {
+              "en": "The group with counters left over has more; no leftovers means equal.",
+              "vi": "Nhóm còn chấm tròn thừa sẽ nhiều hơn; không thừa nghĩa là bằng nhau."
+            }
+          ],
+          "explanation": {
+            "en": "Left has 2, right has 5; the right group has more.",
+            "vi": "Bên trái có 2, bên phải có 5; bên phải nhiều hơn."
+          }
+        },
+        {
+          "id": "compare-to-10-practice-2",
+          "topicId": "compare-to-10",
+          "schemaVersion": 1,
+          "seed": 2002,
+          "difficulty": "normal",
+          "prompt": {
+            "en": "Which group has more counters, or are they equal?",
+            "vi": "Nhóm nào có nhiều chấm tròn hơn, hay hai nhóm bằng nhau?"
+          },
+          "manipulative": {
+            "kind": "two-groups",
+            "counts": [
+              5,
+              2
+            ],
+            "target": 10
+          },
+          "answerSpec": {
+            "kind": "side",
+            "value": "left"
+          },
+          "hintSteps": [
+            {
+              "en": "Match one counter on the left with one on the right.",
+              "vi": "Ghép mỗi chấm bên trái với một chấm bên phải."
+            },
+            {
+              "en": "The group with counters left over has more; no leftovers means equal.",
+              "vi": "Nhóm còn chấm tròn thừa sẽ nhiều hơn; không thừa nghĩa là bằng nhau."
+            }
+          ],
+          "explanation": {
+            "en": "Left has 5, right has 2; the left group has more.",
+            "vi": "Bên trái có 5, bên phải có 2; bên trái nhiều hơn."
+          }
+        },
+        {
+          "id": "compare-to-10-practice-3",
+          "topicId": "compare-to-10",
+          "schemaVersion": 1,
+          "seed": 2003,
+          "difficulty": "normal",
+          "prompt": {
+            "en": "Which group has more counters, or are they equal?",
+            "vi": "Nhóm nào có nhiều chấm tròn hơn, hay hai nhóm bằng nhau?"
+          },
+          "manipulative": {
+            "kind": "two-groups",
+            "counts": [
+              4,
+              4
+            ],
+            "target": 10
+          },
+          "answerSpec": {
+            "kind": "side",
+            "value": "equal"
+          },
+          "hintSteps": [
+            {
+              "en": "Match one counter on the left with one on the right.",
+              "vi": "Ghép mỗi chấm bên trái với một chấm bên phải."
+            },
+            {
+              "en": "The group with counters left over has more; no leftovers means equal.",
+              "vi": "Nhóm còn chấm tròn thừa sẽ nhiều hơn; không thừa nghĩa là bằng nhau."
+            }
+          ],
+          "explanation": {
+            "en": "Left has 4, right has 4; both groups are equal.",
+            "vi": "Bên trái có 4, bên phải có 4; hai nhóm bằng nhau."
+          }
+        },
+        {
+          "id": "compare-to-10-practice-4",
+          "topicId": "compare-to-10",
+          "schemaVersion": 1,
+          "seed": 2004,
+          "difficulty": "advanced",
+          "prompt": {
+            "en": "Which group has more counters, or are they equal?",
+            "vi": "Nhóm nào có nhiều chấm tròn hơn, hay hai nhóm bằng nhau?"
+          },
+          "manipulative": {
+            "kind": "two-groups",
+            "counts": [
+              9,
+              7
+            ],
+            "target": 10
+          },
+          "answerSpec": {
+            "kind": "side",
+            "value": "left"
+          },
+          "hintSteps": [
+            {
+              "en": "Match one counter on the left with one on the right.",
+              "vi": "Ghép mỗi chấm bên trái với một chấm bên phải."
+            },
+            {
+              "en": "The group with counters left over has more; no leftovers means equal.",
+              "vi": "Nhóm còn chấm tròn thừa sẽ nhiều hơn; không thừa nghĩa là bằng nhau."
+            }
+          ],
+          "explanation": {
+            "en": "Left has 9, right has 7; the left group has more.",
+            "vi": "Bên trái có 9, bên phải có 7; bên trái nhiều hơn."
+          }
+        },
+        {
+          "id": "compare-to-10-practice-5",
+          "topicId": "compare-to-10",
+          "schemaVersion": 1,
+          "seed": 2005,
+          "difficulty": "advanced",
+          "prompt": {
+            "en": "Which group has more counters, or are they equal?",
+            "vi": "Nhóm nào có nhiều chấm tròn hơn, hay hai nhóm bằng nhau?"
+          },
+          "manipulative": {
+            "kind": "two-groups",
+            "counts": [
+              1,
+              10
+            ],
+            "target": 10
+          },
+          "answerSpec": {
+            "kind": "side",
+            "value": "right"
+          },
+          "hintSteps": [
+            {
+              "en": "Match one counter on the left with one on the right.",
+              "vi": "Ghép mỗi chấm bên trái với một chấm bên phải."
+            },
+            {
+              "en": "The group with counters left over has more; no leftovers means equal.",
+              "vi": "Nhóm còn chấm tròn thừa sẽ nhiều hơn; không thừa nghĩa là bằng nhau."
+            }
+          ],
+          "explanation": {
+            "en": "Left has 1, right has 10; the right group has more.",
+            "vi": "Bên trái có 1, bên phải có 10; bên phải nhiều hơn."
+          }
+        },
+        {
+          "id": "compare-to-10-practice-6",
+          "topicId": "compare-to-10",
+          "schemaVersion": 1,
+          "seed": 2006,
+          "difficulty": "advanced",
+          "prompt": {
+            "en": "Which group has more counters, or are they equal?",
+            "vi": "Nhóm nào có nhiều chấm tròn hơn, hay hai nhóm bằng nhau?"
+          },
+          "manipulative": {
+            "kind": "two-groups",
+            "counts": [
+              10,
+              10
+            ],
+            "target": 10
+          },
+          "answerSpec": {
+            "kind": "side",
+            "value": "equal"
+          },
+          "hintSteps": [
+            {
+              "en": "Match one counter on the left with one on the right.",
+              "vi": "Ghép mỗi chấm bên trái với một chấm bên phải."
+            },
+            {
+              "en": "The group with counters left over has more; no leftovers means equal.",
+              "vi": "Nhóm còn chấm tròn thừa sẽ nhiều hơn; không thừa nghĩa là bằng nhau."
+            }
+          ],
+          "explanation": {
+            "en": "Left has 10, right has 10; both groups are equal.",
+            "vi": "Bên trái có 10, bên phải có 10; hai nhóm bằng nhau."
+          }
+        }
+      ]
+    },
+    {
+      "id": "bonds-to-10",
+      "name": {
+        "en": "Make 10",
+        "vi": "Ghép thành 10"
+      },
+      "ageGuidance": "5-7 (informal)",
+      "prerequisites": [
+        "count-to-10"
+      ],
+      "objectives": [
+        {
+          "en": "Find the missing part that makes ten.",
+          "vi": "Tìm phần còn thiếu để đủ mười."
+        },
+        {
+          "en": "Visualize the parts in a ten-frame.",
+          "vi": "Minh họa các phần bằng khung mười ô."
+        },
+        {
+          "en": "Check a number bond by combining its parts.",
+          "vi": "Kiểm tra hai phần bằng cách gộp chúng."
+        }
+      ],
+      "lessons": [
+        {
+          "id": "bonds-to-10-lesson-1",
+          "topicId": "bonds-to-10",
+          "title": {
+            "en": "Step 1: Make 10",
+            "vi": "Bước 1: Ghép thành 10"
+          },
+          "steps": [
+            {
+              "id": "observe",
+              "mode": "explain",
+              "prompt": {
+                "en": "Watch this example and count with me.",
+                "vi": "Con hãy xem ví dụ và đếm cùng nhé."
+              },
+              "manipulative": {
+                "kind": "ten-frame",
+                "counts": [
+                  0
+                ],
+                "target": 10
+              }
+            },
+            {
+              "id": "try",
+              "mode": "try",
+              "prompt": {
+                "en": "There are 0 counters. How many more make ten?",
+                "vi": "Có 0 chấm tròn. Cần thêm bao nhiêu để đủ 10?"
+              },
+              "manipulative": {
+                "kind": "ten-frame",
+                "counts": [
+                  0
+                ],
+                "target": 10
+              },
+              "answerSpec": {
+                "kind": "number",
+                "value": 10
+              },
+              "hintSteps": [
+                {
+                  "en": "Look at the empty spaces in the ten-frame.",
+                  "vi": "Nhìn vào các ô trống trong khung mười ô."
+                },
+                {
+                  "en": "Start at 0 and count up to ten.",
+                  "vi": "Bắt đầu từ 0 rồi đếm tiếp đến mười."
+                }
+              ],
+              "explanation": {
+                "en": "0 and 10 together make ten.",
+                "vi": "0 cộng với 10 bằng mười."
+              }
+            },
+            {
+              "id": "reflect",
+              "mode": "reflect",
+              "prompt": {
+                "en": "Tell someone how you found the answer.",
+                "vi": "Kể cho người bên cạnh con đã tìm ra đáp án như thế nào."
+              }
+            }
+          ]
+        },
+        {
+          "id": "bonds-to-10-lesson-2",
+          "topicId": "bonds-to-10",
+          "title": {
+            "en": "Step 2: Make 10",
+            "vi": "Bước 2: Ghép thành 10"
+          },
+          "steps": [
+            {
+              "id": "observe",
+              "mode": "explain",
+              "prompt": {
+                "en": "Let's try another example together.",
+                "vi": "Mình cùng thử thêm một ví dụ nhé."
+              },
+              "manipulative": {
+                "kind": "ten-frame",
+                "counts": [
+                  1
+                ],
+                "target": 10
+              }
+            },
+            {
+              "id": "try",
+              "mode": "try",
+              "prompt": {
+                "en": "There are 1 counters. How many more make ten?",
+                "vi": "Có 1 chấm tròn. Cần thêm bao nhiêu để đủ 10?"
+              },
+              "manipulative": {
+                "kind": "ten-frame",
+                "counts": [
+                  1
+                ],
+                "target": 10
+              },
+              "answerSpec": {
+                "kind": "number",
+                "value": 9
+              },
+              "hintSteps": [
+                {
+                  "en": "Look at the empty spaces in the ten-frame.",
+                  "vi": "Nhìn vào các ô trống trong khung mười ô."
+                },
+                {
+                  "en": "Start at 1 and count up to ten.",
+                  "vi": "Bắt đầu từ 1 rồi đếm tiếp đến mười."
+                }
+              ],
+              "explanation": {
+                "en": "1 and 9 together make ten.",
+                "vi": "1 cộng với 9 bằng mười."
+              }
+            },
+            {
+              "id": "reflect",
+              "mode": "reflect",
+              "prompt": {
+                "en": "Tell someone how you found the answer.",
+                "vi": "Kể cho người bên cạnh con đã tìm ra đáp án như thế nào."
+              }
+            }
+          ]
+        },
+        {
+          "id": "bonds-to-10-lesson-3",
+          "topicId": "bonds-to-10",
+          "title": {
+            "en": "Step 3: Make 10",
+            "vi": "Bước 3: Ghép thành 10"
+          },
+          "steps": [
+            {
+              "id": "observe",
+              "mode": "explain",
+              "prompt": {
+                "en": "Find the answer by yourself.",
+                "vi": "Con thử tự tìm đáp án nhé."
+              },
+              "manipulative": {
+                "kind": "ten-frame",
+                "counts": [
+                  3
+                ],
+                "target": 10
+              }
+            },
+            {
+              "id": "try",
+              "mode": "try",
+              "prompt": {
+                "en": "There are 3 counters. How many more make ten?",
+                "vi": "Có 3 chấm tròn. Cần thêm bao nhiêu để đủ 10?"
+              },
+              "manipulative": {
+                "kind": "ten-frame",
+                "counts": [
+                  3
+                ],
+                "target": 10
+              },
+              "answerSpec": {
+                "kind": "number",
+                "value": 7
+              },
+              "hintSteps": [
+                {
+                  "en": "Look at the empty spaces in the ten-frame.",
+                  "vi": "Nhìn vào các ô trống trong khung mười ô."
+                },
+                {
+                  "en": "Start at 3 and count up to ten.",
+                  "vi": "Bắt đầu từ 3 rồi đếm tiếp đến mười."
+                }
+              ],
+              "explanation": {
+                "en": "3 and 7 together make ten.",
+                "vi": "3 cộng với 7 bằng mười."
+              }
+            },
+            {
+              "id": "reflect",
+              "mode": "reflect",
+              "prompt": {
+                "en": "Tell someone how you found the answer.",
+                "vi": "Kể cho người bên cạnh con đã tìm ra đáp án như thế nào."
+              }
+            }
+          ]
+        }
+      ],
+      "examples": [
+        {
+          "id": "bonds-to-10-practice-1",
+          "topicId": "bonds-to-10",
+          "schemaVersion": 1,
+          "seed": 3001,
+          "difficulty": "starter",
+          "prompt": {
+            "en": "There are 0 counters. How many more make ten?",
+            "vi": "Có 0 chấm tròn. Cần thêm bao nhiêu để đủ 10?"
+          },
+          "manipulative": {
+            "kind": "ten-frame",
+            "counts": [
+              0
+            ],
+            "target": 10
+          },
+          "answerSpec": {
+            "kind": "number",
+            "value": 10
+          },
+          "hintSteps": [
+            {
+              "en": "Look at the empty spaces in the ten-frame.",
+              "vi": "Nhìn vào các ô trống trong khung mười ô."
+            },
+            {
+              "en": "Start at 0 and count up to ten.",
+              "vi": "Bắt đầu từ 0 rồi đếm tiếp đến mười."
+            }
+          ],
+          "explanation": {
+            "en": "0 and 10 together make ten.",
+            "vi": "0 cộng với 10 bằng mười."
+          }
+        },
+        {
+          "id": "bonds-to-10-practice-2",
+          "topicId": "bonds-to-10",
+          "schemaVersion": 1,
+          "seed": 3002,
+          "difficulty": "normal",
+          "prompt": {
+            "en": "There are 1 counters. How many more make ten?",
+            "vi": "Có 1 chấm tròn. Cần thêm bao nhiêu để đủ 10?"
+          },
+          "manipulative": {
+            "kind": "ten-frame",
+            "counts": [
+              1
+            ],
+            "target": 10
+          },
+          "answerSpec": {
+            "kind": "number",
+            "value": 9
+          },
+          "hintSteps": [
+            {
+              "en": "Look at the empty spaces in the ten-frame.",
+              "vi": "Nhìn vào các ô trống trong khung mười ô."
+            },
+            {
+              "en": "Start at 1 and count up to ten.",
+              "vi": "Bắt đầu từ 1 rồi đếm tiếp đến mười."
+            }
+          ],
+          "explanation": {
+            "en": "1 and 9 together make ten.",
+            "vi": "1 cộng với 9 bằng mười."
+          }
+        },
+        {
+          "id": "bonds-to-10-practice-3",
+          "topicId": "bonds-to-10",
+          "schemaVersion": 1,
+          "seed": 3003,
+          "difficulty": "normal",
+          "prompt": {
+            "en": "There are 3 counters. How many more make ten?",
+            "vi": "Có 3 chấm tròn. Cần thêm bao nhiêu để đủ 10?"
+          },
+          "manipulative": {
+            "kind": "ten-frame",
+            "counts": [
+              3
+            ],
+            "target": 10
+          },
+          "answerSpec": {
+            "kind": "number",
+            "value": 7
+          },
+          "hintSteps": [
+            {
+              "en": "Look at the empty spaces in the ten-frame.",
+              "vi": "Nhìn vào các ô trống trong khung mười ô."
+            },
+            {
+              "en": "Start at 3 and count up to ten.",
+              "vi": "Bắt đầu từ 3 rồi đếm tiếp đến mười."
+            }
+          ],
+          "explanation": {
+            "en": "3 and 7 together make ten.",
+            "vi": "3 cộng với 7 bằng mười."
+          }
+        },
+        {
+          "id": "bonds-to-10-practice-4",
+          "topicId": "bonds-to-10",
+          "schemaVersion": 1,
+          "seed": 3004,
+          "difficulty": "advanced",
+          "prompt": {
+            "en": "There are 5 counters. How many more make ten?",
+            "vi": "Có 5 chấm tròn. Cần thêm bao nhiêu để đủ 10?"
+          },
+          "manipulative": {
+            "kind": "ten-frame",
+            "counts": [
+              5
+            ],
+            "target": 10
+          },
+          "answerSpec": {
+            "kind": "number",
+            "value": 5
+          },
+          "hintSteps": [
+            {
+              "en": "Look at the empty spaces in the ten-frame.",
+              "vi": "Nhìn vào các ô trống trong khung mười ô."
+            },
+            {
+              "en": "Start at 5 and count up to ten.",
+              "vi": "Bắt đầu từ 5 rồi đếm tiếp đến mười."
+            }
+          ],
+          "explanation": {
+            "en": "5 and 5 together make ten.",
+            "vi": "5 cộng với 5 bằng mười."
+          }
+        },
+        {
+          "id": "bonds-to-10-practice-5",
+          "topicId": "bonds-to-10",
+          "schemaVersion": 1,
+          "seed": 3005,
+          "difficulty": "advanced",
+          "prompt": {
+            "en": "There are 7 counters. How many more make ten?",
+            "vi": "Có 7 chấm tròn. Cần thêm bao nhiêu để đủ 10?"
+          },
+          "manipulative": {
+            "kind": "ten-frame",
+            "counts": [
+              7
+            ],
+            "target": 10
+          },
+          "answerSpec": {
+            "kind": "number",
+            "value": 3
+          },
+          "hintSteps": [
+            {
+              "en": "Look at the empty spaces in the ten-frame.",
+              "vi": "Nhìn vào các ô trống trong khung mười ô."
+            },
+            {
+              "en": "Start at 7 and count up to ten.",
+              "vi": "Bắt đầu từ 7 rồi đếm tiếp đến mười."
+            }
+          ],
+          "explanation": {
+            "en": "7 and 3 together make ten.",
+            "vi": "7 cộng với 3 bằng mười."
+          }
+        },
+        {
+          "id": "bonds-to-10-practice-6",
+          "topicId": "bonds-to-10",
+          "schemaVersion": 1,
+          "seed": 3006,
+          "difficulty": "advanced",
+          "prompt": {
+            "en": "There are 9 counters. How many more make ten?",
+            "vi": "Có 9 chấm tròn. Cần thêm bao nhiêu để đủ 10?"
+          },
+          "manipulative": {
+            "kind": "ten-frame",
+            "counts": [
+              9
+            ],
+            "target": 10
+          },
+          "answerSpec": {
+            "kind": "number",
+            "value": 1
+          },
+          "hintSteps": [
+            {
+              "en": "Look at the empty spaces in the ten-frame.",
+              "vi": "Nhìn vào các ô trống trong khung mười ô."
+            },
+            {
+              "en": "Start at 9 and count up to ten.",
+              "vi": "Bắt đầu từ 9 rồi đếm tiếp đến mười."
+            }
+          ],
+          "explanation": {
+            "en": "9 and 1 together make ten.",
+            "vi": "9 cộng với 1 bằng mười."
+          }
+        }
+      ]
+    }
+  ]
+}
