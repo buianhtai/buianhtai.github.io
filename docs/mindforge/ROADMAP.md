@@ -168,3 +168,12 @@ Increment 1 does **not** complete all of #73, #74 or #77: in-browser mobile/e2e 
 - Local Chromium smoke tests with embedded shared assets: 320/390/768/1280px, both themes across Sudoku, Traffic, 3D Lab and Arcade, no detected page errors / horizontal overflow; manual interaction checks (Sudoku number entry, Traffic selection, Arcade play/back and language, 3D Lab language) passed.
 - `sw.js` precaches both new shared assets; cache version incremented.
 - Still pending: public GitHub Pages route/service-worker tests and physical iOS/Android, WebGL and accessibility audit. [#111](https://github.com/buianhtai/buianhtai.github.io/issues/111) stays open.
+
+## V3.2 — Memory Garden image recall + professional app themes — #113
+- Adds `memory-images.js`: 18 original inline-SVG illustration cards with localized labels; memory challenges now include **which objects**, **where**, and **in what order** plus the existing glowing tiles.
+- Tiles/Pictures/Mixed selector persists in localStorage. Mixed cycles tiles and illustrated puzzles; age- and level-aware preview times, candidates and puzzle length. Correctness checks operate on IDs, not on visual labels.
+- Root dashboard theme aligned to the professional Game Library (clean light surfaces, high-contrast navy/violet gameplay, responsive mobile cards), shared dark/light preference with all game shells via existing `mf-library-theme` key. No account or network assets required.
+- Existing shared Arcade/Sudoku/Traffic/3D theme navigation kept intact; fixed repeated DOM updates in theme controls.
+- Game Library Memory Garden description updated. PWA version and precache updated for both new assets.
+- QA: independently validated 3,000 puzzles across five age groups and six difficulty levels using original design prototype; all three picture challenge styles and original tiles passed Chromium playthroughs at 280/320/390/768/1280px. Professional root appearance smoke tests in light/dark passed at same widths, no overflow or JS exceptions. Deployed code uses a compact SVG implementation and still requires hosted-origin/physical-device QA.
+- Pending GitHub Pages and real iOS Safari/Android testing, screen reader interaction, and offline service-worker acceptance. Track [#113](https://github.com/buianhtai/buianhtai.github.io/issues/113).
