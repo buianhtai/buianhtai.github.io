@@ -192,3 +192,12 @@ Increment 1 does **not** complete all of #73, #74 or #77: in-browser mobile/e2e 
 - Cancellation prevents duplicate nexts when manually advancing, restarting or changing modes. Existing scoring, questions and state persistence unchanged; no new runtime assets.
 - QA: Chromium 280,320,390,768,1280px validated correct auto, wrong freeze, manual next, preference restoration, swipe-next, reduced-motion default, and no console errors or horizontal overflow.
 - [Issue #117](https://github.com/buianhtai/buianhtai.github.io/issues/117) kept open for live Pages and physical-device testing.
+
+## Math Learning V1 — phased Learn / Practice / Review plan (2026-10-20)
+- [Implementation plan and dependency graph](MATH_LEARNING_V1_PLAN.md) · [Epic #119](https://github.com/buianhtai/buianhtai.github.io/issues/119).
+- **Wave 0:** [#120 workflow/test gates](https://github.com/buianhtai/buianhtai.github.io/issues/120), [#121 curriculum contract](https://github.com/buianhtai/buianhtai.github.io/issues/121), [#122 seeded QA](https://github.com/buianhtai/buianhtai.github.io/issues/122).
+- **Wave 1:** [#123 SVG manipulatives](https://github.com/buianhtai/buianhtai.github.io/issues/123), [#124 Learn guided lessons](https://github.com/buianhtai/buianhtai.github.io/issues/124).
+- **Wave 2:** [#125 topic practice](https://github.com/buianhtai/buianhtai.github.io/issues/125), [#126 mistakes and descriptive progress](https://github.com/buianhtai/buianhtai.github.io/issues/126).
+- **Wave 3:** [#127 integrated mobile E2E release QA](https://github.com/buianhtai/buianhtai.github.io/issues/127).
+- **Workflow reference:** [super-board](https://github.com/EricTechPro/super-board) for GitHub Project dependency-aware Build → QA → Review. Currently issues/docs only: super-board not installed, GitHub Project board not yet set up and no unattended merges enabled.
+- **Scope:** early counting 1–10, quantity comparison ≤10 and number bonds to 10; leave existing Math Quest generators/scores unchanged. Expand content only after functional pilot.
