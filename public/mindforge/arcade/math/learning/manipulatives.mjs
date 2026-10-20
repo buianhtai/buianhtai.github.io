@@ -52,7 +52,7 @@ export function mountTenFrame(host,opts={}){
 export function renderCompare(left,right,opts={}){
  if(!good(left)||!good(right))throw new RangeError('Invalid comparison counts');
  const t=tr(opts.language);
- return '<div class="mf-compare" role="group" aria-label="'+t.compare+'"><section class="mf-group" data-mf-group="left"><h3>'+t.left+' · '+left+'</h3>'+renderTenFrame(left,{...opts,mode:'count',selected:opts.paired||[]})+'</section><section class="mf-group" data-mf-group="right"><h3>'+t.right+' · '+right+'</h3>'+renderTenFrame(right,{...opts,mode:'count',selected:opts.paired||[]})+'</section></div>';
+ return '<div class="mf-compare" role="group" aria-label="'+t.compare+'"><section class="mf-group" data-mf-group="left"><h3>'+t.left+(opts.showCounts?' · '+left:'')+'</h3>'+renderTenFrame(left,{...opts,mode:'count',selected:opts.paired||[]})+'</section><section class="mf-group" data-mf-group="right"><h3>'+t.right+(opts.showCounts?' · '+right:'')+'</h3>'+renderTenFrame(right,{...opts,mode:'count',selected:opts.paired||[]})+'</section></div>';
 }
 export function mountCompare(host,opts={}){
  const left=opts.left??2,right=opts.right??4;if(!good(left)||!good(right))throw new RangeError('Invalid comparison');
