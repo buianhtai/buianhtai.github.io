@@ -47,7 +47,7 @@ function choices(s){
 }
 function lessonPage(){
  if(stepIndex===3)return '<section class="lesson-card completion"><span class="big">🎉</span><div class="eyebrow">'+tr('finished')+'</div><h2>'+tr('done')+'</h2><p>'+tr('doneText')+'</p><div class="foot-actions"><button class="link-button" data-click="repeat">'+tr('again')+'</button><button class="next-button" data-click="after">'+(lessonIndex===2?tr('restart'):tr('following'))+' →</button></div></section>';
- const s=currentStep(),practicing=stepIndex===1;
+ const s=currentStep(),practicing=stepIndex===1,illustration=stepIndex===2?currentLesson().steps[1]:s;
  const steps=[0,1,2].map(n=>'<span class="step '+(n===stepIndex?'current':n<stepIndex?'past':'')+'"></span>').join('');
  const instructions=stepIndex===0?tr('watch'):stepIndex===2?tr('reflection'):topicId==='count-to-10'?tr('tapCount'):topicId==='compare-to-10'?tr('tapCompare'):tr('tapBond');
  const result=outcome?'<div class="status '+(outcome==='correct'?'good':'bad')+'" role="status">'+(outcome==='correct'?tr('success')+' '+esc(localized(s.explanation)):outcome==='revealed'?tr('answer')+': '+esc(String(s.answerSpec.value))+'. '+esc(localized(s.explanation)):tr('wrong'))+'</div>':'';
@@ -74,7 +74,14 @@ function render(){
  if(mounted){mounted();mounted=null}
  document.documentElement.lang=lang;
  root.innerHTML=header()+hero()+topicCards()+'<div class="lesson-layout">'+lessonNav()+lessonPage()+'</div><p class="footer-note">'+tr('privacy')+'</p>';
- if(stepIndex===1)attachVisual();
+ if(stepIndex===1){if(outcome==='correct'||outcome==='revealed'){
+ const m=currentStep().manipulative;
+ const visual=document.getElementById('visual');
+ if(m.kind==='two-groups')visual.innerHTML=renderCompare(m.counts[0],m.counts[1],{language:lang,token:'star',palette:'violet',showCounts:true});
+ else if(topicId==='bonds-to-10')visual.innerHTML=renderTenFrame(m.counts[0],{language:lang,token:'star',palette:'violet',mode:'build',selected:Array.from({length:10-m.counts[0]},(_,i)=>m.counts[0]+i)});
+ else visual.innerHTML=renderTenFrame(m.counts[0],{language:lang,token:'star',palette:'violet'});
+ }else attachVisual()}
+
 }
 function next(){
  if(stepIndex===1&&outcome!=='correct'&&outcome!=='revealed')return;
