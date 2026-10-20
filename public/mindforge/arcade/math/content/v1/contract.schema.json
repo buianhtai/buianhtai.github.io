@@ -1,0 +1,315 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://buianhtai.github.io/mindforge/arcade/math/content/v1/contract.schema.json",
+  "title": "MindForge Math Learning V1 curriculum",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "contentVersion",
+    "licenseNote",
+    "topics"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "contentVersion": {
+      "type": "string",
+      "pattern": "^1\\.[0-9]+\\.[0-9]+$"
+    },
+    "licenseNote": {
+      "type": "string",
+      "minLength": 10
+    },
+    "topics": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "$ref": "#/$defs/topic"
+      }
+    }
+  },
+  "$defs": {
+    "localized": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "en",
+        "vi"
+      ],
+      "properties": {
+        "en": {
+          "type": "string",
+          "minLength": 1
+        },
+        "vi": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "manipulative": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "counts",
+        "target"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "ten-frame",
+            "two-groups"
+          ]
+        },
+        "counts": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 2,
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10
+          }
+        },
+        "target": {
+          "const": 10
+        }
+      }
+    },
+    "answerSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "value"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "number",
+            "side"
+          ]
+        },
+        "value": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10
+            },
+            {
+              "enum": [
+                "left",
+                "right",
+                "equal"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "puzzleFields": {
+      "type": "object",
+      "required": [
+        "prompt",
+        "manipulative",
+        "answerSpec",
+        "hintSteps",
+        "explanation"
+      ],
+      "properties": {
+        "prompt": {
+          "$ref": "#/$defs/localized"
+        },
+        "manipulative": {
+          "$ref": "#/$defs/manipulative"
+        },
+        "answerSpec": {
+          "$ref": "#/$defs/answerSpec"
+        },
+        "hintSteps": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "$ref": "#/$defs/localized"
+          }
+        },
+        "explanation": {
+          "$ref": "#/$defs/localized"
+        }
+      }
+    },
+    "step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "mode",
+        "prompt"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "mode": {
+          "enum": [
+            "explain",
+            "try",
+            "reflect"
+          ]
+        },
+        "prompt": {
+          "$ref": "#/$defs/localized"
+        },
+        "manipulative": {
+          "$ref": "#/$defs/manipulative"
+        },
+        "answerSpec": {
+          "$ref": "#/$defs/answerSpec"
+        },
+        "hintSteps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/localized"
+          }
+        },
+        "explanation": {
+          "$ref": "#/$defs/localized"
+        }
+      }
+    },
+    "lesson": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "topicId",
+        "title",
+        "steps"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "topicId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "$ref": "#/$defs/localized"
+        },
+        "steps": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {
+            "$ref": "#/$defs/step"
+          }
+        }
+      }
+    },
+    "question": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/puzzleFields"
+        },
+        {
+          "type": "object",
+          "required": [
+            "id",
+            "topicId",
+            "schemaVersion",
+            "seed",
+            "difficulty"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "topicId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "schemaVersion": {
+              "const": 1
+            },
+            "seed": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "difficulty": {
+              "enum": [
+                "starter",
+                "normal",
+                "advanced"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "topic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "ageGuidance",
+        "prerequisites",
+        "objectives",
+        "lessons",
+        "examples"
+      ],
+      "properties": {
+        "id": {
+          "enum": [
+            "count-to-10",
+            "compare-to-10",
+            "bonds-to-10"
+          ]
+        },
+        "name": {
+          "$ref": "#/$defs/localized"
+        },
+        "ageGuidance": {
+          "type": "string",
+          "minLength": 1
+        },
+        "prerequisites": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "objectives": {
+          "type": "array",
+          "minItems": 3,
+          "items": {
+            "$ref": "#/$defs/localized"
+          }
+        },
+        "lessons": {
+          "type": "array",
+          "minItems": 3,
+          "items": {
+            "$ref": "#/$defs/lesson"
+          }
+        },
+        "examples": {
+          "type": "array",
+          "minItems": 6,
+          "items": {
+            "$ref": "#/$defs/question"
+          }
+        }
+      }
+    }
+  }
+}
