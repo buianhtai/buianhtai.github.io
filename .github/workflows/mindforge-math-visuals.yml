@@ -1,0 +1,33 @@
+name: MindForge Math Visual Toolkit
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/mindforge-math-visuals.yml'
+      - 'public/mindforge/arcade/math/learning/manipulatives.*'
+      - 'public/mindforge/arcade/math/lab/**'
+      - 'tests/mindforge/math-manipulatives.test.mjs'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/mindforge-math-visuals.yml'
+      - 'public/mindforge/arcade/math/learning/manipulatives.*'
+      - 'public/mindforge/arcade/math/lab/**'
+      - 'tests/mindforge/math-manipulatives.test.mjs'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  visual-toolkit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify SVG module and test syntax
+        run: |
+          node --check public/mindforge/arcade/math/learning/manipulatives.mjs
+          node --check tests/mindforge/math-manipulatives.test.mjs
+      - name: Test ten-frame, comparison, number line and keyboard
+        run: node --test tests/mindforge/math-manipulatives.test.mjs
