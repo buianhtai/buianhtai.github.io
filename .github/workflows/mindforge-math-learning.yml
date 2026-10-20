@@ -1,0 +1,46 @@
+name: MindForge Math Learning checks
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/mindforge-math-learning.yml'
+      - 'docs/mindforge/math-learning/**'
+      - 'public/mindforge/arcade/math/**'
+      - 'scripts/mindforge/**'
+      - 'tests/mindforge/**'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/mindforge-math-learning.yml'
+      - 'docs/mindforge/math-learning/**'
+      - 'public/mindforge/arcade/math/**'
+      - 'scripts/mindforge/**'
+      - 'tests/mindforge/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  math-contracts:
+    name: Math contracts and regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check syntax
+        run: |
+          node --check scripts/mindforge/math-content-validate.mjs
+          node --check scripts/mindforge/verify-existing-math.mjs
+          node --check tests/mindforge/math-content.test.mjs
+      - name: Validate content and mathematical answers
+        run: node scripts/mindforge/math-content-validate.mjs
+      - name: Prove negative fixtures fail
+        run: node --test tests/mindforge/math-content.test.mjs
+      - name: Existing Math Quest regression smoke
+        run: node scripts/mindforge/verify-existing-math.mjs
