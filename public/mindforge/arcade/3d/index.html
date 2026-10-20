@@ -24,7 +24,8 @@
 @media(min-width:821px){.touch-controls{display:none}}
 @media(max-width:820px){#viewport{height:clamp(255px,47vh,350px)}.maze-pad button{min-width:56px;min-height:56px}.cell-control button{min-width:60px;min-height:58px}.bp-cell{min-height:48px}}
 @media(max-width:390px){.touch-controls{gap:6px}.touch-controls button{min-width:51px;min-height:54px}#viewport{height:260px}}
-</style></head><body>
+</style><link rel="stylesheet" href="../experience.css">
+</head><body>
 <div class="app">
  <header class="top"><a class="brand" href="../" aria-label="Back to MindForge Arcade"><span class="brand-icon">◈</span><span><b>MINDFORGE</b><small>SPATIAL 3D LAB</small></span></a><div class="top-tools"><button id="lang" class="control" aria-label="Switch language">VI / EN</button><button id="motion" class="control" aria-label="Toggle animation">✦ <span data-i="motion">Motion</span></button><a class="back-link" href="../" data-i="back">← Arcade</a></div></header>
  <section class="intro"><div><div class="eyebrow">INTERACTIVE WORLD · 01</div><h1 data-i="title">Think in <em>three dimensions.</em></h1><p data-i="subtitle">Rotate, build, and navigate real 3D worlds. Every decision develops spatial reasoning through play.</p><div class="hero-chips"><span data-i="why3d">3D only when it adds to the puzzle</span><span data-i="simple">Touch · mouse · keyboard</span></div><a href="../" class="play-2d" data-i="play2d">Prefer something simple? Play 2D Arcade →</a></div><div class="intro-symbol" aria-hidden="true"><div class="rings"><div class="isocube"><span class="face front">M</span><span class="face right">F</span><span class="face top">3D</span></div></div><b class="spark s1">✧</b><b class="spark s2">✦</b></div></section>
@@ -177,4 +178,5 @@ if(b.dataset.world){openWorld(b.dataset.world);return;}if(b.dataset.mode){state.
 function init(){document.body.classList.toggle('reduce-motion',!state.motion);setLang();renderCards();bind();}
 init();const requestedWorld=new URLSearchParams(location.search).get('world');if(['cube','tower','maze'].includes(requestedWorld))openWorld(requestedWorld);
 
-</script><script src="../sound-kit.js" defer></script></body></html>
+</script><script src="../sound-kit.js" defer></script><script src="../experience.js" defer></script>
+</body></html>
