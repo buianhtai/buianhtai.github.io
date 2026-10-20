@@ -77,6 +77,45 @@
         },
         "target": {
           "const": 10
+        },
+        "visual": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "tokenId",
+            "palette",
+            "arrangement",
+            "flip"
+          ],
+          "properties": {
+            "tokenId": {
+              "enum": [
+                "dot",
+                "apple",
+                "star",
+                "leaf",
+                "fish",
+                "flower"
+              ]
+            },
+            "palette": {
+              "enum": [
+                "mint",
+                "violet",
+                "peach",
+                "sky"
+              ]
+            },
+            "arrangement": {
+              "enum": [
+                "row",
+                "grid"
+              ]
+            },
+            "flip": {
+              "type": "boolean"
+            }
+          }
         }
       }
     },
