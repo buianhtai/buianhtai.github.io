@@ -177,3 +177,10 @@ Increment 1 does **not** complete all of #73, #74 or #77: in-browser mobile/e2e 
 - Game Library Memory Garden description updated. PWA version and precache updated for both new assets.
 - QA: independently validated 3,000 puzzles across five age groups and six difficulty levels using original design prototype; all three picture challenge styles and original tiles passed Chromium playthroughs at 280/320/390/768/1280px. Professional root appearance smoke tests in light/dark passed at same widths, no overflow or JS exceptions. Deployed code uses a compact SVG implementation and still requires hosted-origin/physical-device QA.
 - Pending GitHub Pages and real iOS Safari/Android testing, screen reader interaction, and offline service-worker acceptance. Track [#113](https://github.com/buianhtai/buianhtai.github.io/issues/113).
+
+## V3.3 — Theme visibility + Math Quest (#115)
+- Main app and new Math Quest share `mf-library-theme` Light/Dark preference. Existing library and Arcade pages also use this same key; main header and library theme controls now show their current label rather than icon only. Existing profile state and player progress preserved.
+- New game `/mindforge/arcade/math/` offers arithmetic, missing number and illustrated mini-market scenarios, with Beginner (5 rounds), Normal (7), and Advanced (9); mixed or dedicated puzzle type, localized VI/EN, keypad/keyboard answer, 2 attempts, strategy hints and progress/best streak saved on device.
+- Math Quest is the **14th game** in the main game library and linked on the Visual Arcade landing page. Offline service worker cache updated.
+- Chromium Playwright tested at 280,320,390,768,1280px, including 4,500 random arithmetic examples (3 difficulties × 3 modes × 100 × 5 viewports), and user interaction including incorrect then correct, keyboard Enter, language and theme switch; zero browser JS errors and page overflow.
+- **Pending:** physical iOS/Android, public Pages deployment confirmation, and real-device cross-route theme consistency. Keep #115 open until these are verified.
