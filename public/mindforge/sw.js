@@ -1,4 +1,4 @@
-const CACHE='mindforge-v29-library-20261020';
+const CACHE='mindforge-v30-professional-library-20261020';
 const CORE=['./','./index.html','./manifest.webmanifest','./assets/icon.svg','./visuals.css','./visuals.js','./arcade/','./arcade/index.html','./games/','./games/index.html','./arcade/3d/','./arcade/3d/index.html','./arcade/sudoku/','./arcade/sudoku/index.html','./arcade/traffic/','./arcade/traffic/index.html','./arcade/sound-kit.js'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(CORE)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));

@@ -151,3 +151,11 @@ Increment 1 does **not** complete all of #73, #74 or #77: in-browser mobile/e2e 
 - Chromium Playwright tests at 320/390/768/1280 px: 13 game links, skill/age/difficulty/time filters, bilingual switch, search (empty/results), show more, viewport overflow and no page JS errors.
 - QA remaining: public Pages workflow/live URL, physical iOS Safari/Android, real WebGL and cached routes, screen readers and actual navigation to direct links.
 - [Issue #107](https://github.com/buianhtai/buianhtai.github.io/issues/107) remains open until post-deploy QA.
+
+## V3.0 — Professional Game Library UI/UX redesign — #109
+- Designed the existing 13-game `/mindforge/games/` screen with an editorial layout, light default theme and locally persisted dark-mode switch.
+- Rebalanced desktop two-panel hero, illustrated featured Traffic Escape link, professionally styled game cards and a compact touch-first mobile collection. Preserved search, 6 skill chips, collapsed age/difficulty/play time, Show More, EN/VI, surprise link and all 13 direct launch links.
+- System-font typography and custom inline SVG art; no new network libraries or tracking. Touch targets approximately 42–51px with keyboard focus visibility and reduced-motion styling.
+- Chromium Playwright: 320/390/768/1280px across light/dark and EN/VI; search, filtering, 13 distinct launch routes, Show More, empty state and theme switching all passed; viewport checks also at 280/360/414/600/1024px, no horizontal overflow or JavaScript errors.
+- Bumped offline cache version to force the refreshed UI. Screenshots at 320/390/1280 reviewed.
+- **Pending** actual hosted GitHub Pages verification, iOS/Android device and assistive-technology audit. Keep [#109](https://github.com/buianhtai/buianhtai.github.io/issues/109) open until those checks are complete.
