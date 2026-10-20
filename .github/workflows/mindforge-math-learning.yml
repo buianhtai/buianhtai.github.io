@@ -41,12 +41,14 @@ jobs:
           node --check scripts/mindforge/verify-existing-math.mjs
           node --check tests/mindforge/math-content.test.mjs
           node --check tests/mindforge/math-generator.test.mjs
+          node --check tests/mindforge/math-learn.test.mjs
+          node --check public/mindforge/arcade/math/learn/app.mjs
           node --check tests/mindforge/math-visual-contract.test.mjs
           node --check tests/mindforge/math-task-coordinator.test.mjs
           node --check public/mindforge/arcade/math/learning/engine.mjs
       - name: Validate content and mathematical answers
         run: node scripts/mindforge/math-content-validate.mjs
       - name: Prove negative fixtures fail
-        run: node --test tests/mindforge/math-content.test.mjs tests/mindforge/math-generator.test.mjs tests/mindforge/math-visual-contract.test.mjs tests/mindforge/math-task-coordinator.test.mjs
+        run: node --test tests/mindforge/math-content.test.mjs tests/mindforge/math-generator.test.mjs tests/mindforge/math-visual-contract.test.mjs tests/mindforge/math-task-coordinator.test.mjs tests/mindforge/math-learn.test.mjs
       - name: Existing Math Quest regression smoke
         run: node scripts/mindforge/verify-existing-math.mjs
