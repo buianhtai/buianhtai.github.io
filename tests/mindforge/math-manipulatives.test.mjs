@@ -30,6 +30,7 @@ test('compare renders two ten-frames and number-line has eleven 50px buttons',()
  const html=renderCompare(4,7,{paired:[0,1]});
  assert.equal((html.match(/data-mf-cell="/g)||[]).length,20);
  assert.equal((html.match(/data-mf-group="/g)||[]).length,2);
+ assert.ok(!html.includes('Left · 4'),'count labels must not reveal the comparison answer');
  const line=renderNumberLine({value:7});
  assert.equal((line.match(/data-mf-number="/g)||[]).length,11);
  assert.equal((line.match(/aria-pressed="true"/g)||[]).length,1);
