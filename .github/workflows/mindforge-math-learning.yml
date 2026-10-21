@@ -45,10 +45,38 @@ jobs:
           node --check public/mindforge/arcade/math/learn/app.mjs
           node --check tests/mindforge/math-visual-contract.test.mjs
           node --check tests/mindforge/math-task-coordinator.test.mjs
+          node --check tests/mindforge/math-learning-flow.test.mjs
+          node --check public/mindforge/arcade/math/learning/progress.mjs
+          node --check public/mindforge/arcade/math/learning/flow.mjs
           node --check public/mindforge/arcade/math/learning/engine.mjs
       - name: Validate content and mathematical answers
         run: node scripts/mindforge/math-content-validate.mjs
       - name: Prove negative fixtures fail
-        run: node --test tests/mindforge/math-content.test.mjs tests/mindforge/math-generator.test.mjs tests/mindforge/math-visual-contract.test.mjs tests/mindforge/math-task-coordinator.test.mjs tests/mindforge/math-learn.test.mjs
+        run: node --test tests/mindforge/math-content.test.mjs tests/mindforge/math-generator.test.mjs tests/mindforge/math-visual-contract.test.mjs tests/mindforge/math-task-coordinator.test.mjs tests/mindforge/math-learn.test.mjs tests/mindforge/math-learning-flow.test.mjs
       - name: Existing Math Quest regression smoke
         run: node scripts/mindforge/verify-existing-math.mjs
+
+  visual-browser:
+    name: Visual Math Playwright flow
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install pinned Playwright browser
+        run: |
+          python -m pip install --disable-pip-version-check playwright==1.56.0
+          python -m playwright install --with-deps chromium
+      - name: End-to-end visual math routes and session behavior
+        run: python scripts/mindforge/math-learning-e2e.py
+      - name: Upload mobile and desktop screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mindforge-math-learning-e2e
+          path: artifacts/math-learning/
+          if-no-files-found: ignore
