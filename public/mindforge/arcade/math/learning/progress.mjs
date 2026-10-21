@@ -41,11 +41,15 @@ export function sanitize(v){
  }
  return out;
 }
+export function storageKey(storage=globalThis.localStorage){
+ try{const profile=JSON.parse(storage.getItem('mindforge-data-v1')||'null');const id=profile?.activeId;if(typeof id==='string'&&/^[a-zA-Z0-9_-]{1,80}$/.test(id))return KEY+'-'+id}catch{}
+ return KEY;
+}
 export function read(storage=globalThis.localStorage){
- try{return sanitize(JSON.parse(storage.getItem(KEY)||'null'))}catch{return defaults()}
+ try{return sanitize(JSON.parse(storage.getItem(storageKey(storage))||'null'))}catch{return defaults()}
 }
 export function write(data,storage=globalThis.localStorage){
- const value=sanitize(data);try{storage.setItem(KEY,JSON.stringify(value));return true}catch{return false}
+ const value=sanitize(data);try{storage.setItem(storageKey(storage),JSON.stringify(value));return true}catch{return false}
 }
 export function createSession({topicId='count-to-10',difficulty='starter',mode='practice',seed=1,questions=null}={}){
  if(!topic(topicId)||!diff(difficulty)||!['practice','review'].includes(mode)||!num(seed))throw Error('Invalid session');
