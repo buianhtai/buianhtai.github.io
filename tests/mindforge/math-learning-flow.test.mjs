@@ -59,7 +59,7 @@ test('missed concepts create a review queue with fresh seed and are reduced afte
  assert.equal(review.length,3);
  assert.notEqual(review[0].seed,missed[0].seed);
  for(const q of review)assert.deepEqual(validateQuestion(generateQuestion(q.topicId,q)),[]);
- store=recordAnswer(store,review[0],{answer:7,correct:true,tries:2});
+ store=recordAnswer(store,review[0],{answer:7,correct:true,tries:2,resolvedReview:true});
  assert.equal(store.mistakes.length,2);
  assert.equal(store.mistakes.filter(q=>q.topicId==='count-to-10').length,1);
  const info=summary(store);
