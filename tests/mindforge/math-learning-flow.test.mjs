@@ -78,6 +78,18 @@ test('storage retention, corrupted state, and reset/export are bounded',()=>{
  const m=memory();m.setItem('mf-math-learning-v1','broken{');
  assert.equal(read(m).attempts.length,0);
 });
+test('multiple local MindForge profiles keep learning records separate',()=>{
+ const storage=memory();
+ storage.setItem('mindforge-data-v1',JSON.stringify({activeId:'child-one'}));
+ const a=read(storage);a.session=createSession({topicId:'count-to-10',seed:22});write(a,storage);
+ storage.setItem('mindforge-data-v1',JSON.stringify({activeId:'child-two'}));
+ assert.equal(read(storage).session,null);
+ const b=read(storage);b.session=createSession({topicId:'bonds-to-10',seed:33});write(b,storage);
+ storage.setItem('mindforge-data-v1',JSON.stringify({activeId:'child-one'}));
+ assert.equal(read(storage).session.seed,22);
+ storage.setItem('mindforge-data-v1',JSON.stringify({activeId:'child-two'}));
+ assert.equal(read(storage).session.seed,33);
+});
 test('invalid Math Learning session construction fails closed',()=>{
  assert.throws(()=>createSession({topicId:'insecure'}));
  assert.throws(()=>createSession({difficulty:'expert'}));
