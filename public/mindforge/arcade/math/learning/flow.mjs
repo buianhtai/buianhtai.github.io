@@ -131,7 +131,7 @@ function check(){
  const q=active();const good=evaluateQuestion(q,chosen);session.tries++;
  if(good){
   session.feedback='correct';session.score+=(session.tries===1?10:5);
-  store=recordAnswer(store,q,{answer:chosen,correct:true,hintUsed:hint,tries:session.tries});
+  store=recordAnswer(store,q,{answer:chosen,correct:true,hintUsed:hint,tries:session.tries,resolvedReview:isReview});
   persist();draw();
   if(store.preferences.autoNext&&!matchMedia('(prefers-reduced-motion: reduce)').matches)autoTimer=setTimeout(next,1700);
  }else if(session.tries>=2){
