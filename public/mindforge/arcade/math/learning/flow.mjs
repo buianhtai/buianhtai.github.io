@@ -71,7 +71,7 @@ function aside(){
  '<p>'+tr('timer')+'</p><div class="actions"><button class="btn" data-action="export">'+tr('export')+'</button><button class="btn" data-action="clear">'+tr('clear')+'</button></div></aside>';
 }
 function intro(){
- const content=isReview?'<p class="warning">'+tr('reviewTip')+'</p><div class="actions"><button class="btn primary" data-action="new">'+tr('startReview')+'</button><a class="btn" href="../practice/">'+tr('free')+'</a></div>':modeCards()+controls();
+ const content=isReview?'<p class="warning">'+tr('reviewTip')+'</p><div class="actions"><button class="btn primary" data-action="new">'+tr('startReview')+'</button><a class="btn" href="../practice/">'+tr('free')+'</a></div>':'<p class="muted">'+tr('intro')+'</p>';
  const completed=session?.finished?finish():isReview&&!store.mistakes.length?'<div class="card completion"><h2>'+tr('noMistakes')+'</h2><a class="btn primary" href="../practice/">'+tr('free')+'</a></div>':'<div class="card">'+content+'</div>';
  return '<section class="hero"><p class="eyebrow">MINDFORGE / '+(isReview?'REVIEW':'PRACTICE')+'</p><h1>'+tr(isReview?'reviewTitle':'title')+'</h1><p>'+tr(isReview?'reviewIntro':'intro')+'</p></section>'+
  (!isReview?'<section aria-label="'+tr('topics')+'">'+modeCards()+controls()+'</section>':'')+
