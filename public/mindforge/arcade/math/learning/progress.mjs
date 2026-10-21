@@ -58,7 +58,7 @@ export function createSession({topicId='count-to-10',difficulty='starter',mode='
  return {topicId,difficulty,mode,seed,index:0,questions:entries.map(q=>({topicId:q.topicId,seed:q.seed,index:q.index,difficulty:q.difficulty})),score:0,tries:0,finished:false,answer:null,feedback:null,hintUsed:false,reviewOf:null};
 }
 export const keyFor=q=>q.topicId+':'+q.difficulty+':'+q.seed+':'+q.index;
-export function recordAnswer(store,q,{answer=null,correct=false,hintUsed=false,tries=1}={}){
+export function recordAnswer(store,q,{answer=null,correct=false,hintUsed=false,tries=1,resolvedReview=false}={}){
  const updated=sanitize(store);
  if(!q||!topic(q.topicId)||!diff(q.difficulty)||!num(q.seed)||!small(q.index))throw Error('Invalid question');
  const item={topicId:q.topicId,difficulty:q.difficulty,seed:q.seed,index:q.index,answer:typeof answer==='number'||typeof answer==='string'?answer:null,correct:!!correct,hintUsed:!!hintUsed,tries:Math.max(1,Math.min(2,Number.isInteger(tries)?tries:1)),timestamp:Date.now()};
@@ -66,7 +66,7 @@ export function recordAnswer(store,q,{answer=null,correct=false,hintUsed=false,t
  updated.attempts=updated.attempts.slice(-MAX_ATTEMPTS);
  const key=keyFor(q);
  if(!correct&&!updated.mistakes.some(x=>keyFor(x)===key))updated.mistakes.push({topicId:q.topicId,difficulty:q.difficulty,seed:q.seed,index:q.index});
- if(correct){const index=updated.mistakes.findIndex(x=>x.topicId===q.topicId);if(index>=0)updated.mistakes.splice(index,1);}
+ if(correct&&resolvedReview){const index=updated.mistakes.findIndex(x=>x.topicId===q.topicId);if(index>=0)updated.mistakes.splice(index,1);}
  updated.mistakes=updated.mistakes.slice(-MAX_MISSES);
  return updated;
 }
