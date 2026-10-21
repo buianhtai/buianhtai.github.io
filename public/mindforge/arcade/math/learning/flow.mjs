@@ -113,7 +113,7 @@ function draw(){
  cancelTimer();
  if(mounted){mounted.destroy();mounted=null}
  themeSet();
- if(isReview&&!session?.finished&&session?.mode!=='review')session=null;
+ if(isReview&&session?.mode!=='review')session=null;
  if(!isReview&&session?.mode==='review')session=null;
  const q=active();
  root.innerHTML=header()+((!session||session.finished)?intro():'<section class="hero"><p class="eyebrow">MINDFORGE / '+(isReview?'REVIEW':'PRACTICE')+'</p><h1>'+tr(isReview?'reviewTitle':'title')+'</h1><p>'+tr(isReview?'reviewIntro':'intro')+'</p></section><div class="deck">'+questionView()+aside()+'</div>')+'<p class="bottomnote">'+tr('privacy')+'</p>';
