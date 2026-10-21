@@ -62,7 +62,7 @@ export function recordAnswer(store,q,{answer=null,correct=false,hintUsed=false,t
  updated.attempts=updated.attempts.slice(-MAX_ATTEMPTS);
  const key=keyFor(q);
  if(!correct&&!updated.mistakes.some(x=>keyFor(x)===key))updated.mistakes.push({topicId:q.topicId,difficulty:q.difficulty,seed:q.seed,index:q.index});
- if(correct)updated.mistakes=updated.mistakes.filter(x=>x.topicId!==q.topicId);
+ if(correct){const index=updated.mistakes.findIndex(x=>x.topicId===q.topicId);if(index>=0)updated.mistakes.splice(index,1);}
  updated.mistakes=updated.mistakes.slice(-MAX_MISSES);
  return updated;
 }
