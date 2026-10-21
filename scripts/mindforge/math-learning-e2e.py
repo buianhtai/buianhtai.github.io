@@ -101,11 +101,21 @@ def run():
                 page=ctx.new_page()
                 problems=[]
                 page.on('pageerror',lambda error:problems.append(str(error)))
-                for route in ('practice','review'):
+                for route in ('learn','practice','review'):
                     page.goto(BASE+'/mindforge/arcade/math/'+route+'/',wait_until='networkidle')
-                    page.locator('.hero h1').wait_for(timeout=10000)
+                    page.locator('.masthead h1' if route=='learn' else '.hero h1').wait_for(timeout=10000)
                     assert not overflow(page),f'{route} horizontal overflow at {width}px'
                     assert not problems,f'{route} errors at {width}px: {problems}'
+                page.goto(BASE+'/mindforge/arcade/math/',wait_until='networkidle')
+                for target in ('learn','practice','review'):
+                    assert page.locator('a[href="./'+target+'/"]').count()>0,'Math Quest navigation missing '+target
+                page.goto(BASE+'/mindforge/arcade/math/learn/',wait_until='networkidle')
+                assert page.locator('[data-topic]').count()==3,'Learn must list all 3 topics'
+                page.locator('[data-topic="count-to-10"]').click()
+                assert page.locator('[role="progressbar"]').get_attribute('aria-valuenow')=='1'
+                page.locator('[data-click="next"]').click()
+                assert page.locator('[role="progressbar"]').get_attribute('aria-valuenow')=='2'
+                assert not overflow(page),'Learn overflow'
                 page.screenshot(path=str(OUT/f'practice-{width}.png'),full_page=True)
                 if width==390:
                     check_question(page)
