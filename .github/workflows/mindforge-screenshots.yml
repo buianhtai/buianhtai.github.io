@@ -1,0 +1,56 @@
+name: MindForge real UI screenshots
+on:
+  workflow_dispatch:
+  push:
+    branches: [feat/mindforge-real-ui-screenshots-20261022]
+    paths: [.github/workflows/mindforge-screenshots.yml]
+permissions:
+  contents: read
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install browser
+        run: |
+          npm install --no-save --no-package-lock playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Capture desktop and mobile screenshots
+        run: |
+          mkdir -p mindforge-screenshots
+          node <<'JS'
+          const { chromium } = require('playwright');
+          (async () => {
+            const browser=await chromium.launch({headless:true});
+            const targets=[
+              ['games','https://buianhtai.github.io/mindforge/games/'],
+              ['memory','https://buianhtai.github.io/mindforge/?play=memory'],
+              ['dashboard','https://buianhtai.github.io/mindforge/'],
+              ['arcade','https://buianhtai.github.io/mindforge/arcade/']
+            ];
+            for(const [label,url] of targets){
+              for(const [device,viewport] of [['desktop',{width:1440,height:900}],['mobile',{width:390,height:844}]]){
+                const context=await browser.newContext({viewport,deviceScaleFactor:1,isMobile:device==='mobile',hasTouch:device==='mobile'});
+                const page=await context.newPage();
+                try {
+                  const response=await page.goto(url,{waitUntil:'domcontentloaded',timeout:30000});
+                  await page.waitForTimeout(2000);
+                  await page.screenshot({path:'mindforge-screenshots/'+label+'-'+device+'.png',fullPage:true,animations:'disabled'});
+                  console.log(label,device,response?.status(),await page.title());
+                } catch(err) {console.error(label,device,String(err));}
+                await context.close();
+              }
+            }
+            await browser.close();
+          })().catch(err=>{console.error(err);process.exit(1)});
+          JS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mindforge-real-screenshots
+          path: mindforge-screenshots/*.png
+          if-no-files-found: warn
