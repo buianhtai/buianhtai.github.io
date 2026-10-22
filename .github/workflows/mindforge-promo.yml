@@ -36,7 +36,7 @@ jobs:
       - name: Validate MP4 video and audio streams
         run: |
           for locale in en vi; do
-            video="dist/mindforge-promo/mindforge_promo_$locale_natural.mp4"
+            video="dist/mindforge-promo/mindforge_promo_${locale}_natural.mp4"
             test -s "$video"
             ffprobe -v error -show_entries stream=codec_type -of csv=p=0 "$video" | grep -q video
             ffprobe -v error -show_entries stream=codec_type -of csv=p=0 "$video" | grep -q audio
