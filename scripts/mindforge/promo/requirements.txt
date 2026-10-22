@@ -1,0 +1,4 @@
+Pillow>=10.4,<13
+numpy>=1.26,<3
+qrcode>=7.4,<9
+edge-tts>=7,<9

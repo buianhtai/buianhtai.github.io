@@ -1,0 +1,50 @@
+name: MindForge bilingual promo videos
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'scripts/mindforge/promo/**'
+      - '.github/workflows/mindforge-promo.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/mindforge/promo/**'
+      - '.github/workflows/mindforge-promo.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  promo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: scripts/mindforge/promo/requirements.txt
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg fonts-dejavu-core
+          python -m pip install -r scripts/mindforge/promo/requirements.txt
+      - name: Render English and Vietnamese (neural voices + music + SFX)
+        run: python scripts/mindforge/promo/render.py --language both
+      - name: Validate MP4 video and audio streams
+        run: |
+          for locale in en vi; do
+            video="dist/mindforge-promo/mindforge_promo_${locale}_natural.mp4"
+            test -s "$video"
+            ffprobe -v error -show_entries stream=codec_type -of csv=p=0 "$video" | grep -q video
+            ffprobe -v error -show_entries stream=codec_type -of csv=p=0 "$video" | grep -q audio
+          done
+      - name: Publish downloadable MP4s
+        uses: actions/upload-artifact@v4
+        with:
+          name: mindforge-promo-en-vi-natural-voice
+          path: dist/mindforge-promo/*.mp4
+          if-no-files-found: error
+          retention-days: 30
