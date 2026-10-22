@@ -2,7 +2,7 @@ name: MindForge real UI screenshots
 on:
   workflow_dispatch:
   push:
-    branches: [feat/mindforge-real-ui-screenshots-20261022]
+    branches: [main, feat/mindforge-real-ui-screenshots-20261022]
     paths: [.github/workflows/mindforge-screenshots.yml]
 permissions:
   contents: read
