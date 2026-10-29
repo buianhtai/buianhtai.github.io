@@ -1,4 +1,5 @@
 ---
+import DiagramFrame from './DiagramFrame.astro';
 /**
  * MindMap — radial concept clustering diagram.
  *
@@ -132,8 +133,8 @@ function wrapText(text: string, maxChars = 14): string[] {
 }
 ---
 
+<DiagramFrame {title} {caption} kind="Mind map">
 <div class="mm-wrap">
-  {title && <div class="mm-titlebar"><span class="mm-prompt">$</span> {title}</div>}
   <div class="mm-body">
     <svg
       width={size} height={size}
@@ -297,8 +298,8 @@ function wrapText(text: string, maxChars = 14): string[] {
       })}
     </svg>
   </div>
-  {caption && <div class="mm-caption"><span class="mm-prompt">▶</span> {caption}</div>}
 </div>
+</DiagramFrame>
 
 <style>
   .mm-wrap {

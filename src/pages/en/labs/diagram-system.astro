@@ -1,0 +1,31 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import ArchDiagram from '../../../components/mdx/ArchDiagram.astro';
+import Flowchart from '../../../components/mdx/Flowchart.astro';
+import SequenceDiagram from '../../../components/mdx/SequenceDiagram.astro';
+import ERDiagram from '../../../components/mdx/ERDiagram.astro';
+import StateMachine from '../../../components/mdx/StateMachine.astro';
+import Swimlane from '../../../components/mdx/Swimlane.astro';
+import MindMap from '../../../components/mdx/MindMap.astro';
+import NetworkMap from '../../../components/mdx/NetworkMap.astro';
+---
+<BaseLayout title="Diagram design system" noindex>
+  <article>
+    <a href="/en/blog/">← Engineering notes</a>
+    <h1>One canvas. Different ways to explain.</h1>
+    <p>Architecture, decisions, messages and data share the same reading controls. Expand any diagram to focus, zoom for detail, and press Escape to return to the article.</p>
+    <ArchDiagram title="Where the request goes" nodes={[{id:'client',label:'Client'},{id:'api',label:'API'},{id:'db',label:'Database',shape:'cylinder'}]} edges={[{from:'client',to:'api',label:'HTTPS'},{from:'api',to:'db',label:'SQL'}]} caption="Use architecture diagrams to explain component boundaries and dependencies." />
+    <Flowchart title="Should the request use the cache?" nodes={[{id:'start',label:'Request',shape:'oval'},{id:'check',label:'Cached?',shape:'diamond'},{id:'hit',label:'Return cached',row:3,col:1},{id:'miss',label:'Read database',row:3,col:2}]} edges={[{from:'start',to:'check'},{from:'check',to:'hit',label:'Yes'},{from:'check',to:'miss',label:'No'}]} caption="Use a decision flow to show the condition that selects each path." />
+    <SequenceDiagram title="Read, then respond" actors={['Client','API','Database']} messages={[{from:'Client',to:'API',label:'GET /items'},{from:'API',to:'Database',label:'SELECT'},{from:'Database',to:'API',label:'Rows',type:'response'},{from:'API',to:'Client',label:'200 OK',type:'response'}]} caption="Use sequences when message order matters." />
+    <ERDiagram title="Orders contain items" entities={[{id:'order',name:'Order',focal:true,fields:[{name:'id',note:'PK'}]},{id:'item',name:'OrderItem',fields:[{name:'orderId',note:'FK'},{name:'quantity'}]}]} relations={[{from:'order',to:'item',fromCard:'1',toCard:'N',label:'contains'}]} caption="Use data models to explain ownership and cardinality." />
+    <StateMachine title="The lifecycle of a job" states={[{id:'queued',label:'Queued',initial:true},{id:'running',label:'Running'},{id:'done',label:'Completed',final:true}]} transitions={[{from:'queued',to:'running',label:'claim'},{from:'running',to:'done',label:'finish'}]} caption="Use state machines for valid states and transitions." />
+    <Swimlane title="Who owns each step?" lanes={[{id:'client',label:'Client'},{id:'server',label:'Server'}]} steps={[{id:'ask',lane:'client',label:'Request'},{id:'run',lane:'server',label:'Execute'},{id:'show',lane:'client',label:'Display'}]} arrows={[{from:'ask',to:'run',label:'HTTP'},{from:'run',to:'show',label:'Response'}]} caption="Use lanes to distinguish responsibilities across a workflow." />
+    <MindMap title="Reliability concerns" root={{label:'Reliability'}} branches={[{label:'Recovery',leaves:[{label:'Retries'}]},{label:'Visibility',leaves:[{label:'Traces'}]},{label:'Isolation',leaves:[{label:'Timeouts'}]}]} caption="Use mind maps for categories and relationships, not execution order." />
+    <NetworkMap title="Service connections" nodes={[{id:'api',label:'API',x:25,y:30,icon:'lucide:server'},{id:'db',label:'Database',x:75,y:65,shape:'cylinder',icon:'lucide:database'}]} edges={[{from:'api',to:'db',label:'SQL'}]} caption="Use network maps when the placement of connected components matters." />
+  </article>
+</BaseLayout>
+<style>
+  article { width: min(100% - 2rem, 960px); margin: 3rem auto; }
+  h1 { font-size: clamp(1.8rem, 4vw, 3rem); line-height: 1.15; margin: 1rem 0; }
+  p { max-width: 68ch; line-height: 1.7; color: var(--color-text-muted); }
+</style>

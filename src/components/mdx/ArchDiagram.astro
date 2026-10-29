@@ -1,4 +1,5 @@
 ---
+import DiagramFrame from './DiagramFrame.astro';
 /**
  * ArchDiagram — Annotated architecture / topology diagram.
  *
@@ -189,8 +190,8 @@ const centres = Object.fromEntries(
 );
 ---
 
+<DiagramFrame {title} {caption} kind="Architecture">
 <div class="ad-wrap">
-  {title && <div class="ad-titlebar"><span class="ad-prompt">$</span> {title}</div>}
 
   <div class="ad-scroll">
     <svg
@@ -351,8 +352,8 @@ const centres = Object.fromEntries(
     </div>
   )}
 
-  {caption && <div class="ad-caption"><span class="ad-prompt">▶</span> {caption}</div>}
 </div>
+</DiagramFrame>
 
 <style>
   .ad-wrap {

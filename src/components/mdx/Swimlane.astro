@@ -1,4 +1,5 @@
 ---
+import DiagramFrame from './DiagramFrame.astro';
 /**
  * Swimlane — actor-partitioned process flow.
  *
@@ -157,8 +158,8 @@ function arrowPath(fromId: string, toId: string): string {
 const stepMap = Object.fromEntries(steps.map(s => [s.id, s]));
 ---
 
+<DiagramFrame {title} {caption} kind="Swimlane">
 <div class="sl-wrap">
-  {title && <div class="sl-titlebar"><span class="sl-prompt">$</span> {title}</div>}
   <div class="sl-body">
     <svg
       width={svgW}
@@ -320,8 +321,8 @@ const stepMap = Object.fromEntries(steps.map(s => [s.id, s]));
       })}
     </svg>
   </div>
-  {caption && <div class="sl-caption"><span class="sl-prompt">▶</span> {caption}</div>}
 </div>
+</DiagramFrame>
 
 <style>
   .sl-wrap {

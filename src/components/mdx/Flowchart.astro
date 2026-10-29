@@ -1,4 +1,5 @@
 ---
+import DiagramFrame from './DiagramFrame.astro';
 /**
  * Flowchart — decision logic diagram with shapes-carry-meaning convention.
  *
@@ -177,8 +178,8 @@ function edgePoints(fromN: FCNode, toN: FCNode): { x1: number; y1: number; x2: n
 const nodeMap = Object.fromEntries(nodes.map(n => [n.id, n]));
 ---
 
+<DiagramFrame {title} {caption} kind="Decision flow">
 <div class="fc-wrap">
-  {title && <div class="fc-titlebar"><span class="fc-prompt">$</span> {title}</div>}
   <div class="fc-body">
     <svg
       width={svgW}
@@ -427,8 +428,8 @@ const nodeMap = Object.fromEntries(nodes.map(n => [n.id, n]));
       })}
     </svg>
   </div>
-  {caption && <div class="fc-caption"><span class="fc-prompt">▶</span> {caption}</div>}
 </div>
+</DiagramFrame>
 
 <style>
   .fc-wrap {
